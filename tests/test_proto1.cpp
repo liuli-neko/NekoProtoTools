@@ -1,12 +1,11 @@
-#include <iostream>
+#include <gtest/gtest.h>
+
 #include "../include/cc_proto_base.hpp"
 #include "../include/cc_proto_json_serializer.hpp"
 #include "../include/cc_proto_json_serializer_enum.hpp"
 #include "../include/cc_proto_json_serializer_struct.hpp"
 #include "../include/cc_proto_json_serializer_contrain.hpp"
 #include "../include/cc_proto_json_serializer_binary.hpp"
-
-using namespace rapidjson;
 
 CS_PROTO_USE_NAMESPACE
 
@@ -89,74 +88,61 @@ struct TestP : public ProtoBase<TestP> {
 };
 CS_DECLARE_PROTO(TestP, "TestP");
 
-struct MyProto : public ProtoBase<MyProto> {
-    int my_int = 42;
-    std::string my_string = "Hello, world!";
-    TestP testp = TestP();
-    std::vector<int> my_ints = {1, 2, 3, 4, 5};
-    CS_DECLARE_PROTO_FIELD(my_int)
-    CS_DECLARE_PROTO_FIELD(my_string) 
-    CS_DECLARE_PROTO_FIELD(testp)
-    CS_DECLARE_PROTO_FIELD(my_ints)
-};
-CS_DECLARE_PROTO(MyProto, "MyProto");
+TEST(JsonSerializerTest, StructSerialize) {
+    TestP testp;
+    testp.a = 3;
+    testp.b = "Struct test";
+    testp.c = true;
+    testp.d = 3.141592654;
+    testp.e = {1, 2, 3};
+    testp.f = {{"a", 1}, {"b", 2}};
+    testp.g = {1, 2, 3};
+    testp.h = TEnum_A;
+    testp.i = {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
+    testp.j = {1, "hello"};
+    std::vector<char> data;
+    data = testp.serialize();
+    EXPECT_STREQ(data.data(), "{\"a\":3,\"b\":\"Struct test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,\"hello\"]}");
+}
 
-struct MyProto1 : public ProtoBase<MyProto1> {
-    int intd = 42;
-    int my_int = 1;
-    std::string stringd = "Hello, world!";
-    std::string my_string = "Hello";
-    std::vector<TestP> testps = {TestP(), TestP()};
-    CS_DECLARE_PROTO_FIELD(intd)
-    CS_DECLARE_PROTO_FIELD(stringd)
-    CS_DECLARE_PROTO_FIELD(my_int)
-    CS_DECLARE_PROTO_FIELD(my_string)
-    CS_DECLARE_PROTO_FIELD(testps)
-};
-CS_DECLARE_PROTO(MyProto1, "MyProto1");
+TEST(JsonSerializerTest, StructDeserialize) {
+    TestP testp;
+    std::string str = "{\"a\":3,\"b\":\"Struct test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,\"hello\"]}";
+    std::vector<char> data(str.begin(), str.end());
+    testp.deserialize(data);
+    EXPECT_EQ(testp.a, 3);
+    EXPECT_STREQ(testp.b.c_str(), "Struct test");
+    EXPECT_TRUE(testp.c);
+    EXPECT_DOUBLE_EQ(testp.d, 3.141592654);
+    EXPECT_EQ(testp.e.size(), 3);
+    EXPECT_EQ(testp.f.size(), 2);
+    EXPECT_EQ(testp.f["a"], 1);
+    EXPECT_EQ(testp.f["b"], 2);
+    EXPECT_EQ(testp.g.size(), 5);
+    EXPECT_EQ(testp.g[0], 1);
+    EXPECT_EQ(testp.g[1], 2);
+    EXPECT_EQ(testp.g[2], 3);
+    EXPECT_EQ(testp.h, TEnum_A);
+    EXPECT_EQ(testp.i.a, 1);
+    EXPECT_STREQ(testp.i.b.c_str(), "hello");
+    EXPECT_TRUE(testp.i.c);
+    EXPECT_DOUBLE_EQ(testp.i.d, 3.141592654);
+    EXPECT_EQ(testp.i.e.size(), 3);
+    EXPECT_EQ(testp.i.f.size(), 2);
+    EXPECT_EQ(testp.i.f["a"], 1); 
+    EXPECT_EQ(testp.i.f["b"], 2); 
+    EXPECT_EQ(testp.i.g.size(), 5); 
+    EXPECT_EQ(testp.i.g[0], 1);
+    EXPECT_EQ(testp.i.g[1], 2); 
+    EXPECT_EQ(testp.i.g[2], 3); 
+    EXPECT_EQ(testp.i.g[3], 0); 
+    EXPECT_EQ(testp.i.g[4], 0); 
+    EXPECT_EQ(testp.i.h, TEnum_A);
+    EXPECT_EQ(std::get<0>(testp.j), 1);
+    EXPECT_STREQ(std::get<1>(testp.j).c_str(), "hello");
+}
 
 int main(int argc, char **argv) {
-    ProtoFactory proto(1, 0, 0);
-    std::shared_ptr<MyProto> my_proto(proto.create<MyProto>());
-    my_proto->my_int = 13423;
-    my_proto->my_string = "Hello, proto!";
-    TestP p;
-    p.a = 523523;
-    p.b = "Test for p";
-    p.j = std::make_tuple(114514, "test tuple");
-    my_proto->testp = p;
-    my_proto->my_ints = {1, 2, 3, 4, 5};
-
-    std::cout << "my_int: " << my_proto->my_int << std::endl;
-    std::cout << "my_string: " << my_proto->my_string << std::endl;
-    std::cout << "testp.a: " << my_proto->testp.a << std::endl;
-
-    std::vector<char> data = my_proto->serialize();
-    std::cout << std::string(data.data(), data.size()) << std::endl;
-
-    std::shared_ptr<IProto> proto_copy(proto.create(proto.proto_type<MyProto1>()));
-    std::shared_ptr<IProto> proto_c(proto.create(my_proto->type())); 
-    proto_c->deserialize(data);
-    proto_copy->deserialize(data);
-    std::cout << "proto_copy type: " << proto_copy->type() << std::endl;
-
-    std::cout << "my_int: " << dynamic_cast<MyProto1*>(proto_copy.get())->my_int << std::endl;
-    std::cout << "my_string: " << dynamic_cast<MyProto1*>(proto_copy.get())->my_string << std::endl;
-    std::cout << "proto_c: " << dynamic_cast<MyProto*>(proto_c.get())->testp.a << std::endl;
-    std::cout << "proto_c: " << dynamic_cast<MyProto*>(proto_c.get())->testp.b << std::endl;
-
-    auto d = proto_copy->serialize();
-    std::cout << std::string(d.data(), d.size()) << std::endl;
-
-    auto d1 = proto_c->serialize();
-    std::cout << std::string(d1.data(), d1.size()) << std::endl;
-
-    auto bteststr = "this is a test to base64";
-    std::vector<char> datadd(bteststr, bteststr + 27);
-    auto base64s = Base64Covert::Encode(datadd);
-    std::cout << std::string(base64s.data(), base64s.size()) << std::endl;
-    auto rec = Base64Covert::Decode(base64s);
-    std::cout << std::string(rec.data(), rec.size()) << std::endl;
-
-    return 0;
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }

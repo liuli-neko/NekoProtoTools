@@ -1,19 +1,42 @@
+set_project("cc-proto")
 add_rules("mode.debug", "mode.release")
+set_version("1.0.0")
 
 add_requires("rapidjson")
 
-target("co_test")
+
+target("test_co")
     set_languages("c++20")
     set_kind("binary")
-    add_files("src/co_main.cpp")
+    add_files("tests/test_co.cpp")
+target_end()
 
-target("pro_test")
-    set_kind("binary")
-    set_languages("c++11")
+target("proto_base")
+    set_kind("static")
+    set_languages("c++20")
     add_packages("rapidjson")
-    add_files("src/cc_proto_main.cpp")
     add_files("src/cc_proto_base.cpp")
+target_end()
 
+add_requires("gtest")
+target("test_proto")
+    set_kind("binary")
+    set_languages("c++17")
+    add_packages("rapidjson", "gtest")
+    add_tests("proto")
+    add_deps("proto_base")
+    add_files("tests/test_proto.cpp")
+target_end()
+
+target("test_proto1")
+    set_kind("binary")
+    set_languages("c++17")
+    add_packages("rapidjson", "gtest")
+    add_deps("proto_base")
+    add_tests("proto")
+    set_group("serializer")
+    add_files("tests/test_proto1.cpp")
+target_end()
 --
 -- If you want to known more usage about xmake, please see https://xmake.io
 --
