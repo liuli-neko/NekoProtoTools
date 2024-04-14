@@ -1,0 +1,12 @@
+.vscode
+.xmake
+.cache
+compile_commands.json
+*.pseudocode.*
+/build
+
+*.o
+*.obj
+*.bin
+
+vsxmake*
