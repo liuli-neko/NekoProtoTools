@@ -15,22 +15,22 @@ struct Base64Covert {
     // search on table
     return strchr(Table, ch) - Table;
   }
-  static ::std::vector<char> Encode(const ::std::vector<char> &str) {
+  static std::vector<char> Encode(const std::vector<char> &str) {
     // encode string to base64
     auto s = (const uint8_t *)(str.data());
     return Encode(s, strlen((char *)s));
   }
-  static ::std::vector<char> Encode(const uint8_t *str) {
+  static std::vector<char> Encode(const uint8_t *str) {
     return Encode(str, strlen((char *)str));
   }
-  static ::std::vector<char> Encode(const uint8_t *str, size_t datalen) {
-    ::std::vector<uint8_t> buf;
+  static std::vector<char> Encode(const uint8_t *str, size_t datalen) {
+    std::vector<uint8_t> buf;
     Encode(str, datalen, buf);
-    return ::std::vector<char>((char *)(buf.data()),
+    return std::vector<char>((char *)(buf.data()),
                                (char *)(buf.data()) + buf.size());
   }
   static void Encode(const uint8_t *data, size_t datalen,
-                     ::std::vector<uint8_t> &buf) {
+                     std::vector<uint8_t> &buf) {
     auto cptr = data;
     auto table = Table;
     buf.resize(((datalen + 2) / 3) * 4);
@@ -71,21 +71,21 @@ struct Base64Covert {
       }
     }
   }
-  static ::std::vector<char> Decode(const ::std::vector<char> &str) {
+  static std::vector<char> Decode(const std::vector<char> &str) {
     auto s = (const uint8_t *)(str.data());
     return Decode(s, str.size());
   }
-  static ::std::vector<char> Decode(const uint8_t *str) {
+  static std::vector<char> Decode(const uint8_t *str) {
     return Decode(str, strlen((char *)str));
   }
-  static ::std::vector<char> Decode(const uint8_t *str, size_t datalen) {
-    ::std::vector<uint8_t> buf;
+  static std::vector<char> Decode(const uint8_t *str, size_t datalen) {
+    std::vector<uint8_t> buf;
     Decode(str, datalen, buf);
-    return ::std::vector<char>((char *)(buf.data()),
+    return std::vector<char>((char *)(buf.data()),
                                (char *)(buf.data()) + buf.size());
   }
   static bool Decode(const uint8_t *data, size_t datalen,
-                     ::std::vector<uint8_t> &buf) {
+                     std::vector<uint8_t> &buf) {
     if ((datalen % 4) != 0) {
       LOG("Bad Base64 String len(%zu)", datalen);
       return false;
@@ -133,7 +133,7 @@ struct Base64Covert {
 };
 /// ===================end base 64=========================
 template <typename T>
-struct JsonConvert<T, ::std::enable_if_t<!::std::is_same_v<
+struct JsonConvert<T, std::enable_if_t<!std::is_same_v<
                           typename T::SerializerType, JsonSerializer>>> {
   static void toJsonValue(JsonWriter &writer, const T &value) {
     auto data = Base64Covert::Encode(value.serialize());
@@ -144,7 +144,7 @@ struct JsonConvert<T, ::std::enable_if_t<!::std::is_same_v<
       return false;
     }
     dst->deserialize(
-        Base64Covert::Decode(value.GetString(), value.GetStringLength()));
+        Base64Covert::Decode(reinterpret_cast<const uint8_t *>(value.GetString()), value.GetStringLength()));
     return true;
   }
 };

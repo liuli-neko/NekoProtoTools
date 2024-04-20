@@ -10,15 +10,15 @@
 CS_PROTO_BEGIN_NAMESPACE
 
 template <typename T>
-struct JsonConvert<::std::list<T>, void> {
-  static void toJsonValue(JsonWriter &writer, const ::std::list<T> &value) {
+struct JsonConvert<std::list<T>, void> {
+  static void toJsonValue(JsonWriter &writer, const std::list<T> &value) {
     writer.StartArray();
     for (auto &v : value) {
       JsonConvert<T>::toJsonValue(writer, v);
     }
     writer.EndArray();
   }
-  static bool fromJsonValue(::std::list<T> *dst, const JsonValue &value) {
+  static bool fromJsonValue(std::list<T> *dst, const JsonValue &value) {
     if (!value.IsArray() || dst == nullptr) {
       return false;
     }
@@ -35,15 +35,15 @@ struct JsonConvert<::std::list<T>, void> {
 };
 
 template <typename T>
-struct JsonConvert<::std::set<T>, void> {
-  static void toJsonValue(JsonWriter &writer, const ::std::set<T> &value) {
+struct JsonConvert<std::set<T>, void> {
+  static void toJsonValue(JsonWriter &writer, const std::set<T> &value) {
     writer.StartArray();
     for (auto &v : value) {
       JsonConvert<T>::toJsonValue(writer, v);
     }
     writer.EndArray();
   }
-  static bool fromJsonValue(::std::set<T> *dst, const JsonValue &value) {
+  static bool fromJsonValue(std::set<T> *dst, const JsonValue &value) {
     if (!value.IsArray() || dst == nullptr) {
       return false;
     }
@@ -60,9 +60,9 @@ struct JsonConvert<::std::set<T>, void> {
 };
 
 template <typename T>
-struct JsonConvert<::std::map<const char *, T>, void> {
+struct JsonConvert<std::map<const char *, T>, void> {
   static void toJsonValue(JsonWriter &writer,
-                          const ::std::map<const char *, T> &value) {
+                          const std::map<const char *, T> &value) {
     rapidjson::StringBuffer mBuffer;
     JsonWriter mwriter(mBuffer);
     mwriter.StartObject();
@@ -74,7 +74,7 @@ struct JsonConvert<::std::map<const char *, T>, void> {
     writer.RawValue(mBuffer.GetString(), mBuffer.GetSize(),
                     rapidjson::kObjectType);
   }
-  static bool fromJsonValue(::std::map<const char *, T> *dst,
+  static bool fromJsonValue(std::map<const char *, T> *dst,
                             const JsonValue &value) {
     if (!value.IsObject()) {
       return false;
@@ -90,22 +90,22 @@ struct JsonConvert<::std::map<const char *, T>, void> {
       if (!JsonConvert<T>::fromJsonValue(&t, v.value)) {
         return false;
       }
-      dst->insert(::std::make_pair(v.name.GetString(), t));
+      dst->insert(std::make_pair(v.name.GetString(), t));
     }
     return true;
   }
 };
 
 template <typename T, size_t t>
-struct JsonConvert<::std::array<T, t>, void> {
-  static void toJsonValue(JsonWriter &writer, const ::std::array<T, t> &value) {
+struct JsonConvert<std::array<T, t>, void> {
+  static void toJsonValue(JsonWriter &writer, const std::array<T, t> &value) {
     writer.StartArray();
     for (int i = 0; i < t; ++i) {
       JsonConvert<T>::toJsonValue(writer, value[i]);
     }
     writer.EndArray();
   }
-  static bool fromJsonValue(::std::array<T, t> *dst, const JsonValue &value) {
+  static bool fromJsonValue(std::array<T, t> *dst, const JsonValue &value) {
     if (!value.IsArray() || dst == nullptr) {
       return false;
     }
@@ -120,9 +120,9 @@ struct JsonConvert<::std::array<T, t>, void> {
 };
 
 template <typename T>
-struct JsonConvert<::std::map<::std::string, T>, void> {
+struct JsonConvert<std::map<std::string, T>, void> {
   static void toJsonValue(JsonWriter &writer,
-                          const ::std::map<::std::string, T> &value) {
+                          const std::map<std::string, T> &value) {
     rapidjson::StringBuffer mBuffer;
     JsonWriter mwriter(mBuffer);
     mwriter.StartObject();
@@ -134,7 +134,7 @@ struct JsonConvert<::std::map<::std::string, T>, void> {
     writer.RawValue(mBuffer.GetString(), mBuffer.GetSize(),
                     rapidjson::kObjectType);
   }
-  static bool fromJsonValue(::std::map<::std::string, T> *dst,
+  static bool fromJsonValue(std::map<std::string, T> *dst,
                             const JsonValue &value) {
     if (!value.IsObject()) {
       return false;
@@ -150,8 +150,8 @@ struct JsonConvert<::std::map<::std::string, T>, void> {
       if (!JsonConvert<T>::fromJsonValue(&t, v.value)) {
         return false;
       }
-      dst->insert(::std::make_pair(
-          ::std::string(v.name.GetString(), v.name.GetStringLength()), t));
+      dst->insert(std::make_pair(
+          std::string(v.name.GetString(), v.name.GetStringLength()), t));
     }
     return true;
   }
