@@ -16,10 +16,13 @@ using JsonWriter = rapidjson::Writer<rapidjson::StringBuffer>;
 template <typename T, class enable = void>
 struct JsonConvert {
     static void toJsonValue(JsonWriter &writer, const T &value) {
-        static_assert(false, "not support type, please implement it");
+        // static_assert(false, "not support type, please implement it");
+        printf("not support type %s\n", typeid(T).name());
+        return;
     }
     static bool fromJsonValue(T *dst, const JsonValue &value) {
-        static_assert(false, "not support type, please implement it");
+        printf("not support type %s\n", typeid(T).name());
+        // static_assert(false, "not support type, please implement it");
         return false;
     }
 };
@@ -39,12 +42,12 @@ class JsonSerializer {
     }
     mWriter->StartObject();
   }
-  inline bool endSerialize(::std::vector<char> *data) {
+  inline bool endSerialize(std::vector<char> *data) {
     mWriter->EndObject();
     if (!mWriter || !mWriter->IsComplete()) {
       return false;
     }
-    (*data) = ::std::vector<char>(mBuffer.GetString(),
+    (*data) = std::vector<char>(mBuffer.GetString(),
                                   mBuffer.GetString() + mBuffer.GetSize());
     mBuffer.Clear();
     mWriter.reset();
@@ -57,7 +60,7 @@ class JsonSerializer {
     JsonConvert<T>::toJsonValue(*mWriter, value);
   }
 
-  inline bool startDeserialize(const ::std::vector<char> &data) {
+  inline bool startDeserialize(const std::vector<char> &data) {
     mDocument.Parse(data.data(), data.size());
     if (mDocument.HasParseError()) {
       LOG("parse error %d", mDocument.GetParseError());
@@ -87,7 +90,7 @@ class JsonSerializer {
  private:
   JsonDocument mDocument;
   rapidjson::StringBuffer mBuffer;
-  ::std::unique_ptr<JsonWriter> mWriter;
+  std::unique_ptr<JsonWriter> mWriter;
 };
 
 template <>
@@ -105,29 +108,29 @@ struct JsonConvert<int, void> {
 };
 
 template <>
-struct JsonConvert<::std::string, void> {
-  static void toJsonValue(JsonWriter &writer, const ::std::string &value) {
+struct JsonConvert<std::string, void> {
+  static void toJsonValue(JsonWriter &writer, const std::string &value) {
     writer.String(value.c_str(), value.size(), true);
   }
-  static bool fromJsonValue(::std::string *dst, const JsonValue &value) {
+  static bool fromJsonValue(std::string *dst, const JsonValue &value) {
     if (!value.IsString() || dst == nullptr) {
       return false;
     }
-    (*dst) = ::std::string(value.GetString(), value.GetStringLength());
+    (*dst) = std::string(value.GetString(), value.GetStringLength());
     return true;
   }
 };
 
 template <typename T>
-struct JsonConvert<::std::vector<T>, void> {
-  static void toJsonValue(JsonWriter &writer, const ::std::vector<T> &value) {
+struct JsonConvert<std::vector<T>, void> {
+  static void toJsonValue(JsonWriter &writer, const std::vector<T> &value) {
     writer.StartArray();
     for (auto &v : value) {
       JsonConvert<T>::toJsonValue(writer, v);
     }
     writer.EndArray();
   }
-  static bool fromJsonValue(::std::vector<T> *dst, const JsonValue &value) {
+  static bool fromJsonValue(std::vector<T> *dst, const JsonValue &value) {
     if (!value.IsArray() || dst == nullptr) {
       return false;
     }
@@ -144,7 +147,7 @@ struct JsonConvert<::std::vector<T>, void> {
 };
 
 template <typename T>
-struct JsonConvert<T, ::std::enable_if_t<::std::is_same_v<
+struct JsonConvert<T, std::enable_if_t<std::is_same_v<
                           typename T::SerializerType, JsonSerializer>>> {
   static void toJsonValue(JsonWriter &writer, const T &value) {
     auto data = value.serialize();

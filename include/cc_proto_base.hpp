@@ -15,7 +15,7 @@ CS_PROTO_BEGIN_NAMESPACE
 
 class ProtoFactory;
 template <typename T>
-int _proto_type();
+constexpr int _proto_type();
 template <typename T>
 const char *_proto_name();
 
@@ -43,6 +43,7 @@ class ProtoBase : public IProto {
  public:
   using ProtoType = T;
   using SerializerType = SerializerT;
+  static constexpr int typeValue = _proto_type<T>();
 
   inline ProtoBase() = default;
 
@@ -91,7 +92,7 @@ class ProtoBase : public IProto {
     mSerializer.endDeserialize();
   }
 
-  inline int type() const override { return _proto_type<T>(); }
+  inline int type() const override { return typeValue; }
 
   virtual ~ProtoBase() {}
 
