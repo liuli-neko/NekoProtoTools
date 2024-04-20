@@ -17,7 +17,7 @@ class ProtoFactory;
 template <typename T>
 constexpr int _proto_type();
 template <typename T>
-const char *_proto_name();
+constexpr const char *_proto_name();
 
 class IProto {
  public:
@@ -43,7 +43,6 @@ class ProtoBase : public IProto {
  public:
   using ProtoType = T;
   using SerializerType = SerializerT;
-  static constexpr int typeValue = _proto_type<T>();
 
   inline ProtoBase() = default;
 
@@ -92,7 +91,7 @@ class ProtoBase : public IProto {
     mSerializer.endDeserialize();
   }
 
-  inline int type() const override { return typeValue; }
+  inline int type() const override { return _proto_type<T>(); }
 
   virtual ~ProtoBase() {}
 
@@ -160,7 +159,7 @@ class ProtoFactory {
 #else
   template <typename T>
 #endif
-  int proto_type() {
+  constexpr static int proto_type() {
     return _proto_type<T>();
   }
 
@@ -169,7 +168,7 @@ class ProtoFactory {
 #else
   template <typename T>
 #endif
-  const char *proto_name() {
+  constexpr static const char *proto_name() {
     return _proto_name<T>();
   }
 
@@ -225,10 +224,10 @@ std::vector<std::function<void(ProtoFactory *)>> static_init_funcs(
 
 CS_PROTO_END_NAMESPACE
 
-#define CS_PROTO_SET_TYPE_START(start)                                                      \
-namespace {                                                                                 \
-    constexpr const static int _proto_type_start = start - __COUNTER__ - 1;                 \
-}                                                                                           \
+#define CS_PROTO_SET_TYPE_START(start)                                         \
+namespace {                                                                    \
+    constexpr const static int _proto_type_start = start - __COUNTER__ - 1;    \
+}                                                                              \
 
 #define CS_DECLARE_PROTO(type, name)                                           \
   CS_PROTO_BEGIN_NAMESPACE                                                     \
@@ -237,7 +236,7 @@ namespace {                                                                     
     return _proto_type_start + __COUNTER__;                                    \
   }                                                                            \
   template <>                                                                  \
-  const char *_proto_name<type>() {                                            \
+  constexpr const char *_proto_name<type>() {                                  \
     return name;                                                               \
   }                                                                            \
   namespace {                                                                  \
