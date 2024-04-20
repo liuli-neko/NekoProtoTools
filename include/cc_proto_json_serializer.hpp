@@ -14,18 +14,7 @@ using JsonDocument = rapidjson::Document;
 using JsonWriter = rapidjson::Writer<rapidjson::StringBuffer>;
 
 template <typename T, class enable = void>
-struct JsonConvert {
-    static void toJsonValue(JsonWriter &writer, const T &value) {
-        // static_assert(false, "not support type, please implement it");
-        printf("not support type %s\n", typeid(T).name());
-        return;
-    }
-    static bool fromJsonValue(T *dst, const JsonValue &value) {
-        printf("not support type %s\n", typeid(T).name());
-        // static_assert(false, "not support type, please implement it");
-        return false;
-    }
-};
+struct JsonConvert;
 
 class JsonSerializer {
  public:
