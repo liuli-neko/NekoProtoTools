@@ -138,7 +138,7 @@ struct ContainerTraitsHelper<std::map<T, U>> {
 
 
 #define CS_PROPERTY_FIELD(type, name)                                         \
-    CS_DECLARE_PROTO_FIELD(m_##name)                                          \
+    __CS_DECLARE_PROTO_FIELD1(name)                                           \
 public:                                                                       \
     const type &name() const { return m_##name; }                             \
     type & mutable_##name() { return m_##name; }                              \
@@ -148,7 +148,7 @@ private:                                                                      \
     type m_##name                                                             \
 
 #define CS_PROPERTY_CONTAINER_FIELD(type, name)                               \
-    CS_DECLARE_PROTO_FIELD(m_##name)                                          \
+    __CS_DECLARE_PROTO_FIELD1(name)                                           \
 public:                                                                       \
     const type &name() const { return m_##name; }                             \
     const ContainerTraitsHelper<type>::value_type                             \
@@ -162,6 +162,29 @@ public:                                                                       \
     void set_##name(type &&value) { m_##name = std::move(value); }            \
 private:                                                                      \
     type m_##name                                                             \
+
+#define __CS_DECLARE_PROTO_FIELD1(name)                                       \
+ private:                                                                     \
+  template <typename T>                                                       \
+  static void _regist_field_##name(T *) {                                     \
+    static bool _init_##name = false;                                         \
+    if (_init_##name) { return; }                                             \
+    _init_##name = true;                                                      \
+    T::mSerializeVistor.insert(std::make_pair(#name, [](ProtoBase<T> *self) { \
+      self->serializer()->insert(#name,                                       \
+      static_cast<const T *>(self)->name());                                  \
+    }));                                                                      \
+    T::mDeserializeVistor.insert(                                             \
+    std::make_pair(#name, [](ProtoBase<T> *self) {                            \
+        self->serializer()->get(#name,                                        \
+        &(static_cast<T *>(self)->mutable_##name()));                         \
+    }));                                                                      \
+  }                                                                           \
+  bool _init_##name = [this]() {                                              \
+    _regist_field_##name(this);                                               \
+    return true;                                                              \
+  }();
+
 
 #define CS_DECLARE_PROTO_FIELD(name)                                          \
  private:                                                                     \
