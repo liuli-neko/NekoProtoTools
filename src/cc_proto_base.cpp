@@ -1,4 +1,4 @@
-#include "../include/cc_proto_base.hpp"
+#include "../proto/cc_proto_base.hpp"
 
 #include <functional>
 #include <vector>
