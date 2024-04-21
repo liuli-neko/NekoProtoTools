@@ -2,12 +2,12 @@
 
 #include <gtest/gtest.h>
 
-#include "../include/cc_proto_base.hpp"
-#include "../include/cc_proto_json_serializer.hpp"
-#include "../include/cc_proto_json_serializer_enum.hpp"
-#include "../include/cc_proto_json_serializer_struct.hpp"
-#include "../include/cc_proto_json_serializer_contrain.hpp"
-#include "../include/cc_proto_json_serializer_binary.hpp"
+#include "../proto/cc_proto_base.hpp"
+#include "../proto/cc_proto_json_serializer.hpp"
+#include "../proto/cc_proto_json_serializer_enum.hpp"
+#include "../proto/cc_proto_json_serializer_struct.hpp"
+#include "../proto/cc_proto_json_serializer_contrain.hpp"
+#include "../proto/cc_proto_json_serializer_binary.hpp"
 
 CS_PROTO_USE_NAMESPACE
 
