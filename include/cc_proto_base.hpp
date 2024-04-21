@@ -114,6 +114,55 @@ template <typename T, typename SerializerT>
 std::map<const char *, std::function<void(ProtoBase<T, SerializerT> *)>>
     ProtoBase<T, SerializerT>::mDeserializeVistor;
 
+
+template <typename T, class enable = void>
+struct ContainerTraitsHelper;
+
+template <typename T>
+struct ContainerTraitsHelper<std::vector<T>> {
+    using key_type = int;
+    using value_type = T;
+};
+
+template <typename T, size_t N>
+struct ContainerTraitsHelper<std::array<T, N>> {
+    using key_type = int;
+    using value_type = T;
+};
+
+template <typename T, typename U>
+struct ContainerTraitsHelper<std::map<T, U>> {
+    using key_type = T;
+    using value_type = U;
+};
+
+
+#define CS_PROPERTY_FIELD(type, name)                                         \
+    CS_DECLARE_PROTO_FIELD(m_##name)                                          \
+public:                                                                       \
+    const type &name() const { return m_##name; }                             \
+    type & mutable_##name() { return m_##name; }                              \
+    void set_##name(const type &value) { m_##name = value; }                  \
+    void set_##name(type &&value) { m_##name = std::move(value); }            \
+private:                                                                      \
+    type m_##name                                                             \
+
+#define CS_PROPERTY_CONTAINER_FIELD(type, name)                               \
+    CS_DECLARE_PROTO_FIELD(m_##name)                                          \
+public:                                                                       \
+    const type &name() const { return m_##name; }                             \
+    const ContainerTraitsHelper<type>::value_type                             \
+        &name(const ContainerTraitsHelper<type>::key_type &index)             \
+        { return m_##name[index]; }                                           \
+    type & mutable_##name() { return m_##name; }                              \
+    const ContainerTraitsHelper<type>::value_type                             \
+        &mutable_##name(const ContainerTraitsHelper<type>::key_type &index)   \
+        { return m_##name[index]; }                                           \
+    void set_##name(const type &value) { m_##name = value; }                  \
+    void set_##name(type &&value) { m_##name = std::move(value); }            \
+private:                                                                      \
+    type m_##name                                                             \
+
 #define CS_DECLARE_PROTO_FIELD(name)                                          \
  private:                                                                     \
   template <typename T>                                                       \

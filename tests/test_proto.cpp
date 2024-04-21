@@ -66,27 +66,19 @@ CS_PROTO_END_NAMESPACE
 #endif
 
 struct TestP : public ProtoBase<TestP> {
-    int a = 1;
-    std::string b = "hello";
-    bool c = true;
-    double d = 3.14;
-    std::list<int> e = {1, 2, 3, 4, 5};
-    std::map<std::string, int> f = {{"a", 1}, {"b", 2}, {"c", 3}};
-    std::array<int, 5> g = {1, 2, 3, 4, 5};
-    TEnum h = TEnum_A;
-    StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum_A};
-    std::tuple<int, std::string> j = {1, "hello"};
-
-    CS_DECLARE_PROTO_FIELD(a)
-    CS_DECLARE_PROTO_FIELD(b)
-    CS_DECLARE_PROTO_FIELD(c)
-    CS_DECLARE_PROTO_FIELD(d)
-    CS_DECLARE_PROTO_FIELD(e)
-    CS_DECLARE_PROTO_FIELD(f)
-    CS_DECLARE_PROTO_FIELD(g)
-    CS_DECLARE_PROTO_FIELD(h)
-    CS_DECLARE_PROTO_FIELD(i)
-    CS_DECLARE_PROTO_FIELD(j)
+    CS_PROPERTY_FIELD(int, a) = 1;
+    CS_PROPERTY_FIELD(std::string, b) = "hello";
+    CS_PROPERTY_FIELD(bool, c) = true;
+    CS_PROPERTY_FIELD(double, d) = 3.14;
+    CS_PROPERTY_FIELD(std::list<int>, e) = {1, 2, 3, 4, 5};
+    typedef std::map<std::string, int> TMap;
+    CS_PROPERTY_CONTAINER_FIELD(TMap, f) = {{"a", 1}, {"b", 2}, {"c", 3}};
+    typedef std::array<int, 5> TArray;
+    CS_PROPERTY_CONTAINER_FIELD(TArray, g) = {1, 2, 3, 4, 5};
+    CS_PROPERTY_FIELD(TEnum, h) = TEnum_A;
+    CS_PROPERTY_FIELD(StructA, i) = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum_A};
+    typedef std::tuple<int, std::string> TTuple;
+    CS_PROPERTY_FIELD(TTuple, j) = {1, "hello"};
 };
 CS_DECLARE_PROTO(TestP, "TestP");
 
@@ -182,16 +174,16 @@ TEST_F(JsonSerializerTest, Enum) {
 TEST_F(JsonSerializerTest, Struct) {
     TestP testp;
     // {3, "Struct test", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A, {1, "hello"}};
-    testp.a = 3;
-    testp.b = "Struct test";
-    testp.c = true;
-    testp.d = 3.141592654;
-    testp.e = {1, 2, 3};
-    testp.f = {{"a", 1}, {"b", 2}};
-    testp.g = {1, 2, 3};
-    testp.h = TEnum_A;
-    testp.i = {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
-    testp.j = {1, "hello"};
+    testp.mutable_a() = 3;
+    testp.mutable_b() = "Struct test";
+    testp.mutable_c() = true;
+    testp.mutable_d() = 3.141592654;
+    testp.mutable_e() = {1, 2, 3};
+    // testp.f = {{"a", 1}, {"b", 2}};
+    // testp.g = {1, 2, 3};
+    testp.mutable_h() = TEnum_A;
+    testp.mutable_i() = {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
+    // testp.j = {1, "hello"};
     writer->Key("a");
     JsonConvert<TestP>::toJsonValue(*writer, testp);
     writer->EndObject();
