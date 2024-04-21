@@ -79,6 +79,7 @@ struct TestP : public ProtoBase<TestP> {
     CS_PROPERTY_FIELD(StructA, i) = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum_A};
     typedef std::tuple<int, std::string> TTuple;
     CS_PROPERTY_FIELD(TTuple, j) = {1, "hello"};
+    CS_PROPERTY_CONTAINER_FIELD(std::vector<int>, k) = {1, 2, 3, 4, 5};
 };
 CS_DECLARE_PROTO(TestP, "TestP");
 
@@ -179,11 +180,12 @@ TEST_F(JsonSerializerTest, Struct) {
     testp.mutable_c() = true;
     testp.mutable_d() = 3.141592654;
     testp.mutable_e() = {1, 2, 3};
-    // testp.f = {{"a", 1}, {"b", 2}};
-    // testp.g = {1, 2, 3};
+    testp.mutable_f() = {{"a", 1}, {"b", 2}};
+    testp.mutable_g() = {1, 2, 3};
     testp.mutable_h() = TEnum_A;
     testp.mutable_i() = {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
-    // testp.j = {1, "hello"};
+    testp.mutable_j() = {1, "hello"};
+    testp.set_k({1, 2, 3, 4, 5});
     writer->Key("a");
     JsonConvert<TestP>::toJsonValue(*writer, testp);
     writer->EndObject();
