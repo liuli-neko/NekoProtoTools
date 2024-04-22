@@ -30,7 +30,7 @@ target_end()
 
 target("test_proto1")
     set_kind("binary")
-    set_languages("c++17")
+    set_languages("c++11")
     add_packages("rapidjson", "gtest")
     add_deps("proto_base")
     add_tests("proto")

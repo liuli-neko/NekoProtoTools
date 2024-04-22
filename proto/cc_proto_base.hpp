@@ -145,33 +145,33 @@ struct ContainerTraitsHelper<std::map<T, U>> {
 #define CS_PROPERTY_FIELD(type, name)                                         \
     __CS_DECLARE_PROTO_FIELD1(name)                                           \
 public:                                                                       \
-    const type &name() const { return m_##name; }                             \
-    type & mutable_##name() { return m_##name; }                              \
-    void set_##name(const type &value) { m_##name = value; }                  \
-    void set_##name(type &&value) { m_##name = std::move(value); }            \
+    inline const type &name() const { return m_##name; }                      \
+    inline type & mutable_##name() { return m_##name; }                       \
+    inline void set_##name(const type &value) { m_##name = value; }           \
+    inline void set_##name(type &&value) { m_##name = std::move(value); }     \
 private:                                                                      \
     type m_##name                                                             \
 
 #define CS_PROPERTY_CONTAINER_FIELD(type, name)                               \
     __CS_DECLARE_PROTO_FIELD1(name)                                           \
 public:                                                                       \
-    const type &name() const { return m_##name; }                             \
-    const ContainerTraitsHelper<type>::value_type                             \
+    inline const type &name() const { return m_##name; }                      \
+    inline const ContainerTraitsHelper<type>::value_type                      \
         &name(const ContainerTraitsHelper<type>::key_type &index)             \
         { return m_##name[index]; }                                           \
-    type & mutable_##name() { return m_##name; }                              \
-    const ContainerTraitsHelper<type>::value_type                             \
+    inline type & mutable_##name() { return m_##name; }                       \
+    inline const ContainerTraitsHelper<type>::value_type                      \
         &mutable_##name(const ContainerTraitsHelper<type>::key_type &index)   \
         { return m_##name[index]; }                                           \
-    void set_##name(const type &value) { m_##name = value; }                  \
-    void set_##name(type &&value) { m_##name = std::move(value); }            \
+    inline void set_##name(const type &value) { m_##name = value; }           \
+    inline void set_##name(type &&value) { m_##name = std::move(value); }     \
 private:                                                                      \
     type m_##name                                                             \
 
 #define __CS_DECLARE_PROTO_FIELD1(name)                                       \
  private:                                                                     \
   template <typename T>                                                       \
-  static void _regist_field_##name(T *) {                                     \
+  inline static void _regist_field_##name(T *) {                              \
     static bool _init_##name = false;                                         \
     if (_init_##name) { return; }                                             \
     _init_##name = true;                                                      \
@@ -194,7 +194,7 @@ private:                                                                      \
 #define CS_DECLARE_PROTO_FIELD(name)                                          \
  private:                                                                     \
   template <typename T>                                                       \
-  static void _regist_field_##name(T *) {                                     \
+  inline static void _regist_field_##name(T *) {                              \
     static bool _init_##name = false;                                         \
     if (_init_##name) { return; }                                             \
     _init_##name = true;                                                      \
@@ -236,7 +236,7 @@ class ProtoFactory {
 #else
   template <typename T>
 #endif
-  constexpr static int proto_type() {
+  inline constexpr static int proto_type() {
     return _proto_type<T>();
   }
 
@@ -245,11 +245,11 @@ class ProtoFactory {
 #else
   template <typename T>
 #endif
-  constexpr static const char *proto_name() {
+  inline constexpr static const char *proto_name() {
     return _proto_name<T>();
   }
 
-  IProto *create(int type) {
+  inline IProto *create(int type) {
     LOG("create by type: %d", type);
     auto item = kProtoMap.find(type);
     if (kProtoMap.end() != item) {
@@ -258,7 +258,7 @@ class ProtoFactory {
     return nullptr;
   }
 
-  IProto *create(const char *name) {
+  inline IProto *create(const char *name) {
     LOG("create by name: %s", name);
     auto item = kProtoNameMap.find(name);
     if (kProtoNameMap.end() != item) {
@@ -273,7 +273,7 @@ class ProtoFactory {
 #else
   template <typename T>
 #endif
-  T *create() {
+  inline T *create() {
     return new T();
   }
 
@@ -290,7 +290,7 @@ class ProtoFactory {
 #else
   template <typename T>
 #endif
-  static IProto *creater() {
+  inline static IProto *creater() {
     return new T();
   }
   void setVersion(int major, int minor, int patch);

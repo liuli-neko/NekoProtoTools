@@ -136,8 +136,8 @@ struct JsonConvert<std::vector<T>, void> {
 };
 
 template <typename T>
-struct JsonConvert<T, std::enable_if_t<std::is_same_v<
-                          typename T::SerializerType, JsonSerializer>>> {
+struct JsonConvert<T,typename std::enable_if<std::is_same<
+                          typename T::SerializerType, JsonSerializer>::value>::type> {
   static void toJsonValue(JsonWriter &writer, const T &value) {
     auto data = value.serialize();
     writer.RawValue(data.data(), data.size(), rapidjson::kObjectType);
