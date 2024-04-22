@@ -190,7 +190,11 @@ TEST_F(JsonSerializerTest, Struct) {
     JsonConvert<TestP>::toJsonValue(*writer, testp);
     writer->EndObject();
     const char * str = buffer.GetString();
+#if __cplusplus >= 201703L || _MSVC_LANG > 201402L
     EXPECT_STREQ(str, "{\"a\":{\"a\":3,\"b\":\"Struct test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"k\":[1,2,3,4,5]}}");
+#else
+    EXPECT_STREQ(str, "{\"a\":{\"a\":3,\"b\":\"Struct test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"1\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"1\"],\"j\":[1,\"hello\"],\"k\":[1,2,3,4,5]}}");
+#endif
 }
 
 int main(int argc, char **argv) {
