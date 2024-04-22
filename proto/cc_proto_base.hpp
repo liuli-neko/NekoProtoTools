@@ -8,6 +8,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <cstring>
 
 #include "cc_proto_global.hpp"
 
@@ -99,19 +100,23 @@ class ProtoBase : public IProto {
 
  protected:
   mutable SerializerT mSerializer;
-
-  static std::map<const char *, std::function<void(ProtoBase *)>>
+  struct less {
+    bool operator()(const char *a, const char *b) const {
+      return ::strcmp(a, b) < 0;
+    }
+  };
+  static std::map<const char *, std::function<void(ProtoBase *)>, less>
       mSerializeVistor;
 
-  static std::map<const char *, std::function<void(ProtoBase *)>>
+  static std::map<const char *, std::function<void(ProtoBase *)>, less>
       mDeserializeVistor;
 };
 
 template <typename T, typename SerializerT>
-std::map<const char *, std::function<void(ProtoBase<T, SerializerT> *)>>
+std::map<const char *, std::function<void(ProtoBase<T, SerializerT> *)>, typename ProtoBase<T, SerializerT>::less>
     ProtoBase<T, SerializerT>::mSerializeVistor;
 template <typename T, typename SerializerT>
-std::map<const char *, std::function<void(ProtoBase<T, SerializerT> *)>>
+std::map<const char *, std::function<void(ProtoBase<T, SerializerT> *)>, typename ProtoBase<T, SerializerT>::less>
     ProtoBase<T, SerializerT>::mDeserializeVistor;
 
 
