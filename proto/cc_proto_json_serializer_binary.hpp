@@ -17,15 +17,15 @@ struct Base64Covert {
   }
   static std::vector<char> Encode(const std::vector<char> &str) {
     // encode string to base64
-    auto s = (const uint8_t *)(str.data());
-    return Encode(s, strlen((char *)s));
+    auto s = (str.data());
+    return Encode(str.data(), str.size());
   }
-  static std::vector<char> Encode(const uint8_t *str) {
-    return Encode(str, strlen((char *)str));
+  static std::vector<char> Encode(const char *str) {
+    return Encode(str, strlen(str));
   }
-  static std::vector<char> Encode(const uint8_t *str, size_t datalen) {
+  static std::vector<char> Encode(const char *str, size_t datalen) {
     std::vector<uint8_t> buf;
-    Encode(str, datalen, buf);
+    Encode(reinterpret_cast<const uint8_t *>(str), datalen, buf);
     return std::vector<char>((char *)(buf.data()),
                                (char *)(buf.data()) + buf.size());
   }
@@ -33,7 +33,7 @@ struct Base64Covert {
                      std::vector<uint8_t> &buf) {
     auto cptr = data;
     auto table = Table;
-    buf.resize(((datalen + 2) / 3) * 4);
+    buf.resize(((datalen + 2) / 3) * 4, '=');
     auto bufptr = buf.data();
     while (datalen > 2) {
       // encode
@@ -57,7 +57,7 @@ struct Base64Covert {
         bufptr[0] = table[(cptr[0] >> 2) & 0x3f];
         bufptr[1] = table[((cptr[0] << 4) | (cptr[1] >> 4)) & 0x3f];
         bufptr[2] = table[(cptr[1] & 0x0f) << 2];
-        bufptr[3] = '=';
+        bufptr += 4;
         break;
       }
       case 1: {
@@ -65,37 +65,38 @@ struct Base64Covert {
         // xxxxxx|xx 0000|00 00|000000
         bufptr[0] = table[(cptr[0] >> 2) & 0x3f];
         bufptr[1] = table[(cptr[1] << 4) & 0x3f];
-        bufptr[2] = '=';
-        bufptr[3] = '=';
+        bufptr += 4;
         break;
       }
     }
+    CS_ASSERT(bufptr == buf.data() + buf.size(), "Bad Base64 String");
   }
   static std::vector<char> Decode(const std::vector<char> &str) {
-    auto s = (const uint8_t *)(str.data());
-    return Decode(s, str.size());
+    return Decode(str.data(), str.size());
   }
-  static std::vector<char> Decode(const uint8_t *str) {
-    return Decode(str, strlen((char *)str));
+  static std::vector<char> Decode(const char *str) {
+    return Decode(str, strlen(str));
   }
-  static std::vector<char> Decode(const uint8_t *str, size_t datalen) {
+  static std::vector<char> Decode(const char *str, size_t datalen) {
     std::vector<uint8_t> buf;
-    Decode(str, datalen, buf);
+    Decode(reinterpret_cast<const uint8_t *>(str), datalen, buf);
     return std::vector<char>((char *)(buf.data()),
                                (char *)(buf.data()) + buf.size());
   }
   static bool Decode(const uint8_t *data, size_t datalen,
                      std::vector<uint8_t> &buf) {
     if ((datalen % 4) != 0) {
-      LOG("Bad Base64 String len(%zu)", datalen);
+      CS_LOG_ERROR("Bad Base64 String len({}), data({:.{}s})", datalen, reinterpret_cast<const char *>(data), datalen);
       return false;
     }
-    buf.resize(datalen / 4 * 3);
 
+    int len = (datalen / 4) * 3;
     auto cptr = data;
     while (data[datalen - 1] == '=') {
       --datalen;  // remove '='
+      --len;
     }
+    buf.resize(len, '=');
 
     uint8_t array[4];
     auto bufptr = buf.data();
@@ -117,6 +118,7 @@ struct Base64Covert {
         array[0] = QueryTable(cptr[0]);
         array[1] = QueryTable(cptr[1]);
         bufptr[0] = ((array[0] << 2) | (array[1] >> 4));
+        bufptr += 1;
         break;
       }
       case 3: {
@@ -125,9 +127,11 @@ struct Base64Covert {
         array[2] = QueryTable(cptr[2]);
         bufptr[0] = ((array[0] << 2) | (array[1] >> 4));
         bufptr[1] = ((array[1] << 4) | (array[2] >> 2));
+        bufptr += 2;
         break;
       }
     }
+    CS_ASSERT(bufptr == buf.data() + buf.size(), "Bad Base64 String");
     return true;
   }
 };
@@ -144,7 +148,7 @@ struct JsonConvert<T, typename std::enable_if<!std::is_same<
       return false;
     }
     dst->deserialize(
-        Base64Covert::Decode(reinterpret_cast<const uint8_t *>(value.GetString()), value.GetStringLength()));
+        Base64Covert::Decode(value.GetString(), value.GetStringLength()));
     return true;
   }
 };
