@@ -52,7 +52,7 @@ class JsonSerializer {
   inline bool startDeserialize(const std::vector<char> &data) {
     mDocument.Parse(data.data(), data.size());
     if (mDocument.HasParseError()) {
-      LOG("parse error %d", mDocument.GetParseError());
+      CS_LOG_ERROR("parse error %d", mDocument.GetParseError());
       return false;
     }
     return true;

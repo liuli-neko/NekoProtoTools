@@ -146,7 +146,19 @@ TEST(JsonSerializerTest, StructDeserialize) {
     EXPECT_STREQ(std::get<1>(testp.j).c_str(), "hello");
 }
 
+TEST(JsonSerializerTest, Base64Covert) {
+    const char * str = "this is a test string";
+    auto base64string = Base64Covert::Encode(str);
+    base64string.push_back('\0');
+    EXPECT_STREQ(base64string.data(), "dGhpcyBpcyBhIHRlc3Qgc3RyaW5n");
+    base64string.pop_back();
+    auto str2 = Base64Covert::Decode(base64string);
+    str2.push_back('\0');
+    EXPECT_STREQ(str2.data(), str);
+}
+
 int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);
+    spdlog::set_level(spdlog::level::debug);
     return RUN_ALL_TESTS();
 }

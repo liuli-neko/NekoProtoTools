@@ -20,7 +20,7 @@ constexpr int _proto_type();
 template <typename T>
 constexpr const char *_proto_name();
 
-class IProto {
+class CS_PROTO_API IProto {
  public:
   IProto() = default;
   virtual ~IProto() {}
@@ -70,7 +70,7 @@ class ProtoBase : public IProto {
     }
     std::vector<char> ret;
     if (!mSerializer.endSerialize(&ret)) {
-      LOG("serialize error");
+      CS_LOG_ERROR("Proto({}) serialize error", _proto_name<T>());
     }
     return std::move(ret);
   }
@@ -215,7 +215,7 @@ private:                                                                      \
 #define CS_DECLARE_PROTO_FIELDS(...) FOR_EACH(CS_DECLARE_PROTO_FIELD, __VA_ARGS__)
 #endif
 
-class ProtoFactory {
+class CS_PROTO_API ProtoFactory {
  public:
   ProtoFactory(int major = 0, int minor = 0, int patch = 1);
   ~ProtoFactory();
@@ -227,6 +227,21 @@ class ProtoFactory {
   template <typename T>
 #endif
   void regist(const char *name) {
+    auto itemType = kProtoMap.find(proto_type<T>());
+    auto itemName = kProtoNameMap.find(name);
+    if (itemType != kProtoMap.end()) {
+      auto rname = "";
+      for (auto item : kProtoNameMap) {
+        if (item.second == proto_type<T>()) {
+            rname = item.first;
+            break;
+        }
+      }
+      CS_LOG_WARN("type {} is regist by proto({}), proto({}) can't regist again", proto_type<T>(), rname, name);
+    }
+    if (itemName != kProtoNameMap.end()) {
+      CS_LOG_WARN("proto({}) is regist type {}, can't regist type {} again", name, itemName->second, proto_type<T>());
+    }
     kProtoNameMap.insert(std::make_pair(_proto_name<T>(), proto_type<T>()));
     kProtoMap.insert(std::make_pair(proto_type<T>(), creater<T>));
   }
@@ -250,7 +265,6 @@ class ProtoFactory {
   }
 
   inline IProto *create(int type) {
-    LOG("create by type: %d", type);
     auto item = kProtoMap.find(type);
     if (kProtoMap.end() != item) {
       return (item->second)();
@@ -259,10 +273,8 @@ class ProtoFactory {
   }
 
   inline IProto *create(const char *name) {
-    LOG("create by name: %s", name);
     auto item = kProtoNameMap.find(name);
     if (kProtoNameMap.end() != item) {
-      LOG("find type(%d) by name: %s", item->second, name);
       return kProtoMap[item->second]();
     }
     return nullptr;
@@ -296,7 +308,7 @@ class ProtoFactory {
   void setVersion(int major, int minor, int patch);
 };
 
-std::vector<std::function<void(ProtoFactory *)>> static_init_funcs(
+std::map<const char *, std::function<void(ProtoFactory *)>> static_init_funcs(const char *,
     std::function<void(ProtoFactory *)>);
 
 CS_PROTO_END_NAMESPACE
@@ -319,7 +331,8 @@ namespace {                                                                    \
   namespace {                                                                  \
   struct _regist_##type {                                                      \
     _regist_##type() {                                                         \
-      static_init_funcs([](ProtoFactory *self) { self->regist<type>(name); }); \
+      static_init_funcs(name, [](ProtoFactory *self)                           \
+        { self->regist<type>(name); });                                        \
     }                                                                          \
   } _regist_##type##__tmp;                                                     \
   }                                                                            \

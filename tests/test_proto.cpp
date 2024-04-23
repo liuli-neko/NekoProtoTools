@@ -199,5 +199,6 @@ TEST_F(JsonSerializerTest, Struct) {
 
 int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);
+    ProtoFactory factor(1, 0, 0);
     return RUN_ALL_TESTS();
 }
