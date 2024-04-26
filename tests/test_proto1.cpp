@@ -86,7 +86,7 @@ struct TestP : public ProtoBase<TestP> {
     CS_DECLARE_PROTO_FIELD(i)
     CS_DECLARE_PROTO_FIELD(j)
 };
-CS_DECLARE_PROTO(TestP, "TestP");
+CS_DECLARE_PROTO(TestP, TestP);
 
 TEST(JsonSerializerTest, StructSerialize) {
     TestP testp;

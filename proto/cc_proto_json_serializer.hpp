@@ -34,19 +34,25 @@ class JsonSerializer {
   inline bool endSerialize(std::vector<char> *data) {
     mWriter->EndObject();
     if (!mWriter || !mWriter->IsComplete()) {
+      mBuffer.Clear();
+      mWriter.reset();
       return false;
     }
-    (*data) = std::vector<char>(mBuffer.GetString(),
-                                  mBuffer.GetString() + mBuffer.GetSize());
+    if (data) {
+      (*data) = std::vector<char>(mBuffer.GetString(),
+                                    mBuffer.GetString() + mBuffer.GetSize());
+    }
     mBuffer.Clear();
     mWriter.reset();
     return true;
   }
 
   template <typename T>
-  void insert(const char *name, const T &value) {
-    mWriter->Key(name);
-    JsonConvert<T>::toJsonValue(*mWriter, value);
+  bool insert(const char *name, const T &value) {
+    if (!mWriter->Key(name)) {
+      return false;
+    }
+    return JsonConvert<T>::toJsonValue(*mWriter, value);
   }
 
   inline bool startDeserialize(const std::vector<char> &data) {
@@ -63,9 +69,10 @@ class JsonSerializer {
     return true;
   }
 
-  inline void endDeserialize() {
+  inline bool endDeserialize() {
     mDocument.SetNull();
     mDocument.GetAllocator().Clear();
+    return true;
   }
 
   template <typename T>
@@ -84,8 +91,8 @@ class JsonSerializer {
 
 template <>
 struct JsonConvert<int, void> {
-  static void toJsonValue(JsonWriter &writer, const int value) {
-    writer.Int(value);
+  static bool toJsonValue(JsonWriter &writer, const int value) {
+    return writer.Int(value);
   }
   static bool fromJsonValue(int *dst, const JsonValue &value) {
     if (!value.IsInt() || dst == nullptr) {
@@ -98,8 +105,8 @@ struct JsonConvert<int, void> {
 
 template <>
 struct JsonConvert<std::string, void> {
-  static void toJsonValue(JsonWriter &writer, const std::string &value) {
-    writer.String(value.c_str(), value.size(), true);
+  static bool toJsonValue(JsonWriter &writer, const std::string &value) {
+    return writer.String(value.c_str(), value.size(), true);
   }
   static bool fromJsonValue(std::string *dst, const JsonValue &value) {
     if (!value.IsString() || dst == nullptr) {
@@ -112,12 +119,13 @@ struct JsonConvert<std::string, void> {
 
 template <typename T>
 struct JsonConvert<std::vector<T>, void> {
-  static void toJsonValue(JsonWriter &writer, const std::vector<T> &value) {
-    writer.StartArray();
+  static bool toJsonValue(JsonWriter &writer, const std::vector<T> &value) {
+    bool ret = writer.StartArray();
     for (auto &v : value) {
-      JsonConvert<T>::toJsonValue(writer, v);
+      ret = JsonConvert<T>::toJsonValue(writer, v) && ret;
     }
-    writer.EndArray();
+    ret = writer.EndArray() && ret;
+    return ret;
   }
   static bool fromJsonValue(std::vector<T> *dst, const JsonValue &value) {
     if (!value.IsArray() || dst == nullptr) {
@@ -138,23 +146,22 @@ struct JsonConvert<std::vector<T>, void> {
 template <typename T>
 struct JsonConvert<T,typename std::enable_if<std::is_same<
                           typename T::SerializerType, JsonSerializer>::value>::type> {
-  static void toJsonValue(JsonWriter &writer, const T &value) {
+  static bool toJsonValue(JsonWriter &writer, const T &value) {
     auto data = value.serialize();
-    writer.RawValue(data.data(), data.size(), rapidjson::kObjectType);
+    return writer.RawValue(data.data(), data.size(), rapidjson::kObjectType);
   }
   static bool fromJsonValue(T *dst, const JsonValue &value) {
     if (!value.IsObject() || dst == nullptr) {
       return false;
     }
-    dst->deserialize(value);
-    return true;
+    return dst->deserialize(value);
   }
 };
 
 template <>
 struct JsonConvert<bool, void> {
-  static void toJsonValue(JsonWriter &writer, const bool value) {
-    writer.Bool(value);
+  static bool toJsonValue(JsonWriter &writer, const bool value) {
+    return writer.Bool(value);
   }
   static bool fromJsonValue(bool *dst, const JsonValue &value) {
     if (!value.IsBool() || dst == nullptr) {
@@ -167,8 +174,8 @@ struct JsonConvert<bool, void> {
 
 template <>
 struct JsonConvert<double, void> {
-  static void toJsonValue(JsonWriter &writer, const double value) {
-    writer.Double(value);
+  static bool toJsonValue(JsonWriter &writer, const double value) {
+    return writer.Double(value);
   }
   static bool fromJsonValue(double *dst, const JsonValue &value) {
     if (!value.IsDouble() || dst == nullptr) {
@@ -181,8 +188,8 @@ struct JsonConvert<double, void> {
 
 template <>
 struct JsonConvert<float, void> {
-  static void toJsonValue(JsonWriter &writer, const float value) {
-    writer.Double(value);
+  static bool toJsonValue(JsonWriter &writer, const float value) {
+    return writer.Double(value);
   }
   static bool fromJsonValue(float *dst, const JsonValue &value) {
     if (!value.IsDouble() || dst == nullptr) {
@@ -195,8 +202,8 @@ struct JsonConvert<float, void> {
 
 template <>
 struct JsonConvert<long long int, void> {
-  static void toJsonValue(JsonWriter &writer, const long long int value) {
-    writer.Int64(value);
+  static bool toJsonValue(JsonWriter &writer, const long long int value) {
+    return writer.Int64(value);
   }
   static bool fromJsonValue(long long int *dst, const JsonValue &value) {
     if (!value.IsInt64() || dst == nullptr) {

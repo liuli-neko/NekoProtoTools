@@ -200,20 +200,23 @@ constexpr auto unwrap_struct(T &data) noexcept {
 template <typename T>
 struct JsonConvert<T, std::enable_if_t<can_unwrap_v<T>>> {
     template <typename U>
-    static void serializeTupleImpl(JsonWriter &writer, U &value) {
+    static void serializeTupleImpl(bool &ret, JsonWriter &writer, U &value) {
         using Type = std::remove_reference_t<std::remove_cv_t<U>>;
-        JsonConvert<Type>::toJsonValue(writer, value);
+        ret = JsonConvert<Type>::toJsonValue(writer, value) && ret;
     }
     template <typename ...Args>
-    static void serializeTupleTo(JsonWriter &writer, const std::tuple<Args...> &tp) {
+    static bool serializeTupleTo(JsonWriter &writer, const std::tuple<Args...> &tp) {
+        bool ret = true;
         std::apply([&](Args &&...args) {
-            ((serializeTupleImpl(writer, args)), ...);
+            ((serializeTupleImpl(ret, writer, args)), ...);
         }, tp);
+        return ret;
     }
-    static void toJsonValue(JsonWriter &writer, const T &value) {
-        writer.StartArray();
-        serializeTupleTo(writer, unwrap_struct(value));
-        writer.EndArray();
+    static bool toJsonValue(JsonWriter &writer, const T &value) {
+        auto ret = writer.StartArray();
+        ret = serializeTupleTo(writer, unwrap_struct(value)) && ret;
+        ret = writer.EndArray() && ret;
+        return ret;
     }
 
     template <typename U>
