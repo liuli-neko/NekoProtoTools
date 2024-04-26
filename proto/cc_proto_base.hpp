@@ -25,7 +25,7 @@ class CS_PROTO_API IProto {
   IProto() = default;
   virtual ~IProto() {}
   virtual std::vector<char> serialize() const = 0;
-  virtual void deserialize(const std::vector<char> &) = 0;
+  virtual bool deserialize(const std::vector<char> &) = 0;
   virtual int type() const = 0;
 };
 
@@ -66,7 +66,9 @@ class ProtoBase : public IProto {
   inline std::vector<char> serialize() const override {
     mSerializer.startSerialize();
     for (auto item : mSerializeVistor) {
-      (item.second)(const_cast<ProtoBase *>(this));
+      if (!(item.second)(const_cast<ProtoBase *>(this))) {
+        CS_LOG_WARN("field {} serialize error", item.first);
+      }
     }
     std::vector<char> ret;
     if (!mSerializer.endSerialize(&ret)) {
@@ -75,16 +77,25 @@ class ProtoBase : public IProto {
     return std::move(ret);
   }
 
-  inline void deserialize(const std::vector<char> &data) override {
-    mSerializer.startDeserialize(data);
-    for (auto item : mDeserializeVistor) {
-      (item.second)(const_cast<ProtoBase *>(this));
+  inline bool deserialize(const std::vector<char> &data) override {
+    if (!mSerializer.startDeserialize(data)) {
+      return false;
     }
-    mSerializer.endDeserialize();
+    bool ret = true;
+    for (auto item : mDeserializeVistor) {
+      if (!(item.second)(const_cast<ProtoBase *>(this))) {
+        ret = false;
+        CS_LOG_WARN("field {} deserialize error", item.first);
+      }
+    }
+    if (!mSerializer.endDeserialize() || !ret) {
+      return false;
+    }
+    return true;
   }
 
   template <typename U>
-  void deserialize(const U &data) {
+  bool deserialize(const U &data) {
     mSerializer.startDeserialize(data);
     for (auto item : mDeserializeVistor) {
       (item.second)(const_cast<ProtoBase *>(this));
@@ -105,18 +116,18 @@ class ProtoBase : public IProto {
       return ::strcmp(a, b) < 0;
     }
   };
-  static std::map<const char *, std::function<void(ProtoBase *)>, less>
+  static std::map<const char *, std::function<bool(ProtoBase *)>, less>
       mSerializeVistor;
 
-  static std::map<const char *, std::function<void(ProtoBase *)>, less>
+  static std::map<const char *, std::function<bool(ProtoBase *)>, less>
       mDeserializeVistor;
 };
 
 template <typename T, typename SerializerT>
-std::map<const char *, std::function<void(ProtoBase<T, SerializerT> *)>, typename ProtoBase<T, SerializerT>::less>
+std::map<const char *, std::function<bool(ProtoBase<T, SerializerT> *)>, typename ProtoBase<T, SerializerT>::less>
     ProtoBase<T, SerializerT>::mSerializeVistor;
 template <typename T, typename SerializerT>
-std::map<const char *, std::function<void(ProtoBase<T, SerializerT> *)>, typename ProtoBase<T, SerializerT>::less>
+std::map<const char *, std::function<bool(ProtoBase<T, SerializerT> *)>, typename ProtoBase<T, SerializerT>::less>
     ProtoBase<T, SerializerT>::mDeserializeVistor;
 
 
@@ -175,13 +186,14 @@ private:                                                                      \
     static bool _init_##name = false;                                         \
     if (_init_##name) { return; }                                             \
     _init_##name = true;                                                      \
-    T::mSerializeVistor.insert(std::make_pair(#name, [](ProtoBase<T> *self) { \
-      self->serializer()->insert(#name,                                       \
+    T::mSerializeVistor.insert(std::make_pair(#name,                          \
+      [](ProtoBase<T, typename T::SerializerType> *self) {                    \
+      return self->serializer()->insert(#name,                                \
       static_cast<const T *>(self)->name());                                  \
     }));                                                                      \
     T::mDeserializeVistor.insert(                                             \
-    std::make_pair(#name, [](ProtoBase<T> *self) {                            \
-        self->serializer()->get(#name,                                        \
+    std::make_pair(#name, [](ProtoBase<T, typename T::SerializerType> *self) {\
+        return self->serializer()->get(#name,                                 \
         &(static_cast<T *>(self)->mutable_##name()));                         \
     }));                                                                      \
   }                                                                           \
@@ -198,12 +210,15 @@ private:                                                                      \
     static bool _init_##name = false;                                         \
     if (_init_##name) { return; }                                             \
     _init_##name = true;                                                      \
-    T::mSerializeVistor.insert(std::make_pair(#name, [](ProtoBase<T> *self) { \
-      self->serializer()->insert(#name, static_cast<const T *>(self)->name);  \
+    T::mSerializeVistor.insert(std::make_pair(#name, [](ProtoBase<T,          \
+      typename T::SerializerType> *self) {                                    \
+      return self->serializer()->insert(#name,                                \
+        static_cast<const T *>(self)->name);                                  \
     }));                                                                      \
     T::mDeserializeVistor.insert(                                             \
-    std::make_pair(#name, [](ProtoBase<T> *self) {                            \
-        self->serializer()->get(#name, &(static_cast<T *>(self)->name));      \
+    std::make_pair(#name, [](ProtoBase<T, typename T::SerializerType> *self) {\
+        return self->serializer()->get(#name,                                 \
+          &(static_cast<T *>(self)->name));                                   \
     }));                                                                      \
   }                                                                           \
   bool _init_##name = [this]() {                                              \
@@ -218,6 +233,10 @@ private:                                                                      \
 class CS_PROTO_API ProtoFactory {
  public:
   ProtoFactory(int major = 0, int minor = 0, int patch = 1);
+  ProtoFactory(const ProtoFactory &);
+  ProtoFactory(ProtoFactory &&);
+  ProtoFactory &operator=(const ProtoFactory &);
+  ProtoFactory &operator=(ProtoFactory &&);
   ~ProtoFactory();
   void init();
 
@@ -227,11 +246,11 @@ class CS_PROTO_API ProtoFactory {
   template <typename T>
 #endif
   void regist(const char *name) {
-    auto itemType = kProtoMap.find(proto_type<T>());
-    auto itemName = kProtoNameMap.find(name);
-    if (itemType != kProtoMap.end()) {
+    auto itemType = mProtoMap.find(proto_type<T>());
+    auto itemName = mProtoNameMap.find(name);
+    if (itemType != mProtoMap.end()) {
       auto rname = "";
-      for (auto item : kProtoNameMap) {
+      for (auto item : mProtoNameMap) {
         if (item.second == proto_type<T>()) {
             rname = item.first;
             break;
@@ -239,11 +258,11 @@ class CS_PROTO_API ProtoFactory {
       }
       CS_LOG_WARN("type {} is regist by proto({}), proto({}) can't regist again", proto_type<T>(), rname, name);
     }
-    if (itemName != kProtoNameMap.end()) {
+    if (itemName != mProtoNameMap.end()) {
       CS_LOG_WARN("proto({}) is regist type {}, can't regist type {} again", name, itemName->second, proto_type<T>());
     }
-    kProtoNameMap.insert(std::make_pair(_proto_name<T>(), proto_type<T>()));
-    kProtoMap.insert(std::make_pair(proto_type<T>(), creater<T>));
+    mProtoNameMap.insert(std::make_pair(_proto_name<T>(), proto_type<T>()));
+    mProtoMap.insert(std::make_pair(proto_type<T>(), creater<T>));
   }
 
 #if __cplusplus >= 202100L
@@ -263,19 +282,33 @@ class CS_PROTO_API ProtoFactory {
   inline constexpr static const char *proto_name() {
     return _proto_name<T>();
   }
-
-  inline IProto *create(int type) {
-    auto item = kProtoMap.find(type);
-    if (kProtoMap.end() != item) {
+/**
+ * @brief create a proto object by type
+ *  this object is a pointer, you need to delete it by yourself
+ * @param type 
+ * @return IProto* 
+ */
+  inline IProto *create(int type) const {
+    auto item = mProtoMap.find(type);
+    if (mProtoMap.end() != item) {
       return (item->second)();
     }
     return nullptr;
   }
-
-  inline IProto *create(const char *name) {
-    auto item = kProtoNameMap.find(name);
-    if (kProtoNameMap.end() != item) {
-      return kProtoMap[item->second]();
+/**
+ * @brief create a proto object by name
+ *  this object is a pointer, you need to delete it by yourself
+ * @param name 
+ * @return IProto* 
+ */
+  inline IProto *create(const char *name) const {
+    auto item = mProtoNameMap.find(name);
+    if (mProtoNameMap.end() == item) {
+      return nullptr;
+    }
+    auto itemType = mProtoMap.find(item->second);
+    if (mProtoMap.end() != itemType) {
+      return (itemType->second)();
     }
     return nullptr;
   }
@@ -285,17 +318,21 @@ class CS_PROTO_API ProtoFactory {
 #else
   template <typename T>
 #endif
-  inline T *create() {
+/**
+ * @brief create a object
+ * this object is a pointer, you need to delete it by yourself
+ * @return T* 
+ */
+  inline T *create() const {
     return new T();
   }
 
-  uint32_t version();
+  uint32_t version() const;
 
  private:
-  std::map<int, std::function<IProto *()>> kProtoMap;
-  std::map<const char *, int> kProtoNameMap;
-  uint32_t kCounter = 0;
-  uint32_t kVersion = 0;
+  std::map<int, std::function<IProto *()>> mProtoMap;
+  std::map<const char *, int> mProtoNameMap;
+  uint32_t mVersion = 0;
 
 #if __cplusplus >= 202100L
   template <Proto T>
@@ -326,14 +363,14 @@ namespace {                                                                    \
   }                                                                            \
   template <>                                                                  \
   constexpr const char *_proto_name<type>() {                                  \
-    return name;                                                               \
+    return #name;                                                              \
   }                                                                            \
   namespace {                                                                  \
-  struct _regist_##type {                                                      \
-    _regist_##type() {                                                         \
-      static_init_funcs(name, [](ProtoFactory *self)                           \
-        { self->regist<type>(name); });                                        \
+  struct _regist_##name {                                                      \
+    _regist_##name() {                                                         \
+      static_init_funcs(#name, [](ProtoFactory *self)                          \
+        { self->regist<type>(#name); });                                       \
     }                                                                          \
-  } _regist_##type##__tmp;                                                     \
+  } _regist_##name##__tmp;                                                     \
   }                                                                            \
   CS_PROTO_END_NAMESPACE

@@ -138,7 +138,7 @@ struct JsonConvert<T,
                    typename std::enable_if<std::is_enum<T>::value>::type> {
   constexpr static auto kEnumArr = _Neko_GetValidEnumNames<T>(
       std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
-  static void toJsonValue(JsonWriter &writer, const T &value) {
+  static bool toJsonValue(JsonWriter &writer, const T &value) {
     std::string ret;
     for (int i = 0; i < kEnumArr.size(); ++i) {
       if (kEnumArr[i].first == value) {
@@ -146,7 +146,7 @@ struct JsonConvert<T,
       }
     }
     ret += "(" + std::to_string(static_cast<int32_t>(value)) + ")";
-    writer.String(ret.c_str(), ret.size(), true);
+    return writer.String(ret.c_str(), ret.size(), true);
   }
   static bool fromJsonValue(T *dst, const JsonValue &value) {
     if (dst == nullptr) {
@@ -171,8 +171,8 @@ struct JsonConvert<T,
 #else
 template <typename T>
 struct JsonConvert<T, typename std::enable_if<std::is_enum<T>::value>::type> {
-  static void toJsonValue(JsonWriter &writer, const T &value) {
-    writer.Int(static_cast<int32_t>(value));
+  static bool toJsonValue(JsonWriter &writer, const T &value) {
+    return writer.Int(static_cast<int32_t>(value));
   }
   static bool fromJsonValue(T *dst, const JsonValue &value) {
     if (dst == nullptr) {

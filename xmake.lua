@@ -38,6 +38,19 @@ target("test_proto1")
     set_group("serializer")
     add_files("tests/test_proto1.cpp")
 target_end()
+
+target("test_rpc")
+    set_kind("binary")
+    set_languages("c++20")
+    add_includedirs("./modules/Ilias/include")
+    add_packages("rapidjson", "gtest", "spdlog")
+    add_deps("proto_base")
+    add_tests("proto")
+    set_group("serializer")
+    add_files("tests/test_rpc.cpp")
+target_end()
+
+
 --
 -- If you want to known more usage about xmake, please see https://xmake.io
 --

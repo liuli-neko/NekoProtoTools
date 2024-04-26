@@ -81,7 +81,7 @@ struct TestP : public ProtoBase<TestP> {
     CS_PROPERTY_FIELD(TTuple, j) = {1, "hello"};
     CS_PROPERTY_CONTAINER_FIELD(std::vector<int>, k) = {1, 2, 3, 4, 5};
 };
-CS_DECLARE_PROTO(TestP, "TestP");
+CS_DECLARE_PROTO(TestP, TestP);
 
 class JsonSerializerTest : public testing::Test {
 protected:

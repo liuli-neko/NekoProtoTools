@@ -11,12 +11,13 @@ CS_PROTO_BEGIN_NAMESPACE
 
 template <typename T>
 struct JsonConvert<std::list<T>, void> {
-  static void toJsonValue(JsonWriter &writer, const std::list<T> &value) {
-    writer.StartArray();
+  static bool toJsonValue(JsonWriter &writer, const std::list<T> &value) {
+    auto ret = writer.StartArray();
     for (auto &v : value) {
-      JsonConvert<T>::toJsonValue(writer, v);
+      ret = JsonConvert<T>::toJsonValue(writer, v) && ret;
     }
-    writer.EndArray();
+    ret = writer.EndArray() && ret;
+    return ret;
   }
   static bool fromJsonValue(std::list<T> *dst, const JsonValue &value) {
     if (!value.IsArray() || dst == nullptr) {
@@ -36,12 +37,13 @@ struct JsonConvert<std::list<T>, void> {
 
 template <typename T>
 struct JsonConvert<std::set<T>, void> {
-  static void toJsonValue(JsonWriter &writer, const std::set<T> &value) {
-    writer.StartArray();
+  static bool toJsonValue(JsonWriter &writer, const std::set<T> &value) {
+    auto ret = writer.StartArray();
     for (auto &v : value) {
-      JsonConvert<T>::toJsonValue(writer, v);
+      ret = JsonConvert<T>::toJsonValue(writer, v) && ret;
     }
-    writer.EndArray();
+    ret = writer.EndArray() && ret;
+    return ret;
   }
   static bool fromJsonValue(std::set<T> *dst, const JsonValue &value) {
     if (!value.IsArray() || dst == nullptr) {
@@ -61,18 +63,19 @@ struct JsonConvert<std::set<T>, void> {
 
 template <typename T>
 struct JsonConvert<std::map<const char *, T>, void> {
-  static void toJsonValue(JsonWriter &writer,
+  static bool toJsonValue(JsonWriter &writer,
                           const std::map<const char *, T> &value) {
     rapidjson::StringBuffer mBuffer;
     JsonWriter mwriter(mBuffer);
-    mwriter.StartObject();
+    auto ret = mwriter.StartObject();
     for (auto &v : value) {
       mwriter.Key(v.first);
-      JsonConvert<T>::toJsonValue(mwriter, v.second);
+      ret = JsonConvert<T>::toJsonValue(mwriter, v.second) && ret;
     }
-    mwriter.EndObject();
-    writer.RawValue(mBuffer.GetString(), mBuffer.GetSize(),
-                    rapidjson::kObjectType);
+    ret = mwriter.EndObject() && ret;
+    ret = writer.RawValue(mBuffer.GetString(), mBuffer.GetSize(),
+                    rapidjson::kObjectType) && ret;
+    return ret;
   }
   static bool fromJsonValue(std::map<const char *, T> *dst,
                             const JsonValue &value) {
@@ -98,12 +101,13 @@ struct JsonConvert<std::map<const char *, T>, void> {
 
 template <typename T, size_t t>
 struct JsonConvert<std::array<T, t>, void> {
-  static void toJsonValue(JsonWriter &writer, const std::array<T, t> &value) {
-    writer.StartArray();
+  static bool toJsonValue(JsonWriter &writer, const std::array<T, t> &value) {
+    auto ret = writer.StartArray();
     for (int i = 0; i < t; ++i) {
-      JsonConvert<T>::toJsonValue(writer, value[i]);
+      ret = JsonConvert<T>::toJsonValue(writer, value[i]) && ret;
     }
-    writer.EndArray();
+    ret = writer.EndArray() && ret;
+    return ret;
   }
   static bool fromJsonValue(std::array<T, t> *dst, const JsonValue &value) {
     if (!value.IsArray() || dst == nullptr) {
@@ -121,18 +125,19 @@ struct JsonConvert<std::array<T, t>, void> {
 
 template <typename T>
 struct JsonConvert<std::map<std::string, T>, void> {
-  static void toJsonValue(JsonWriter &writer,
+  static bool toJsonValue(JsonWriter &writer,
                           const std::map<std::string, T> &value) {
     rapidjson::StringBuffer mBuffer;
     JsonWriter mwriter(mBuffer);
-    mwriter.StartObject();
+    auto ret = mwriter.StartObject();
     for (auto &v : value) {
-      mwriter.Key(v.first.c_str(), v.first.size(), true);
-      JsonConvert<T>::toJsonValue(mwriter, v.second);
+      ret = mwriter.Key(v.first.c_str(), v.first.size(), true) && ret;
+      ret = JsonConvert<T>::toJsonValue(mwriter, v.second) && ret;
     }
-    mwriter.EndObject();
-    writer.RawValue(mBuffer.GetString(), mBuffer.GetSize(),
-                    rapidjson::kObjectType);
+    ret = mwriter.EndObject() && ret;
+    ret = writer.RawValue(mBuffer.GetString(), mBuffer.GetSize(),
+                    rapidjson::kObjectType) && ret;
+    return ret;
   }
   static bool fromJsonValue(std::map<std::string, T> *dst,
                             const JsonValue &value) {
@@ -163,44 +168,46 @@ struct JsonConvert<std::tuple<Arg...>> {
   template <typename TupleT, size_t N>
   struct toJsonValueImp {
     using Type = typename std::tuple_element<N - 1, TupleT>::type;
-    static void toJsonValue(JsonWriter &writer,const TupleT &value) {
-        toJsonValueImp<TupleT, N-1>::toJsonValue(writer, value);
-        JsonConvert<Type>::toJsonValue(writer, std::get<N-1>(value));
+    static bool toJsonValue(JsonWriter &writer,const TupleT &value) {
+        auto ret = toJsonValueImp<TupleT, N-1>::toJsonValue(writer, value);
+        ret = JsonConvert<Type>::toJsonValue(writer, std::get<N-1>(value)) && ret;
+        return ret;
     }
   };
   template <typename TupleT>
   struct toJsonValueImp<TupleT, 1> {
     using Type = typename std::tuple_element<0, TupleT>::type;
-    static void toJsonValue(JsonWriter &writer,const TupleT &value) {
-        JsonConvert<Type>::toJsonValue(writer, std::get<0>(value));
+    static bool toJsonValue(JsonWriter &writer,const TupleT &value) {
+        return JsonConvert<Type>::toJsonValue(writer, std::get<0>(value));
     }
   };
   template <typename TupleT, size_t N>
   struct fromJsonValueImp {
     using Type = typename std::tuple_element<N - 1, TupleT>::type;
-    static void fromJsonValue(TupleT *dst, const JsonValue &value) {
-        fromJsonValueImp<TupleT, N-1>::fromJsonValue(dst, value);
-        JsonConvert<Type>::fromJsonValue(&(std::get<N-1>(*dst)), value[N-1]);
+    static bool fromJsonValue(TupleT *dst, const JsonValue &value) {
+        bool ret = fromJsonValueImp<TupleT, N-1>::fromJsonValue(dst, value);
+        ret = JsonConvert<Type>::fromJsonValue(&(std::get<N-1>(*dst)), value[N-1]) && ret;
+        return ret;
     }
   };
   template <typename TupleT>
   struct fromJsonValueImp<TupleT, 1> {
     using Type = typename std::tuple_element<0, TupleT>::type;
-    static void fromJsonValue(TupleT *dst, const JsonValue &value) {
-        JsonConvert<Type>::fromJsonValue(&(std::get<0>(*dst)), value[0]);
+    static bool fromJsonValue(TupleT *dst, const JsonValue &value) {
+        return JsonConvert<Type>::fromJsonValue(&(std::get<0>(*dst)), value[0]);
     }
   };
-  static void toJsonValue(JsonWriter &writer, const std::tuple<Arg...> &value) {
-    writer.StartArray();
-    toJsonValueImp<std::tuple<Arg...>, sizeof...(Arg)>::toJsonValue(writer, value);
-    writer.EndArray();
+  static bool toJsonValue(JsonWriter &writer, const std::tuple<Arg...> &value) {
+    auto ret = writer.StartArray();
+    ret = toJsonValueImp<std::tuple<Arg...>, sizeof...(Arg)>::toJsonValue(writer, value) && ret;
+    ret = writer.EndArray() && ret;
+    return ret;
   }
   static bool fromJsonValue(std::tuple<Arg...> *dst, const JsonValue &value) {
     if (dst == nullptr || !value.IsArray()) {
         return false;
     }
-    fromJsonValueImp<std::tuple<Arg...>, sizeof...(Arg)>::fromJsonValue(dst, value);
-    return true;
+    return fromJsonValueImp<std::tuple<Arg...>, sizeof...(Arg)>::fromJsonValue(dst, value);
   }
 };
 
