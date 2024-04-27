@@ -44,6 +44,7 @@ class ProtoBase : public IProto {
  public:
   using ProtoType = T;
   using SerializerType = SerializerT;
+  using ProtoBaseType = ProtoBase;
 
   inline ProtoBase() = default;
 
@@ -187,12 +188,12 @@ private:                                                                      \
     if (_init_##name) { return; }                                             \
     _init_##name = true;                                                      \
     T::mSerializeVistor.insert(std::make_pair(#name,                          \
-      [](ProtoBase<T, typename T::SerializerType> *self) {                    \
+      [](typename T::ProtoBaseType *self) {                                   \
       return self->serializer()->insert(#name,                                \
       static_cast<const T *>(self)->name());                                  \
     }));                                                                      \
     T::mDeserializeVistor.insert(                                             \
-    std::make_pair(#name, [](ProtoBase<T, typename T::SerializerType> *self) {\
+    std::make_pair(#name, [](typename T::ProtoBaseType *self) {               \
         return self->serializer()->get(#name,                                 \
         &(static_cast<T *>(self)->mutable_##name()));                         \
     }));                                                                      \
@@ -210,13 +211,13 @@ private:                                                                      \
     static bool _init_##name = false;                                         \
     if (_init_##name) { return; }                                             \
     _init_##name = true;                                                      \
-    T::mSerializeVistor.insert(std::make_pair(#name, [](ProtoBase<T,          \
-      typename T::SerializerType> *self) {                                    \
+    T::mSerializeVistor.insert(std::make_pair(#name, [](                      \
+        typename T::ProtoBaseType *self) {                                    \
       return self->serializer()->insert(#name,                                \
         static_cast<const T *>(self)->name);                                  \
     }));                                                                      \
     T::mDeserializeVistor.insert(                                             \
-    std::make_pair(#name, [](ProtoBase<T, typename T::SerializerType> *self) {\
+    std::make_pair(#name, [](typename T::ProtoBaseType *self) {               \
         return self->serializer()->get(#name,                                 \
           &(static_cast<T *>(self)->name));                                   \
     }));                                                                      \

@@ -7,6 +7,10 @@
 #include <map>
 #include <set>
 
+#ifdef GetObject
+#undef GetObject
+#endif
+
 CS_PROTO_BEGIN_NAMESPACE
 
 template <typename T>
