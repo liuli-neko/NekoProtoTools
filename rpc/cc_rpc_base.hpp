@@ -103,7 +103,7 @@ protected:
 template <>
 class Channel<ILIAS_NAMESPACE::IStreamClient, ILIAS_NAMESPACE::IStreamClient> : public ChannelBase {
 public:
-    Channel(RPCContext *ctxt, ILIAS_NAMESPACE::IStreamClient &client, uint16_t channelId) : ChannelBase(ctxt, channelId), mClient(client) {}
+    Channel(RPCContext *ctxt,ILIAS_NAMESPACE::IStreamClient &client, uint16_t channelId) : ChannelBase(ctxt, channelId), mClient(std::move(client)) {}
     ILIAS_NAMESPACE::Task<void> send(std::unique_ptr<CS_PROTO_NAMESPACE::IProto> message) override {
         auto msg = message->serialize();
         CCMessageHeader msgHeader;
@@ -133,9 +133,17 @@ public:
             co_return ret.error();
         }
         CCMessageHeader msgHeader;
-        msgHeader.deserialize(headerData);
+        msgHeader.deserialize(std::move(headerData));
+        std::vector<char> data(msgHeader.length(), 0);
+        ret = co_await recvUntilFill(data);
+        if (!ret) {
+            co_return ret.error();
+        }
         std::unique_ptr<CS_PROTO_NAMESPACE::IProto> message(mRPCContext->getProtoFactory().create(msgHeader.protoType()));
-        co_return message;
+        message->deserialize(std::move(data));
+        data.clear();
+        headerData.clear();
+        co_return std::move(message);
     }
     void close() override {
         ilias_wait mClient.send(nullptr, 0);
