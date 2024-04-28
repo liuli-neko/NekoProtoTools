@@ -246,23 +246,24 @@ struct BinaryConvert<int64_t, void> {
 template <>
 struct BinaryConvert<std::string, void> {
   static bool toBinaryArray(std::vector<char> &buf, const std::string &value) {
-    buf.resize(buf.size() + value.size(), 0);
+    buf.resize(buf.size() + value.size() + 4, 0);
+    uint32_t len = htobe32(value.size());
+    memcpy(buf.data() + buf.size() - 4 - value.size(), &len, 4);
     memcpy(buf.data() + buf.size() - value.size(), value.data(), value.size());
     return true;
   }
   static bool fromBinaryArray(std::string *dst, const std::vector<char> &buf, int &offset_byte) {
-    if (buf.size() < offset_byte + 1) {
+    if (buf.size() < offset_byte + 4) {
         return false;
     }
-    int len = offset_byte;
-    while (len < buf.size() && buf[len] != 0) {
-      ++len;
+    int len = 0;
+    memcpy(&len, buf.data() + offset_byte, 4);
+    len = be32toh(len);
+    if (buf.size() < offset_byte + len + 4) {
+        return false;
     }
-    if (buf.size() <= len) {
-      return false;
-    }
-    *dst = std::string(buf.data() + offset_byte, len - offset_byte);
-    offset_byte = len + 1;
+    *dst = std::string(buf.data() + offset_byte + 4, len);
+    offset_byte += len + 4;
     return true;
   }
 };

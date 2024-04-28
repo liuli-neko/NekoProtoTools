@@ -28,35 +28,36 @@ struct StructA {
     TEnum h;
 };
 
-#if (defined(_MSC_VER) && _MSVC_LANG <= 201402L) || ( defined(__GNUC__) && cplusplus < 201703L)
+#if (defined(_MSC_VER) && _MSVC_LANG <= 201402L) || ( defined(__GNUC__) && __cplusplus < 201703L)
 CS_PROTO_BEGIN_NAMESPACE
 template <>
 struct JsonConvert<StructA, void> {
-  static void toJsonValue(JsonWriter &writer, const StructA &value) {
-    writer.StartArray();
-    JsonConvert<int>::toJsonValue(writer, value.a);
-    JsonConvert<std::string>::toJsonValue(writer, value.b);
-    JsonConvert<bool>::toJsonValue(writer, value.c);
-    JsonConvert<double>::toJsonValue(writer, value.d);
-    JsonConvert<std::list<int>>::toJsonValue(writer, value.e);
-    JsonConvert<std::map<std::string, int>>::toJsonValue(writer, value.f);
-    JsonConvert<std::array<int, 5>>::toJsonValue(writer, value.g);
-    JsonConvert<TEnum>::toJsonValue(writer, value.h);
-    writer.EndArray();
+  static bool toJsonValue(JsonWriter &writer, const StructA &value) {
+    auto ret = writer.StartArray();
+    ret = JsonConvert<int>::toJsonValue(writer, value.a) && ret;
+    ret = JsonConvert<std::string>::toJsonValue(writer, value.b) && ret;
+    ret = JsonConvert<bool>::toJsonValue(writer, value.c) && ret;
+    ret = JsonConvert<double>::toJsonValue(writer, value.d) && ret;
+    ret = JsonConvert<std::list<int>>::toJsonValue(writer, value.e) && ret;
+    ret = JsonConvert<std::map<std::string, int>>::toJsonValue(writer, value.f) && ret;
+    ret = JsonConvert<std::array<int, 5>>::toJsonValue(writer, value.g) && ret;
+    ret = JsonConvert<TEnum>::toJsonValue(writer, value.h) && ret;
+    ret = writer.EndArray() && ret;
+    return ret;
   }
   static bool fromJsonValue(StructA *result, const JsonValue &value) {
     if (result == nullptr || !value.IsArray()) {
         return false;
     }
-    JsonConvert<int>::fromJsonValue(&result->a, value[0]);
-    JsonConvert<std::string>::fromJsonValue(&result->b, value[1]);
-    JsonConvert<bool>::fromJsonValue(&result->c, value[2]);
-    JsonConvert<double>::fromJsonValue(&result->d, value[3]);
-    JsonConvert<std::list<int>>::fromJsonValue(&result->e, value[4]);
-    JsonConvert<std::map<std::string, int>>::fromJsonValue(&result->f, value[5]);
-    JsonConvert<std::array<int, 5>>::fromJsonValue(&result->g, value[6]);
-    JsonConvert<TEnum>::fromJsonValue(&result->h, value[7]);
-    return true;
+    auto ret = JsonConvert<int>::fromJsonValue(&result->a, value[0]);
+    ret = JsonConvert<std::string>::fromJsonValue(&result->b, value[1]) && ret;
+    ret = JsonConvert<bool>::fromJsonValue(&result->c, value[2]) && ret;
+    ret = JsonConvert<double>::fromJsonValue(&result->d, value[3]) && ret;
+    ret = JsonConvert<std::list<int>>::fromJsonValue(&result->e, value[4]) && ret;
+    ret = JsonConvert<std::map<std::string, int>>::fromJsonValue(&result->f, value[5]) && ret;
+    ret = JsonConvert<std::array<int, 5>>::fromJsonValue(&result->g, value[6]) && ret;
+    ret = JsonConvert<TEnum>::fromJsonValue(&result->h, value[7]) && ret;
+    return ret;
   }
 };
 

@@ -97,11 +97,20 @@ class ProtoBase : public IProto {
 
   template <typename U>
   bool deserialize(const U &data) {
-    mSerializer.startDeserialize(data);
-    for (auto item : mDeserializeVistor) {
-      (item.second)(const_cast<ProtoBase *>(this));
+    if (!mSerializer.startDeserialize(data)) {
+      return false;
     }
-    mSerializer.endDeserialize();
+    bool ret = true;
+    for (auto item : mDeserializeVistor) {
+      if (!(item.second)(const_cast<ProtoBase *>(this))) {
+        ret = false;
+        CS_LOG_WARN("field {} deserialize error", item.first);
+      }
+    }
+    if (!mSerializer.endDeserialize() || !ret) {
+      return false;
+    }
+    return true;
   }
 
   inline int type() const override { return _proto_type<T>(); }
