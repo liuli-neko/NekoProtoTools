@@ -1,9 +1,8 @@
 #include <iostream>
 #include <sstream>
 
-#include "../rpc/cc_rpc_base.hpp"
 #include "../proto/cc_proto_json_serializer.hpp"
-
+#include "../rpc/cc_rpc_base.hpp"
 #include "ilias_poll.hpp"
 
 CS_RPC_USE_NAMESPACE
@@ -16,7 +15,7 @@ class Message : public CS_PROTO_NAMESPACE::ProtoBase<Message> {
 };
 CS_DECLARE_PROTO(Message, Message);
 
-std::string to_hex(const std::vector<char> &data) {
+std::string to_hex(const std::vector<char>& data) {
     std::stringstream ss;
     for (auto c : data) {
         ss << "\\" << std::hex << (uint32_t(c) & 0xFF);
@@ -24,7 +23,7 @@ std::string to_hex(const std::vector<char> &data) {
     return ss.str();
 }
 
-Task<void> ClientLoop(PollContext &ioContext, ChannelFactory &channelFactor) {
+Task<void> ClientLoop(PollContext& ioContext, ChannelFactory& channelFactor) {
     auto ret = co_await channelFactor.connect("tcp://127.0.0.1:1234", 0);
     if (!ret) {
         co_return ret.error();
@@ -32,7 +31,7 @@ Task<void> ClientLoop(PollContext &ioContext, ChannelFactory &channelFactor) {
     std::cout << "connect successed " << std::endl;
     auto channel = ret.value();
     int count = 10;
-    while (count -- > 0) {
+    while (count-- > 0) {
         if (auto cl = channel.lock(); cl != nullptr) {
             CS_LOG_INFO("send message to channel {}", cl->channelId());
             auto msg = std::make_unique<Message>();
@@ -73,9 +72,9 @@ Task<void> ClientLoop(PollContext &ioContext, ChannelFactory &channelFactor) {
             co_return Result<>();
         }
     }
-    // if (auto cl = channel.lock(); cl != nullptr) {
-        // cl->close();
-    // }
+    if (auto cl = channel.lock(); cl != nullptr) {
+        cl->close();
+    }
     co_return Result<>();
 }
 
@@ -127,35 +126,31 @@ Task<void> HandleLoop(std::weak_ptr<cs_ccproto::ChannelBase> channel) {
     }
     co_return Result<>();
 }
-Task<void> serverLoop(PollContext &ioContext, ChannelFactory &channelFactor) {
-    while (true)
-    {
-        CS_LOG_INFO("serverLoop");
-        auto ret = co_await channelFactor.accept();
-        if (!ret) {
-            CS_LOG_ERROR("accept failed: {}", ret.error().message());
-            co_return ret.error();
-        }
-        CS_LOG_INFO("accept successed");
-        ilias_go HandleLoop(ret.value());
+Task<void> serverLoop(PollContext& ioContext, ChannelFactory& channelFactor) {
+    CS_LOG_INFO("serverLoop");
+    auto ret = co_await channelFactor.accept();
+    if (!ret) {
+        CS_LOG_ERROR("accept failed: {}", ret.error().message());
+        co_return ret.error();
     }
+    CS_LOG_INFO("accept successed");
+    co_await HandleLoop(ret.value());
+    co_return Result<>();
 }
 
-int main(int argc, char **argv) {
+Task<void> test(PollContext& ioContext, ChannelFactory& channelFactor, ChannelFactory& channelFactor1) {
+    co_await WhenAll(serverLoop(ioContext, channelFactor), ClientLoop(ioContext, channelFactor1));
+    co_return Result<>();
+}
+
+int main(int argc, char** argv) {
     spdlog::set_level(spdlog::level::debug);
     PollContext ioContext;
     std::shared_ptr<CS_PROTO_NAMESPACE::ProtoFactory> protoFactory(new CS_PROTO_NAMESPACE::ProtoFactory());
     ChannelFactory channelFactor(ioContext, protoFactory);
-    if (argc > 1) {
-        if (std::string(argv[1]) == "server") {
-            channelFactor.listen("tcp://127.0.0.1:1234");
-            ilias_wait serverLoop(ioContext, channelFactor);
-        } else {
-            ilias_wait ClientLoop(ioContext, channelFactor);
-        }
-    } else {
-        std::cout << "Usage: " << argv[0] << " [server|client]" << std::endl;
-    }
+    ChannelFactory channelFactor1(ioContext, protoFactory);
+    channelFactor.listen("tcp://127.0.0.1:1234");
+    ilias_wait test(ioContext, channelFactor, channelFactor1);
     channelFactor.close();
     // cc_rpc_base::rpc_server server;
     // server.start();

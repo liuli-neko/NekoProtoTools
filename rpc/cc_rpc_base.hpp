@@ -15,7 +15,7 @@
 CS_RPC_BEGIN_NAMESPACE
 class ChannelFactory;
 
-class CCMessageHeader : public CS_PROTO_NAMESPACE::ProtoBase<CCMessageHeader, CS_PROTO_NAMESPACE::BinarySerializer> {
+class CS_RPC_API CCMessageHeader : public CS_PROTO_NAMESPACE::ProtoBase<CCMessageHeader, CS_PROTO_NAMESPACE::BinarySerializer> {
 public:
     inline CCMessageHeader(uint32_t length = 0, int32_t protoType = 0, uint16_t transType = 0, uint32_t reserved = 0)
         : m_length(length), m_protoType(protoType), m_transType(transType), m_reserved(reserved) {}
@@ -26,7 +26,7 @@ public:
     CS_PROPERTY_FIELD(uint32_t, reserved) = 0;   // 4 : the reserved field
 };
 
-class ChannelHeader : public CS_PROTO_NAMESPACE::ProtoBase<ChannelHeader, CS_PROTO_NAMESPACE::BinarySerializer> {
+class CS_RPC_API ChannelHeader : public CS_PROTO_NAMESPACE::ProtoBase<ChannelHeader, CS_PROTO_NAMESPACE::BinarySerializer> {
 public:
     enum MessageType {
         UserMessage = 1,
@@ -60,21 +60,10 @@ public:
 
 protected:
     ChannelBase(ChannelFactory* ctxt, uint16_t channelId);
-    std::queue<std::unique_ptr<CS_PROTO_NAMESPACE::IProto>> mRecvQueue;
     const uint16_t mChannelId;
-    ChannelFactory* mChannelFactory = nullptr;
+    ChannelFactory * const mChannelFactory = nullptr;
     ChannelState mState;
 };
-
-inline ChannelBase::ChannelBase(ChannelFactory* ctxt, uint16_t channelId)
-    : mChannelId(channelId), mChannelFactory(ctxt) {}
-
-inline uint16_t ChannelBase::channelId() { return mChannelId; }
-
-inline ChannelBase::ChannelState ChannelBase::state() { return mState; }
-
-template <typename SenderType, typename ReceiverType>
-class Channel;
 
 class CS_RPC_API ChannelFactory {
 public:
@@ -108,11 +97,10 @@ protected:
     std::shared_ptr<CS_PROTO_NAMESPACE::ProtoFactory> mFactory;
 };
 
-template <>
-class Channel<ILIAS_NAMESPACE::ByteStream<>, ILIAS_NAMESPACE::ByteStream<>> : public ChannelBase {
+class CS_RPC_API ByteStreamChannel : public ChannelBase {
 public:
-    Channel(ChannelFactory* ctxt, ILIAS_NAMESPACE::ByteStream<>&& client, uint16_t channelId);
-    ~Channel() = default;
+    ByteStreamChannel(ChannelFactory* ctxt, ILIAS_NAMESPACE::ByteStream<>&& client, uint16_t channelId);
+    ~ByteStreamChannel() = default;
     ILIAS_NAMESPACE::Task<void> send(std::unique_ptr<CS_PROTO_NAMESPACE::IProto> message) override;
     ILIAS_NAMESPACE::Task<std::unique_ptr<CS_PROTO_NAMESPACE::IProto>> recv() override;
     void close() override;
@@ -121,5 +109,12 @@ public:
 private:
     ILIAS_NAMESPACE::ByteStream<> mClient;
 };
+
+inline ChannelBase::ChannelBase(ChannelFactory* ctxt, uint16_t channelId)
+    : mChannelId(channelId), mChannelFactory(ctxt) {}
+
+inline uint16_t ChannelBase::channelId() { return mChannelId; }
+
+inline ChannelBase::ChannelState ChannelBase::state() { return mState; }
 
 CS_RPC_END_NAMESPACE

@@ -93,7 +93,6 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
     }
     buf.resize(hmsg.length());
     ret1 = co_await client1.recvAll(buf.data(), buf.size());
-    CS_LOG_INFO("recv data data {}", spdlog::to_hex(buf.begin(), buf.end()));
     if (!ret1) {
         CS_LOG_ERROR("recv data error");
         co_return ret.error();
@@ -128,8 +127,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
         co_return ret.error();
     }
 
-    std::shared_ptr<ChannelBase> channel(new Channel<ByteStream<IStreamClient, char>, ByteStream<IStreamClient, char>>(
-        this, std::move(client1), cmsg.channelId()));
+    std::shared_ptr<ChannelBase> channel(new ByteStreamChannel(this, std::move(client1), cmsg.channelId()));
     mChannels.insert(std::make_pair(cmsg.channelId(), channel));
     co_return std::weak_ptr<ChannelBase>(channel);
 }
@@ -212,8 +210,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::makeChannel(IStreamClient&& cli
         co_return Error(Error::Unknown);
     }
 
-    std::shared_ptr<ChannelBase> channel(new Channel<ByteStream<IStreamClient, char>, ByteStream<IStreamClient, char>>(
-        this, std::move(client1), cmsg.channelId()));
+    std::shared_ptr<ChannelBase> channel(new ByteStreamChannel(this, std::move(client1), cmsg.channelId()));
     mChannels.insert(std::make_pair(cmsg.channelId(), channel));
     co_return std::weak_ptr<ChannelBase>(channel);
 }
@@ -236,16 +233,12 @@ std::vector<uint16_t> ChannelFactory::getChannels() {
 
 const CS_PROTO_NAMESPACE::ProtoFactory& ChannelFactory::getProtoFactory() { return *(mFactory.get()); }
 
-
-Channel<ILIAS_NAMESPACE::ByteStream<>, ILIAS_NAMESPACE::ByteStream<>>::Channel(ChannelFactory* ctxt,
-                                                                               ILIAS_NAMESPACE::ByteStream<>&& client,
-                                                                               uint16_t channelId)
+ByteStreamChannel::ByteStreamChannel(ChannelFactory* ctxt, ILIAS_NAMESPACE::ByteStream<>&& client, uint16_t channelId)
     : ChannelBase(ctxt, channelId), mClient(std::move(client)) {
     mState = ChannelBase::ChannelState::Connected;
 }
 
-ILIAS_NAMESPACE::Task<void> Channel<ILIAS_NAMESPACE::ByteStream<>, ILIAS_NAMESPACE::ByteStream<>>::send(
-    std::unique_ptr<CS_PROTO_NAMESPACE::IProto> message) {
+ILIAS_NAMESPACE::Task<void> ByteStreamChannel::send(std::unique_ptr<CS_PROTO_NAMESPACE::IProto> message) {
     if (mState != ChannelBase::ChannelState::Connected) {
         co_return ILIAS_NAMESPACE::Error(ILIAS_NAMESPACE::Error::Code::Unknown);
     }
@@ -265,8 +258,7 @@ ILIAS_NAMESPACE::Task<void> Channel<ILIAS_NAMESPACE::ByteStream<>, ILIAS_NAMESPA
     co_return ILIAS_NAMESPACE::Result<void>();
 }
 
-ILIAS_NAMESPACE::Task<std::unique_ptr<CS_PROTO_NAMESPACE::IProto>>
-Channel<ILIAS_NAMESPACE::ByteStream<>, ILIAS_NAMESPACE::ByteStream<>>::recv() {
+ILIAS_NAMESPACE::Task<std::unique_ptr<CS_PROTO_NAMESPACE::IProto>> ByteStreamChannel::recv() {
     if (mState != ChannelBase::ChannelState::Connected) {
         co_return ILIAS_NAMESPACE::Error(ILIAS_NAMESPACE::Error::Code::Unknown);
     }
@@ -309,7 +301,7 @@ Channel<ILIAS_NAMESPACE::ByteStream<>, ILIAS_NAMESPACE::ByteStream<>>::recv() {
     co_return std::move(message);
 }
 
-void Channel<ILIAS_NAMESPACE::ByteStream<>, ILIAS_NAMESPACE::ByteStream<>>::close() {
+void ByteStreamChannel::close() {
     if (mState == ChannelBase::ChannelState::Closed) {
         return;
     }
@@ -326,9 +318,7 @@ void Channel<ILIAS_NAMESPACE::ByteStream<>, ILIAS_NAMESPACE::ByteStream<>>::clos
     mState = ChannelBase::ChannelState::Closed;
 }
 
-void Channel<ILIAS_NAMESPACE::ByteStream<>, ILIAS_NAMESPACE::ByteStream<>>::destroy() {
-    mChannelFactory->destroyChannel(mChannelId);
-}
+void ByteStreamChannel::destroy() { mChannelFactory->destroyChannel(mChannelId); }
 
 CS_RPC_END_NAMESPACE
 
