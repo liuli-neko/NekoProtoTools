@@ -11,8 +11,6 @@
 
 CS_PROTO_USE_NAMESPACE
 
-CS_PROTO_SET_TYPE_START(1)
-
 enum TEnum {
     TEnum_A = 1,
     TEnum_B = 2,

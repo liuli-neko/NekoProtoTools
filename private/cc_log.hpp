@@ -24,6 +24,7 @@
 
 #ifdef CS_CCPROTO_LOG
 #   include <spdlog/spdlog.h>
+#   include <spdlog/fmt/bin_to_hex.h>
 #   define CS_LOG_INFO(...)                                                         \
         spdlog::info(__VA_ARGS__)
 #   define CS_LOG_WARN(...)                                                         \
