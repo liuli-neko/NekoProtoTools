@@ -4,6 +4,9 @@ set_version("1.0.0")
 
 add_requires("rapidjson", "spdlog")
 
+if is_mode("debug") then
+    add_defines("CS_CCPROTO_LOG_CONTEXT")
+end 
 
 target("test_co")
     set_languages("c++20")
