@@ -19,8 +19,10 @@ jobs:
         xmake-version: latest
     - name: Update apt
       run: sudo apt update -y
+    - name: Install valgrind
+      run: sudo apt install valgrind -y
     - name: Configure
-      run: xmake f -m debug -y
+      run: xmake f -m valgrind -y
     - name: Update submodules
       run: git submodule update --init --recursive
     - name: Build

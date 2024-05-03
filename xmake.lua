@@ -1,5 +1,5 @@
 set_project("cc-proto")
-add_rules("mode.debug", "mode.release")
+add_rules("mode.debug", "mode.release", "mode.valgrind")
 set_version("1.0.0")
 
 add_requires("rapidjson", "spdlog")
