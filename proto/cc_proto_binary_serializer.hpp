@@ -232,24 +232,24 @@ struct BinaryConvert<int64_t, void> {
 template <>
 struct BinaryConvert<std::string, void> {
     static bool toBinaryArray(std::vector<char>& buf, const std::string& value) {
-        buf.resize(buf.size() + value.size() + 4, 0);
-        uint32_t len = htobe32(value.size());
-        memcpy(buf.data() + buf.size() - 4 - value.size(), &len, 4);
+        buf.resize(buf.size() + value.size() + 8, 0);
+        uint64_t len = htobe64((uint64_t)value.size());
+        memcpy(buf.data() + buf.size() - 8 - value.size(), &len, 8);
         memcpy(buf.data() + buf.size() - value.size(), value.data(), value.size());
         return true;
     }
     static bool fromBinaryArray(std::string* dst, const std::vector<char>& buf, int& offset_byte) {
-        if (buf.size() < offset_byte + 4) {
+        if (buf.size() < offset_byte + 8) {
             return false;
         }
-        int len = 0;
-        memcpy(&len, buf.data() + offset_byte, 4);
-        len = be32toh(len);
-        if (buf.size() < offset_byte + len + 4) {
+        uint64_t len = 0;
+        memcpy(&len, buf.data() + offset_byte, 8);
+        len = be64toh(len);
+        if (buf.size() < offset_byte + len + 8) {
             return false;
         }
         *dst = std::string(buf.data() + offset_byte + 4, len);
-        offset_byte += len + 4;
+        offset_byte += len + 8;
         return true;
     }
 };

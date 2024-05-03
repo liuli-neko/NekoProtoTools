@@ -139,7 +139,7 @@ bool JsonSerializer::insert(const char* name, const T& value) {
 inline bool JsonSerializer::startDeserialize(const std::vector<char>& data) {
     mDocument.Parse(data.data(), data.size());
     if (mDocument.HasParseError()) {
-        CS_LOG_ERROR("parse error %d", mDocument.GetParseError());
+        CS_LOG_ERROR("parse error %d", (int)mDocument.GetParseError());
         return false;
     }
     return true;
@@ -177,9 +177,9 @@ struct JsonConvert<int, void> {
 };
 
 template <>
-struct JsonConvert<uint, void> {
-    static bool toJsonValue(JsonWriter& writer, const uint value) { return writer.Uint(value); }
-    static bool fromJsonValue(uint* dst, const JsonValue& value) {
+struct JsonConvert<unsigned int, void> {
+    static bool toJsonValue(JsonWriter& writer, const unsigned int value) { return writer.Uint(value); }
+    static bool fromJsonValue(unsigned int* dst, const JsonValue& value) {
         if (!value.IsUint() || dst == nullptr) {
             return false;
         }
@@ -298,18 +298,6 @@ struct JsonConvert<float, void> {
             return false;
         }
         (*dst) = value.GetDouble();
-        return true;
-    }
-};
-
-template <>
-struct JsonConvert<long long int, void> {
-    static bool toJsonValue(JsonWriter& writer, const long long int value) { return writer.Int64(value); }
-    static bool fromJsonValue(long long int* dst, const JsonValue& value) {
-        if (!value.IsInt64() || dst == nullptr) {
-            return false;
-        }
-        (*dst) = value.GetInt64();
         return true;
     }
 };
