@@ -55,11 +55,11 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::connect(std::string_view hostna
         IStreamClient client = TcpClient(mIoContext, AF_INET);
         auto ret = co_await client.connect(IPEndpoint(IPAddress4::fromString(ip.c_str()), port));
         if (!ret) {
-            co_return ret.error();
+            co_return Unexpected(ret.error());
         }
         auto ret1 = co_await makeChannel(std::move(client), channelId);
         if (!ret1) {
-            co_return ret.error();
+            co_return Unexpected(ret.error());
         }
         co_return ret1.value();
     }
@@ -69,7 +69,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
     auto ret = co_await mListener.accept();
     if (!ret) {
         CS_LOG_ERROR("tcp listener Failed. can't accept");
-        co_return ret.error();
+        co_return Unexpected(ret.error());
     }
 
     ByteStream<IStreamClient, char> client1(std::move(ret.value().first));
@@ -77,7 +77,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
     auto ret1 = co_await client1.recvAll(buf.data(), buf.size());
     if (!ret1) {
         CS_LOG_ERROR("recv msg header error");
-        co_return ret.error();
+        co_return Unexpected(ret.error());
     }
     CCMessageHeader hmsg;
     hmsg.deserialize(buf);
@@ -85,26 +85,26 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
     ChannelHeader cmsg;
     if (hmsg.transType() != static_cast<uint16_t>(TransType::Channel)) {
         CS_LOG_ERROR("trans type {} is not channel", hmsg.transType());
-        co_return Error(Error::Unknown);
+        co_return Unexpected(Error(Error::Unknown));
     }
     if (hmsg.protoType() != cmsg.type()) {
         CS_LOG_ERROR("type {} is not channel header", hmsg.type());
-        co_return Error(Error::Unknown);
+        co_return Unexpected(Error(Error::Unknown));
     }
     buf.resize(hmsg.length());
     ret1 = co_await client1.recvAll(buf.data(), buf.size());
     if (!ret1) {
         CS_LOG_ERROR("recv data error");
-        co_return ret.error();
+        co_return Unexpected(ret.error());
     }
     cmsg.deserialize(buf);
     if (cmsg.messageType() != static_cast<uint8_t>(ChannelHeader::MessageType::ConnectMessage)) {
         CS_LOG_ERROR("message type {} is not connect message", cmsg.messageType());
-        co_return Error(Error::Unknown);
+        co_return Unexpected(Error(Error::Unknown));
     }
     if (cmsg.factoryVersion() != getProtoFactory().version()) {
         CS_LOG_ERROR("factory version {} is not {}", cmsg.factoryVersion(), getProtoFactory().version());
-        co_return Error(Error::Unknown);
+        co_return Unexpected(Error(Error::Unknown));
     }
     uint32_t channelId = 0;
     if (cmsg.channelId() == 0) {
@@ -124,7 +124,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
     ret1 = co_await client1.sendAll(buf.data(), buf.size());
     if (!ret1) {
         CS_LOG_ERROR("send data error");
-        co_return ret.error();
+        co_return Unexpected(ret.error());
     }
 
     std::shared_ptr<ChannelBase> channel(new ByteStreamChannel(this, std::move(client1), cmsg.channelId()));
@@ -165,14 +165,14 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::makeChannel(IStreamClient&& cli
 
     if (!ret) {
         CS_LOG_ERROR("send data error");
-        co_return ret.error();
+        co_return Unexpected(ret.error());
     }
 
     msgbuf.resize(CCMessageHeader::size());
     ret = co_await client1.recvAll(msgbuf.data(), msgbuf.size());
     if (!ret) {
         CS_LOG_ERROR("recv msg header error");
-        co_return ret.error();
+        co_return Unexpected(ret.error());
     }
     hmsg.deserialize(std::move(msgbuf));
     msgbuf.clear();
@@ -181,33 +181,33 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::makeChannel(IStreamClient&& cli
     ret = co_await client1.recvAll(buf.data(), buf.size());
     if (!ret) {
         CS_LOG_ERROR("recv data error");
-        co_return ret.error();
+        co_return Unexpected(ret.error());
     }
 
     cmsg.deserialize(buf);
     if (hmsg.protoType() != cmsg.type()) {
         CS_LOG_ERROR("type {} is not channel header", hmsg.type());
-        co_return Error(Error::Unknown);
+        co_return Unexpected(Error(Error::Unknown));
     }
 
     if (hmsg.transType() != static_cast<uint16_t>(TransType::Channel)) {
         CS_LOG_ERROR("trans type {} is not channel", hmsg.transType());
-        co_return Error(Error::Unknown);
+        co_return Unexpected(Error(Error::Unknown));
     }
 
     if (cmsg.messageType() != static_cast<uint8_t>(ChannelHeader::MessageType::ConnectMessage)) {
         CS_LOG_ERROR("message type {} is not connect message", cmsg.messageType());
-        co_return Error(Error::Unknown);
+        co_return Unexpected(Error(Error::Unknown));
     }
 
     if (cmsg.factoryVersion() != mFactory->version()) {
         CS_LOG_ERROR("factory version {} is not {}", cmsg.factoryVersion(), mFactory->version());
-        co_return Error(Error::Unknown);
+        co_return Unexpected(Error(Error::Unknown));
     }
 
     if (channelId != 0 && cmsg.channelId() != channelId) {
         CS_LOG_ERROR("channel id {} is not {}", cmsg.channelId(), channelId);
-        co_return Error(Error::Unknown);
+        co_return Unexpected(Error(Error::Unknown));
     }
 
     std::shared_ptr<ChannelBase> channel(new ByteStreamChannel(this, std::move(client1), cmsg.channelId()));
@@ -253,7 +253,7 @@ ILIAS_NAMESPACE::Task<void> ByteStreamChannel::send(std::unique_ptr<CS_PROTO_NAM
     sendMsg.clear();
     if (!ret) {
         close();
-        co_return ret.error();
+        co_return Unexpected(ret.error());
     }
     co_return ILIAS_NAMESPACE::Result<void>();
 }
@@ -267,7 +267,7 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<CS_PROTO_NAMESPACE::IProto>> ByteStreamCha
     auto ret = co_await mClient.recvAll(headerData.data(), headerData.size());
     if (!ret) {
         close();
-        co_return ret.error();
+        co_return Unexpected(ret.error());
     }
     CCMessageHeader msgHeader;
     msgHeader.deserialize(std::move(headerData));
@@ -279,7 +279,7 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<CS_PROTO_NAMESPACE::IProto>> ByteStreamCha
     ret = co_await mClient.recvAll(data.data(), data.size());
     if (!ret) {
         close();
-        co_return ret.error();
+        co_return Unexpected(ret.error());
     }
     std::unique_ptr<CS_PROTO_NAMESPACE::IProto> message(
         mChannelFactory->getProtoFactory().create(msgHeader.protoType()));
