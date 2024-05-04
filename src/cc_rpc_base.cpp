@@ -301,10 +301,16 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<CS_PROTO_NAMESPACE::IProto>> ByteStreamCha
     co_return std::move(message);
 }
 
+Task<void> _closeLater(ILIAS_NAMESPACE::ByteStream<> client, std::vector<char> buf) {
+    co_await client.send(buf.data(), buf.size());
+    co_return ILIAS_NAMESPACE::Result<>();
+}
+
 void ByteStreamChannel::close() {
     if (mState == ChannelBase::ChannelState::Closed) {
         return;
     }
+    mState = ChannelBase::ChannelState::Closed;
     ChannelHeader cmsg;
     cmsg.set_channelId(mChannelId);
     cmsg.set_factoryVersion(mChannelFactory->getProtoFactory().version());
@@ -314,8 +320,7 @@ void ByteStreamChannel::close() {
     auto buf = msgHeader.serialize();
     buf.resize(buf.size() + msg.size());
     memcpy(buf.data() + CCMessageHeader::size(), msg.data(), msg.size());
-    ilias_wait mClient.sendAll(buf.data(), buf.size());
-    mState = ChannelBase::ChannelState::Closed;
+    ilias_go _closeLater(std::move(mClient), std::move(buf));
 }
 
 void ByteStreamChannel::destroy() { mChannelFactory->destroyChannel(mChannelId); }
