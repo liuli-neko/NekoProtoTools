@@ -3,11 +3,10 @@
 
 #include "../proto/cc_proto_json_serializer.hpp"
 #include "../rpc/cc_rpc_base.hpp"
+
+#include "ilias_networking.hpp"
 #ifdef _WIN32
-#include "ilias_iocp.hpp"
 #include "ilias_iocp.cpp"
-#else
-#include "ilias_poll.hpp"
 #endif
 CS_RPC_USE_NAMESPACE
 using namespace ILIAS_NAMESPACE;
@@ -149,11 +148,7 @@ Task<void> test(IoContext& ioContext, ChannelFactory& channelFactor, ChannelFact
 
 int main(int argc, char** argv) {
     spdlog::set_level(spdlog::level::debug);
-#ifdef _WIN32
-    IOCPContext ioContext;
-#else
-    PollContext ioContext;
-#endif
+    PlatformIoContext ioContext;
     std::shared_ptr<CS_PROTO_NAMESPACE::ProtoFactory> protoFactory(new CS_PROTO_NAMESPACE::ProtoFactory());
     ChannelFactory channelFactor(ioContext, protoFactory);
     ChannelFactory channelFactor1(ioContext, protoFactory);

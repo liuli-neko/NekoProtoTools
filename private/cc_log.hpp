@@ -10,10 +10,10 @@
 
 #if defined(CS_CCPROTO_DEBUG) && defined(CS_CCPROTO_LOG_CONTEXT)
 #include <spdlog/spdlog.h>
-#define CS_DEBUG(fmt, ...) spdlog::debug("[{}:{}]" fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define CS_DEBUG(fmt, ...) spdlog::debug("[{}:{}] " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
 #define CS_ASSERT(cond, fmt, ...)                                        \
     if (!(cond)) {                                                       \
-        spdlog::error("[{}:{}]" fmt, __FILE__, __LINE__, ##__VA_ARGS__); \
+        spdlog::error("[{}:{}] " fmt, __FILE__, __LINE__, ##__VA_ARGS__); \
         abort();                                                         \
     }
 #elif defined(CS_CCPROTO_DEBUG)
@@ -32,10 +32,10 @@
 #if defined(CS_CCPROTO_LOG) && defined(CS_CCPROTO_LOG_CONTEXT)
 #include <spdlog/fmt/bin_to_hex.h>
 #include <spdlog/spdlog.h>
-#define CS_LOG_INFO(fmt, ...) spdlog::info("[{}:{}]" fmt, __FILE__, __LINE__, ##__VA_ARGS__)
-#define CS_LOG_WARN(fmt, ...) spdlog::warn("[{}:{}]" fmt, __FILE__, __LINE__, ##__VA_ARGS__)
-#define CS_LOG_ERROR(fmt, ...) spdlog::error("[{}:{}]" fmt, __FILE__, __LINE__, ##__VA_ARGS__)
-#define CS_LOG_FATAL(fmt, ...) spdlog::critical("[{}:{}]" fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define CS_LOG_INFO(fmt, ...) spdlog::info("[{}:{}] " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define CS_LOG_WARN(fmt, ...) spdlog::warn("[{}:{}] " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define CS_LOG_ERROR(fmt, ...) spdlog::error("[{}:{}] " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define CS_LOG_FATAL(fmt, ...) spdlog::critical("[{}:{}] " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
 #elif defined(CS_CCPROTO_LOG)
 #include <spdlog/fmt/bin_to_hex.h>
 #include <spdlog/spdlog.h>
