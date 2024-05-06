@@ -8,6 +8,10 @@ if is_mode("debug") then
     add_defines("CS_CCPROTO_LOG_CONTEXT")
 end 
 
+if is_plat("linux") then
+    add_cxxflags("-fcoroutines")
+end
+
 target("test_co")
     set_languages("c++20")
     set_kind("binary")
@@ -69,7 +73,6 @@ target("test_rpc")
     set_group("serializer")
     add_files("tests/test_rpc.cpp")
 target_end()
-
 
 --
 -- If you want to known more usage about xmake, please see https://xmake.io

@@ -25,8 +25,8 @@
         abort();                    \
     }
 #else
-#define CS_ASSERT(cond, fmt, ...) void
-#define CS_DEBUG(...) void
+#define CS_ASSERT(cond, fmt, ...)
+#define CS_DEBUG(...)
 #endif
 
 #if defined(CS_CCPROTO_LOG) && defined(CS_CCPROTO_LOG_CONTEXT)
@@ -44,8 +44,8 @@
 #define CS_LOG_ERROR(...) spdlog::error(__VA_ARGS__)
 #define CS_LOG_FATAL(...) spdlog::critical(__VA_ARGS__)
 #else
-#define CS_LOG_INFO(...) void
-#define CS_LOG_WARN(...) void
-#define CS_LOG_ERROR(...) void
-#define CS_LOG_FATAL(...) void
+#define CS_LOG_INFO(...)
+#define CS_LOG_WARN(...)
+#define CS_LOG_ERROR(...)
+#define CS_LOG_FATAL(...)
 #endif
