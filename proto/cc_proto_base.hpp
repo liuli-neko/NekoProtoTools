@@ -100,11 +100,13 @@ public:
 
 protected:
     mutable SerializerT mSerializer;
-    struct less {
-        bool operator()(const char* a, const char* b) const;
+    struct Field {
+        const char* name;
+        bool(*serialize)(ProtoBase*);
+        bool(*deserialize)(ProtoBase*);
     };
-    static std::map<const char*, std::function<bool(ProtoBase*)>, less> mSerializeVistor;
-    static std::map<const char*, std::function<bool(ProtoBase*)>, less> mDeserializeVistor;
+    
+    static std::vector<Field> mSerializerVistor;
 };
 
 template <typename T>
@@ -150,11 +152,8 @@ IProto* ProtoFactory::creater() {
 }
 
 template <typename T, typename SerializerT>
-std::map<const char*, std::function<bool(ProtoBase<T, SerializerT>*)>, typename ProtoBase<T, SerializerT>::less>
-    ProtoBase<T, SerializerT>::mSerializeVistor;
-template <typename T, typename SerializerT>
-std::map<const char*, std::function<bool(ProtoBase<T, SerializerT>*)>, typename ProtoBase<T, SerializerT>::less>
-    ProtoBase<T, SerializerT>::mDeserializeVistor;
+std::vector<typename ProtoBase<T, SerializerT>::Field>
+    ProtoBase<T, SerializerT>::mSerializerVistor;
 
 template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>::ProtoBase(const ProtoBase<T, SerializerT>& other) {
@@ -181,9 +180,12 @@ ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, Ser
 template <typename T, typename SerializerT>
 std::vector<char> ProtoBase<T, SerializerT>::serialize() const {
     mSerializer.startSerialize();
-    for (auto item : mSerializeVistor) {
-        if (!(item.second)(const_cast<ProtoBase*>(this))) {
-            CS_LOG_WARN("field {} serialize error", item.first);
+    if (mSerializerVistor.size() <= 0) {
+        CS_LOG_WARN("Proto({}) no field to serialize", _proto_name<T>());
+    }
+    for (const auto &item : mSerializerVistor) {
+        if (!(item.serialize)(const_cast<ProtoBase*>(this))) {
+            CS_LOG_WARN("field {} serialize error", item.name);
         }
     }
     std::vector<char> ret;
@@ -203,11 +205,14 @@ bool ProtoBase<T, SerializerT>::deserialize(const std::vector<char>& data) {
     if (!mSerializer.startDeserialize(data)) {
         return false;
     }
+    if (mSerializerVistor.size() <= 0) {
+        CS_LOG_WARN("Proto({}) no field to deserialize", _proto_name<T>());
+    }
     bool ret = true;
-    for (auto item : mDeserializeVistor) {
-        if (!(item.second)(const_cast<ProtoBase*>(this))) {
+    for (const auto &item : mSerializerVistor) {
+        if (!(item.deserialize)(const_cast<ProtoBase*>(this))) {
             ret = false;
-            CS_LOG_WARN("field {} deserialize error", item.first);
+            CS_LOG_WARN("field {} deserialize error", item.name);
         }
     }
     if (!mSerializer.endDeserialize() || !ret) {
@@ -223,8 +228,11 @@ bool ProtoBase<T, SerializerT>::deserialize(const U& data) {
         return false;
     }
     bool ret = true;
-    for (auto item : mDeserializeVistor) {
-        if (!(item.second)(const_cast<ProtoBase*>(this))) {
+    if (mSerializerVistor.size() <= 0) {
+        CS_LOG_WARN("Proto({}) no field to deserialize", _proto_name<T>());
+    }
+    for (const auto &item : mSerializerVistor) {
+        if (!(item.deserialize)(const_cast<ProtoBase*>(this))) {
             ret = false;
             CS_LOG_WARN("field {} deserialize error", item.first);
         }
@@ -233,11 +241,6 @@ bool ProtoBase<T, SerializerT>::deserialize(const U& data) {
         return false;
     }
     return true;
-}
-
-template <typename T, typename SerializerT>
-bool ProtoBase<T, SerializerT>::less::operator()(const char* a, const char* b) const {
-    return ::strcmp(a, b) < 0;
 }
 
 template <typename T, typename SerializerT>
@@ -298,65 +301,71 @@ public:                                                                         
 private:                                                                                      \
     type m_##name
 
-#define __CS_DECLARE_PROTO_FIELD1(name)                                                          \
+#define __CS_DECLARE_PROTO_FIELD1(_name)                                                         \
 private:                                                                                         \
     template <typename T>                                                                        \
-    inline static void _regist_field_##name(T*) {                                                \
-        static bool _init_##name = false;                                                        \
-        if (_init_##name) {                                                                      \
+    inline static void _regist_field_##_name(T*) {                                               \
+        static bool _init_##_name = false;                                                       \
+        if (_init_##_name) {                                                                     \
             return;                                                                              \
         }                                                                                        \
-        _init_##name = true;                                                                     \
-        T::mSerializeVistor.insert(std::make_pair(#name, [](typename T::ProtoBaseType* self) {   \
-            auto ptr = dynamic_cast<const T*>(self);                                             \
-            if (ptr == nullptr) {                                                                \
-                CS_LOG_ERROR("please make sure T is self whien public ProtoBase<T>");            \
-                return false;                                                                    \
-            }                                                                                    \
-            return self->serializer()->insert(#name, ptr->name());                               \
-        }));                                                                                     \
-        T::mDeserializeVistor.insert(std::make_pair(#name, [](typename T::ProtoBaseType* self) { \
-            auto ptr = dynamic_cast<T*>(self);                                                   \
-            if (ptr == nullptr) {                                                                \
-                CS_LOG_ERROR("please make sure T is self whien public ProtoBase<T>");            \
-                return false;                                                                    \
-            }                                                                                    \
-            return self->serializer()->get(#name, &(ptr->mutable_##name()));                     \
-        }));                                                                                     \
+        _init_##_name = true;                                                                    \
+        CS_ASSERT((std::find_if(T::mSerializerVistor.begin(), T::mSerializerVistor.end(),        \
+            [](const Field &v) { return v.name == #_name; }) == T::mSerializerVistor.end()),     \
+            #_name " declared!");                                                                \
+        T::mSerializerVistor.push_back({#_name,                                                  \
+            +[](typename T::ProtoBaseType* self) {                                               \
+                auto ptr = dynamic_cast<const T*>(self);                                         \
+                if (ptr == nullptr) {                                                            \
+                    CS_LOG_ERROR("please make sure T is self whien public ProtoBase<T>");        \
+                    return false;                                                                \
+                }                                                                                \
+                return self->serializer()->insert(#_name, ptr->_name());                         \
+            },+[](typename T::ProtoBaseType* self) {                                             \
+                auto ptr = dynamic_cast<T*>(self);                                               \
+                if (ptr == nullptr) {                                                            \
+                    CS_LOG_ERROR("please make sure T is self whien public ProtoBase<T>");        \
+                    return false;                                                                \
+                }                                                                                \
+                return self->serializer()->get(#_name, &(ptr->mutable_##_name()));               \
+        }});                                                                                     \
     }                                                                                            \
-    bool _init_##name = [this]() {                                                               \
-        _regist_field_##name(this);                                                              \
+    bool _init_##_name = [this]() {                                                              \
+        _regist_field_##_name(this);                                                             \
         return true;                                                                             \
     }();
 
-#define CS_DECLARE_PROTO_FIELD(name)                                                             \
+#define CS_DECLARE_PROTO_FIELD(_name)                                                            \
 private:                                                                                         \
     template <typename T>                                                                        \
-    inline static void _regist_field_##name(T*) {                                                \
-        static bool _init_##name = false;                                                        \
-        if (_init_##name) {                                                                      \
+    inline static void _regist_field_##_name(T*) {                                               \
+        static bool _init_##_name = false;                                                       \
+        if (_init_##_name) {                                                                     \
             return;                                                                              \
         }                                                                                        \
-        _init_##name = true;                                                                     \
-        T::mSerializeVistor.insert(std::make_pair(#name, [](typename T::ProtoBaseType* self) {   \
-            auto ptr = dynamic_cast<const T*>(self);                                             \
-            if (ptr == nullptr) {                                                                \
-                CS_LOG_ERROR("please make sure T is self whien public ProtoBase<T>");            \
-                return false;                                                                    \
-            }                                                                                    \
-            return self->serializer()->insert(#name, ptr->name);                                 \
-        }));                                                                                     \
-        T::mDeserializeVistor.insert(std::make_pair(#name, [](typename T::ProtoBaseType* self) { \
-            auto ptr = dynamic_cast<T*>(self);                                                   \
-            if (ptr == nullptr) {                                                                \
-                CS_LOG_ERROR("please make sure T is self whien public ProtoBase<T>");            \
-                return false;                                                                    \
-            }                                                                                    \
-            return self->serializer()->get(#name, &(ptr->name));                                 \
-        }));                                                                                     \
+        _init_##_name = true;                                                                    \
+        CS_ASSERT((std::find_if(T::mSerializerVistor.begin(), T::mSerializerVistor.end(),        \
+            +[](const Field &v) { return v.name == #_name; }) == T::mSerializerVistor.end()),    \
+            #_name " declared!");                                                                \
+        T::mSerializerVistor.push_back({#_name,                                                  \
+            +[](typename T::ProtoBaseType* self) {                                               \
+                auto ptr = dynamic_cast<const T*>(self);                                         \
+                if (ptr == nullptr) {                                                            \
+                    CS_LOG_ERROR("please make sure T is self whien public ProtoBase<T>");        \
+                    return false;                                                                \
+                }                                                                                \
+                return self->serializer()->insert(#_name, ptr->_name);                           \
+            }, +[](typename T::ProtoBaseType* self) {                                            \
+                auto ptr = dynamic_cast<T*>(self);                                               \
+                if (ptr == nullptr) {                                                            \
+                    CS_LOG_ERROR("please make sure T is self whien public ProtoBase<T>");        \
+                    return false;                                                                \
+                }                                                                                \
+                return self->serializer()->get(#_name, &(ptr->_name));                           \
+        }});                                                                                     \
     }                                                                                            \
-    bool _init_##name = [this]() {                                                               \
-        _regist_field_##name(this);                                                              \
+    bool _init_##_name = [this]() {                                                              \
+        _regist_field_##_name(this);                                                             \
         return true;                                                                             \
     }();
 

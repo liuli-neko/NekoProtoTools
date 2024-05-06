@@ -7,7 +7,7 @@
 #include <time.h>
 #include <atomic>
 #include <condition_variable>
-#include <source_location>
+// #include <source_location>
 #include <functional>
 #include <string>
  
@@ -246,9 +246,9 @@ template <typename T>
 struct Promise : public PromiseBase {
    TRACER_CONTEXT(Promise)
 public:
-   Task<T> get_return_object(std::source_location self = std::source_location::current()) {
+   Task<T> get_return_object() {
       CTXTRACER
-      return Task<T>{Task<T>::handle_type::from_promise(*this), self.function_name()};
+      return Task<T>{Task<T>::handle_type::from_promise(*this), "unknow"};
    }
    std::suspend_always initial_suspend() noexcept {
       CTXTRACER
