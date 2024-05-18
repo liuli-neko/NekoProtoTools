@@ -9,6 +9,8 @@
 #include "../proto/cc_proto_json_serializer_contrain.hpp"
 #include "../proto/cc_proto_json_serializer_binary.hpp"
 
+#include "../proto/cc_serializer_base.hpp"
+
 CS_PROTO_USE_NAMESPACE
 
 enum TEnum {
@@ -16,6 +18,40 @@ enum TEnum {
     TEnum_B = 2,
     TEnum_C = 3
 };
+
+struct TestProto {
+int aads_ddfd;
+std::string ccsdfg;
+bool c124142;
+double d;
+std::list<int> e;
+std::map<std::string, int> f;
+std::array<int, 5> g;
+TEnum h;
+
+CS_SERIALIZER(aads_ddfd, ccsdfg, c124142, d, e, f, g, h)
+};
+
+TEST(TestProto, TestHelpFunction) {
+    JsonSerializer serializer;
+    TestProto p { 1, "abc", true, 1.23, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3, 4, 5}, TEnum_A };
+    serializer.startSerialize();
+    EXPECT_TRUE(p.serialize(serializer));
+    std::vector<char> data;
+    EXPECT_TRUE(serializer.endSerialize(&data));
+    EXPECT_TRUE(data.size() > 0);
+    std::cout << std::string(data.data(), data.size()) << std::endl;
+    TestProto p2;
+    EXPECT_TRUE(serializer.startDeserialize(data));
+    EXPECT_TRUE(p2.deserialize(serializer));
+    EXPECT_TRUE(serializer.endDeserialize());
+    ASSERT_EQ(p.aads_ddfd, p2.aads_ddfd);
+    ASSERT_EQ(p.ccsdfg, p2.ccsdfg);
+    ASSERT_EQ(p.c124142, p2.c124142);
+    ASSERT_EQ(p.d, p2.d);
+    ASSERT_EQ(p.e, p2.e);
+    return;
+}
 
 struct StructA {
     int a;
@@ -65,20 +101,19 @@ CS_PROTO_END_NAMESPACE
 #endif
 
 struct TestP : public ProtoBase<TestP> {
-    CS_PROPERTY_FIELD(int, a) = 1;
-    CS_PROPERTY_FIELD(std::string, b) = "hello";
-    CS_PROPERTY_FIELD(bool, c) = true;
-    CS_PROPERTY_FIELD(double, d) = 3.14;
-    CS_PROPERTY_FIELD(std::list<int>, e) = {1, 2, 3, 4, 5};
-    typedef std::map<std::string, int> TMap;
-    CS_PROPERTY_CONTAINER_FIELD(TMap, f) = {{"a", 1}, {"b", 2}, {"c", 3}};
-    typedef std::array<int, 5> TArray;
-    CS_PROPERTY_CONTAINER_FIELD(TArray, g) = {1, 2, 3, 4, 5};
-    CS_PROPERTY_FIELD(TEnum, h) = TEnum_A;
-    CS_PROPERTY_FIELD(StructA, i) = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum_A};
-    typedef std::tuple<int, std::string> TTuple;
-    CS_PROPERTY_FIELD(TTuple, j) = {1, "hello"};
-    CS_PROPERTY_CONTAINER_FIELD(std::vector<int>, k) = {1, 2, 3, 4, 5};
+    int a = 1;
+    std::string b = "hello";
+    bool c = true;
+    double d = 3.14;
+    std::list<int> e = {1, 2, 3, 4, 5};
+    std::map<std::string, int> f = {{"a", 1}, {"b", 2}, {"c", 3}};
+    std::array<int, 5> g = {1, 2, 3, 4, 5};
+    TEnum h = TEnum_A;
+    StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum_A};
+    std::tuple<int, std::string> j = {1, "hello"};
+    std::vector<int> k = {1, 2, 3, 4, 5};
+
+    CS_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k)
 };
 CS_DECLARE_PROTO(TestP, TestP);
 
@@ -174,17 +209,17 @@ TEST_F(JsonSerializerTest, Enum) {
 TEST_F(JsonSerializerTest, Struct) {
     TestP testp;
     // {3, "Struct test", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A, {1, "hello"}};
-    testp.mutable_a() = 3;
-    testp.mutable_b() = "Struct test";
-    testp.mutable_c() = true;
-    testp.mutable_d() = 3.141592654;
-    testp.mutable_e() = {1, 2, 3};
-    testp.mutable_f() = {{"a", 1}, {"b", 2}};
-    testp.mutable_g() = {1, 2, 3};
-    testp.mutable_h() = TEnum_A;
-    testp.mutable_i() = {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
-    testp.mutable_j() = {1, "hello"};
-    testp.set_k({1, 2, 3, 4, 5});
+    testp.a = 3;
+    testp.b = "Struct test";
+    testp.c = true;
+    testp.d = 3.141592654;
+    testp.e = {1, 2, 3};
+    testp.f = {{"a", 1}, {"b", 2}};
+    testp.g = {1, 2, 3};
+    testp.h = TEnum_A;
+    testp.i = {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
+    testp.j = {1, "hello"};
+    testp.k = std::vector<int>({1, 2, 3, 4, 5});
     writer->Key("a");
     JsonConvert<TestP>::toJsonValue(*writer, testp);
     writer->EndObject();
@@ -192,11 +227,12 @@ TEST_F(JsonSerializerTest, Struct) {
 #if __cplusplus >= 201703L || _MSVC_LANG > 201402L
     EXPECT_STREQ(str, "{\"a\":{\"a\":3,\"b\":\"Struct test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"k\":[1,2,3,4,5]}}");
 #else
-    EXPECT_STREQ(str, "{\"a\":{\"a\":3,\"b\":\"Struct test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"1\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"1\"],\"j\":[1,\"hello\"],\"k\":[1,2,3,4,5]}}");
+    EXPECT_STREQ(str, "{\"a\":{\"a\":3,\"b\":\"Struct test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":1,\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],1],\"j\":[1,\"hello\"],\"k\":[1,2,3,4,5]}}");
 #endif
 }
 
 int main(int argc, char **argv) {
+    std::cout << "CS_CPP_PLUS: " << CS_CPP_PLUS << std::endl;
     testing::InitGoogleTest(&argc, argv);
     ProtoFactory factor(1, 0, 0);
     return RUN_ALL_TESTS();

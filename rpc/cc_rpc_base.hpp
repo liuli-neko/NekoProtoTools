@@ -5,6 +5,7 @@
 
 #include "../proto/cc_proto_base.hpp"
 #include "../proto/cc_proto_binary_serializer.hpp"
+#include "../proto/cc_serializer_base.hpp"
 #include "cc_rpc_global.hpp"
 #include "ilias.hpp"
 #include "ilias_async.hpp"
@@ -18,12 +19,14 @@ class ChannelFactory;
 class CS_RPC_API CCMessageHeader : public CS_PROTO_NAMESPACE::ProtoBase<CCMessageHeader, CS_PROTO_NAMESPACE::BinarySerializer> {
 public:
     inline CCMessageHeader(uint32_t length = 0, int32_t protoType = 0, uint16_t transType = 0, uint32_t reserved = 0)
-        : m_length(length), m_protoType(protoType), m_transType(transType), m_reserved(reserved) {}
+        : length(length), protoType(protoType), transType(transType), reserved(reserved) {}
     inline static int size() { return 14; }
-    CS_PROPERTY_FIELD(uint32_t, length) = 0;     // 4 : the length of the message, no't contain the header
-    CS_PROPERTY_FIELD(int32_t, protoType) = 0;   // 4 : the type of the message in proto factory
-    CS_PROPERTY_FIELD(uint16_t, transType) = 0;  // 2 : the type of this transaction
-    CS_PROPERTY_FIELD(uint32_t, reserved) = 0;   // 4 : the reserved field
+    uint32_t length = 0;     // 4 : the length of the message, no't contain the header
+    int32_t protoType = 0;   // 4 : the type of the message in proto factory
+    uint16_t transType = 0;  // 2 : the type of this transaction
+    uint32_t reserved = 0;   // 4 : the reserved field
+
+    CS_SERIALIZER(length, protoType, transType, reserved)
 };
 
 class CS_RPC_API ChannelHeader : public CS_PROTO_NAMESPACE::ProtoBase<ChannelHeader, CS_PROTO_NAMESPACE::BinarySerializer> {
@@ -37,9 +40,11 @@ public:
         OkMessage = 127,
         ErrorMessage = 128,
     };
-    CS_PROPERTY_FIELD(uint32_t, factoryVersion) = 0;  // 4 : the version of the proto factory
-    CS_PROPERTY_FIELD(uint8_t, messageType) = 0;      // 1
-    CS_PROPERTY_FIELD(uint16_t, channelId) = 0;       // 2
+    uint32_t factoryVersion = 0;  // 4 : the version of the proto factory
+    uint8_t messageType = 0;      // 1
+    uint16_t channelId = 0;       // 2
+
+    CS_SERIALIZER(factoryVersion, messageType, channelId)
 };
 
 class CS_RPC_API ChannelBase {

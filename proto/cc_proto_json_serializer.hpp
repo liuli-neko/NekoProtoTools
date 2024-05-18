@@ -255,14 +255,14 @@ struct JsonConvert<std::vector<T>, void> {
 template <typename T>
 struct JsonConvert<T, typename std::enable_if<std::is_same<typename T::SerializerType, JsonSerializer>::value>::type> {
     static bool toJsonValue(JsonWriter& writer, const T& value) {
-        auto data = value.serialize();
+        auto data = value.toData();
         return writer.RawValue(data.data(), data.size(), rapidjson::kObjectType);
     }
     static bool fromJsonValue(T* dst, const JsonValue& value) {
         if (!value.IsObject() || dst == nullptr) {
             return false;
         }
-        return dst->deserialize(value);
+        return dst->fromData(value);
     }
 };
 

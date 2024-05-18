@@ -80,45 +80,45 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
         co_return Unexpected(ret.error());
     }
     CCMessageHeader hmsg;
-    hmsg.deserialize(buf);
+    hmsg.formData(buf);
     buf.clear();
     ChannelHeader cmsg;
-    if (hmsg.transType() != static_cast<uint16_t>(TransType::Channel)) {
-        CS_LOG_ERROR("trans type {} is not channel", hmsg.transType());
+    if (hmsg.transType != static_cast<uint16_t>(TransType::Channel)) {
+        CS_LOG_ERROR("trans type {} is not channel", hmsg.transType);
         co_return Unexpected(Error(Error::Unknown));
     }
-    if (hmsg.protoType() != cmsg.type()) {
+    if (hmsg.protoType != cmsg.type()) {
         CS_LOG_ERROR("type {} is not channel header", hmsg.type());
         co_return Unexpected(Error(Error::Unknown));
     }
-    buf.resize(hmsg.length());
+    buf.resize(hmsg.length);
     ret1 = co_await client1.recvAll(buf.data(), buf.size());
     if (!ret1) {
         CS_LOG_ERROR("recv data error");
         co_return Unexpected(ret.error());
     }
-    cmsg.deserialize(buf);
-    if (cmsg.messageType() != static_cast<uint8_t>(ChannelHeader::MessageType::ConnectMessage)) {
-        CS_LOG_ERROR("message type {} is not connect message", cmsg.messageType());
+    cmsg.formData(buf);
+    if (cmsg.messageType != static_cast<uint8_t>(ChannelHeader::MessageType::ConnectMessage)) {
+        CS_LOG_ERROR("message type {} is not connect message", cmsg.messageType);
         co_return Unexpected(Error(Error::Unknown));
     }
-    if (cmsg.factoryVersion() != getProtoFactory().version()) {
-        CS_LOG_ERROR("factory version {} is not {}", cmsg.factoryVersion(), getProtoFactory().version());
+    if (cmsg.factoryVersion != getProtoFactory().version()) {
+        CS_LOG_ERROR("factory version {} is not {}", cmsg.factoryVersion, getProtoFactory().version());
         co_return Unexpected(Error(Error::Unknown));
     }
     uint32_t channelId = 0;
-    if (cmsg.channelId() == 0) {
+    if (cmsg.channelId == 0) {
         channelId = mChannels.size() + 1;
         while (mChannels.find(channelId) != mChannels.end()) {
             channelId++;
         }
-        cmsg.set_channelId(channelId);
+        cmsg.channelId = channelId;
     } else {
-        channelId = cmsg.channelId();
+        channelId = cmsg.channelId;
     }
 
-    buf = hmsg.serialize();
-    auto msgBuf = cmsg.serialize();
+    buf = hmsg.toData();
+    auto msgBuf = cmsg.toData();
     buf.insert(buf.end(), msgBuf.begin(), msgBuf.end());
     msgBuf.clear();
     ret1 = co_await client1.sendAll(buf.data(), buf.size());
@@ -127,8 +127,8 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
         co_return Unexpected(ret.error());
     }
 
-    std::shared_ptr<ChannelBase> channel(new ByteStreamChannel(this, std::move(client1), cmsg.channelId()));
-    mChannels.insert(std::make_pair(cmsg.channelId(), channel));
+    std::shared_ptr<ChannelBase> channel(new ByteStreamChannel(this, std::move(client1), cmsg.channelId));
+    mChannels.insert(std::make_pair(cmsg.channelId, channel));
     co_return std::weak_ptr<ChannelBase>(channel);
 }
 
@@ -150,12 +150,12 @@ void ChannelFactory::close() {
 
 Task<std::weak_ptr<ChannelBase>> ChannelFactory::makeChannel(IStreamClient&& client, const uint16_t channelId) {
     ChannelHeader cmsg;
-    cmsg.set_messageType(static_cast<uint8_t>(ChannelHeader::MessageType::ConnectMessage));
-    cmsg.set_channelId(channelId);
-    cmsg.set_factoryVersion(mFactory->version());
-    auto buf = cmsg.serialize();
+    cmsg.messageType = static_cast<uint8_t>(ChannelHeader::MessageType::ConnectMessage);
+    cmsg.channelId = channelId;
+    cmsg.factoryVersion = mFactory->version();
+    auto buf = cmsg.toData();
     CCMessageHeader hmsg(buf.size(), cmsg.type(), static_cast<uint16_t>(TransType::Channel), 0);
-    auto msgbuf = hmsg.serialize();
+    auto msgbuf = hmsg.toData();
     msgbuf.resize(msgbuf.size() + buf.size());
     std::copy(buf.begin(), buf.end(), msgbuf.begin() + msgbuf.size() - buf.size());
     ByteStream<IStreamClient, char> client1(std::move(client));
@@ -174,9 +174,9 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::makeChannel(IStreamClient&& cli
         CS_LOG_ERROR("recv msg header error");
         co_return Unexpected(ret.error());
     }
-    hmsg.deserialize(std::move(msgbuf));
+    hmsg.formData(std::move(msgbuf));
     msgbuf.clear();
-    buf.resize(hmsg.length());
+    buf.resize(hmsg.length);
 
     ret = co_await client1.recvAll(buf.data(), buf.size());
     if (!ret) {
@@ -184,34 +184,34 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::makeChannel(IStreamClient&& cli
         co_return Unexpected(ret.error());
     }
 
-    cmsg.deserialize(buf);
-    if (hmsg.protoType() != cmsg.type()) {
+    cmsg.formData(buf);
+    if (hmsg.protoType != cmsg.type()) {
         CS_LOG_ERROR("type {} is not channel header", hmsg.type());
         co_return Unexpected(Error(Error::Unknown));
     }
 
-    if (hmsg.transType() != static_cast<uint16_t>(TransType::Channel)) {
-        CS_LOG_ERROR("trans type {} is not channel", hmsg.transType());
+    if (hmsg.transType != static_cast<uint16_t>(TransType::Channel)) {
+        CS_LOG_ERROR("trans type {} is not channel", hmsg.transType);
         co_return Unexpected(Error(Error::Unknown));
     }
 
-    if (cmsg.messageType() != static_cast<uint8_t>(ChannelHeader::MessageType::ConnectMessage)) {
-        CS_LOG_ERROR("message type {} is not connect message", cmsg.messageType());
+    if (cmsg.messageType != static_cast<uint8_t>(ChannelHeader::MessageType::ConnectMessage)) {
+        CS_LOG_ERROR("message type {} is not connect message", cmsg.messageType);
         co_return Unexpected(Error(Error::Unknown));
     }
 
-    if (cmsg.factoryVersion() != mFactory->version()) {
-        CS_LOG_ERROR("factory version {} is not {}", cmsg.factoryVersion(), mFactory->version());
+    if (cmsg.factoryVersion != mFactory->version()) {
+        CS_LOG_ERROR("factory version {} is not {}", cmsg.factoryVersion, mFactory->version());
         co_return Unexpected(Error(Error::Unknown));
     }
 
-    if (channelId != 0 && cmsg.channelId() != channelId) {
-        CS_LOG_ERROR("channel id {} is not {}", cmsg.channelId(), channelId);
+    if (channelId != 0 && cmsg.channelId != channelId) {
+        CS_LOG_ERROR("channel id {} is not {}", cmsg.channelId, channelId);
         co_return Unexpected(Error(Error::Unknown));
     }
 
-    std::shared_ptr<ChannelBase> channel(new ByteStreamChannel(this, std::move(client1), cmsg.channelId()));
-    mChannels.insert(std::make_pair(cmsg.channelId(), channel));
+    std::shared_ptr<ChannelBase> channel(new ByteStreamChannel(this, std::move(client1), cmsg.channelId));
+    mChannels.insert(std::make_pair(cmsg.channelId, channel));
     co_return std::weak_ptr<ChannelBase>(channel);
 }
 
@@ -242,10 +242,10 @@ ILIAS_NAMESPACE::Task<void> ByteStreamChannel::send(std::unique_ptr<CS_PROTO_NAM
     if (mState != ChannelBase::ChannelState::Connected) {
         co_return ILIAS_NAMESPACE::Error(ILIAS_NAMESPACE::Error::Code::Unknown);
     }
-    auto msg = message->serialize();
+    auto msg = message->toData();
     CCMessageHeader msgHeader(msg.size(), message->type(), mChannelFactory->getProtoFactory().version(),
                               static_cast<uint16_t>(ChannelFactory::TransType::Channel));
-    std::vector<char> sendMsg = msgHeader.serialize();
+    std::vector<char> sendMsg = msgHeader.toData();
     sendMsg.resize(sendMsg.size() + msg.size());
     memcpy(sendMsg.data() + CCMessageHeader::size(), msg.data(), msg.size());
     msg.clear();
@@ -270,30 +270,30 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<CS_PROTO_NAMESPACE::IProto>> ByteStreamCha
         co_return Unexpected(ret.error());
     }
     CCMessageHeader msgHeader;
-    msgHeader.deserialize(std::move(headerData));
-    if (msgHeader.length() == 0 && msgHeader.protoType() == 0 && msgHeader.transType() == 0) {
+    msgHeader.formData(std::move(headerData));
+    if (msgHeader.length == 0 && msgHeader.protoType == 0 && msgHeader.transType == 0) {
         close();
         co_return ILIAS_NAMESPACE::Error(ILIAS_NAMESPACE::Error::Code::ChannelBroken);
     }
-    std::vector<char> data(msgHeader.length(), 0);
+    std::vector<char> data(msgHeader.length, 0);
     ret = co_await mClient.recvAll(data.data(), data.size());
     if (!ret) {
         close();
         co_return Unexpected(ret.error());
     }
     std::unique_ptr<CS_PROTO_NAMESPACE::IProto> message(
-        mChannelFactory->getProtoFactory().create(msgHeader.protoType()));
+        mChannelFactory->getProtoFactory().create(msgHeader.protoType));
     if (message == nullptr) {
-        CS_LOG_ERROR("unknown proto type: {}", msgHeader.protoType());
+        CS_LOG_ERROR("unknown proto type: {}", msgHeader.protoType);
         co_return ILIAS_NAMESPACE::Error(ILIAS_NAMESPACE::Error::Code::Unknown);
     }
-    auto desRet = message->deserialize(std::move(data));
+    auto desRet = message->formData(std::move(data));
     if (!desRet) {
         CS_LOG_ERROR("deserialize message deserialize failed.");
     }
     if (message->type() == CS_PROTO_NAMESPACE::ProtoFactory::proto_type<ChannelHeader>()) {
         std::unique_ptr<ChannelHeader> cmsg(static_cast<ChannelHeader*>(message.release()));
-        if (cmsg->messageType() == ChannelHeader::MessageType::CloseMessage) {
+        if (cmsg->messageType == ChannelHeader::MessageType::CloseMessage) {
             close();
             co_return ILIAS_NAMESPACE::Error(ILIAS_NAMESPACE::Error::Code::ChannelBroken);
         }
@@ -302,8 +302,8 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<CS_PROTO_NAMESPACE::IProto>> ByteStreamCha
 }
 
 Task<void> _closeLater(ILIAS_NAMESPACE::ByteStream<> client, std::vector<char> buf) {
-    co_await client.send(buf.data(), buf.size());
-    co_return ILIAS_NAMESPACE::Result<>();
+    auto ret = co_await client.send(buf.data(), buf.size());
+    co_return !ret ? Unexpected(ret.error()) : ILIAS_NAMESPACE::Result<>();
 }
 
 void ByteStreamChannel::close() {
@@ -312,12 +312,12 @@ void ByteStreamChannel::close() {
     }
     mState = ChannelBase::ChannelState::Closed;
     ChannelHeader cmsg;
-    cmsg.set_channelId(mChannelId);
-    cmsg.set_factoryVersion(mChannelFactory->getProtoFactory().version());
-    cmsg.set_messageType(ChannelHeader::MessageType::CloseMessage);
-    std::vector<char> msg = cmsg.serialize();
+    cmsg.channelId = mChannelId;
+    cmsg.factoryVersion = mChannelFactory->getProtoFactory().version();
+    cmsg.messageType = ChannelHeader::MessageType::CloseMessage;
+    std::vector<char> msg = cmsg.toData();
     CCMessageHeader msgHeader(msg.size(), cmsg.type(), static_cast<uint16_t>(ChannelFactory::TransType::Channel), 0);
-    auto buf = msgHeader.serialize();
+    auto buf = msgHeader.toData();
     buf.resize(buf.size() + msg.size());
     memcpy(buf.data() + CCMessageHeader::size(), msg.data(), msg.size());
     ilias_go _closeLater(std::move(mClient), std::move(buf));

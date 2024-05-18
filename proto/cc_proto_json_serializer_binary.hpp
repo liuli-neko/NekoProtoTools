@@ -140,14 +140,14 @@ template <typename T>
 struct JsonConvert<T, typename std::enable_if<!std::is_same<
                           typename T::SerializerType, JsonSerializer>::value>::type> {
   static bool toJsonValue(JsonWriter &writer, const T &value) {
-    auto data = Base64Covert::Encode(value.serialize());
+    auto data = Base64Covert::Encode(value.toData());
     return writer.String(data.data(), data.size(), true);
   }
   static bool fromJsonValue(T *dst, const JsonValue &value) {
     if (!value.IsString() || dst == nullptr) {
       return false;
     }
-    dst->deserialize(
+    dst->fromData(
         Base64Covert::Decode(value.GetString(), value.GetStringLength()));
     return true;
   }

@@ -23,8 +23,8 @@ class CS_PROTO_API IProto {
 public:
     IProto() = default;
     virtual ~IProto() = default;
-    virtual std::vector<char> serialize() const = 0;
-    virtual bool deserialize(const std::vector<char>&) = 0;
+    virtual std::vector<char> toData() const = 0;
+    virtual bool formData(const std::vector<char>&) = 0;
     virtual int type() const = 0;
 };
 
@@ -87,26 +87,18 @@ public:
     ProtoBase() = default;
     ProtoBase(const ProtoBase& other);
     ProtoBase(ProtoBase&& other);
+    virtual ~ProtoBase() = default;
     ProtoBase& operator=(const ProtoBase& other);
     ProtoBase& operator=(ProtoBase&& other);
 
-    std::vector<char> serialize() const override;
+    std::vector<char> toData() const override;
     int type() const override;
-    bool deserialize(const std::vector<char>& data) override;
+    bool formData(const std::vector<char>& data) override;
     template <typename U>
-    bool deserialize(const U& data);
-    virtual ~ProtoBase() = default;
-    SerializerT* serializer();
+    bool formData(const U& data);
 
 protected:
     mutable SerializerT mSerializer;
-    struct Field {
-        const char* name;
-        bool(*serialize)(ProtoBase*);
-        bool(*deserialize)(ProtoBase*);
-    };
-    
-    static std::vector<Field> mSerializerVistor;
 };
 
 template <typename T>
@@ -152,10 +144,6 @@ IProto* ProtoFactory::creater() {
 }
 
 template <typename T, typename SerializerT>
-std::vector<typename ProtoBase<T, SerializerT>::Field>
-    ProtoBase<T, SerializerT>::mSerializerVistor;
-
-template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>::ProtoBase(const ProtoBase<T, SerializerT>& other) {
     mSerializer = other.mSerializer;
 }
@@ -166,33 +154,30 @@ ProtoBase<T, SerializerT>::ProtoBase(ProtoBase<T, SerializerT>&& other) {
 }
 
 template <typename T, typename SerializerT>
-ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(const ProtoBase<T, SerializerT>& other) {
+ProtoBase<T, SerializerT>& 
+ProtoBase<T, SerializerT>::operator=(const ProtoBase<T, SerializerT>& other) {
     mSerializer = other.mSerializer;
     return *this;
 }
 
 template <typename T, typename SerializerT>
-ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, SerializerT>&& other) {
+ProtoBase<T, SerializerT>& 
+ProtoBase<T, SerializerT>::operator=(ProtoBase<T, SerializerT>&& other) {
     mSerializer = std::move(other.mSerializer);
     return *this;
 }
 
 template <typename T, typename SerializerT>
-std::vector<char> ProtoBase<T, SerializerT>::serialize() const {
+std::vector<char> ProtoBase<T, SerializerT>::toData() const {
     mSerializer.startSerialize();
-    if (mSerializerVistor.size() <= 0) {
-        CS_LOG_WARN("Proto({}) no field to serialize", _proto_name<T>());
-    }
-    for (const auto &item : mSerializerVistor) {
-        if (!(item.serialize)(const_cast<ProtoBase*>(this))) {
-            CS_LOG_WARN("field {} serialize error", item.name);
-        }
-    }
-    std::vector<char> ret;
-    if (!mSerializer.endSerialize(&ret)) {
+    auto self = dynamic_cast<const ProtoType *>(this);
+    CS_ASSERT(self != nullptr, "Proto({}) is nullptr", _proto_name<T>());
+    auto ret = const_cast<ProtoType *>(self)->serialize(mSerializer);
+    std::vector<char> data;
+    if (!mSerializer.endSerialize(&data)) {
         CS_LOG_ERROR("Proto({}) serialize error", _proto_name<T>());
     }
-    return std::move(ret);
+    return std::move(data);
 }
 
 template <typename T, typename SerializerT>
@@ -201,20 +186,13 @@ int ProtoBase<T, SerializerT>::type() const {
 }
 
 template <typename T, typename SerializerT>
-bool ProtoBase<T, SerializerT>::deserialize(const std::vector<char>& data) {
+bool ProtoBase<T, SerializerT>::formData(const std::vector<char>& data) {
     if (!mSerializer.startDeserialize(data)) {
         return false;
     }
-    if (mSerializerVistor.size() <= 0) {
-        CS_LOG_WARN("Proto({}) no field to deserialize", _proto_name<T>());
-    }
-    bool ret = true;
-    for (const auto &item : mSerializerVistor) {
-        if (!(item.deserialize)(const_cast<ProtoBase*>(this))) {
-            ret = false;
-            CS_LOG_WARN("field {} deserialize error", item.name);
-        }
-    }
+    auto self = dynamic_cast<const ProtoType *>(this);
+    CS_ASSERT(self != nullptr, "Proto({}) is nullptr", _proto_name<T>());
+    bool ret = const_cast<ProtoType *>(self)->deserialize(mSerializer);
     if (!mSerializer.endDeserialize() || !ret) {
         return false;
     }
@@ -223,175 +201,43 @@ bool ProtoBase<T, SerializerT>::deserialize(const std::vector<char>& data) {
 
 template <typename T, typename SerializerT>
 template <typename U>
-bool ProtoBase<T, SerializerT>::deserialize(const U& data) {
+bool ProtoBase<T, SerializerT>::formData(const U& data) {
     if (!mSerializer.startDeserialize(data)) {
         return false;
     }
-    bool ret = true;
-    if (mSerializerVistor.size() <= 0) {
-        CS_LOG_WARN("Proto({}) no field to deserialize", _proto_name<T>());
-    }
-    for (const auto &item : mSerializerVistor) {
-        if (!(item.deserialize)(const_cast<ProtoBase*>(this))) {
-            ret = false;
-            CS_LOG_WARN("field {} deserialize error", item.first);
-        }
-    }
+    auto self = dynamic_cast<const ProtoType *>(this);
+    CS_ASSERT(self != nullptr, "Proto({}) is nullptr", _proto_name<T>());
+    bool ret = const_cast<ProtoType *>(self)->deserialize(mSerializer);
     if (!mSerializer.endDeserialize() || !ret) {
         return false;
     }
     return true;
 }
 
-template <typename T, typename SerializerT>
-SerializerT* ProtoBase<T, SerializerT>::serializer() {
-    return &mSerializer;
-}
-
-template <typename T, class enable = void>
-struct ContainerTraitsHelper;
-
-template <typename T>
-struct ContainerTraitsHelper<std::vector<T>> {
-    using key_type = int;
-    using value_type = T;
-};
-
-template <typename T, size_t N>
-struct ContainerTraitsHelper<std::array<T, N>> {
-    using key_type = int;
-    using value_type = T;
-};
-
-template <typename T, typename U>
-struct ContainerTraitsHelper<std::map<T, U>> {
-    using key_type = T;
-    using value_type = U;
-};
-
 CS_PROTO_END_NAMESPACE
 
-#define CS_PROPERTY_FIELD(type, name)                                     \
-    __CS_DECLARE_PROTO_FIELD1(name)                                       \
-public:                                                                   \
-    inline const type& name() const { return m_##name; }                  \
-    inline type& mutable_##name() { return m_##name; }                    \
-    inline void set_##name(const type& value) { m_##name = value; }       \
-    inline void set_##name(type&& value) { m_##name = std::move(value); } \
-                                                                          \
-private:                                                                  \
-    type m_##name
-
-#define CS_PROPERTY_CONTAINER_FIELD(type, name)                                               \
-    __CS_DECLARE_PROTO_FIELD1(name)                                                           \
-public:                                                                                       \
-    inline const type& name() const { return m_##name; }                                      \
-    inline const CS_PROTO_NAMESPACE::ContainerTraitsHelper<type>::value_type& name(           \
-        const CS_PROTO_NAMESPACE::ContainerTraitsHelper<type>::key_type& index) {             \
-        return m_##name[index];                                                               \
-    }                                                                                         \
-    inline type& mutable_##name() { return m_##name; }                                        \
-    inline const CS_PROTO_NAMESPACE::ContainerTraitsHelper<type>::value_type& mutable_##name( \
-        const CS_PROTO_NAMESPACE::ContainerTraitsHelper<type>::key_type& index) {             \
-        return m_##name[index];                                                               \
-    }                                                                                         \
-    inline void set_##name(const type& value) { m_##name = value; }                           \
-    inline void set_##name(type&& value) { m_##name = std::move(value); }                     \
-                                                                                              \
-private:                                                                                      \
-    type m_##name
-
-#define __CS_DECLARE_PROTO_FIELD1(_name)                                                         \
-private:                                                                                         \
-    template <typename T>                                                                        \
-    inline static void _regist_field_##_name(T*) {                                               \
-        static bool _init_##_name = false;                                                       \
-        if (_init_##_name) {                                                                     \
-            return;                                                                              \
-        }                                                                                        \
-        _init_##_name = true;                                                                    \
-        CS_ASSERT((std::find_if(T::mSerializerVistor.begin(), T::mSerializerVistor.end(),        \
-            [](const Field &v) { return v.name == #_name; }) == T::mSerializerVistor.end()),     \
-            #_name " declared!");                                                                \
-        T::mSerializerVistor.push_back({#_name,                                                  \
-            +[](typename T::ProtoBaseType* self) {                                               \
-                auto ptr = dynamic_cast<const T*>(self);                                         \
-                if (ptr == nullptr) {                                                            \
-                    CS_LOG_ERROR("please make sure T is self whien public ProtoBase<T>");        \
-                    return false;                                                                \
-                }                                                                                \
-                return self->serializer()->insert(#_name, ptr->_name());                         \
-            },+[](typename T::ProtoBaseType* self) {                                             \
-                auto ptr = dynamic_cast<T*>(self);                                               \
-                if (ptr == nullptr) {                                                            \
-                    CS_LOG_ERROR("please make sure T is self whien public ProtoBase<T>");        \
-                    return false;                                                                \
-                }                                                                                \
-                return self->serializer()->get(#_name, &(ptr->mutable_##_name()));               \
-        }});                                                                                     \
-    }                                                                                            \
-    bool _init_##_name = [this]() {                                                              \
-        _regist_field_##_name(this);                                                             \
-        return true;                                                                             \
-    }();
-
-#define CS_DECLARE_PROTO_FIELD(_name)                                                            \
-private:                                                                                         \
-    template <typename T>                                                                        \
-    inline static void _regist_field_##_name(T*) {                                               \
-        static bool _init_##_name = false;                                                       \
-        if (_init_##_name) {                                                                     \
-            return;                                                                              \
-        }                                                                                        \
-        _init_##_name = true;                                                                    \
-        CS_ASSERT((std::find_if(T::mSerializerVistor.begin(), T::mSerializerVistor.end(),        \
-            +[](const Field &v) { return v.name == #_name; }) == T::mSerializerVistor.end()),    \
-            #_name " declared!");                                                                \
-        T::mSerializerVistor.push_back({#_name,                                                  \
-            +[](typename T::ProtoBaseType* self) {                                               \
-                auto ptr = dynamic_cast<const T*>(self);                                         \
-                if (ptr == nullptr) {                                                            \
-                    CS_LOG_ERROR("please make sure T is self whien public ProtoBase<T>");        \
-                    return false;                                                                \
-                }                                                                                \
-                return self->serializer()->insert(#_name, ptr->_name);                           \
-            }, +[](typename T::ProtoBaseType* self) {                                            \
-                auto ptr = dynamic_cast<T*>(self);                                               \
-                if (ptr == nullptr) {                                                            \
-                    CS_LOG_ERROR("please make sure T is self whien public ProtoBase<T>");        \
-                    return false;                                                                \
-                }                                                                                \
-                return self->serializer()->get(#_name, &(ptr->_name));                           \
-        }});                                                                                     \
-    }                                                                                            \
-    bool _init_##_name = [this]() {                                                              \
-        _regist_field_##_name(this);                                                             \
-        return true;                                                                             \
-    }();
-
-#ifdef __GNU__
-#define CS_DECLARE_PROTO_FIELDS(...) FOR_EACH(CS_DECLARE_PROTO_FIELD, __VA_ARGS__)
-#endif
-
-#define CS_DECLARE_PROTO(type, name)                                                                             \
-    CS_PROTO_BEGIN_NAMESPACE                                                                                     \
-    template <>                                                                                                  \
-    int _proto_type<type>() {                                                                                    \
-        static int _proto_type = 0;                                                                              \
-        if (_proto_type == 0) {                                                                                  \
-            _proto_type = type_counter();                                                                        \
-        }                                                                                                        \
-        return _proto_type;                                                                                      \
-    }                                                                                                            \
-    template <>                                                                                                  \
-    constexpr const char* _proto_name<type>() {                                                                  \
-        return #name;                                                                                            \
-    }                                                                                                            \
-    namespace {                                                                                                  \
-    struct _regist_##name {                                                                                      \
-        _regist_##name() {                                                                                       \
-            static_init_funcs(#name, [](CS_PROTO_NAMESPACE::ProtoFactory* self) { self->regist<type>(#name); }); \
-        }                                                                                                        \
-    } _regist_##name##__tmp;                                                                                     \
-    }                                                                                                            \
+#define CS_DECLARE_PROTO(type, name)                         \
+    CS_PROTO_BEGIN_NAMESPACE                                 \
+    template <>                                              \
+    int _proto_type<type>() {                                \
+        static int _proto_type = 0;                          \
+        if (_proto_type == 0) {                              \
+            _proto_type = type_counter();                    \
+        }                                                    \
+        return _proto_type;                                  \
+    }                                                        \
+    template <>                                              \
+    constexpr const char* _proto_name<type>() {              \
+        return #name;                                        \
+    }                                                        \
+    namespace {                                              \
+    struct _regist_##name {                                  \
+        _regist_##name() {                                   \
+            static_init_funcs(#name,                         \
+                [](CS_PROTO_NAMESPACE::ProtoFactory* self) { \
+                    self->regist<type>(#name);               \
+                });                                          \
+        }                                                    \
+    } _regist_##name##__tmp;                                 \
+    }                                                        \
     CS_PROTO_END_NAMESPACE

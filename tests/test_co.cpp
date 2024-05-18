@@ -11,6 +11,8 @@
 #include <functional>
 #include <string>
  
+#include "../proto/cc_proto_global.hpp"
+
 #ifdef TRACER_ENABLE
 #define TRACER printf("%s:%d [%s]\n", __FILE__, __LINE__, __FUNCTION__);
 #define TRACER_CONTEXT(ctx) \
@@ -518,6 +520,7 @@ Task<void> exit(Scheduler *scheduler) {
 
 int main()
 {
+    std::cout << "CS_CPP_PLUS: " << CS_CPP_PLUS << std::endl;
    auto scheduler = Scheduler::current();
 
    auto t = go test();
