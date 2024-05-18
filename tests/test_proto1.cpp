@@ -6,6 +6,7 @@
 #include "../proto/cc_proto_json_serializer_struct.hpp"
 #include "../proto/cc_proto_json_serializer_contrain.hpp"
 #include "../proto/cc_proto_json_serializer_binary.hpp"
+#include "../proto/cc_serializer_base.hpp"
 
 CS_PROTO_USE_NAMESPACE
 
@@ -74,16 +75,7 @@ struct TestP : public ProtoBase<TestP> {
     StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum_A};
     std::tuple<int, std::string> j = {1, "hello"};
 
-    CS_DECLARE_PROTO_FIELD(a)
-    CS_DECLARE_PROTO_FIELD(b)
-    CS_DECLARE_PROTO_FIELD(c)
-    CS_DECLARE_PROTO_FIELD(d)
-    CS_DECLARE_PROTO_FIELD(e)
-    CS_DECLARE_PROTO_FIELD(f)
-    CS_DECLARE_PROTO_FIELD(g)
-    CS_DECLARE_PROTO_FIELD(h)
-    CS_DECLARE_PROTO_FIELD(i)
-    CS_DECLARE_PROTO_FIELD(j)
+    CS_SERIALIZER(a, b, c, d, e, f, g, h, i, j)
 };
 CS_DECLARE_PROTO(TestP, TestP);
 
@@ -100,8 +92,8 @@ TEST(JsonSerializerTest, StructSerialize) {
     testp.i = {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
     testp.j = {1, "hello"};
     std::vector<char> data;
-    data = testp.serialize();
-#if __cplusplus >= 201703L || _MSVC_LANG > 201402L
+    data = testp.toData();
+#if CS_CPP_PLUS >= 17
     EXPECT_STREQ(data.data(), "{\"a\":3,\"b\":\"Struct test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,\"hello\"]}");
 #else
     EXPECT_STREQ(data.data(), "{\"a\":3,\"b\":\"Struct test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":1,\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],1],\"j\":[1,\"hello\"]}");
@@ -112,7 +104,7 @@ TEST(JsonSerializerTest, StructDeserialize) {
     TestP testp;
     std::string str = "{\"a\":3,\"b\":\"Struct test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,\"hello\"]}";
     std::vector<char> data(str.begin(), str.end());
-    testp.deserialize(data);
+    testp.formData(data);
     EXPECT_EQ(testp.a, 3);
     EXPECT_STREQ(testp.b.c_str(), "Struct test");
     EXPECT_TRUE(testp.c);
@@ -157,6 +149,7 @@ TEST(JsonSerializerTest, Base64Covert) {
 }
 
 int main(int argc, char **argv) {
+    std::cout << "CS_CPP_PLUS: " << CS_CPP_PLUS << std::endl;
     testing::InitGoogleTest(&argc, argv);
     spdlog::set_level(spdlog::level::debug);
     return RUN_ALL_TESTS();

@@ -7,6 +7,16 @@
 #define CS_PROTO_USE_NAMESPACE using namespace cs_ccproto;
 #define CS_PROTO_NAMESPACE ::cs_ccproto
 
+#if __cplusplus >= 202002L || _MSVC_LANG >= 202002L
+#define CS_CPP_PLUS 20
+#elif __cplusplus >= 201703L || _MSVC_LANG >= 201703L
+#define CS_CPP_PLUS 17
+#elif __cplusplus >= 201402L || _MSVC_LANG >= 201402L
+#define CS_CPP_PLUS 14
+#elif __cplusplus >= 201103L || _MSVC_LANG >= 201103L
+#define CS_CPP_PLUS 11
+#endif
+
 #define CS_PROTO_ASSERT(cond, fmt, ...) if (!(cond)) {                                  \
     printf("[%s:%d][%s] Assertion failed: " fmt "\n", __FILE__, __LINE__,               \
            __FUNCTION__, ##__VA_ARGS__);                                                \

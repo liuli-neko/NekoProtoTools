@@ -1,13 +1,14 @@
 #include <iostream>
 #include <sstream>
+#include <QApplication>
+#include <QWidget>
 
 #include "../proto/cc_proto_json_serializer.hpp"
 #include "../rpc/cc_rpc_base.hpp"
+#include "../proto/cc_serializer_base.hpp"
 
-#include "ilias_networking.hpp"
-#ifdef _WIN32
-#include "ilias_iocp.cpp"
-#endif
+#include "ilias_qt.hpp"
+
 CS_RPC_USE_NAMESPACE
 using namespace ILIAS_NAMESPACE;
 
@@ -17,7 +18,7 @@ public:
     std::string msg;
     std::vector<int> numbers;
 
-    CS_SERIALIZER(timestamp, msg, numbers);
+    CS_SERIALIZER(timestamp, msg, numbers)
 };
 CS_DECLARE_PROTO(Message, Message);
 
@@ -41,9 +42,9 @@ Task<void> ClientLoop(IoContext& ioContext, ChannelFactory& channelFactor) {
         if (auto cl = channel.lock(); cl != nullptr) {
             CS_LOG_INFO("send message to channel {}", cl->channelId());
             auto msg = std::make_unique<Message>();
-            msg->msg = "this is a message from client";
-            msg->timestamp = time(NULL);
-            msg->numbers = (std::vector<int>{1, 2, 3, 5});
+            msg->msg = ("this is a message from client");
+            msg->timestamp = (time(NULL));
+            msg->numbers = std::vector<int>{1, 2, 3, 5};
             auto ret1 = co_await cl->send(std::move(msg));
             if (!ret1) {
                 CS_LOG_ERROR("send failed: {}", ret1.error().message());
@@ -149,10 +150,24 @@ Task<void> test(IoContext& ioContext, ChannelFactory& channelFactor, ChannelFact
     co_return Result<>();
 }
 
+class MainWidget : public QWidget {
+    Q_OBJECT
+public:
+    MainWidget(QWidget* parent = nullptr) : QWidget(parent) {
+        setWindowTitle("test");
+        setFixedSize(600, 800);
+    }
+    ~MainWidget() {}
+    void initUi() {
+        
+    }
+protected:
+};
+
 int main(int argc, char** argv) {
-    std::cout << "CS_CPP_PLUS: " << CS_CPP_PLUS << std::endl;
+    QApplication app(argc, argv);
     spdlog::set_level(spdlog::level::debug);
-    PlatformIoContext ioContext;
+    QIoContext ioContext;
     std::shared_ptr<CS_PROTO_NAMESPACE::ProtoFactory> protoFactory(new CS_PROTO_NAMESPACE::ProtoFactory());
     ChannelFactory channelFactor(ioContext, protoFactory);
     ChannelFactory channelFactor1(ioContext, protoFactory);
