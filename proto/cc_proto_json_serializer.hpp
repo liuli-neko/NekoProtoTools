@@ -52,7 +52,7 @@ public:
      * @return false 
      */
     template <typename T>
-    bool insert(const char* name, const T& value);
+    bool insert(const char* name, const size_t len, const T& value);
     /**
      * @brief start deserialize
      *  while calling this function before traversing all fields, 
@@ -89,7 +89,7 @@ public:
      * @return false 
      */
     template <typename T>
-    bool get(const char* name, T* value);
+    bool get(const char* name, const size_t len, T* value);
 
 private:
     JsonDocument mDocument;
@@ -129,8 +129,8 @@ inline bool JsonSerializer::endSerialize(std::vector<char>* data) {
 }
 
 template <typename T>
-bool JsonSerializer::insert(const char* name, const T& value) {
-    if (!mWriter->Key(name)) {
+bool JsonSerializer::insert(const char* name,const size_t len, const T& value) {
+    if (!mWriter->Key(name, len)) {
         return false;
     }
     return JsonConvert<T>::toJsonValue(*mWriter, value);
@@ -157,11 +157,12 @@ inline bool JsonSerializer::endDeserialize() {
 }
 
 template <typename T>
-bool JsonSerializer::get(const char* name, T* value) {
-    if (!mDocument.HasMember(name)) {
+bool JsonSerializer::get(const char* name, const size_t len, T* value) {
+    std::string name_str(name, len);
+    if (!mDocument.HasMember(name_str.c_str())) {
         return false;
     }
-    return JsonConvert<T>::fromJsonValue(value, mDocument[name]);
+    return JsonConvert<T>::fromJsonValue(value, mDocument[name_str.c_str()]);
 }
 
 template <>
@@ -226,6 +227,21 @@ struct JsonConvert<std::string, void> {
     }
 };
 
+#if CS_CPP_PLUS >= 20
+template <>
+struct JsonConvert<std::u8string, void> {
+    static bool toJsonValue(JsonWriter& writer, const std::u8string value) {
+        return writer.String(reinterpret_cast<const char *>(value.data()), value.size(), true);
+    }
+    static bool fromJsonValue(std::u8string* dst, const JsonValue& value) {
+        if (!value.IsString() || dst == nullptr) {
+            return false;
+        }
+        (*dst) = std::u8string(reinterpret_cast<const char8_t *>(value.GetString()), value.GetStringLength());
+        return true;
+    }
+};
+#endif
 template <typename T>
 struct JsonConvert<std::vector<T>, void> {
     static bool toJsonValue(JsonWriter& writer, const std::vector<T>& value) {

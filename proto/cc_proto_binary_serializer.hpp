@@ -33,11 +33,11 @@ public:
     void startSerialize();
     inline bool endSerialize(std::vector<char>* data);
     template <typename T>
-    bool insert(const char* name, const T& value);
+    bool insert(const char* name, const size_t len, const T& value);
     bool startDeserialize(const std::vector<char>& data);
     bool endDeserialize();
     template <typename T>
-    bool get(const char* name, T* value);
+    bool get(const char* name, const size_t len, T* value);
 
 private:
     std::vector<char> mData;
@@ -56,7 +56,7 @@ inline bool BinarySerializer::endSerialize(std::vector<char>* data) {
 }
 
 template <typename T>
-bool BinarySerializer::insert(const char* name, const T& value) {
+bool BinarySerializer::insert(const char* name, const size_t len, const T& value) {
     return BinaryConvert<T>::toBinaryArray(mData, value);
 }
 
@@ -69,14 +69,13 @@ inline bool BinarySerializer::startDeserialize(const std::vector<char>& data) {
 inline bool BinarySerializer::endDeserialize() {
     if (mOffset != mData.size()) {
         CS_LOG_WARN("binary data deserialize warning, read size{} != buf szie{}.", mOffset, mData.size());
-        // std::cout << "mOffset: " << mOffset << ", mData.size(): " << mData.size() << std::endl;
     }
     mData.clear();
     return true;
 }
 
 template <typename T>
-bool BinarySerializer::get(const char* name, T* value) {
+bool BinarySerializer::get(const char* name, const size_t len, T* value) {
     return BinaryConvert<T>::fromBinaryArray(value, mData, mOffset);
 }
 
@@ -104,6 +103,8 @@ struct BinaryConvert<int8_t, void> {
             return false;
         }
         *dst = buf[offset_byte];
+        offset_byte += 1;
+        return true;
     }
 };
 

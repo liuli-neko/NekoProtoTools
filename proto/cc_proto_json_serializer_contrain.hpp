@@ -11,6 +11,10 @@
 #undef GetObject
 #endif
 
+#if CS_CPP_PLUS >= 20
+#include <string>
+#endif
+
 CS_PROTO_BEGIN_NAMESPACE
 
 template <typename T>
@@ -65,15 +69,16 @@ struct JsonConvert<std::set<T>, void> {
   }
 };
 
+#if CS_CPP_PLUS >= 20
 template <typename T>
-struct JsonConvert<std::map<const char *, T>, void> {
+struct JsonConvert<std::map<std::u8string, T>, void> {
   static bool toJsonValue(JsonWriter &writer,
-                          const std::map<const char *, T> &value) {
+                          const std::map<std::u8string, T> &value) {
     rapidjson::StringBuffer mBuffer;
     JsonWriter mwriter(mBuffer);
     auto ret = mwriter.StartObject();
     for (auto &v : value) {
-      mwriter.Key(v.first);
+      mwriter.Key(v.first.data(), v.first.size(), true);
       ret = JsonConvert<T>::toJsonValue(mwriter, v.second) && ret;
     }
     ret = mwriter.EndObject() && ret;
@@ -81,7 +86,7 @@ struct JsonConvert<std::map<const char *, T>, void> {
                     rapidjson::kObjectType) && ret;
     return ret;
   }
-  static bool fromJsonValue(std::map<const char *, T> *dst,
+  static bool fromJsonValue(std::map<std::u8string, T> *dst,
                             const JsonValue &value) {
     if (!value.IsObject()) {
       return false;
@@ -102,7 +107,7 @@ struct JsonConvert<std::map<const char *, T>, void> {
     return true;
   }
 };
-
+#endif
 template <typename T, size_t t>
 struct JsonConvert<std::array<T, t>, void> {
   static bool toJsonValue(JsonWriter &writer, const std::array<T, t> &value) {
