@@ -255,4 +255,31 @@ struct BinaryConvert<std::string, void> {
     }
 };
 
+#if CS_CPP_PLUS >= 20
+template <>
+struct BinaryConvert<std::u8string, void> {
+    static bool toBinaryArray(std::vector<char>& buf, const std::u8string& value) {
+        buf.resize(buf.size() + value.size() + 8, 0);
+        uint64_t len = htobe64((uint64_t)value.size());
+        memcpy(buf.data() + buf.size() - 8 - value.size(), &len, 8);
+        memcpy(buf.data() + buf.size() - value.size(), value.data(), value.size());
+        return true;
+    }
+    static bool fromBinaryArray(std::u8string* dst, const std::vector<char>& buf, int& offset_byte) {
+        if (buf.size() < offset_byte + 8) {
+            return false;
+        }
+        uint64_t len = 0;
+        memcpy(&len, buf.data() + offset_byte, 8);
+        len = be64toh(len);
+        if (buf.size() < offset_byte + len + 8) {
+            return false;
+        }
+        *dst = std::u8string(reinterpret_cast<const char8_t *>(buf.data()) + offset_byte + 4, len);
+        offset_byte += len + 8;
+        return true;
+    }
+};
+#endif
+
 CS_PROTO_END_NAMESPACE
