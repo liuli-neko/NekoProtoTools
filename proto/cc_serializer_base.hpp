@@ -127,17 +127,17 @@ public:                                                                         
 #else
 #define CS_SERIALIZER(...)                                                                                                  \
 private:                                                                                                                    \
-        static inline constexpr std::array<std::string_view, membersSize(#__VA_ARGS__)> _names__ =                          \
-            CS_PROTO_NAMESPACE::parseNames<membersSize(#__VA_ARGS__)>(#__VA_ARGS__);                                        \
+        static inline constexpr std::array<std::string_view, CS_PROTO_NAMESPACE::membersSize(#__VA_ARGS__)> _names__ =      \
+            CS_PROTO_NAMESPACE::parseNames<CS_PROTO_NAMESPACE::membersSize(#__VA_ARGS__)>(#__VA_ARGS__);                    \
 public:                                                                                                                     \
     template <typename SerializerT>                                                                                         \
     bool serialize(SerializerT &serializer) {                                                                               \
-        return CS_PROTO_NAMESPACE::unfoldFunction<membersSize(#__VA_ARGS__), true, SerializerT>(                            \
+        return CS_PROTO_NAMESPACE::unfoldFunction<CS_PROTO_NAMESPACE::membersSize(#__VA_ARGS__), true, SerializerT>(        \
                 serializer, _names__, __VA_ARGS__);                                                                         \
     }                                                                                                                       \
     template <typename SerializerT>                                                                                         \
     bool deserialize(SerializerT &serializer) {                                                                             \
-        return CS_PROTO_NAMESPACE::unfoldFunction<membersSize(#__VA_ARGS__), false, SerializerT>(                           \
+        return CS_PROTO_NAMESPACE::unfoldFunction<CS_PROTO_NAMESPACE::membersSize(#__VA_ARGS__), false, SerializerT>(       \
                 serializer, _names__, __VA_ARGS__);                                                                         \
     }
 #endif

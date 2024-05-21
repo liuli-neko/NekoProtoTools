@@ -2,6 +2,9 @@ set_project("cc-proto")
 add_rules("mode.debug", "mode.release", "mode.valgrind")
 set_version("1.0.0")
 
+add_rules("plugin.compile_commands.autoupdate", {outputdir = ".vscode"})
+
+
 add_requires("rapidjson", "spdlog")
 
 if is_mode("debug") then
@@ -73,6 +76,20 @@ target("test_rpc")
     add_tests("proto")
     set_group("rpc")
     add_files("tests/test_rpc.cpp")
+target_end()
+
+target("test_so")
+    set_kind("binary")
+    set_languages("c++20")
+    add_includedirs("./modules/Ilias/include")
+    add_defines("CS_PROTO_STATIC", "CS_RPC_STATIC")
+    add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
+    add_cxxflags("-Wstrict-aliasing")
+    add_packages("rapidjson", "gtest", "spdlog")
+    add_deps("proto_base", "rpc_base")
+    add_tests("proto")
+    set_group("so")
+    add_files("tests/test_dump_object.cpp")
 target_end()
 
 -- target("test_rpc_ui")

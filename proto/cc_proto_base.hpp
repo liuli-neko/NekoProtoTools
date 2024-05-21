@@ -125,7 +125,11 @@ void ProtoFactory::regist(const char* name) {
 
 template <typename T>
 int ProtoFactory::proto_type() {
-    return _proto_type<T>();
+    static int _proto_type = 0;
+    if (_proto_type == 0) {
+        _proto_type = type_counter();
+    }
+    return _proto_type;
 }
 
 template <typename T>
@@ -154,15 +158,13 @@ ProtoBase<T, SerializerT>::ProtoBase(ProtoBase<T, SerializerT>&& other) {
 }
 
 template <typename T, typename SerializerT>
-ProtoBase<T, SerializerT>& 
-ProtoBase<T, SerializerT>::operator=(const ProtoBase<T, SerializerT>& other) {
+ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(const ProtoBase<T, SerializerT>& other) {
     mSerializer = other.mSerializer;
     return *this;
 }
 
 template <typename T, typename SerializerT>
-ProtoBase<T, SerializerT>& 
-ProtoBase<T, SerializerT>::operator=(ProtoBase<T, SerializerT>&& other) {
+ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, SerializerT>&& other) {
     mSerializer = std::move(other.mSerializer);
     return *this;
 }
@@ -170,9 +172,9 @@ ProtoBase<T, SerializerT>::operator=(ProtoBase<T, SerializerT>&& other) {
 template <typename T, typename SerializerT>
 std::vector<char> ProtoBase<T, SerializerT>::toData() const {
     mSerializer.startSerialize();
-    auto self = dynamic_cast<const ProtoType *>(this);
+    auto self = dynamic_cast<const ProtoType*>(this);
     CS_ASSERT(self != nullptr, "Proto({}) is nullptr", _proto_name<T>());
-    auto ret = const_cast<ProtoType *>(self)->serialize(mSerializer);
+    auto ret = const_cast<ProtoType*>(self)->serialize(mSerializer);
     std::vector<char> data;
     if (!mSerializer.endSerialize(&data)) {
         CS_LOG_ERROR("Proto({}) serialize error", _proto_name<T>());
@@ -182,7 +184,7 @@ std::vector<char> ProtoBase<T, SerializerT>::toData() const {
 
 template <typename T, typename SerializerT>
 int ProtoBase<T, SerializerT>::type() const {
-    return _proto_type<T>();
+    return ProtoFactory::proto_type<T>();
 }
 
 template <typename T, typename SerializerT>
@@ -190,9 +192,9 @@ bool ProtoBase<T, SerializerT>::formData(const std::vector<char>& data) {
     if (!mSerializer.startDeserialize(data)) {
         return false;
     }
-    auto self = dynamic_cast<const ProtoType *>(this);
+    auto self = dynamic_cast<const ProtoType*>(this);
     CS_ASSERT(self != nullptr, "Proto({}) is nullptr", _proto_name<T>());
-    bool ret = const_cast<ProtoType *>(self)->deserialize(mSerializer);
+    bool ret = const_cast<ProtoType*>(self)->deserialize(mSerializer);
     if (!mSerializer.endDeserialize() || !ret) {
         return false;
     }
@@ -205,9 +207,9 @@ bool ProtoBase<T, SerializerT>::formData(const U& data) {
     if (!mSerializer.startDeserialize(data)) {
         return false;
     }
-    auto self = dynamic_cast<const ProtoType *>(this);
+    auto self = dynamic_cast<const ProtoType*>(this);
     CS_ASSERT(self != nullptr, "Proto({}) is nullptr", _proto_name<T>());
-    bool ret = const_cast<ProtoType *>(self)->deserialize(mSerializer);
+    bool ret = const_cast<ProtoType*>(self)->deserialize(mSerializer);
     if (!mSerializer.endDeserialize() || !ret) {
         return false;
     }
@@ -216,28 +218,17 @@ bool ProtoBase<T, SerializerT>::formData(const U& data) {
 
 CS_PROTO_END_NAMESPACE
 
-#define CS_DECLARE_PROTO(type, name)                         \
-    CS_PROTO_BEGIN_NAMESPACE                                 \
-    template <>                                              \
-    int _proto_type<type>() {                                \
-        static int _proto_type = 0;                          \
-        if (_proto_type == 0) {                              \
-            _proto_type = type_counter();                    \
-        }                                                    \
-        return _proto_type;                                  \
-    }                                                        \
-    template <>                                              \
-    constexpr const char* _proto_name<type>() {              \
-        return #name;                                        \
-    }                                                        \
-    namespace {                                              \
-    struct _regist_##name {                                  \
-        _regist_##name() {                                   \
-            static_init_funcs(#name,                         \
-                [](CS_PROTO_NAMESPACE::ProtoFactory* self) { \
-                    self->regist<type>(#name);               \
-                });                                          \
-        }                                                    \
-    } _regist_##name##__tmp;                                 \
-    }                                                        \
+#define CS_DECLARE_PROTO(type, name)                                                                             \
+    CS_PROTO_BEGIN_NAMESPACE                                                                                     \
+    template <>                                                                                                  \
+    constexpr const char* _proto_name<type>() {                                                                  \
+        return #name;                                                                                            \
+    }                                                                                                            \
+    namespace {                                                                                                  \
+    struct _regist_##name {                                                                                      \
+        _regist_##name() {                                                                                       \
+            static_init_funcs(#name, [](CS_PROTO_NAMESPACE::ProtoFactory* self) { self->regist<type>(#name); }); \
+        }                                                                                                        \
+    } _regist_##name##__tmp;                                                                                     \
+    }                                                                                                            \
     CS_PROTO_END_NAMESPACE
