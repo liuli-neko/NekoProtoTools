@@ -77,7 +77,6 @@ struct TestP : public ProtoBase<TestP> {
 
     CS_SERIALIZER(a, b, c, d, e, f, g, h, i, j)
 };
-CS_DECLARE_PROTO(TestP, TestP);
 
 TEST(JsonSerializerTest, StructSerialize) {
     TestP testp;

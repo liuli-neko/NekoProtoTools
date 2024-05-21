@@ -115,7 +115,6 @@ struct TestP : public ProtoBase<TestP> {
 
     CS_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k)
 };
-CS_DECLARE_PROTO(TestP, TestP);
 
 class JsonSerializerTest : public testing::Test {
 protected:

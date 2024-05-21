@@ -90,3 +90,38 @@
     }                                                                          \
   }
 #endif
+
+CS_PROTO_BEGIN_NAMESPACE
+#if defined(__GNUC__) || defined(__MINGW__)
+namespace {
+    template <class T>
+    std::string _cs_class_name() {
+        int status = -4; // some arbitrary value to eliminate the compiler warning
+        std::unique_ptr<char, void(*)(void*)> res {
+            abi::__cxa_demangle(typeid(T).name(), nullptr, nullptr, &status),
+            std::free
+        };
+        return (status==0) ? res.get() : typeid(T).name();
+    }
+}
+#elif defined(_WIN32)
+namespace {
+    template <class T>
+    std::string _cs_class_name() {
+        std::string string(__FUNCSIG__);
+        size_t start = string.find_last_of(' ');
+        auto sstring = string.substr(start);
+        size_t d =  sstring.find_last_of(':');
+        if (d != std::string::npos)
+            start = d;
+        else
+            start = 0;
+        while (start < sstring.size() && (sstring[start] == ' ' || sstring[start] == '>' || sstring[start] == ':')) {
+            ++start;
+        }
+        size_t end = sstring.find_last_of('>');
+        return sstring.substr(start, end - start);
+    }
+}
+#endif
+CS_PROTO_END_NAMESPACE

@@ -11,12 +11,8 @@ CS_PROTO_BEGIN_NAMESPACE
 class JsonSerializer;
 class ProtoFactory;
 
-template <typename T>
-int _proto_type();
-template <typename T>
-const char* _proto_name();
-auto static_init_funcs(const char*, std::function<void(ProtoFactory*)>)
-    -> std::map<const char*, std::function<void(ProtoFactory*)>>;
+auto static_init_funcs(const std::string &, std::function<void(ProtoFactory*)>)
+    -> std::map<std::string, std::function<void(ProtoFactory*)>>;
 int type_counter();
 
 class CS_PROTO_API IProto {
@@ -39,11 +35,11 @@ public:
 
     void init();
     template <typename T>
-    void regist(const char* name);
+    void regist(const std::string &name);
     template <typename T>
     static int proto_type();
     template <typename T>
-    static const char* proto_name();
+    static std::string proto_name();
     /**
      * @brief create a proto object by type
      *  this object is a pointer, you need to delete it by yourself
@@ -69,7 +65,7 @@ public:
 
 private:
     std::map<int, std::function<IProto*()>> mProtoMap;
-    std::map<const char*, int> mProtoNameMap;
+    std::map<std::string, int> mProtoNameMap;
     uint32_t mVersion = 0;
 
     template <typename T>
@@ -96,17 +92,20 @@ public:
     bool formData(const std::vector<char>& data) override;
     template <typename U>
     bool formData(const U& data);
+    std::string protoName() const;
 
 protected:
     mutable SerializerT mSerializer;
+private:
+    static std::string _init_class_name__;
 };
 
 template <typename T>
-void ProtoFactory::regist(const char* name) {
+void ProtoFactory::regist(const std::string &name) {
     auto itemType = mProtoMap.find(proto_type<T>());
     auto itemName = mProtoNameMap.find(name);
     if (itemType != mProtoMap.end()) {
-        auto rname = "";
+        std::string rname = "";
         for (auto item : mProtoNameMap) {
             if (item.second == proto_type<T>()) {
                 rname = item.first;
@@ -119,7 +118,7 @@ void ProtoFactory::regist(const char* name) {
         CS_LOG_WARN("proto({}) is regist type {}, can't regist type {} again", name, itemName->second, proto_type<T>());
     }
     CS_LOG_INFO("Init proto {}:{} for factory({})", name, proto_type<T>(), (void*)this);
-    mProtoNameMap.insert(std::make_pair(_proto_name<T>(), proto_type<T>()));
+    mProtoNameMap.insert(std::make_pair(name, proto_type<T>()));
     mProtoMap.insert(std::make_pair(proto_type<T>(), creater<T>));
 }
 
@@ -133,8 +132,8 @@ int ProtoFactory::proto_type() {
 }
 
 template <typename T>
-const char* ProtoFactory::proto_name() {
-    return _proto_name<T>();
+std::string ProtoFactory::proto_name() {
+    return _cs_class_name<T>();
 }
 
 template <typename T>
@@ -146,6 +145,13 @@ template <typename T>
 IProto* ProtoFactory::creater() {
     return new T();
 }
+
+template <typename T, typename SerializerT>
+std::string ProtoBase<T, SerializerT>::_init_class_name__ = []() {
+    std::string name = _cs_class_name<T>();
+    static_init_funcs(name, [name](CS_PROTO_NAMESPACE::ProtoFactory* self) { self->regist<T>(name); });
+    return name;
+}();
 
 template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>::ProtoBase(const ProtoBase<T, SerializerT>& other) {
@@ -170,14 +176,19 @@ ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, Ser
 }
 
 template <typename T, typename SerializerT>
+std::string ProtoBase<T, SerializerT>::protoName() const {
+    return _init_class_name__;
+}
+
+template <typename T, typename SerializerT>
 std::vector<char> ProtoBase<T, SerializerT>::toData() const {
     mSerializer.startSerialize();
     auto self = dynamic_cast<const ProtoType*>(this);
-    CS_ASSERT(self != nullptr, "Proto({}) is nullptr", _proto_name<T>());
+    CS_ASSERT(self != nullptr, "Proto({}) is nullptr", protoName());
     auto ret = const_cast<ProtoType*>(self)->serialize(mSerializer);
     std::vector<char> data;
     if (!mSerializer.endSerialize(&data)) {
-        CS_LOG_ERROR("Proto({}) serialize error", _proto_name<T>());
+        CS_LOG_ERROR("Proto({}) serialize error", protoName());
     }
     return std::move(data);
 }
@@ -193,7 +204,7 @@ bool ProtoBase<T, SerializerT>::formData(const std::vector<char>& data) {
         return false;
     }
     auto self = dynamic_cast<const ProtoType*>(this);
-    CS_ASSERT(self != nullptr, "Proto({}) is nullptr", _proto_name<T>());
+    CS_ASSERT(self != nullptr, "Proto({}) is nullptr", protoName());
     bool ret = const_cast<ProtoType*>(self)->deserialize(mSerializer);
     if (!mSerializer.endDeserialize() || !ret) {
         return false;
@@ -208,7 +219,7 @@ bool ProtoBase<T, SerializerT>::formData(const U& data) {
         return false;
     }
     auto self = dynamic_cast<const ProtoType*>(this);
-    CS_ASSERT(self != nullptr, "Proto({}) is nullptr", _proto_name<T>());
+    CS_ASSERT(self != nullptr, "Proto({}) is nullptr", protoName());
     bool ret = const_cast<ProtoType*>(self)->deserialize(mSerializer);
     if (!mSerializer.endDeserialize() || !ret) {
         return false;
@@ -217,18 +228,3 @@ bool ProtoBase<T, SerializerT>::formData(const U& data) {
 }
 
 CS_PROTO_END_NAMESPACE
-
-#define CS_DECLARE_PROTO(type, name)                                                                             \
-    CS_PROTO_BEGIN_NAMESPACE                                                                                     \
-    template <>                                                                                                  \
-    constexpr const char* _proto_name<type>() {                                                                  \
-        return #name;                                                                                            \
-    }                                                                                                            \
-    namespace {                                                                                                  \
-    struct _regist_##name {                                                                                      \
-        _regist_##name() {                                                                                       \
-            static_init_funcs(#name, [](CS_PROTO_NAMESPACE::ProtoFactory* self) { self->regist<type>(#name); }); \
-        }                                                                                                        \
-    } _regist_##name##__tmp;                                                                                     \
-    }                                                                                                            \
-    CS_PROTO_END_NAMESPACE

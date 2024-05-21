@@ -19,7 +19,6 @@ public:
 
     CS_SERIALIZER(timestamp, msg, numbers);
 };
-CS_DECLARE_PROTO(Message, Message);
 
 std::string to_hex(const std::vector<char>& data) {
     std::stringstream ss;
