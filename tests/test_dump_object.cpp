@@ -7,13 +7,9 @@
 
 using namespace CS_PROTO_NAMESPACE;
 
-class T1 : public CS_PROTO_NAMESPACE::DumpableObject<T1, CS_PROTO_NAMESPACE::JsonSerializer> {
+class TestT : public CS_PROTO_NAMESPACE::DumpableObject<TestT, CS_PROTO_NAMESPACE::JsonSerializer> {
 
 public:
-    std::string objectName() const override {
-        return "T1";
-    }
-
     int a = 1;
     std::string b = " hesd";
 
@@ -21,12 +17,22 @@ public:
 };
 
 TEST(DumpObject, Test) {
-    T1 t1;
+    TestT t1;
+    t1.a = 234324;
+    t1.b = "asdasd";
+    
     auto t = t1.dumpToString();
-    std::cout << t << std::endl;
-    // auto d = IDumpableObject::create("T1");
-    // ASSERT_NE(d, nullptr);
-    // d->loadFromString(t);
+    IDumpableObject::dumpToFile("test.json", &t1);
+    IDumpableObject *d = nullptr;
+    IDumpableObject::loadFromFile("test.json", &d);
+    ASSERT_NE(d, nullptr);
+    
+    TestT* a = dynamic_cast<TestT *>(d);
+    ASSERT_NE(a, nullptr);
+    EXPECT_EQ(a->a, t1.a);
+    EXPECT_STREQ(a->b.c_str(), t1.b.c_str());
+
+    delete d;
 }
 
 
