@@ -91,6 +91,9 @@
   }
 #endif
 
+#if defined(__GNUC__) || defined(__MINGW__)
+#include <cxxabi.h>
+#endif
 CS_PROTO_BEGIN_NAMESPACE
 #if defined(__GNUC__) || defined(__MINGW__)
 namespace {
