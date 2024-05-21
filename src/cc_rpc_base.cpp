@@ -326,6 +326,3 @@ void ByteStreamChannel::close() {
 void ByteStreamChannel::destroy() { mChannelFactory->destroyChannel(mChannelId); }
 
 CS_RPC_END_NAMESPACE
-
-CS_DECLARE_PROTO(CS_RPC_NAMESPACE::CCMessageHeader, RPCHeader);
-CS_DECLARE_PROTO(CS_RPC_NAMESPACE::ChannelHeader, ChannelHeader);

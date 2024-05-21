@@ -11,11 +11,11 @@ void ProtoFactory::setVersion(int major, int minor, int patch) {
 
 uint32_t ProtoFactory::version() const { return mVersion; }
 
-std::map<const char*, std::function<void(ProtoFactory*)>> static_init_funcs(
-    const char* name = nullptr, std::function<void(ProtoFactory*)> func = nullptr) {
-    static std::map<const char*, std::function<void(ProtoFactory*)>> funcs = {};
+std::map<std::string, std::function<void(ProtoFactory*)>> static_init_funcs(
+    const std::string &name = "", std::function<void(ProtoFactory*)> func = nullptr) {
+    static std::map<std::string, std::function<void(ProtoFactory*)>> funcs = {};
     auto item = funcs.find(name);
-    if (name != nullptr && item == funcs.end() && func) {
+    if (!name.empty() && item == funcs.end() && func) {
         funcs.insert(std::make_pair(name, func));
     }
     if (item != funcs.end()) {
@@ -25,16 +25,7 @@ std::map<const char*, std::function<void(ProtoFactory*)>> static_init_funcs(
 }
 
 void ProtoFactory::init() {
-    std::vector<std::pair<const char*, std::function<void(ProtoFactory*)>>> init_funcs;
     for (auto& item : static_init_funcs()) {
-        init_funcs.push_back(item);
-    }
-    std::sort(init_funcs.begin(), init_funcs.end(),
-              [](const std::pair<const char*, std::function<void(ProtoFactory*)>>& a,
-                 const std::pair<const char*, std::function<void(ProtoFactory*)>>& b) {
-                  return ::strcmp(a.first, b.first) < 0;
-              });
-    for (auto& item : init_funcs) {
         item.second(this);
     }
 }

@@ -20,39 +20,6 @@
 #include "cc_proto_json_serializer.hpp"
 
 CS_PROTO_BEGIN_NAMESPACE
-#if defined(__GNUC__) || defined(__MINGW__)
-namespace {
-    template <class T>
-    std::string _cs_class_name() {
-        int status = -4; // some arbitrary value to eliminate the compiler warning
-        std::unique_ptr<char, void(*)(void*)> res {
-            abi::__cxa_demangle(typeid(T).name(), nullptr, nullptr, &status),
-            std::free
-        };
-        return (status==0) ? res.get() : typeid(T).name();
-    }
-}
-#elif defined(_WIN32)
-namespace {
-    template <class T>
-    std::string _cs_class_name() {
-        std::string string(__FUNCSIG__);
-        size_t start = string.find_last_of(' ');
-        auto sstring = string.substr(start);
-        size_t d =  sstring.find_last_of(':');
-        if (d != std::string::npos)
-            start = d;
-        else
-            start = 0;
-        while (start < sstring.size() && (sstring[start] == ' ' || sstring[start] == '>' || sstring[start] == ':')) {
-            ++start;
-        }
-        size_t end = sstring.find_last_of('>');
-        return sstring.substr(start, end - start);
-    }
-}
-#endif
-
 
 class CS_PROTO_API IDumpableObject {
 public:
@@ -89,25 +56,22 @@ public:
 
     std::string className() const override;
 private:
-    CS_USED static struct _init_data {
-        _init_data();
-    } _init__flag;
+    static std::string _init_class_name__;
 };
+
 template <typename T, typename SerializerT>
-DumpableObject<T, SerializerT>::_init_data::_init_data() {
+std::string DumpableObject<T, SerializerT>::_init_class_name__ = [](){
     static_assert(std::is_base_of<DumpableObject<T, SerializerT>, T>::value, "T must be derived from DumpableObject<T, SerializerT>");
     CS_LOG_INFO("DumpableObject<{}, {}> init", typeid(T).name(), typeid(SerializerT).name());
     mObjectMap.insert(std::make_pair(_cs_class_name<T>(), [](){
         return new T();
     }));
-}
-
-template <typename T, typename SerializerT>
-CS_USED typename DumpableObject<T, SerializerT>::_init_data DumpableObject<T, SerializerT>::_init__flag = {};
+    return _cs_class_name<T>();
+}();
 
 template <typename T, typename SerializerT>
 std::string DumpableObject<T, SerializerT>::className() const {
-    return _cs_class_name<T>();
+    return _init_class_name__;
 }
 
 template <typename T, typename SerializerT>
