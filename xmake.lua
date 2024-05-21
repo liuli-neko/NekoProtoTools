@@ -80,7 +80,7 @@ target_end()
 
 target("test_so")
     set_kind("binary")
-    set_languages("c++11")
+    set_languages("c++14")
     add_includedirs("./modules/Ilias/include")
     add_defines("CS_PROTO_STATIC", "CS_RPC_STATIC")
     add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")

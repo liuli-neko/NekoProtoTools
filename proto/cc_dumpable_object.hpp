@@ -10,7 +10,9 @@
 #if defined(__GNUC__) || defined(__MINGW__)
 #include <cxxabi.h>
 #elif defined(_WIN32)
-#include <Windows.h>
+#ifdef GetObject
+#undef GetObject
+#endif
 #endif
 
 #include <rapidjson/istreamwrapper.h>
@@ -35,9 +37,18 @@ namespace {
     template <class T>
     std::string _cs_class_name() {
         std::string string(__FUNCSIG__);
-        size_t start = string.find_first_of("<enum") + 1;
-        size_t end = string.find_last_of('>');
-        return string.substr(start, end - start);
+        size_t start = string.find_last_of(' ');
+        auto sstring = string.substr(start);
+        size_t d =  sstring.find_last_of(':');
+        if (d != std::string::npos)
+            start = d;
+        else
+            start = 0;
+        while (start < sstring.size() && (sstring[start] == ' ' || sstring[start] == '>' || sstring[start] == ':')) {
+            ++start;
+        }
+        size_t end = sstring.find_last_of('>');
+        return sstring.substr(start, end - start);
     }
 }
 #endif
@@ -78,7 +89,7 @@ public:
 
     std::string className() const override;
 private:
-    [[gnu::used]] static struct _init_data {
+    CS_USED static struct _init_data {
         _init_data();
     } _init__flag;
 };
@@ -92,7 +103,7 @@ DumpableObject<T, SerializerT>::_init_data::_init_data() {
 }
 
 template <typename T, typename SerializerT>
-[[gnu::used]] typename DumpableObject<T, SerializerT>::_init_data DumpableObject<T, SerializerT>::_init__flag = {};
+CS_USED typename DumpableObject<T, SerializerT>::_init_data DumpableObject<T, SerializerT>::_init__flag = {};
 
 template <typename T, typename SerializerT>
 std::string DumpableObject<T, SerializerT>::className() const {
@@ -149,6 +160,7 @@ struct JsonConvert<IDumpableObject *> {
         }
         std::string className = value["className"].GetString();
         auto d = IDumpableObject::create(className);
+        CS_ASSERT(d != nullptr, "DumpableObject {} create failed", className);
         rapidjson::StringBuffer buffer;
         rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
         const auto& o = value["value"];

@@ -17,6 +17,19 @@
 #define CS_CPP_PLUS 11
 #endif
 
+#if defined(__GNUC__) || defined(__MINGW32__)
+#define CS_USED [[gnu::used]]
+#elif defined(_WIN32)
+#define CS_USED 
+#endif
+#if CS_CPP_PLUS >= 17
+#define CONSTEXPR_FUNC constexpr
+#define CONSTEXPR_VAR constexpr
+#else
+#define CONSTEXPR_FUNC
+#define CONSTEXPR_VAR constexpr
+#endif
+
 #define CS_PROTO_ASSERT(cond, fmt, ...) if (!(cond)) {                                  \
     printf("[%s:%d][%s] Assertion failed: " fmt "\n", __FILE__, __LINE__,               \
            __FUNCTION__, ##__VA_ARGS__);                                                \
