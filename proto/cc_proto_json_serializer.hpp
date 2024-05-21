@@ -117,14 +117,12 @@ inline bool JsonSerializer::endSerialize(std::vector<char>* data) {
     mWriter->EndObject();
     if (!mWriter || !mWriter->IsComplete()) {
         mBuffer.Clear();
-        mWriter.reset();
         return false;
     }
     if (data) {
         (*data) = std::vector<char>(mBuffer.GetString(), mBuffer.GetString() + mBuffer.GetSize());
     }
     mBuffer.Clear();
-    mWriter.reset();
     return true;
 }
 
