@@ -11,8 +11,8 @@ CS_PROTO_BEGIN_NAMESPACE
 class JsonSerializer;
 class ProtoFactory;
 
-auto static_init_funcs(const std::string &, std::function<void(ProtoFactory*)>)
-    -> std::map<std::string, std::function<void(ProtoFactory*)>>;
+auto static_init_funcs(const CS_STRING_VIEW &, std::function<void(ProtoFactory*)>)
+    -> std::map<CS_STRING_VIEW, std::function<void(ProtoFactory*)>>;
 int type_counter();
 
 class CS_PROTO_API IProto {
@@ -35,11 +35,11 @@ public:
 
     void init();
     template <typename T>
-    void regist(const std::string &name);
+    void regist(const CS_STRING_VIEW &name);
     template <typename T>
     static int proto_type();
     template <typename T>
-    static std::string proto_name();
+    static CS_STRING_VIEW proto_name();
     /**
      * @brief create a proto object by type
      *  this object is a pointer, you need to delete it by yourself
@@ -65,7 +65,7 @@ public:
 
 private:
     std::map<int, std::function<IProto*()>> mProtoMap;
-    std::map<std::string, int> mProtoNameMap;
+    std::map<CS_STRING_VIEW, int> mProtoNameMap;
     uint32_t mVersion = 0;
 
     template <typename T>
@@ -92,20 +92,21 @@ public:
     bool formData(const std::vector<char>& data) override;
     template <typename U>
     bool formData(const U& data);
-    std::string protoName() const;
+    CS_STRING_VIEW protoName() const;
 
 protected:
     mutable SerializerT mSerializer;
+
 private:
-    static std::string _init_class_name__;
+    static CS_STRING_VIEW _init_class_name__;
 };
 
 template <typename T>
-void ProtoFactory::regist(const std::string &name) {
+void ProtoFactory::regist(const CS_STRING_VIEW &name) {
     auto itemType = mProtoMap.find(proto_type<T>());
     auto itemName = mProtoNameMap.find(name);
     if (itemType != mProtoMap.end()) {
-        std::string rname = "";
+        CS_STRING_VIEW rname = "";
         for (auto item : mProtoNameMap) {
             if (item.second == proto_type<T>()) {
                 rname = item.first;
@@ -132,7 +133,7 @@ int ProtoFactory::proto_type() {
 }
 
 template <typename T>
-std::string ProtoFactory::proto_name() {
+CS_STRING_VIEW ProtoFactory::proto_name() {
     return _cs_class_name<T>();
 }
 
@@ -147,8 +148,8 @@ IProto* ProtoFactory::creater() {
 }
 
 template <typename T, typename SerializerT>
-std::string ProtoBase<T, SerializerT>::_init_class_name__ = []() {
-    std::string name = _cs_class_name<T>();
+CS_STRING_VIEW ProtoBase<T, SerializerT>::_init_class_name__ = []() {
+    CS_STRING_VIEW name = _cs_class_name<T>();
     static_init_funcs(name, [name](CS_PROTO_NAMESPACE::ProtoFactory* self) { self->regist<T>(name); });
     return name;
 }();
@@ -176,7 +177,7 @@ ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, Ser
 }
 
 template <typename T, typename SerializerT>
-std::string ProtoBase<T, SerializerT>::protoName() const {
+CS_STRING_VIEW ProtoBase<T, SerializerT>::protoName() const {
     return _init_class_name__;
 }
 
