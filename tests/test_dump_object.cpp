@@ -12,14 +12,18 @@ class TestT : public CS_PROTO_NAMESPACE::DumpableObject<TestT, CS_PROTO_NAMESPAC
 public:
     int a = 1;
     std::string b = " hesd";
+    IDumpableObject *c = nullptr;
 
-    CS_SERIALIZER(a, b)
+    CS_SERIALIZER(a, b, c)
 };
 
 TEST(DumpObject, Test) {
     TestT t1;
     t1.a = 234324;
     t1.b = "asdasd";
+    t1.c = new TestT();
+    static_cast<TestT*>(t1.c)->a = 123;
+    static_cast<TestT*>(t1.c)->b = "asdasd";
     
     auto t = t1.dumpToString();
     IDumpableObject::dumpToFile("test.json", &t1);

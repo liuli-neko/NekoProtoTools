@@ -7,9 +7,7 @@
 #include <string>
 #include <fstream>
 
-#if defined(__GNUC__) || defined(__MINGW__)
-#include <cxxabi.h>
-#elif defined(_WIN32)
+#if defined(_WIN32)
 #ifdef GetObject
 #undef GetObject
 #endif
@@ -28,16 +26,16 @@ public:
     static bool dumpToFile(const std::string& filePath, IDumpableObject *obj);
     static bool loadFromFile(const std::string& filePath, IDumpableObject **obj);
     virtual ~IDumpableObject() = default;
-    virtual std::string className() const = 0;
-    static IDumpableObject *create(const std::string& className);
+    virtual CS_STRING_VIEW className() const = 0;
+    static IDumpableObject *create(const CS_STRING_VIEW& className);
 
 protected:
-    static std::map<std::string, std::function<IDumpableObject *()>> mObjectMap;
+    static std::map<CS_STRING_VIEW, std::function<IDumpableObject *()>> mObjectMap;
 };
 
-std::map<std::string, std::function<IDumpableObject *()>> IDumpableObject::mObjectMap; 
+inline std::map<CS_STRING_VIEW, std::function<IDumpableObject *()>> IDumpableObject::mObjectMap; 
 
-inline IDumpableObject *IDumpableObject::create(const std::string& className) {
+inline IDumpableObject *IDumpableObject::create(const CS_STRING_VIEW& className) {
     auto it = mObjectMap.find(className);
     if (it != mObjectMap.end()) {
         return (it->second)();
@@ -54,23 +52,24 @@ public:
     virtual std::string dumpToString() const override;
     virtual bool loadFromString(const std::string& str) override;
 
-    std::string className() const override;
+    CS_STRING_VIEW className() const override;
 private:
-    static std::string _init_class_name__;
+    static CS_STRING_VIEW _init_class_name__;
 };
 
 template <typename T, typename SerializerT>
-std::string DumpableObject<T, SerializerT>::_init_class_name__ = [](){
+CS_STRING_VIEW DumpableObject<T, SerializerT>::_init_class_name__ = [](){
+    CS_STRING_VIEW name = _cs_class_name<T>();
     static_assert(std::is_base_of<DumpableObject<T, SerializerT>, T>::value, "T must be derived from DumpableObject<T, SerializerT>");
-    CS_LOG_INFO("DumpableObject<{}, {}> init", typeid(T).name(), typeid(SerializerT).name());
-    mObjectMap.insert(std::make_pair(_cs_class_name<T>(), [](){
+    CS_LOG_INFO("Dumpable Object {}({}) init", name, _cs_class_name<SerializerT>());
+    mObjectMap.insert(std::make_pair(name, [](){
         return new T();
     }));
-    return _cs_class_name<T>();
+    return name;
 }();
 
 template <typename T, typename SerializerT>
-std::string DumpableObject<T, SerializerT>::className() const {
+CS_STRING_VIEW DumpableObject<T, SerializerT>::className() const {
     return _init_class_name__;
 }
 
@@ -107,7 +106,12 @@ struct JsonConvert<IDumpableObject *> {
     static bool toJsonValue(JsonWriter& writer, const IDumpableObject *value) {
         auto ret = writer.StartObject();
         ret = writer.Key("className") && ret;
-        ret = writer.String(value->className().c_str()) && ret;
+        if (value == nullptr) {
+            ret = writer.String("null") && ret;
+            ret = writer.EndObject() && ret;
+            return ret;
+        }
+        ret = writer.String(value->className().data(), value->className().length()) && ret;
         ret = writer.Key("value") && ret;
         auto str = value->dumpToString();
         ret = (!str.empty() && ret);
@@ -123,6 +127,10 @@ struct JsonConvert<IDumpableObject *> {
             return false;
         }
         std::string className = value["className"].GetString();
+        if (className == "null") {
+            (*dst) = nullptr;
+            return true;
+        }
         auto d = IDumpableObject::create(className);
         CS_ASSERT(d != nullptr, "DumpableObject {} create failed", className);
         rapidjson::StringBuffer buffer;
@@ -135,7 +143,7 @@ struct JsonConvert<IDumpableObject *> {
     }
 };
 
-bool IDumpableObject::dumpToFile(const std::string& filePath, IDumpableObject *obj) {
+inline bool IDumpableObject::dumpToFile(const std::string& filePath, IDumpableObject *obj) {
     auto buffer = rapidjson::StringBuffer();
     auto writer = std::make_shared<JsonWriter>(buffer);
     auto ret = JsonConvert<IDumpableObject *>::toJsonValue(*writer, obj);
@@ -150,7 +158,7 @@ bool IDumpableObject::dumpToFile(const std::string& filePath, IDumpableObject *o
 
 }
 
-bool IDumpableObject::loadFromFile(const std::string& filePath, IDumpableObject **obj) {
+inline bool IDumpableObject::loadFromFile(const std::string& filePath, IDumpableObject **obj) {
     std::ifstream file(filePath, std::ios::in);
     if (!file.is_open()) {
         return false;

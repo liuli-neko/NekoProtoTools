@@ -23,11 +23,15 @@
 #define CS_USED 
 #endif
 #if CS_CPP_PLUS >= 17
-#define CONSTEXPR_FUNC constexpr
-#define CONSTEXPR_VAR constexpr
+#include <string>
+#define CS_CONSTEXPR_FUNC constexpr
+#define CS_CONSTEXPR_VAR constexpr
+#define CS_STRING_VIEW std::string_view
 #else
-#define CONSTEXPR_FUNC
-#define CONSTEXPR_VAR constexpr
+#include <string>
+#define CS_CONSTEXPR_FUNC
+#define CS_CONSTEXPR_VAR constexpr
+#define CS_STRING_VIEW std::string
 #endif
 
 #define CS_PROTO_ASSERT(cond, fmt, ...) if (!(cond)) {                                  \
@@ -91,31 +95,41 @@
   }
 #endif
 
-#if defined(__GNUC__) || defined(__MINGW__)
-#include <cxxabi.h>
-#endif
 CS_PROTO_BEGIN_NAMESPACE
 #if defined(__GNUC__) || defined(__MINGW__)
 namespace {
     template <class T>
-    std::string _cs_class_name() {
-        int status = -4; // some arbitrary value to eliminate the compiler warning
-        std::unique_ptr<char, void(*)(void*)> res {
-            abi::__cxa_demangle(typeid(T).name(), nullptr, nullptr, &status),
-            std::free
-        };
-        return (status==0) ? res.get() : typeid(T).name();
+    CS_CONSTEXPR_FUNC CS_STRING_VIEW _cs_class_name() {
+      CS_STRING_VIEW pretty_function = __PRETTY_FUNCTION__;
+      size_t start = pretty_function.find_last_of('[');
+      size_t end = start;
+      while (end < pretty_function.size() && (pretty_function[end] != ';')) {
+        end ++;
+      }
+      auto sstring = pretty_function.substr(start, end - start);
+      size_t d =  sstring.find_last_of(':');
+      if (d != CS_STRING_VIEW::npos)
+        start = d;
+      else
+        start = 0;
+      d = sstring.find_last_of(' ');
+      if (d != CS_STRING_VIEW::npos) 
+        start = start > d ? start : d;
+      while (start < sstring.size() && (sstring[start] == ' ' || sstring[start] == '>' || sstring[start] == ':')) {
+        ++start;
+      }
+      return sstring.substr(start, end - start);
     }
 }
 #elif defined(_WIN32)
 namespace {
     template <class T>
-    std::string _cs_class_name() {
-        std::string string(__FUNCSIG__);
+    CS_CONSTEXPR_FUNC CS_STRING_VIEW _cs_class_name() {
+        CS_STRING_VIEW string(__FUNCSIG__);
         size_t start = string.find_last_of(' ');
         auto sstring = string.substr(start);
         size_t d =  sstring.find_last_of(':');
-        if (d != std::string::npos)
+        if (d != CS_STRING_VIEW::npos)
             start = d;
         else
             start = 0;
