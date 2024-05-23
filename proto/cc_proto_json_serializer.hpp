@@ -18,16 +18,18 @@ struct JsonConvert;
 
 class JsonSerializer {
 public:
-    JsonSerializer() = default;
+    JsonSerializer();
     JsonSerializer(const JsonSerializer&);
     JsonSerializer(JsonSerializer&& other);
+    JsonSerializer(JsonWriter* writer);
+    JsonSerializer(const JsonValue& root);
     JsonSerializer& operator=(const JsonSerializer&);
     JsonSerializer& operator=(JsonSerializer&& other);
     ~JsonSerializer() = default;
 
     /**
      * @brief start serialize
-     *  while calling this function before traversing all fields, 
+     *  while calling this function before traversing all fields,
      * can clear the buffer in this function or initialize the buffer and serializor.
      */
     void startSerialize();
@@ -35,10 +37,10 @@ public:
      * @brief end serialize
      *  while calling this function after traversing all fields.
      *  if success serialize all fields, return true, otherwise return false.
-     * 
+     *
      * @param[out] data the buf to output
-     * @return true 
-     * @return false 
+     * @return true
+     * @return false
      */
     bool endSerialize(std::vector<char>* data);
     /**
@@ -48,33 +50,25 @@ public:
      * @tparam T the type of value
      * @param[in] name the field name
      * @param[in] value the field value
-     * @return true 
-     * @return false 
+     * @return true
+     * @return false
      */
     template <typename T>
     bool insert(const char* name, const size_t len, const T& value);
     /**
      * @brief start deserialize
-     *  while calling this function before traversing all fields, 
+     *  while calling this function before traversing all fields,
      * can clear the last time deserialize states in this function and initialize the deserializor.
      * @param[in] data the buf to input
-     * @return true 
-     * @return false 
+     * @return true
+     * @return false
      */
     bool startDeserialize(const std::vector<char>& data);
-    /**
-     * @brief start deserialize
-     * if want to start with a custom value, can't overload this function.
-     * @param[in] data the value to input
-     * @return true 
-     * @return false 
-     */
-    bool startDeserialize(const JsonValue& data);
     /**
      * @brief end deserialize
      *  while calling this function after traversing all fields.
      *  if success deserialize all fields, return true, otherwise return false.
-     * @return true 
+     * @return true
      * @return false
      */
     inline bool endDeserialize();
@@ -85,21 +79,37 @@ public:
      * @tparam T the type of value
      * @param[in] name the field name
      * @param[out] value the field value
-     * @return true 
-     * @return false 
+     * @return true
+     * @return false
      */
     template <typename T>
     bool get(const char* name, const size_t len, T* value);
 
 private:
     JsonDocument mDocument;
+    const JsonValue& mRoot;
     rapidjson::StringBuffer mBuffer;
-    std::unique_ptr<JsonWriter> mWriter;
+    std::unique_ptr<JsonWriter, void (*)(JsonWriter*)> mWriter;
 };
 
-inline JsonSerializer::JsonSerializer(const JsonSerializer&) {}
+inline JsonSerializer::JsonSerializer()
+    : mDocument(), mRoot(JsonValue()), mBuffer(), mWriter(nullptr, [](JsonWriter* writer) {}) {}
 
-inline JsonSerializer::JsonSerializer(JsonSerializer&& other) {}
+inline JsonSerializer::JsonSerializer(const JsonSerializer&)
+    : mDocument(), mRoot(JsonValue()), mBuffer(), mWriter(nullptr, [](JsonWriter* writer) {}) {}
+
+inline JsonSerializer::JsonSerializer(JsonSerializer&& other)
+    : mDocument(), mRoot(JsonValue()), mBuffer(), mWriter(nullptr, [](JsonWriter* writer) {}) {}
+
+inline JsonSerializer::JsonSerializer(JsonWriter* writer)
+    : mDocument(),
+      mRoot(JsonValue()),
+      mBuffer(),
+      mWriter(std::unique_ptr<JsonWriter, void (*)(JsonWriter*)>(writer, [](JsonWriter* writer) {})) {}
+
+inline JsonSerializer::JsonSerializer(const JsonValue& root)
+    : mDocument(), mRoot(root), mBuffer(), mWriter(nullptr, [](JsonWriter* writer) {}) {
+}
 
 inline JsonSerializer& JsonSerializer::operator=(const JsonSerializer&) { return *this; }
 
@@ -108,7 +118,8 @@ inline JsonSerializer& JsonSerializer::operator=(JsonSerializer&& other) { retur
 inline void JsonSerializer::startSerialize() {
     if (!mWriter) {
         mBuffer.Clear();
-        mWriter.reset(new JsonWriter(mBuffer));
+        mWriter = std::unique_ptr<JsonWriter, void (*)(JsonWriter*)>(new JsonWriter(mBuffer),
+                                                                     [](JsonWriter* writer) { delete writer; });
     }
     mWriter->StartObject();
 }
@@ -127,7 +138,7 @@ inline bool JsonSerializer::endSerialize(std::vector<char>* data) {
 }
 
 template <typename T>
-bool JsonSerializer::insert(const char* name,const size_t len, const T& value) {
+bool JsonSerializer::insert(const char* name, const size_t len, const T& value) {
     if (!mWriter->Key(name, len)) {
         return false;
     }
@@ -143,11 +154,6 @@ inline bool JsonSerializer::startDeserialize(const std::vector<char>& data) {
     return true;
 }
 
-inline bool JsonSerializer::startDeserialize(const JsonValue& data) {
-    mDocument.CopyFrom(data, mDocument.GetAllocator());
-    return true;
-}
-
 inline bool JsonSerializer::endDeserialize() {
     mDocument.SetNull();
     mDocument.GetAllocator().Clear();
@@ -157,10 +163,13 @@ inline bool JsonSerializer::endDeserialize() {
 template <typename T>
 bool JsonSerializer::get(const char* name, const size_t len, T* value) {
     std::string name_str(name, len);
-    if (!mDocument.HasMember(name_str.c_str())) {
-        return false;
+    if (!mDocument.IsNull() && mDocument.HasMember(name_str.c_str())) {
+        return JsonConvert<T>::fromJsonValue(value, mDocument[name_str.c_str()]);
     }
-    return JsonConvert<T>::fromJsonValue(value, mDocument[name_str.c_str()]);
+    if (!mRoot.IsNull() && mRoot.HasMember(name_str.c_str())) {
+        return JsonConvert<T>::fromJsonValue(value, mRoot[name_str.c_str()]);
+    }
+    return false;
 }
 
 template <>
@@ -229,13 +238,13 @@ struct JsonConvert<std::string, void> {
 template <>
 struct JsonConvert<std::u8string, void> {
     static bool toJsonValue(JsonWriter& writer, const std::u8string value) {
-        return writer.String(reinterpret_cast<const char *>(value.data()), value.size(), true);
+        return writer.String(reinterpret_cast<const char*>(value.data()), value.size(), true);
     }
     static bool fromJsonValue(std::u8string* dst, const JsonValue& value) {
         if (!value.IsString() || dst == nullptr) {
             return false;
         }
-        (*dst) = std::u8string(reinterpret_cast<const char8_t *>(value.GetString()), value.GetStringLength());
+        (*dst) = std::u8string(reinterpret_cast<const char8_t*>(value.GetString()), value.GetStringLength());
         return true;
     }
 };
@@ -269,14 +278,18 @@ struct JsonConvert<std::vector<T>, void> {
 template <typename T>
 struct JsonConvert<T, typename std::enable_if<std::is_same<typename T::SerializerType, JsonSerializer>::value>::type> {
     static bool toJsonValue(JsonWriter& writer, const T& value) {
-        auto data = value.toData();
-        return writer.RawValue(data.data(), data.size(), rapidjson::kObjectType);
+        auto jsonS = JsonSerializer(&writer);
+        writer.StartObject();
+        auto ret = value.serialize(jsonS);
+        writer.EndObject();
+        return ret;
     }
     static bool fromJsonValue(T* dst, const JsonValue& value) {
         if (!value.IsObject() || dst == nullptr) {
             return false;
         }
-        return dst->fromData(value);
+        auto jsonS = JsonSerializer(value);
+        return dst->deserialize(jsonS);
     }
 };
 

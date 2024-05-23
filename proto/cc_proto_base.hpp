@@ -90,8 +90,6 @@ public:
     std::vector<char> toData() const override;
     int type() const override;
     bool formData(const std::vector<char>& data) override;
-    template <typename U>
-    bool formData(const U& data);
     CS_STRING_VIEW protoName() const;
 
 protected:
@@ -201,21 +199,6 @@ int ProtoBase<T, SerializerT>::type() const {
 
 template <typename T, typename SerializerT>
 bool ProtoBase<T, SerializerT>::formData(const std::vector<char>& data) {
-    if (!mSerializer.startDeserialize(data)) {
-        return false;
-    }
-    auto self = dynamic_cast<const ProtoType*>(this);
-    CS_ASSERT(self != nullptr, "Proto({}) is nullptr", protoName());
-    bool ret = const_cast<ProtoType*>(self)->deserialize(mSerializer);
-    if (!mSerializer.endDeserialize() || !ret) {
-        return false;
-    }
-    return true;
-}
-
-template <typename T, typename SerializerT>
-template <typename U>
-bool ProtoBase<T, SerializerT>::formData(const U& data) {
     if (!mSerializer.startDeserialize(data)) {
         return false;
     }

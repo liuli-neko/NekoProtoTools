@@ -100,6 +100,13 @@ struct JsonConvert<StructA, void> {
 CS_PROTO_END_NAMESPACE
 #endif
 
+struct TestA : public ProtoBase<TestA> {
+    int a = 1;
+    std::string b = "dsadfsd";
+
+    CS_SERIALIZER(a, b)
+};
+
 struct TestP : public ProtoBase<TestP> {
     int a = 1;
     std::string b = "hello";
@@ -112,8 +119,9 @@ struct TestP : public ProtoBase<TestP> {
     StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum_A};
     std::tuple<int, std::string> j = {1, "hello"};
     std::vector<int> k = {1, 2, 3, 4, 5};
+    TestA l;
 
-    CS_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k)
+    CS_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k, l)
 };
 
 class JsonSerializerTest : public testing::Test {
@@ -224,9 +232,9 @@ TEST_F(JsonSerializerTest, Struct) {
     writer->EndObject();
     const char * str = buffer.GetString();
 #if __cplusplus >= 201703L || _MSVC_LANG > 201402L
-    EXPECT_STREQ(str, "{\"a\":{\"a\":3,\"b\":\"Struct test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"k\":[1,2,3,4,5]}}");
+    EXPECT_STREQ(str, "{\"a\":{\"a\":3,\"b\":\"Struct test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"k\":[1,2,3,4,5],\"l\":{\"a\":1,\"b\":\"dsadfsd\"}}}");
 #else
-    EXPECT_STREQ(str, "{\"a\":{\"a\":3,\"b\":\"Struct test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":1,\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],1],\"j\":[1,\"hello\"],\"k\":[1,2,3,4,5]}}");
+    EXPECT_STREQ(str, "{\"a\":{\"a\":3,\"b\":\"Struct test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":1,\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],1],\"j\":[1,\"hello\"],\"k\":[1,2,3,4,5],\"l\":{\"a\":1,\"b\":\"dsadfsd\"}}}");
 #endif
 }
 
