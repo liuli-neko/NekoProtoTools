@@ -9,15 +9,18 @@
 CS_PROTO_BEGIN_NAMESPACE
 
 #if CS_CPP_PLUS >= 17
-template <int N, bool isSerlizer, typename SerializerT, typename T>
-inline bool unfoldFunctionImp(SerializerT &serializer, const std::array<std::string_view, N> &names, int& i, T& value) {
+template <int N, typename SerializerT, typename T>
+inline bool unfoldFunctionImp1(SerializerT &serializer, const std::array<std::string_view, N> &names, int& i, T& value) {
     CS_ASSERT(i < names.size(), "unfoldFunctionImp: index out of range");
     ++i;
-    if constexpr (isSerlizer)
-        return serializer.insert(names[i - 1].data(), names[i - 1].size(), value);
-    else
-        return serializer.get(names[i - 1].data(), names[i - 1].size(), &value);
+    return serializer.get(names[i - 1].data(), names[i - 1].size(), &value);
     
+}
+template <int N, typename SerializerT, typename T>
+inline bool unfoldFunctionImp2(SerializerT &serializer, const std::array<std::string_view, N> &names, int& i,const T& value) {
+    CS_ASSERT(i < names.size(), "unfoldFunctionImp: index out of range");
+    ++i;
+    return serializer.insert(names[i - 1].data(), names[i - 1].size(), value);
 }
 
 inline constexpr int membersSize(std::string_view names) {
@@ -56,33 +59,17 @@ inline constexpr std::array<std::string_view, N> parseNames(std::string_view nam
     }
     return std::move(namesVec);
 }
-template <int N, bool isSerlizer, typename SerializerT, typename ...Args>
-inline bool unfoldFunction(SerializerT &serializer,const std::array<std::string_view, N> &namesVec, Args& ...args) {
+template <int N, typename SerializerT, typename ...Args>
+inline bool unfoldFunction1(SerializerT &serializer,const std::array<std::string_view, N> &namesVec, Args& ...args) {
     int i = 0;
-    return (unfoldFunctionImp<N, isSerlizer, SerializerT, std::decay_t<Args>>(serializer, namesVec, i, args) + ...) == N;
+    return (unfoldFunctionImp1<N, SerializerT, std::decay_t<Args>>(serializer, namesVec, i, args) + ...) == N;
+}
+template <int N, typename SerializerT, typename ...Args>
+inline bool unfoldFunction2(SerializerT &serializer,const std::array<std::string_view, N> &namesVec, const Args& ...args) {
+    int i = 0;
+    return (unfoldFunctionImp2<N, SerializerT, std::decay_t<Args>>(serializer, namesVec, i, args) + ...) == N;
 }
 #else
-template <bool isSerlizer, typename SerializerT, typename T>
-inline bool unfoldFunctionImp(SerializerT &serializer, const char *names, const std::vector<std::pair<size_t, size_t>> &namesVec, int i, T& value) {
-    CS_ASSERT(i < namesVec.size(), "unfoldFunctionImp: index out of range");
-    if (isSerlizer)
-        return serializer.insert(names + namesVec[i].first, namesVec[i].second, value);
-    else
-        return serializer.get(names + namesVec[i].first, namesVec[i].second, &value);
-    
-}
-
-template <bool isSerlizer, typename SerializerT, typename T, typename ...Args>
-inline bool unfoldFunctionImp(SerializerT &serializer, const char *names, const std::vector<std::pair<size_t, size_t>> &namesVec, int i, T& value, Args& ...args) {
-    bool ret = 0;
-    CS_ASSERT(i < namesVec.size(), "unfoldFunctionImp: index out of range");
-    if (isSerlizer)
-        ret = serializer.insert(names + namesVec[i].first, namesVec[i].second, value);
-    else
-        ret = serializer.get(names + namesVec[i].first, namesVec[i].second, &value);
-
-    return unfoldFunctionImp<isSerlizer, SerializerT>(serializer, names, namesVec, i + 1, args...) && ret;
-}
 
 inline std::vector<std::pair<size_t, size_t>> parseNames(const char *names) {
     std::string namesStr(names);
@@ -103,10 +90,47 @@ inline std::vector<std::pair<size_t, size_t>> parseNames(const char *names) {
     }
     return std::move(namesVec);
 }
-template <bool isSerlizer, typename SerializerT, typename ...Args>
-inline bool unfoldFunction(SerializerT &serializer, const char *names, const std::vector<std::pair<size_t, size_t>> &namesVec, Args& ...args) {
+
+template <typename SerializerT, typename T>
+inline bool unfoldFunctionImp1(SerializerT &serializer, const char *names, const std::vector<std::pair<size_t, size_t>> &namesVec, int i, const T& value) {
+    CS_ASSERT(i < namesVec.size(), "unfoldFunctionImp: index out of range");
+    return serializer.insert(names + namesVec[i].first, namesVec[i].second, value);
+    
+}
+
+template <typename SerializerT, typename T, typename ...Args>
+inline bool unfoldFunctionImp1(SerializerT &serializer, const char *names, const std::vector<std::pair<size_t, size_t>> &namesVec, int i, const T& value, const Args& ...args) {
+    bool ret = 0;
+    CS_ASSERT(i < namesVec.size(), "unfoldFunctionImp: index out of range");
+    ret = serializer.insert(names + namesVec[i].first, namesVec[i].second, value);
+
+    return unfoldFunctionImp1<SerializerT>(serializer, names, namesVec, i + 1, args...) && ret;
+}
+template <typename SerializerT, typename ...Args>
+inline bool unfoldFunction1(SerializerT &serializer, const char *names, const std::vector<std::pair<size_t, size_t>> &namesVec, Args& ...args) {
     int i = 0;
-    return unfoldFunctionImp<isSerlizer, SerializerT>(serializer, names, namesVec, i, args...);
+    return unfoldFunctionImp1<SerializerT>(serializer, names, namesVec, i, args...);
+}
+
+template <typename SerializerT, typename T>
+inline bool unfoldFunctionImp2(SerializerT &serializer, const char *names, const std::vector<std::pair<size_t, size_t>> &namesVec, int i, T& value) {
+    CS_ASSERT(i < namesVec.size(), "unfoldFunctionImp: index out of range");
+    return serializer.get(names + namesVec[i].first, namesVec[i].second, &value);
+    
+}
+
+template <typename SerializerT, typename T, typename ...Args>
+inline bool unfoldFunctionImp2(SerializerT &serializer, const char *names, const std::vector<std::pair<size_t, size_t>> &namesVec, int i, T& value, Args& ...args) {
+    bool ret = 0;
+    CS_ASSERT(i < namesVec.size(), "unfoldFunctionImp: index out of range");
+    ret = serializer.get(names + namesVec[i].first, namesVec[i].second, &value);
+
+    return unfoldFunctionImp2<SerializerT>(serializer, names, namesVec, i + 1, args...) && ret;
+}
+template <typename SerializerT, typename ...Args>
+inline bool unfoldFunction2(SerializerT &serializer, const char *names, const std::vector<std::pair<size_t, size_t>> &namesVec, Args& ...args) {
+    int i = 0;
+    return unfoldFunctionImp2<SerializerT>(serializer, names, namesVec, i, args...);
 }
 #endif
 CS_PROTO_END_NAMESPACE
@@ -115,14 +139,14 @@ CS_PROTO_END_NAMESPACE
 #define CS_SERIALIZER(...)                                                                                                  \
 public:                                                                                                                     \
     template <typename SerializerT>                                                                                         \
-    bool serialize(SerializerT &serializer) {                                                                               \
+    bool serialize(SerializerT &serializer) const {                                                                         \
         static auto names = CS_PROTO_NAMESPACE::parseNames(#__VA_ARGS__);                                                   \
-        return CS_PROTO_NAMESPACE::unfoldFunction<true, SerializerT>(serializer, #__VA_ARGS__, names, __VA_ARGS__);         \
+        return CS_PROTO_NAMESPACE::unfoldFunction1<SerializerT>(serializer, #__VA_ARGS__, names, __VA_ARGS__);              \
     }                                                                                                                       \
     template <typename SerializerT>                                                                                         \
     bool deserialize(SerializerT &serializer) {                                                                             \
         static auto names = CS_PROTO_NAMESPACE::parseNames(#__VA_ARGS__);                                                   \
-        return CS_PROTO_NAMESPACE::unfoldFunction<false, SerializerT>(serializer, #__VA_ARGS__, names, __VA_ARGS__);        \
+        return CS_PROTO_NAMESPACE::unfoldFunction2<SerializerT>(serializer, #__VA_ARGS__, names, __VA_ARGS__);              \
     }
 #else
 #define CS_SERIALIZER(...)                                                                                                  \
@@ -131,13 +155,13 @@ private:                                                                        
             CS_PROTO_NAMESPACE::parseNames<CS_PROTO_NAMESPACE::membersSize(#__VA_ARGS__)>(#__VA_ARGS__);                    \
 public:                                                                                                                     \
     template <typename SerializerT>                                                                                         \
-    bool serialize(SerializerT &serializer) {                                                                               \
-        return CS_PROTO_NAMESPACE::unfoldFunction<CS_PROTO_NAMESPACE::membersSize(#__VA_ARGS__), true, SerializerT>(        \
+    bool serialize(SerializerT &serializer) const {                                                                         \
+        return CS_PROTO_NAMESPACE::unfoldFunction2<CS_PROTO_NAMESPACE::membersSize(#__VA_ARGS__), SerializerT>(             \
                 serializer, _names__, __VA_ARGS__);                                                                         \
     }                                                                                                                       \
     template <typename SerializerT>                                                                                         \
     bool deserialize(SerializerT &serializer) {                                                                             \
-        return CS_PROTO_NAMESPACE::unfoldFunction<CS_PROTO_NAMESPACE::membersSize(#__VA_ARGS__), false, SerializerT>(       \
+        return CS_PROTO_NAMESPACE::unfoldFunction1<CS_PROTO_NAMESPACE::membersSize(#__VA_ARGS__), SerializerT>(             \
                 serializer, _names__, __VA_ARGS__);                                                                         \
     }
 #endif
