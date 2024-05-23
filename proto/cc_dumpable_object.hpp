@@ -1,3 +1,65 @@
+/**
+ * @file cc_dumpable_object.hpp
+ * @brief Serialize a class to a file through a serializer
+ * 
+ * @mainpage ccproto
+ * 
+ * @section intro_sec Introduction
+ * Here is a simple auxiliary base class that helps you 
+ * quickly provide serialization and deserialization support 
+ * for a class. This base class provides simple reflection 
+ * construction for all objects that inherit it. To do this, 
+ * it is necessary to ensure that your implementation class 
+ * can be constructed by default. This interface is header only,
+ * and all created objects are generated through new. Please 
+ * make sure to use delete to correctly delete objects.
+ * 
+ * @section usage_sec Usage
+ * If you want to make your class serializable, you need to inherit 
+ * the DumpableObject class. and make use macro CS_SERIALIZER generator
+ * serializer and deserializer function. 
+ * 
+ * @section example_sec Example
+ * @code
+ * #include "cc_dumpable_object.hpp"
+ * #include "cc_serializer_base.hpp"
+ * #include "cc_proto_json_serializer.hpp"
+ * 
+ * CS_PROTO_USE_NAMESPACE
+ * 
+ * class MyObject : public DumpableObject<MyObject, JsonSerializer> {
+ * public:
+ *     MyObject(int a, std::string b, std::vector<int> c, std::map<std::string, int> d) : 
+ *         mA(a), mB(b), mC(c), mD(d) {}
+ *     MyObject() = default;
+ *     ~MyObject() = default;
+ *
+ *     CS_SERIALIZER(mA, mB, mC, mD);
+ * private:
+ *     int mA;
+ *     std::string mB;
+ *     std::vector<int> mC;
+ *     std::map<std::string, int> mD;
+ * };
+ * 
+ * int main() {
+ *     MyObject obj(1, "hello", {1, 2}, {{"a", 1}});
+ *     IDumpableObject::dumpToFile("test.json", &obj);
+ *     IDumpableObject *obj1 = nullptr;
+ *     IDumpableObject::loadFromFile("test.json", &obj1);
+ * }
+ * @endcode 
+ * 
+ * @par license
+ *  GPL-3.0 license
+ * 
+ * @author llhsdmd (llhsdmd@gmail.com)
+ * @version 0.1
+ * @date 2024-05-23
+ * 
+ * @copyright Copyright (c) 2024
+ * 
+ */
 #pragma once
 
 #include "cc_proto_global.hpp"
