@@ -42,14 +42,14 @@ If you want to use the protocol factory to generate the message type of proto, y
 ```
 and a cpp file `src/cc_proto_base.cpp`
 
-and use macro `CS_DECLARE_PROTO` to declare your class you want to register as the message type of proto.
+and inherit this template class ProtoBase<SelfT, SerializerT> to declare your class you want to register as the message type of proto.
 ```C++
+// SelfT is the type of your class, SerializerT is the type of serializer you want to use. default is JsonSerializer.
 class SerializerAble : public ProtoBase<SerializerAble> {
     int a;
     std::string b;
     CS_SERIALIZER(a, b);
 }
-CS_DECLARE_PROTO(SerializerAble, SerializerAble); // the first parameter is the class name, the second parameter is the message type name in factory
 
 int main() {
     SerializerAble sa;
@@ -87,6 +87,7 @@ This repository provides a default json serializer. support most of commonly typ
 | std::string | yes | STRING | cc_proto_json_serializer.hpp |
 | std::u8string | yes | STRING | cc_proto_json_serializer.hpp |
 | std::vector\<T\> | yes | ARRAY | cc_proto_json_serializer.hpp |
+| class public PorotoBase<T, JsonSerializer> | yes | OBJECT | cc_proto_json_serializer.hpp |
 | std::array\<T, N\> | yes | ARRAY | cc_proto_json_serializer_contrain.hpp |
 | std::set\<T\> | yes | ARRAY | cc_proto_json_serializer_contrain.hpp |
 | std::list\<T\> | yes | ARRAY | cc_proto_json_serializer_contrain.hpp |
@@ -96,6 +97,7 @@ This repository provides a default json serializer. support most of commonly typ
 | enum | yes | STRING [ INT ] | cc_proto_json_serializer_enum.hpp |
 
 [^1]: https://en.cppreference.com/w/cpp/language/types
+
 [*T]: T refers to all supported types
 
 ##### 3.1.2. binary serializer

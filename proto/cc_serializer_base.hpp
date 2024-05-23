@@ -1,3 +1,17 @@
+/**
+ * @file cc_serializer_base.hpp
+ * @author llhsdmd (llhsdmd@gmail.com)
+ * @brief serializer base
+ * 
+ * @par license
+ *  GPL-3.0 license
+ * 
+ * @version 0.1
+ * @date 2024-05-23
+ * 
+ * @copyright Copyright (c) 2024
+ * 
+ */
 #pragma once
 
 #include <vector>
@@ -149,6 +163,30 @@ public:                                                                         
         return CS_PROTO_NAMESPACE::unfoldFunction2<SerializerT>(serializer, #__VA_ARGS__, names, __VA_ARGS__);              \
     }
 #else
+/**
+ * @brief generate serialize and deserialize functions for a class.
+ *
+ * Give all member variables that require serialization and deserialization support as parameters to the macro,
+ * this macro will generate the serialize and deserialize functions for the class to process all given members.
+ * 
+ * @param ...Args
+ * member variables that require serialization and deserialization support.
+ * 
+ * @note
+ * Don't use this macro duplicate times. because it will generate same functions for class.
+ * This function cannot directly serialize members and needs to be used in conjunction with supported serializers.
+ * Please refer to the default JSON serializer implementation for the implementation specifications of the serializer.
+ * 
+ * @example
+ * class MyClass {
+ *  ...
+ *  CS_SERIALIZER(a, b, c)
+ * private:
+ *  int a;
+ *  std::string b;
+ *  std::vector<int> c;
+ * };
+ */
 #define CS_SERIALIZER(...)                                                                                                  \
 private:                                                                                                                    \
         static inline constexpr std::array<std::string_view, CS_PROTO_NAMESPACE::membersSize(#__VA_ARGS__)> _names__ =      \

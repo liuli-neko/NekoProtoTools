@@ -70,7 +70,7 @@ target("test_rpc")
     add_files("tests/test_rpc.cpp")
 target_end()
 
-target("test_so")
+target("test_dump")
     set_kind("binary")
     set_languages("c++20")
     add_includedirs("./modules/Ilias/include")
