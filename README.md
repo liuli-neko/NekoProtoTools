@@ -55,7 +55,7 @@ int main() {
     SerializerAble sa;
     sa.a = 1;
     sa.b = "hello";
-    autp data = sa.toData(); // for proto message, you can serialize it by toData() and deserialize it by fromData(data)
+    auto data = sa.toData(); // for proto message, you can serialize it by toData() and deserialize it by fromData(data)
 
     ProtoFactory factory(1, 0, 0); // you can generate the factory. and proto message while auto regist to this factory.
     auto proto = factory.create("SerializerAble"); // you can create the proto message by the name or type value.
@@ -186,7 +186,7 @@ public:
 ```
 make sure this class can structure by default.
 
-#### 3.2. proto
+#### 3.2. protocol message manager
 
 protoFactory support create & version. is a manager of proto message. by you can make proto as a dynamic library to dynamic replace proto. the interface is:
 
@@ -221,6 +221,30 @@ public:
     uint32_t version() const;
 };
 ```
+
+you can define a proto message by inheritance from ProtoBase, it while atuo register to protoFactory when you create protoFactory instance.
+
+```C++
+struct ProtoMessage ProtoBase<ProtoMessage> {
+    int a;
+    std::string b;
+
+    CS_SERIALIZE(a, b)
+}
+
+int main() {
+    ProtoFactory factory(1, 0, 0);
+    IProto* msg = factory.create("ProtoMessage");
+    msg->a = 1;
+    msg->b = "hello";
+    std::vector<char> data;
+    data = msg->toData();
+    // do something
+    delete msg;
+    return 0;
+}
+```
+
 ### 4. the end
 
 why I want to do this?

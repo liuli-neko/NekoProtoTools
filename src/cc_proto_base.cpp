@@ -11,7 +11,7 @@ void ProtoFactory::setVersion(int major, int minor, int patch) {
 
 uint32_t ProtoFactory::version() const { return mVersion; }
 
-std::map<CS_STRING_VIEW, std::function<void(ProtoFactory*)>> static_init_funcs(
+std::map<CS_STRING_VIEW, std::function<void(ProtoFactory*)>>& static_init_funcs(
     const CS_STRING_VIEW &name = "", std::function<void(ProtoFactory*)> func = nullptr) {
     static std::map<CS_STRING_VIEW, std::function<void(ProtoFactory*)>> funcs = {};
     auto item = funcs.find(name);
