@@ -3,6 +3,47 @@
  * @author llhsdmd (llhsdmd@gmail.com)
  * @brief serializer base
  * 
+ * @mainpage ccproto
+ * 
+ * @section intro_sec Introduction
+ * A simple c++ header to generate serializer and deserializer function for class.
+ * This file provides the macro CS_SERIALIZER to generation, and this function is 
+ * a template function, can't be used directly. you need provide compliant requirements
+ * Serializer. a default JsonSerializer is provided in cc_proto_json_serializer.hpp.
+ * 
+ * @section usage_sec Usage
+ * you only need to use CS_SERIALIZER in your class, and specify the members you want to 
+ * serialize.
+ * 
+ * @section example_sec Example
+ * @code {.c++}
+ * 
+ * class MyClass {
+ *     CS_SERIALIZER(MyClass, (name)(age)(address))
+ *     std::string name;
+ *     int age;
+ *     std::string address;
+ * };
+ * 
+ * int main()
+ *     MyClass obj;
+ *     obj.name = "Alice";
+ *     obj.age = 18;
+ *     obj.address = "Zh";
+ * 
+ *     JsonSerializer serializer;
+ *     serializer.startSerialize();
+ *     obj.serialize(serializer);
+ *     std::vector<char> data;
+ *     serializer.endSerialize(data);
+ *     data.push_back(0);
+ *     std::cout << data.data() << std::endl;
+ *
+ *     return 0;
+ * }
+ * @endcode
+ * 
+ * 
  * @par license
  *  GPL-3.0 license
  * 
