@@ -16,7 +16,7 @@
 CS_RPC_BEGIN_NAMESPACE
 class ChannelFactory;
 
-class CS_RPC_API CCMessageHeader : public CS_PROTO_NAMESPACE::ProtoBase<CCMessageHeader, CS_PROTO_NAMESPACE::BinarySerializer> {
+class CS_RPC_API CCMessageHeader {
 public:
     inline CCMessageHeader(uint32_t length = 0, int32_t protoType = 0, uint16_t transType = 0, uint32_t reserved = 0)
         : length(length), protoType(protoType), transType(transType), reserved(reserved) {}
@@ -29,7 +29,7 @@ public:
     CS_SERIALIZER(length, protoType, transType, reserved)
 };
 
-class CS_RPC_API ChannelHeader : public CS_PROTO_NAMESPACE::ProtoBase<ChannelHeader, CS_PROTO_NAMESPACE::BinarySerializer> {
+class CS_RPC_API ChannelHeader {
 public:
     enum MessageType {
         UserMessage = 1,
@@ -43,6 +43,7 @@ public:
     uint32_t factoryVersion = 0;  // 4 : the version of the proto factory
     uint8_t messageType = 0;      // 1
     uint16_t channelId = 0;       // 2
+    inline static int size() { return 6; }
 
     CS_SERIALIZER(factoryVersion, messageType, channelId)
 };

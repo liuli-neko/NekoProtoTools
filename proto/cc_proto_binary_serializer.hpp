@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+
 #include <vector>
 #ifndef _WIN32
 #include <arpa/inet.h>
@@ -30,8 +31,9 @@ struct BinaryConvert;
 
 class BinarySerializer {
 public:
-    void startSerialize();
-    inline bool endSerialize(std::vector<char>* data);
+    ~BinarySerializer();
+    void startSerialize(std::vector<char>* data);
+    inline bool endSerialize();
     template <typename T>
     bool insert(const char* name, const size_t len, const T& value);
     bool startDeserialize(const std::vector<char>& data);
@@ -40,43 +42,56 @@ public:
     bool get(const char* name, const size_t len, T* value);
 
 private:
-    std::vector<char> mData;
+    std::vector<char>* mData = nullptr;
+    bool mDeserializing = false;
     int mOffset = 0;
 };
 
-inline void BinarySerializer::startSerialize() {
-    mData.clear();
-    mData.reserve(1024);
+inline BinarySerializer::~BinarySerializer()  {
+    if (mDeserializing) {
+        delete mData;
+        mData = nullptr;
+    }
 }
 
-inline bool BinarySerializer::endSerialize(std::vector<char>* data) {
-    data->swap(mData);
-    mData.clear();
+inline void BinarySerializer::startSerialize(std::vector<char>* data) {
+    mData = data;
+    if (mData->capacity() < 1024) {
+        mData->reserve(1024);
+    }
+}
+
+inline bool BinarySerializer::endSerialize() {
+    mData = nullptr;
     return true;
 }
 
 template <typename T>
 bool BinarySerializer::insert(const char* name, const size_t len, const T& value) {
-    return BinaryConvert<T>::toBinaryArray(mData, value);
+    return BinaryConvert<T>::toBinaryArray(*mData, value);
 }
 
 inline bool BinarySerializer::startDeserialize(const std::vector<char>& data) {
-    mData = data;
+    mData = new std::vector<char>(data);
     mOffset = 0;
+    mDeserializing = true;
     return true;
 }
 
 inline bool BinarySerializer::endDeserialize() {
-    if (mOffset != mData.size()) {
-        CS_LOG_WARN("binary data deserialize warning, read size{} != buf szie{}.", mOffset, mData.size());
+    if (mOffset != mData->size()) {
+        CS_LOG_WARN("binary data deserialize warning, read size{} != buf szie{}.", mOffset, mData->size());
     }
-    mData.clear();
+    mData->clear();
+    delete mData;
+    mData = nullptr;
+    mDeserializing = false;
     return true;
 }
 
 template <typename T>
 bool BinarySerializer::get(const char* name, const size_t len, T* value) {
-    return BinaryConvert<T>::fromBinaryArray(value, mData, mOffset);
+    return BinaryConvert<T>::fromBinaryArray(value, *mData, mOffset);
 }
 
 template <>
@@ -275,7 +290,7 @@ struct BinaryConvert<std::u8string, void> {
         if (buf.size() < offset_byte + len + 8) {
             return false;
         }
-        *dst = std::u8string(reinterpret_cast<const char8_t *>(buf.data()) + offset_byte + 4, len);
+        *dst = std::u8string(reinterpret_cast<const char8_t*>(buf.data()) + offset_byte + 4, len);
         offset_byte += len + 8;
         return true;
     }

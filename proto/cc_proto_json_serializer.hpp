@@ -11,10 +11,37 @@ CS_PROTO_BEGIN_NAMESPACE
 
 using JsonValue = rapidjson::Value;
 using JsonDocument = rapidjson::Document;
-using JsonWriter = rapidjson::Writer<rapidjson::StringBuffer>;
 
 template <typename T, class enable = void>
 struct JsonConvert;
+
+class VectorBuffer {
+public:
+    using Ch = char;
+
+    inline VectorBuffer() : mVec(nullptr) {}
+    inline void setVector(std::vector<Ch>* vec) { mVec = vec; }
+    inline void Put(Ch c) {
+        if (nullptr != mVec) mVec->push_back(c);
+    }
+    inline void Flush() {}
+    inline const Ch* GetString() const {
+        if (nullptr != mVec) return mVec->data();
+        return nullptr;
+    }
+    inline std::size_t GetSize() const {
+        if (nullptr != mVec) return mVec->size();
+        return 0;
+    }
+    inline void Clear() {
+        if (nullptr != mVec) mVec->clear();
+    }
+
+private:
+    std::vector<Ch>* mVec;
+};
+
+using JsonWriter = rapidjson::Writer<VectorBuffer>;
 
 class JsonSerializer {
 public:
@@ -31,18 +58,19 @@ public:
      * @brief start serialize
      *  while calling this function before traversing all fields,
      * can clear the buffer in this function or initialize the buffer and serializor.
+     *
+     * @param[out] data the buf to output
      */
-    void startSerialize();
+    void startSerialize(std::vector<char>* data);
     /**
      * @brief end serialize
      *  while calling this function after traversing all fields.
      *  if success serialize all fields, return true, otherwise return false.
      *
-     * @param[out] data the buf to output
      * @return true
      * @return false
      */
-    bool endSerialize(std::vector<char>* data);
+    bool endSerialize();
     /**
      * @brief insert value
      * for all fields, this function will be called by original class.
@@ -88,7 +116,7 @@ public:
 private:
     JsonDocument mDocument;
     const JsonValue& mRoot;
-    rapidjson::StringBuffer mBuffer;
+    VectorBuffer mBuffer;
     std::unique_ptr<JsonWriter, void (*)(JsonWriter*)> mWriter;
 };
 
@@ -108,32 +136,29 @@ inline JsonSerializer::JsonSerializer(JsonWriter* writer)
       mWriter(std::unique_ptr<JsonWriter, void (*)(JsonWriter*)>(writer, [](JsonWriter* writer) {})) {}
 
 inline JsonSerializer::JsonSerializer(const JsonValue& root)
-    : mDocument(), mRoot(root), mBuffer(), mWriter(nullptr, [](JsonWriter* writer) {}) {
-}
+    : mDocument(), mRoot(root), mBuffer(), mWriter(nullptr, [](JsonWriter* writer) {}) {}
 
 inline JsonSerializer& JsonSerializer::operator=(const JsonSerializer&) { return *this; }
 
 inline JsonSerializer& JsonSerializer::operator=(JsonSerializer&& other) { return *this; }
 
-inline void JsonSerializer::startSerialize() {
+inline void JsonSerializer::startSerialize(std::vector<char> *data) {
     if (!mWriter) {
         mBuffer.Clear();
+        mBuffer.setVector(data);
         mWriter = std::unique_ptr<JsonWriter, void (*)(JsonWriter*)>(new JsonWriter(mBuffer),
                                                                      [](JsonWriter* writer) { delete writer; });
     }
     mWriter->StartObject();
 }
 
-inline bool JsonSerializer::endSerialize(std::vector<char>* data) {
+inline bool JsonSerializer::endSerialize() {
     mWriter->EndObject();
     if (!mWriter || !mWriter->IsComplete()) {
         mBuffer.Clear();
         return false;
     }
-    if (data) {
-        (*data) = std::vector<char>(mBuffer.GetString(), mBuffer.GetString() + mBuffer.GetSize());
-    }
-    mBuffer.Clear();
+    mBuffer.setVector(nullptr);
     return true;
 }
 

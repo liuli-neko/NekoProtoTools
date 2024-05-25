@@ -74,16 +74,12 @@ template <typename T>
 struct JsonConvert<std::map<std::u8string, T>, void> {
   static bool toJsonValue(JsonWriter &writer,
                           const std::map<std::u8string, T> &value) {
-    rapidjson::StringBuffer mBuffer;
-    JsonWriter mwriter(mBuffer);
-    auto ret = mwriter.StartObject();
+    auto ret = writer.StartObject();
     for (auto &v : value) {
-      mwriter.Key(v.first.data(), v.first.size(), true);
-      ret = JsonConvert<T>::toJsonValue(mwriter, v.second) && ret;
+      writer.Key(v.first.data(), v.first.size(), true);
+      ret = JsonConvert<T>::toJsonValue(writer, v.second) && ret;
     }
-    ret = mwriter.EndObject() && ret;
-    ret = writer.RawValue(mBuffer.GetString(), mBuffer.GetSize(),
-                    rapidjson::kObjectType) && ret;
+    ret = writer.EndObject() && ret;
     return ret;
   }
   static bool fromJsonValue(std::map<std::u8string, T> *dst,
@@ -136,16 +132,12 @@ template <typename T>
 struct JsonConvert<std::map<std::string, T>, void> {
   static bool toJsonValue(JsonWriter &writer,
                           const std::map<std::string, T> &value) {
-    rapidjson::StringBuffer mBuffer;
-    JsonWriter mwriter(mBuffer);
-    auto ret = mwriter.StartObject();
+    auto ret = writer.StartObject();
     for (auto &v : value) {
-      ret = mwriter.Key(v.first.c_str(), v.first.size(), true) && ret;
-      ret = JsonConvert<T>::toJsonValue(mwriter, v.second) && ret;
+      ret = writer.Key(v.first.c_str(), v.first.size(), true) && ret;
+      ret = JsonConvert<T>::toJsonValue(writer, v.second) && ret;
     }
-    ret = mwriter.EndObject() && ret;
-    ret = writer.RawValue(mBuffer.GetString(), mBuffer.GetSize(),
-                    rapidjson::kObjectType) && ret;
+    ret = writer.EndObject() && ret;
     return ret;
   }
   static bool fromJsonValue(std::map<std::string, T> *dst,
