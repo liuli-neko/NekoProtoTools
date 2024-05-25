@@ -138,13 +138,13 @@ CS_STRING_VIEW DumpableObject<T, SerializerT>::className() const {
 template <typename T, typename SerializerT>
 std::string DumpableObject<T, SerializerT>::dumpToString() const {
     SerializerT serializer;
-    serializer.startSerialize();
+    std::vector<char> data;
+    serializer.startSerialize(&data);
     auto self = static_cast<const T*>(this);
     CS_ASSERT(self != nullptr, "please make sure that DumpableObject<{}, {}> is only inherited by {}.",
               _init_class_name__, _cs_class_name<SerializerT>(), _init_class_name__);
     auto ret = self->serialize(serializer);
-    std::vector<char> data;
-    if (!serializer.endSerialize(&data) || !ret) {
+    if (!serializer.endSerialize() || !ret) {
         CS_LOG_ERROR("{} dumpToString failed", _init_class_name__);
         return "";
     }
@@ -199,8 +199,10 @@ struct JsonConvert<IDumpableObject*> {
         }
         auto d = IDumpableObject::create(className);
         CS_ASSERT(d != nullptr, "DumpableObject {} create failed", className);
-        rapidjson::StringBuffer buffer;
-        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+        VectorBuffer buffer;
+        std::vector<char> buff;
+        buffer.setVector(&buff);
+        JsonWriter writer(buffer);
         const auto& o = value["value"];
         auto ret = o.Accept(writer);
         ret = d->loadFromString(buffer.GetString()) && ret;
@@ -210,9 +212,11 @@ struct JsonConvert<IDumpableObject*> {
 };
 
 inline bool IDumpableObject::dumpToFile(const std::string& filePath, IDumpableObject* obj) {
-    auto buffer = rapidjson::StringBuffer();
-    auto writer = std::make_shared<JsonWriter>(buffer);
-    auto ret = JsonConvert<IDumpableObject*>::toJsonValue(*writer, obj);
+    VectorBuffer buffer;
+    std::vector<char> buf;
+    buffer.setVector(&buf);
+    JsonWriter writer(buffer);
+    auto ret = JsonConvert<IDumpableObject*>::toJsonValue(writer, obj);
     std::ofstream file(filePath, std::ios::out | std::ios::trunc);
     if (!file.is_open()) {
         return false;

@@ -262,13 +262,13 @@ CS_STRING_VIEW ProtoBase<T, SerializerT>::className() const {
 
 template <typename T, typename SerializerT>
 std::vector<char> ProtoBase<T, SerializerT>::toData() const {
-    mSerializer.startSerialize();
+    std::vector<char> data;
+    mSerializer.startSerialize(&data);
     auto self = dynamic_cast<const ProtoType*>(this);
     CS_ASSERT(self != nullptr, "please make sure that ProtoBase<{}, {}> is only inherited by {}.", _init_class_name__,
               _cs_class_name<SerializerT>(), _init_class_name__);
     auto ret = const_cast<ProtoType*>(self)->serialize(mSerializer);
-    std::vector<char> data;
-    if (!mSerializer.endSerialize(&data)) {
+    if (!mSerializer.endSerialize()) {
         CS_LOG_ERROR("{} serialize error", _init_class_name__);
     }
     return std::move(data);

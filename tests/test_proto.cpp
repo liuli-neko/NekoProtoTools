@@ -35,10 +35,11 @@ CS_SERIALIZER(aads_ddfd, ccsdfg, c124142, d, e, f, g, h)
 TEST(TestProto, TestHelpFunction) {
     JsonSerializer serializer;
     TestProto p { 1, "abc", true, 1.23, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3, 4, 5}, TEnum_A };
-    serializer.startSerialize();
-    EXPECT_TRUE(p.serialize(serializer));
+
     std::vector<char> data;
-    EXPECT_TRUE(serializer.endSerialize(&data));
+    serializer.startSerialize(&data);
+    EXPECT_TRUE(p.serialize(serializer));
+    EXPECT_TRUE(serializer.endSerialize());
     EXPECT_TRUE(data.size() > 0);
     std::cout << std::string(data.data(), data.size()) << std::endl;
     TestProto p2;
@@ -127,6 +128,7 @@ struct TestP : public ProtoBase<TestP> {
 class JsonSerializerTest : public testing::Test {
 protected:
     virtual void SetUp() {
+        buffer.setVector(&mbuf);
         writer = std::make_shared<JsonWriter>(buffer);
         writer->StartObject();
     }
@@ -134,7 +136,8 @@ protected:
         writer.reset();
     }
     std::shared_ptr<JsonWriter> writer;
-    rapidjson::StringBuffer buffer;
+    VectorBuffer buffer;
+    std::vector<char> mbuf;
 };
 
 TEST_F(JsonSerializerTest, Int) {
