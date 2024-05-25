@@ -173,7 +173,7 @@ bool JsonSerializer::insert(const char* name, const size_t len, const T& value) 
 inline bool JsonSerializer::startDeserialize(const std::vector<char>& data) {
     mDocument.Parse(data.data(), data.size());
     if (mDocument.HasParseError()) {
-        CS_LOG_ERROR("parse error %d", (int)mDocument.GetParseError());
+        CS_LOG_ERROR("parse error {}", (int)mDocument.GetParseError());
         return false;
     }
     return true;

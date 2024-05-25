@@ -43,7 +43,7 @@ public:
     uint32_t factoryVersion = 0;  // 4 : the version of the proto factory
     uint8_t messageType = 0;      // 1
     uint16_t channelId = 0;       // 2
-    inline static int size() { return 6; }
+    inline static int size() { return 7; }
 
     CS_SERIALIZER(factoryVersion, messageType, channelId)
 };
