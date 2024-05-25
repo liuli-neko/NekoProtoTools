@@ -79,10 +79,11 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
         CS_LOG_ERROR("recv msg header error");
         co_return Unexpected(ret.error());
     }
+    CS_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(),buf.data() + buf.size()));
     CCMessageHeader hmsg;
     BinarySerializer serializer;
     serializer.startDeserialize(buf);
-    auto ret2 = hmsg.deserialize(serializer);
+    hmsg.deserialize(serializer);
     serializer.endDeserialize();
     buf.clear();
     ChannelHeader cmsg;
@@ -90,7 +91,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
         CS_LOG_ERROR("trans type {} is not channel", hmsg.transType);
         co_return Unexpected(Error(Error::Unknown));
     }
-    if (hmsg.protoType != 0 || !ret) {
+    if (hmsg.protoType != 0) {
         CS_LOG_ERROR("type {} is not channel header", hmsg.protoType);
         co_return Unexpected(Error(Error::Unknown));
     }
@@ -100,8 +101,9 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
         CS_LOG_ERROR("recv data error");
         co_return Unexpected(ret.error());
     }
+    CS_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(),buf.data() + buf.size()));
     serializer.startDeserialize(buf);
-    cmsg.deserialize(buf);
+    cmsg.deserialize(serializer);
     serializer.endDeserialize();
     buf.clear();
     if (cmsg.messageType != static_cast<uint8_t>(ChannelHeader::MessageType::ConnectMessage)) {
@@ -126,6 +128,8 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
     hmsg.serialize(serializer);
     cmsg.serialize(serializer);
     serializer.endSerialize();
+    CS_ASSERT(buf.size() == ChannelHeader::size() + CCMessageHeader::size(), "buf size error");
+    CS_LOG_INFO("send: {}", spdlog::to_hex(buf.data(),buf.data() + buf.size()));
     ret1 = co_await client1.sendAll(buf.data(), buf.size());
     if (!ret1) {
         CS_LOG_ERROR("send data error");
@@ -166,6 +170,8 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::makeChannel(IStreamClient&& cli
     cmsg.serialize(serializer);
     serializer.endSerialize();
     ByteStream<IStreamClient, char> client1(std::move(client));
+    CS_LOG_INFO("send: {}", spdlog::to_hex(buf.data(),buf.data() + buf.size()));
+    CS_ASSERT(buf.size() == ChannelHeader::size() + CCMessageHeader::size(), "buf size error{} - {}", buf.size(), ChannelHeader::size() + CCMessageHeader::size());
     auto ret = co_await client1.sendAll(buf.data(), buf.size());
     buf.clear();
 
@@ -180,20 +186,22 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::makeChannel(IStreamClient&& cli
         CS_LOG_ERROR("recv msg header error");
         co_return Unexpected(ret.error());
     }
+    CS_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(),buf.data() + buf.size()));
     serializer.startDeserialize(buf);
-    hmsg.deserialize(buf);
+    hmsg.deserialize(serializer);
     serializer.endDeserialize();
+    buf.clear();
     buf.resize(hmsg.length);
-
     ret = co_await client1.recvAll(buf.data(), buf.size());
     if (!ret) {
         CS_LOG_ERROR("recv data error");
         co_return Unexpected(ret.error());
     }
+    CS_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(),buf.data() + buf.size()));
     serializer.startDeserialize(buf);
-    auto ret = cmsg.deserialize(serializer);
+    cmsg.deserialize(serializer);
     serializer.endDeserialize();
-    if (hmsg.protoType != 0 || !ret) {
+    if (hmsg.protoType != 0) {
         CS_LOG_ERROR("type {} is not channel header", hmsg.protoType);
         co_return Unexpected(Error(Error::Unknown));
     }
@@ -261,6 +269,7 @@ ILIAS_NAMESPACE::Task<void> ByteStreamChannel::send(std::unique_ptr<CS_PROTO_NAM
     sendMsg.resize(sendMsg.size() + msg.size());
     memcpy(sendMsg.data() + CCMessageHeader::size(), msg.data(), msg.size());
     msg.clear();
+    CS_LOG_INFO("send: {}", spdlog::to_hex(sendMsg.data(),sendMsg.data() + sendMsg.size()));
     auto ret = co_await mClient.send(sendMsg.data(), sendMsg.size());
     sendMsg.clear();
     if (!ret) {
@@ -281,6 +290,7 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<CS_PROTO_NAMESPACE::IProto>> ByteStreamCha
         close();
         co_return Unexpected(ret.error());
     }
+    CS_LOG_INFO("recv: {}", spdlog::to_hex(headerData.data(),headerData.data() + headerData.size()));
     CCMessageHeader msgHeader;
     BinarySerializer serializer;
     serializer.startDeserialize(headerData);
@@ -296,6 +306,7 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<CS_PROTO_NAMESPACE::IProto>> ByteStreamCha
         close();
         co_return Unexpected(ret.error());
     }
+    CS_LOG_INFO("recv: {}", spdlog::to_hex(data.data(),data.data() + data.size()));
     if (msgHeader.protoType == 0) {
         ChannelHeader cmsg;
         serializer.startDeserialize(data);
@@ -304,6 +315,8 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<CS_PROTO_NAMESPACE::IProto>> ByteStreamCha
         if (cmsg.messageType == ChannelHeader::MessageType::CloseMessage) {
             close();
             co_return ILIAS_NAMESPACE::Error(ILIAS_NAMESPACE::Error::Code::ChannelBroken);
+        } else {
+            co_return ILIAS_NAMESPACE::Error(ILIAS_NAMESPACE::Error::Code::Unknown);
         }
     }
 
@@ -321,6 +334,7 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<CS_PROTO_NAMESPACE::IProto>> ByteStreamCha
 }
 
 Task<void> _closeLater(ILIAS_NAMESPACE::ByteStream<> client, std::vector<char> buf) {
+    CS_LOG_INFO("send: {}", spdlog::to_hex(buf.data(),buf.data() + buf.size()));
     auto ret = co_await client.send(buf.data(), buf.size());
     co_return !ret ? Unexpected(ret.error()) : ILIAS_NAMESPACE::Result<>();
 }

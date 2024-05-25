@@ -205,6 +205,8 @@ struct JsonConvert<IDumpableObject*> {
         JsonWriter writer(buffer);
         const auto& o = value["value"];
         auto ret = o.Accept(writer);
+        buffer.Put('\0');
+        buffer.Flush();
         ret = d->loadFromString(buffer.GetString()) && ret;
         (*dst) = d;
         return ret;
@@ -221,7 +223,7 @@ inline bool IDumpableObject::dumpToFile(const std::string& filePath, IDumpableOb
     if (!file.is_open()) {
         return false;
     }
-    fprintf(stderr, "dump file: %s\n", filePath.c_str());
+    CS_LOG_INFO("dump file: {}\n", filePath.c_str());
     file.write(buffer.GetString(), buffer.GetSize());
     file.close();
     return ret;
@@ -235,7 +237,7 @@ inline bool IDumpableObject::loadFromFile(const std::string& filePath, IDumpable
     rapidjson::IStreamWrapper isw(file);
     rapidjson::Document document;
     document.ParseStream(isw);
-    auto ret = JsonConvert<IDumpableObject*>::fromJsonValue(obj, document.GetObject());
+    auto ret = JsonConvert<IDumpableObject*>::fromJsonValue(obj, document);
     file.close();
     return ret;
 }

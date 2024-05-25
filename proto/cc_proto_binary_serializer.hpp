@@ -56,9 +56,6 @@ inline BinarySerializer::~BinarySerializer()  {
 
 inline void BinarySerializer::startSerialize(std::vector<char>* data) {
     mData = data;
-    if (mData->capacity() < 1024) {
-        mData->reserve(1024);
-    }
 }
 
 inline bool BinarySerializer::endSerialize() {
@@ -79,7 +76,7 @@ inline bool BinarySerializer::startDeserialize(const std::vector<char>& data) {
 }
 
 inline bool BinarySerializer::endDeserialize() {
-    if (mOffset != mData->size()) {
+    if (mOffset != mData->size() && mData->size() > 0 && mData->back() != '\0') {
         CS_LOG_WARN("binary data deserialize warning, read size{} != buf szie{}.", mOffset, mData->size());
     }
     mData->clear();

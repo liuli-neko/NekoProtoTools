@@ -145,6 +145,7 @@ TEST_F(JsonSerializerTest, Int) {
     writer->Key("a");
     JsonConvert<int>::toJsonValue(*writer, a);
     writer->EndObject();
+    buffer.Put('\0');
     const char * str = buffer.GetString();
     EXPECT_STREQ(str, "{\"a\":1}");
 }
@@ -154,6 +155,7 @@ TEST_F(JsonSerializerTest, String) {
     writer->Key("a");
     JsonConvert<std::string>::toJsonValue(*writer, a);
     writer->EndObject();
+    buffer.Put('\0');
     const char * str = buffer.GetString();
     EXPECT_STREQ(str, "{\"a\":\"hello\"}");
 }
@@ -163,6 +165,7 @@ TEST_F(JsonSerializerTest, Bool) {
     writer->Key("a");
     JsonConvert<bool>::toJsonValue(*writer, a);
     writer->EndObject();
+    buffer.Put('\0');
     const char * str = buffer.GetString();
     EXPECT_STREQ(str, "{\"a\":true}");
 }
@@ -172,6 +175,7 @@ TEST_F(JsonSerializerTest, Double) {
     writer->Key("a");
     JsonConvert<double>::toJsonValue(*writer, a);
     writer->EndObject();
+    buffer.Put('\0');
     const char * str = buffer.GetString();
     EXPECT_STREQ(str, "{\"a\":3.14}");
 }
@@ -181,6 +185,7 @@ TEST_F(JsonSerializerTest, List) {
     writer->Key("a");
     JsonConvert<std::list<int>>::toJsonValue(*writer, a);
     writer->EndObject();
+    buffer.Put('\0');
     const char * str = buffer.GetString();
     EXPECT_STREQ(str, "{\"a\":[1,2,3,4,5]}");
 }
@@ -190,6 +195,7 @@ TEST_F(JsonSerializerTest, Map) {
     writer->Key("a");
     JsonConvert<std::map<std::string, int>>::toJsonValue(*writer, a);
     writer->EndObject();
+    buffer.Put('\0');
     const char * str = buffer.GetString();
     EXPECT_STREQ(str, "{\"a\":{\"a\":1,\"b\":2,\"c\":3}}");
 }
@@ -199,6 +205,7 @@ TEST_F(JsonSerializerTest, Array) {
         writer->Key("a");
         JsonConvert<std::array<int, 5>>::toJsonValue(*writer, a);
         writer->EndObject();
+        buffer.Put('\0');
         const char * str = buffer.GetString();
         EXPECT_STREQ(str, "{\"a\":[1,2,3,4,5]}");
 }
@@ -208,6 +215,7 @@ TEST_F(JsonSerializerTest, Enum) {
     writer->Key("a");
     JsonConvert<TEnum>::toJsonValue(*writer, a);
     writer->EndObject();
+    buffer.Put('\0');
     const char * str = buffer.GetString();
 #if __cplusplus >= 201703L || _MSVC_LANG > 201402L
     EXPECT_STREQ(str, "{\"a\":\"TEnum_A(1)\"}");
