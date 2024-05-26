@@ -45,7 +45,7 @@ and a cpp file `src/cc_proto_base.cpp`
 and inherit this template class ProtoBase<SelfT, SerializerT> to declare your class you want to register as the message type of proto.
 ```C++
 // SelfT is the type of your class, SerializerT is the type of serializer you want to use. default is JsonSerializer.
-class SerializerAble : public ProtoBase<SerializerAble> {
+class SerializerAble : public ProtoBase<SerializerAble, JsonSerializer<>> {
     int a;
     std::string b;
     CS_SERIALIZER(a, b);
@@ -225,7 +225,7 @@ public:
 you can define a proto message by inheritance from ProtoBase, it while atuo register to protoFactory when you create protoFactory instance.
 
 ```C++
-struct ProtoMessage ProtoBase<ProtoMessage> {
+struct ProtoMessage ProtoBase<ProtoMessage, JsonSerializer<>> {
     int a;
     std::string b;
 

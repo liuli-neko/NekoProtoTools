@@ -63,7 +63,7 @@ struct JsonConvert<StructA, void> {
 CS_PROTO_END_NAMESPACE
 #endif
 
-struct TestP : public ProtoBase<TestP> {
+struct TestP : public ProtoBase<TestP, JsonSerializer<>> {
     int a = 1;
     std::string b = "hello";
     bool c = true;
@@ -92,6 +92,7 @@ TEST(JsonSerializerTest, StructSerialize) {
     testp.j = {1, "hello"};
     std::vector<char> data;
     data = testp.toData();
+    data.push_back('\0');
 #if CS_CPP_PLUS >= 17
     EXPECT_STREQ(data.data(), "{\"a\":3,\"b\":\"Struct test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,\"hello\"]}");
 #else

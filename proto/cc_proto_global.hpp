@@ -1,3 +1,17 @@
+/**
+ * @file cc_proto_global.hpp
+ * @author llhsdmd (llhsdmd@gmail.com)
+ * @brief ccproto
+ * 
+ * @version 0.1
+ * @date 2024-05-25
+ * 
+ * @par license
+ *  GPL-3.0 license
+ * 
+ * @copyright Copyright (c) 2024 by llhsdmd
+ * 
+ */
 #pragma once
 
 #include "../private/cc_log.hpp"

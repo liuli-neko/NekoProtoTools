@@ -7,7 +7,7 @@
 
 using namespace CS_PROTO_NAMESPACE;
 
-class TestT : public CS_PROTO_NAMESPACE::DumpableObject<TestT, CS_PROTO_NAMESPACE::JsonSerializer> {
+class TestT : public CS_PROTO_NAMESPACE::DumpableObject<TestT, CS_PROTO_NAMESPACE::JsonSerializer<>> {
 
 public:
     int a = 1;
