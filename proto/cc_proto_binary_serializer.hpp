@@ -26,10 +26,13 @@ inline uint64_t htobe64(const uint64_t value) { return _byteswap_uint64(value); 
 inline uint64_t be64toh(const uint64_t value) { return _byteswap_uint64(value); }
 #endif
 
-template <typename T, class enable = void>
+template <typename WriterT, typename ValueT, typename T, class enable = void>
 struct BinaryConvert;
 
 class BinarySerializer {
+public:
+    using WriterType = std::vector<char>;
+    using ValueType = std::vector<char>;
 public:
     ~BinarySerializer();
     void startSerialize(std::vector<char>* data);
@@ -65,7 +68,7 @@ inline bool BinarySerializer::endSerialize() {
 
 template <typename T>
 bool BinarySerializer::insert(const char* name, const size_t len, const T& value) {
-    return BinaryConvert<T>::toBinaryArray(*mData, value);
+    return BinaryConvert<WriterType, ValueType, T>::toBinaryArray(*mData, value);
 }
 
 inline bool BinarySerializer::startDeserialize(const std::vector<char>& data) {
@@ -88,29 +91,29 @@ inline bool BinarySerializer::endDeserialize() {
 
 template <typename T>
 bool BinarySerializer::get(const char* name, const size_t len, T* value) {
-    return BinaryConvert<T>::fromBinaryArray(value, *mData, mOffset);
+    return BinaryConvert<WriterType, ValueType, T>::fromBinaryArray(value, *mData, mOffset);
 }
 
-template <>
-struct BinaryConvert<uint8_t, void> {
-    static bool toBinaryArray(std::vector<char>& buf, const uint8_t value) {
+template <typename WriterT, typename ValueT>
+struct BinaryConvert<WriterT, ValueT, uint8_t, void> {
+    static bool toBinaryArray(WriterT& buf, const uint8_t value) {
         buf.push_back(value);
         return true;
     }
-    static bool fromBinaryArray(uint8_t* dst, const std::vector<char>& buf, int& offset_byte) {
+    static bool fromBinaryArray(uint8_t* dst, const ValueT& buf, int& offset_byte) {
         *dst = buf[offset_byte];
         offset_byte += 1;
         return true;
     }
 };
 
-template <>
-struct BinaryConvert<int8_t, void> {
-    static bool toBinaryArray(std::vector<char>& buf, const int8_t value) {
+template <typename WriterT, typename ValueT>
+struct BinaryConvert<WriterT, ValueT, int8_t, void> {
+    static bool toBinaryArray(WriterT& buf, const int8_t value) {
         buf.push_back(value);
         return true;
     }
-    static bool fromBinaryArray(int8_t* dst, const std::vector<char>& buf, int& offset_byte) {
+    static bool fromBinaryArray(int8_t* dst, const ValueT& buf, int& offset_byte) {
         if (buf.size() < offset_byte + 1) {
             return false;
         }
@@ -120,15 +123,15 @@ struct BinaryConvert<int8_t, void> {
     }
 };
 
-template <>
-struct BinaryConvert<uint16_t, void> {
-    static bool toBinaryArray(std::vector<char>& buf, const uint16_t value) {
+template <typename WriterT, typename ValueT>
+struct BinaryConvert<WriterT, ValueT, uint16_t, void> {
+    static bool toBinaryArray(WriterT& buf, const uint16_t value) {
         auto nv = htobe16(value);
         buf.push_back(nv & 0xFF);
         buf.push_back((nv >> 8) & 0xFF);
         return true;
     }
-    static bool fromBinaryArray(uint16_t* dst, const std::vector<char>& buf, int& offset_byte) {
+    static bool fromBinaryArray(uint16_t* dst, const ValueT& buf, int& offset_byte) {
         if (buf.size() < offset_byte + 2) {
             return false;
         }
@@ -141,15 +144,15 @@ struct BinaryConvert<uint16_t, void> {
     }
 };
 
-template <>
-struct BinaryConvert<int16_t, void> {
-    static bool toBinaryArray(std::vector<char>& buf, const int16_t value) {
+template <typename WriterT, typename ValueT>
+struct BinaryConvert<WriterT, ValueT, int16_t, void> {
+    static bool toBinaryArray(WriterT& buf, const int16_t value) {
         auto nv = htobe16(value);
         buf.push_back(nv & 0xFF);
         buf.push_back((nv >> 8) & 0xFF);
         return true;
     }
-    static bool fromBinaryArray(int16_t* dst, const std::vector<char>& buf, int& offset_byte) {
+    static bool fromBinaryArray(int16_t* dst, const ValueT& buf, int& offset_byte) {
         if (buf.size() < offset_byte + 2) {
             return false;
         }
@@ -162,15 +165,15 @@ struct BinaryConvert<int16_t, void> {
     }
 };
 
-template <>
-struct BinaryConvert<uint32_t, void> {
-    static bool toBinaryArray(std::vector<char>& buf, const uint32_t value) {
+template <typename WriterT, typename ValueT>
+struct BinaryConvert<WriterT, ValueT, uint32_t, void> {
+    static bool toBinaryArray(WriterT& buf, const uint32_t value) {
         auto nv = htobe32(value);
         buf.resize(buf.size() + 4, 0);
         memcpy(buf.data() + buf.size() - 4, &nv, 4);
         return true;
     }
-    static bool fromBinaryArray(uint32_t* dst, const std::vector<char>& buf, int& offset_byte) {
+    static bool fromBinaryArray(uint32_t* dst, const ValueT& buf, int& offset_byte) {
         if (buf.size() < offset_byte + 4) {
             return false;
         }
@@ -182,15 +185,15 @@ struct BinaryConvert<uint32_t, void> {
     }
 };
 
-template <>
-struct BinaryConvert<int32_t, void> {
-    static bool toBinaryArray(std::vector<char>& buf, const int32_t value) {
+template <typename WriterT, typename ValueT>
+struct BinaryConvert<WriterT, ValueT, int32_t, void> {
+    static bool toBinaryArray(WriterT& buf, const int32_t value) {
         auto nv = htobe32(value);
         buf.resize(buf.size() + 4, 0);
         memcpy(buf.data() + buf.size() - 4, &nv, 4);
         return true;
     }
-    static bool fromBinaryArray(int32_t* dst, const std::vector<char>& buf, int& offset_byte) {
+    static bool fromBinaryArray(int32_t* dst, const ValueT& buf, int& offset_byte) {
         if (buf.size() < offset_byte + 4) {
             return false;
         }
@@ -202,15 +205,15 @@ struct BinaryConvert<int32_t, void> {
     }
 };
 
-template <>
-struct BinaryConvert<uint64_t, void> {
-    static bool toBinaryArray(std::vector<char>& buf, const uint64_t value) {
+template <typename WriterT, typename ValueT>
+struct BinaryConvert<WriterT, ValueT, uint64_t, void> {
+    static bool toBinaryArray(WriterT& buf, const uint64_t value) {
         auto nv = htobe64(value);
         buf.resize(buf.size() + 8, 0);
         memcpy(buf.data() + buf.size() - 8, &nv, 8);
         return true;
     }
-    static bool fromBinaryArray(uint64_t* dst, const std::vector<char>& buf, int& offset_byte) {
+    static bool fromBinaryArray(uint64_t* dst, const ValueT& buf, int& offset_byte) {
         if (buf.size() < offset_byte + 8) {
             return false;
         }
@@ -222,15 +225,15 @@ struct BinaryConvert<uint64_t, void> {
     }
 };
 
-template <>
-struct BinaryConvert<int64_t, void> {
-    static bool toBinaryArray(std::vector<char>& buf, const int64_t value) {
+template <typename WriterT, typename ValueT>
+struct BinaryConvert<WriterT, ValueT, int64_t, void> {
+    static bool toBinaryArray(WriterT& buf, const int64_t value) {
         auto nv = htobe64(value);
         buf.resize(buf.size() + 8, 0);
         memcpy(buf.data() + buf.size() - 8, &nv, 8);
         return true;
     }
-    static bool fromBinaryArray(int64_t* dst, const std::vector<char>& buf, int& offset_byte) {
+    static bool fromBinaryArray(int64_t* dst, const ValueT& buf, int& offset_byte) {
         if (buf.size() < offset_byte + 8) {
             return false;
         }
@@ -242,16 +245,16 @@ struct BinaryConvert<int64_t, void> {
     }
 };
 
-template <>
-struct BinaryConvert<std::string, void> {
-    static bool toBinaryArray(std::vector<char>& buf, const std::string& value) {
+template <typename WriterT, typename ValueT>
+struct BinaryConvert<WriterT, ValueT, std::string, void> {
+    static bool toBinaryArray(WriterT& buf, const std::string& value) {
         buf.resize(buf.size() + value.size() + 8, 0);
         uint64_t len = htobe64((uint64_t)value.size());
         memcpy(buf.data() + buf.size() - 8 - value.size(), &len, 8);
         memcpy(buf.data() + buf.size() - value.size(), value.data(), value.size());
         return true;
     }
-    static bool fromBinaryArray(std::string* dst, const std::vector<char>& buf, int& offset_byte) {
+    static bool fromBinaryArray(std::string* dst, const ValueT& buf, int& offset_byte) {
         if (buf.size() < offset_byte + 8) {
             return false;
         }
@@ -268,16 +271,16 @@ struct BinaryConvert<std::string, void> {
 };
 
 #if CS_CPP_PLUS >= 20
-template <>
-struct BinaryConvert<std::u8string, void> {
-    static bool toBinaryArray(std::vector<char>& buf, const std::u8string& value) {
+template <typename WriterT, typename ValueT>
+struct BinaryConvert<WriterT, ValueT, std::u8string, void> {
+    static bool toBinaryArray(WriterT& buf, const std::u8string& value) {
         buf.resize(buf.size() + value.size() + 8, 0);
         uint64_t len = htobe64((uint64_t)value.size());
         memcpy(buf.data() + buf.size() - 8 - value.size(), &len, 8);
         memcpy(buf.data() + buf.size() - value.size(), value.data(), value.size());
         return true;
     }
-    static bool fromBinaryArray(std::u8string* dst, const std::vector<char>& buf, int& offset_byte) {
+    static bool fromBinaryArray(std::u8string* dst, const ValueT& buf, int& offset_byte) {
         if (buf.size() < offset_byte + 8) {
             return false;
         }

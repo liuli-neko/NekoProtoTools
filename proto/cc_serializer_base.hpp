@@ -31,11 +31,11 @@
  *     obj.age = 18;
  *     obj.address = "Zh";
  * 
- *     JsonSerializer serializer;
- *     serializer.startSerialize();
- *     obj.serialize(serializer);
+ *     JsonSerializer<> serializer;
  *     std::vector<char> data;
- *     serializer.endSerialize(data);
+ *     serializer.startSerialize(&data);
+ *     obj.serialize(serializer);
+ *     serializer.endSerialize();
  *     data.push_back(0);
  *     std::cout << data.data() << std::endl;
  *
@@ -50,7 +50,7 @@
  * @version 0.1
  * @date 2024-05-23
  * 
- * @copyright Copyright (c) 2024
+ * @copyright Copyright (c) 2024 by llhsdmd
  * 
  */
 #pragma once

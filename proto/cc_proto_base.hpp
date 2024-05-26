@@ -21,7 +21,7 @@
  * #include "cc_proto_json_serializer.hpp"
  * #include "cc_serializer_base.hpp"
  *
- * struct ProtoMessage ProtoBase<ProtoMessage> {
+ * struct ProtoMessage ProtoBase<ProtoMessage, JsonSerializer<>> {
  *     int a;
  *     std::string b;
  *
@@ -53,7 +53,7 @@
  * @version 0.1
  * @date 2024-05-23
  *
- * @copyright Copyright (c) 2024
+ * @copyright Copyright (c) 2024 by llhsdmd
  *
  */
 #pragma once
@@ -66,7 +66,6 @@
 #include "cc_proto_global.hpp"
 
 CS_PROTO_BEGIN_NAMESPACE
-class JsonSerializer;
 class ProtoFactory;
 
 auto static_init_funcs(const CS_STRING_VIEW&, std::function<void(ProtoFactory*)>)
@@ -106,7 +105,7 @@ public:
     virtual CS_STRING_VIEW className() const = 0;
 };
 
-template <typename ProtoT, typename SerializerT = JsonSerializer>
+template <typename ProtoT, typename SerializerT>
 class ProtoBase : public IProto {
 public:
     using ProtoType = ProtoT;

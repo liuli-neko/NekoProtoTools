@@ -197,22 +197,22 @@ constexpr auto unwrap_struct(T &data) noexcept {
 }
 }
 
-template <typename T>
-struct JsonConvert<T, std::enable_if_t<can_unwrap_v<T>>> {
+template <typename WriterT, typename ValueT, typename T>
+struct JsonConvert<WriterT, ValueT, T, std::enable_if_t<can_unwrap_v<T>>> {
     template <typename U>
-    static void serializeTupleImpl(bool &ret, JsonWriter &writer, U &value) {
+    static void serializeTupleImpl(bool &ret, WriterT &writer, U &value) {
         using Type = std::remove_reference_t<std::remove_cv_t<U>>;
-        ret = JsonConvert<Type>::toJsonValue(writer, value) && ret;
+        ret = JsonConvert<WriterT, ValueT, Type>::toJsonValue(writer, value) && ret;
     }
     template <typename ...Args>
-    static bool serializeTupleTo(JsonWriter &writer, const std::tuple<Args...> &tp) {
+    static bool serializeTupleTo(WriterT &writer, const std::tuple<Args...> &tp) {
         bool ret = true;
         std::apply([&](Args &&...args) {
             ((serializeTupleImpl(ret, writer, args)), ...);
         }, tp);
         return ret;
     }
-    static bool toJsonValue(JsonWriter &writer, const T &value) {
+    static bool toJsonValue(WriterT &writer, const T &value) {
         auto ret = writer.StartArray();
         ret = serializeTupleTo(writer, unwrap_struct(value)) && ret;
         ret = writer.EndArray() && ret;
@@ -220,19 +220,19 @@ struct JsonConvert<T, std::enable_if_t<can_unwrap_v<T>>> {
     }
 
     template <typename U>
-    static void deserializeTupleImpl(const JsonValue &value, U &tp) {
+    static void deserializeTupleImpl(const ValueT &value, U &tp) {
         using Type = std::remove_reference_t<std::remove_cv_t<U>>;
-        JsonConvert<Type>::fromJsonValue(&tp, value);
+        JsonConvert<WriterT, ValueT, Type>::fromJsonValue(&tp, value);
         
     }
     template <typename ...Args>
-    static void deserializeTupleFrom(const JsonValue &value, const std::tuple<Args...> &tp) {
+    static void deserializeTupleFrom(const ValueT &value, const std::tuple<Args...> &tp) {
         int index = 0;
         std::apply([&](Args &&...args) {
             ((deserializeTupleImpl(value[index++], args)), ...);
         }, tp);
     }
-    static bool fromJsonValue(T *dst, const JsonValue &value) {
+    static bool fromJsonValue(T *dst, const ValueT &value) {
         if (dst == nullptr || !value.IsArray()) {
             return false;
         }

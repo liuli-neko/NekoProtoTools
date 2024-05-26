@@ -27,7 +27,7 @@
  *
  * CS_PROTO_USE_NAMESPACE
  *
- * class MyObject : public DumpableObject<MyObject, JsonSerializer> {
+ * class MyObject : public DumpableObject<MyObject, JsonSerializer<>> {
  * public:
  *     MyObject(int a, std::string b, std::vector<int> c, std::map<std::string, int> d) :
  *         mA(a), mB(b), mC(c), mD(d) {}
@@ -57,7 +57,7 @@
  * @version 0.1
  * @date 2024-05-23
  *
- * @copyright Copyright (c) 2024
+ * @copyright Copyright (c) 2024 by llhsdmd
  *
  */
 #pragma once
@@ -105,7 +105,7 @@ inline IDumpableObject* IDumpableObject::create(const CS_STRING_VIEW& className)
     return nullptr;
 }
 
-template <typename T, typename SerializerT = JsonSerializer>
+template <typename T, typename SerializerT = JsonSerializer<>>
 class DumpableObject : public IDumpableObject {
 public:
     using ObjectType = T;
@@ -167,9 +167,9 @@ bool DumpableObject<T, SerializerT>::loadFromString(const std::string& str) {
     return true;
 }
 
-template <>
-struct JsonConvert<IDumpableObject*> {
-    static bool toJsonValue(JsonWriter& writer, const IDumpableObject* value) {
+template <typename WriterT,typename ValueT>
+struct JsonConvert<WriterT, ValueT, IDumpableObject*> {
+    static bool toJsonValue(WriterT& writer, const IDumpableObject* value) {
         auto ret = writer.StartObject();
         ret = writer.Key("className") && ret;
         if (value == nullptr) {
@@ -185,7 +185,7 @@ struct JsonConvert<IDumpableObject*> {
         ret = writer.EndObject() && ret;
         return ret;
     }
-    static bool fromJsonValue(IDumpableObject** dst, const JsonValue& value) {
+    static bool fromJsonValue(IDumpableObject** dst, const ValueT& value) {
         if (!value.IsObject() || dst == nullptr) {
             return false;
         }
@@ -200,8 +200,6 @@ struct JsonConvert<IDumpableObject*> {
         auto d = IDumpableObject::create(className);
         CS_ASSERT(d != nullptr, "DumpableObject {} create failed", className);
         VectorBuffer buffer;
-        std::vector<char> buff;
-        buffer.setVector(&buff);
         JsonWriter writer(buffer);
         const auto& o = value["value"];
         auto ret = o.Accept(writer);
@@ -215,10 +213,8 @@ struct JsonConvert<IDumpableObject*> {
 
 inline bool IDumpableObject::dumpToFile(const std::string& filePath, IDumpableObject* obj) {
     VectorBuffer buffer;
-    std::vector<char> buf;
-    buffer.setVector(&buf);
     JsonWriter writer(buffer);
-    auto ret = JsonConvert<IDumpableObject*>::toJsonValue(writer, obj);
+    auto ret = JsonConvert<JsonWriter<VectorBuffer>, JsonValue, IDumpableObject*>::toJsonValue(writer, obj);
     std::ofstream file(filePath, std::ios::out | std::ios::trunc);
     if (!file.is_open()) {
         return false;
@@ -237,7 +233,7 @@ inline bool IDumpableObject::loadFromFile(const std::string& filePath, IDumpable
     rapidjson::IStreamWrapper isw(file);
     rapidjson::Document document;
     document.ParseStream(isw);
-    auto ret = JsonConvert<IDumpableObject*>::fromJsonValue(obj, document);
+    auto ret = JsonConvert<JsonWriter<VectorBuffer>, JsonValue, IDumpableObject*>::fromJsonValue(obj, document);
     file.close();
     return ret;
 }
