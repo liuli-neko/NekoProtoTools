@@ -200,7 +200,7 @@ struct JsonConvert<WriterT, ValueT, IDumpableObject*> {
         auto d = IDumpableObject::create(className);
         CS_ASSERT(d != nullptr, "DumpableObject {} create failed", className);
         VectorBuffer buffer;
-        JsonWriter writer(buffer);
+        JsonWriter<VectorBuffer> writer(buffer);
         const auto& o = value["value"];
         auto ret = o.Accept(writer);
         buffer.Put('\0');
@@ -213,7 +213,7 @@ struct JsonConvert<WriterT, ValueT, IDumpableObject*> {
 
 inline bool IDumpableObject::dumpToFile(const std::string& filePath, IDumpableObject* obj) {
     VectorBuffer buffer;
-    JsonWriter writer(buffer);
+    JsonWriter<VectorBuffer> writer(buffer);
     auto ret = JsonConvert<JsonWriter<VectorBuffer>, JsonValue, IDumpableObject*>::toJsonValue(writer, obj);
     std::ofstream file(filePath, std::ios::out | std::ios::trunc);
     if (!file.is_open()) {
