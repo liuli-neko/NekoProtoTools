@@ -146,7 +146,7 @@ auto CCZip<Args...>::Iterator<Iterators...>::operator*() noexcept {
 template <typename... Args>
 template <typename... Iterators>
 const auto& CCZip<Args...>::Iterator<Iterators...>::operator*() const noexcept {
-    return std::apply([](auto&... iterators) { return std::make_tuple(*iterators...); }, mIterators);
+    return std::apply([](auto&... iterators) { return std::tuple<const typename Args::value_type&...>(*iterators...); }, mIterators);
 }
 
 template <typename... Args>
