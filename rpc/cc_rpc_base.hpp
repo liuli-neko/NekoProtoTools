@@ -2,6 +2,7 @@
 #pragma once
 
 #include <queue>
+#include <errno.h>
 
 #include "../proto/cc_proto_base.hpp"
 #include "../proto/cc_proto_binary_serializer.hpp"
@@ -12,9 +13,26 @@
 #include "ilias_await.hpp"
 #include "ilias_co.hpp"
 #include "ilias_task.hpp"
+#include "ilias_expected.hpp"
 
 CS_RPC_BEGIN_NAMESPACE
 class ChannelFactory;
+
+// enum | code | message | system code mapping
+#define CS_RPC_CHANNEL_ERROR_CODE_TABLE                                                                             \
+    CS_RPC_CHANNEL_ERROR(Ok, 0, "ok", 0)                                                                            \
+    CS_RPC_CHANNEL_ERROR(InvalidMessageHeader, 1, "receive an unrecognized message header", -1)                     \
+    CS_RPC_CHANNEL_ERROR(InvalidChannelHeader, 2, "receive an unrecognized channel header", -1)                     \
+    CS_RPC_CHANNEL_ERROR(InvalidProtoType, 3, "receive a message, but proto type is not registed", -1)              \
+    CS_RPC_CHANNEL_ERROR(InvalidUrl, 4, "unrecognized or error url", -1)                                            \
+    CS_RPC_CHANNEL_ERROR(ConnectFailed, 5, "can't connect to the url", -1)                                          \
+    CS_RPC_CHANNEL_ERROR(ProtoVersionUnsupported, 6, "proto version is not supported", -1)                          \
+    CS_RPC_CHANNEL_ERROR(ChannelIdInconsistent, 7, "unable to negotiate a consistent channel id", -1)               \
+    CS_RPC_CHANNEL_ERROR(ConnectionMessageTypeError, 8, "receive a error message in connection state", -1)          \
+    CS_RPC_CHANNEL_ERROR(ChannelBroken, 9, "the channel is broken", -1)                                             \
+    CS_RPC_CHANNEL_ERROR(ChannelClosed, 10, "the channel is closed", -1)                                            \
+    CS_RPC_CHANNEL_ERROR(ChannelClosedByPeer, 11, "the channel is closed by peer", -1)                              \
+    CS_RPC_CHANNEL_ERROR(Timeout, 12, "the operator is timeout", -1)                                                \
 
 class CS_RPC_API CCMessageHeader {
 public:
@@ -46,6 +64,21 @@ public:
     inline static int size() { return 7; }
 
     CS_SERIALIZER(factoryVersion, messageType, channelId)
+};
+
+#define CS_RPC_CHANNEL_ERROR(name, code, message, _) \
+        name = code,
+enum class CCErrorCode {
+CS_RPC_CHANNEL_ERROR_CODE_TABLE 
+};
+#undef CS_RPC_CHANNEL_ERROR
+
+class CS_RPC_API CCErrorCategory : public ILIAS_NAMESPACE::ErrorCategory {
+public:
+    static auto instance() -> const CCErrorCategory&;
+    auto message(uint32_t value) const -> std::string override;
+    auto name() const -> std::string_view override;
+    auto equivalent(uint32_t self, const ILIAS_NAMESPACE::Error &other) const -> bool override;
 };
 
 class CS_RPC_API ChannelBase {
@@ -85,14 +118,14 @@ public:
     };
     ChannelFactory(ILIAS_NAMESPACE::IoContext& ioContext, std::shared_ptr<CS_PROTO_NAMESPACE::ProtoFactory> factory);
     ~ChannelFactory();
-    void listen(std::string_view hostname);
+    ILIAS_NAMESPACE::Expected<void, ILIAS_NAMESPACE::Error> listen(std::string_view hostname);
     ILIAS_NAMESPACE::Task<std::weak_ptr<ChannelBase>> connect(std::string_view hostname, const uint16_t channelId);
     ILIAS_NAMESPACE::Task<std::weak_ptr<ChannelBase>> accept();
     void close();
     ILIAS_NAMESPACE::Task<std::weak_ptr<ChannelBase>> makeChannel(ILIAS_NAMESPACE::IStreamClient&& client,
                                                                   const uint16_t channelId);
     std::weak_ptr<ChannelBase> getChannel(uint16_t channelId);
-    std::vector<uint16_t> getChannels();
+    std::vector<uint16_t> getChannelIds();
     void destroyChannel(uint16_t channelId);
     const CS_PROTO_NAMESPACE::ProtoFactory& getProtoFactory();
 
@@ -124,3 +157,7 @@ inline uint16_t ChannelBase::channelId() { return mChannelId; }
 inline ChannelBase::ChannelState ChannelBase::state() { return mState; }
 
 CS_RPC_END_NAMESPACE
+
+ILIAS_NS_BEGIN
+ILIAS_DECLARE_ERROR(CS_RPC_NAMESPACE::CCErrorCode, CS_RPC_NAMESPACE::CCErrorCategory);
+ILIAS_NS_END
