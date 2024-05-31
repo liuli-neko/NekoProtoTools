@@ -264,7 +264,7 @@ struct BinaryConvert<WriterT, ValueT, std::string, void> {
         if (buf.size() < offset_byte + len + 8) {
             return false;
         }
-        *dst = std::string(buf.data() + offset_byte + 4, len);
+        *dst = std::string(buf.data() + offset_byte + 8, len);
         offset_byte += len + 8;
         return true;
     }
