@@ -85,7 +85,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::connect(std::string_view hostna
 Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
     auto ret = co_await mListener.accept();
     if (!ret) {
-        CS_LOG_ERROR("tcp listener Failed. can't accept");
+        CS_LOG_ERROR("tcp accept Failed. {}", ret.error().message());
         co_return Unexpected(ret.error());
     }
 

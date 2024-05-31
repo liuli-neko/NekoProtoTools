@@ -12,18 +12,28 @@ class TestT : public CS_PROTO_NAMESPACE::DumpableObject<TestT, CS_PROTO_NAMESPAC
 public:
     int a = 1;
     std::string b = " hesd";
-    IDumpableObject *c = nullptr;
 
-    CS_SERIALIZER(a, b, c)
+    CS_SERIALIZER(a, b)
+};
+
+class TestA : public CS_PROTO_NAMESPACE::DumpableObject<TestA, CS_PROTO_NAMESPACE::JsonSerializer<>> {
+
+public:
+    int a = 1;
+    double b = 1.1;
+    std::string c = " hesd";
+    TestT d;
+
+    CS_SERIALIZER(a, b, c, d)
 };
 
 TEST(DumpObject, Test) {
-    TestT t1;
+    TestA t1;
     t1.a = 234324;
-    t1.b = "asdasd";
-    t1.c = new TestT();
-    static_cast<TestT*>(t1.c)->a = 123;
-    static_cast<TestT*>(t1.c)->b = "asdasd";
+    t1.b = 1.234;
+    t1.c = "asdasd";
+    t1.d.a = 566;
+    t1.d.b = "uuuuuos";
     
     auto t = t1.dumpToString();
     IDumpableObject::dumpToFile("test.json", &t1);
@@ -31,10 +41,13 @@ TEST(DumpObject, Test) {
     IDumpableObject::loadFromFile("test.json", &d);
     ASSERT_NE(d, nullptr);
     
-    TestT* a = dynamic_cast<TestT *>(d);
+    TestA* a = dynamic_cast<TestA *>(d);
     ASSERT_NE(a, nullptr);
-    EXPECT_EQ(a->a, t1.a);
-    EXPECT_STREQ(a->b.c_str(), t1.b.c_str());
+    EXPECT_EQ(a->a, 234324);
+    EXPECT_EQ(a->b, 1.234);
+    EXPECT_STREQ(a->c.c_str(), "asdasd");
+    EXPECT_EQ(a->d.a, 566);
+    EXPECT_STREQ(a->d.b.c_str(), "uuuuuos");
 
     delete d;
 }

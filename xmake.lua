@@ -101,9 +101,7 @@ option("ui_test")
 option_end()
 
 if has_config("ui_test") then 
-    if is_plat("windows") then
-        add_requires("qt6base")
-    end
+    add_requires("qt6base")
     
     target("test_rpc_ui")
         add_rules("qt.widgetapp")
@@ -117,6 +115,6 @@ if has_config("ui_test") then
         add_defines("CS_PROTO_STATIC", "CS_RPC_STATIC")
         add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
         add_packages("rapidjson", "spdlog")
-        add_frameworks("QtNetwork")
+        add_frameworks("QtCore", "QtNetwork", "QtWidgets", "QtGui")
     target_end()
 end 

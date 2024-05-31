@@ -232,6 +232,7 @@ void MainWidget::startService() {
 
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
+    app.setDesktopSettingsAware(true);
     spdlog::set_level(spdlog::level::debug);
     QIoContext ioContext;
     std::shared_ptr<CS_PROTO_NAMESPACE::ProtoFactory> protoFactory(new CS_PROTO_NAMESPACE::ProtoFactory());

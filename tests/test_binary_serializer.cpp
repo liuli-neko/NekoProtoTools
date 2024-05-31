@@ -16,9 +16,10 @@ public:
     uint16_t f = 6; // 2 bytes
     uint32_t g = 7; // 4 bytes
     uint64_t h = 8; // 8 bytes
+    std::string i = "hello";
     // 30
 
-    CS_SERIALIZER(a, b, c, d, e, f, g, h)
+    CS_SERIALIZER(a, b, c, d, e, f, g, h, i)
 };
 
 TEST(BinarySerializer, Serialize) {
@@ -33,11 +34,12 @@ TEST(BinarySerializer, Serialize) {
     p.f = 336;
     p.g = 337;
     p.h = 338;
+    p.i = "test string";
     serializer.startSerialize(&buf);
     p.serialize(serializer);
     serializer.endSerialize();
 
-    EXPECT_EQ(buf.size(), 30);
+    EXPECT_EQ(buf.size(), 49);
     EXPECT_EQ(buf[0], -12);
     TestP p2;
     serializer.startDeserialize(buf);
@@ -51,6 +53,7 @@ TEST(BinarySerializer, Serialize) {
     EXPECT_EQ(p2.f, 336);
     EXPECT_EQ(p2.g, 337);
     EXPECT_EQ(p2.h, 338);
+    EXPECT_STREQ(p2.i.c_str(), "test string");
 }
 
 int main(int argc, char **argv) {
