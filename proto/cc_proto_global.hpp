@@ -140,8 +140,10 @@ namespace {
     template <class T>
     CS_CONSTEXPR_FUNC CS_STRING_VIEW _cs_class_name() {
         CS_STRING_VIEW string(__FUNCSIG__);
-        size_t start = string.find_last_of(' ');
-        auto sstring = string.substr(start);
+        size_t start = string.find("_cs_class_name<") + 15;
+        start = string.find_first_of(' ', start);
+        size_t end = string.find('<', start);
+        auto sstring = string.substr(start, end - start);
         size_t d =  sstring.find_last_of(':');
         if (d != CS_STRING_VIEW::npos)
             start = d;
@@ -150,7 +152,7 @@ namespace {
         while (start < sstring.size() && (sstring[start] == ' ' || sstring[start] == '>' || sstring[start] == ':')) {
             ++start;
         }
-        size_t end = sstring.find_last_of('>');
+        end = end == CS_STRING_VIEW::npos ? sstring.find_last_of('>') : end;
         return sstring.substr(start, end - start);
     }
 }
