@@ -51,6 +51,7 @@ MainWidget::MainWidget(QIoContext* ctxt, std::shared_ptr<CS_PROTO_NAMESPACE::Pro
         }
     });
     ui->send->setDisabled(true);
+    ui->makeSubChannel->setDisabled(true);
 }
 
 MainWidget::~MainWidget() {
@@ -135,7 +136,7 @@ ILIAS_NAMESPACE::Task<void> MainWidget::sendMessage(std::weak_ptr<cs_ccproto::Ch
     if (auto cl = channel.lock(); cl != nullptr) {
         // CS_LOG_INFO("send message to channel {}", cl->channelId());
         auto msg = std::make_unique<Message>();
-        msg->msg = std::string(ui->sendEdit->toPlainText().toLocal8Bit());
+        msg->msg = std::string(ui->sendEdit->toPlainText().toUtf8());
         msg->timestamp = (time(NULL));
         auto ids = mChannelFactor.getChannelIds();
         msg->numbers = std::vector<int>(ids.begin(), ids.end());
@@ -162,7 +163,10 @@ ILIAS_NAMESPACE::Task<void> MainWidget::recvMessage(std::weak_ptr<cs_ccproto::Ch
 
         auto msg = std::dynamic_pointer_cast<Message>(retMsg);
         if (msg) {
-            ui->recvEdit->append(QString("from %1 [%2]:\n%3\n").arg(cl->channelId()).arg(msg->timestamp).arg(msg->msg.c_str()));
+            ui->recvEdit->append(QString("from %1 [%2]:\n%3\n")
+                    .arg(cl->channelId())
+                    .arg(msg->timestamp)
+                    .arg(QString::fromUtf8(msg->msg.c_str())));
             std::cout << "current ids : ";
             for (auto n : msg->numbers) {
                 std::cout << n << " ";
