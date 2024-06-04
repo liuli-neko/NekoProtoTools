@@ -63,7 +63,7 @@ struct JsonConvert<StructA, void> {
 CS_PROTO_END_NAMESPACE
 #endif
 
-struct TestP : public ProtoBase<TestP, JsonSerializer<>> {
+struct TestP : public ProtoBase<TestP, JsonSerializer> {
     int a = 1;
     std::string b = "hello";
     bool c = true;

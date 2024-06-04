@@ -7,7 +7,7 @@
 
 using namespace CS_PROTO_NAMESPACE;
 
-class TestT : public CS_PROTO_NAMESPACE::DumpableObject<TestT, CS_PROTO_NAMESPACE::JsonSerializer<>> {
+class TestT : public DumpableObject<TestT, JsonSerializer> {
 
 public:
     int a = 1;
@@ -16,7 +16,7 @@ public:
     CS_SERIALIZER(a, b)
 };
 
-class TestA : public CS_PROTO_NAMESPACE::DumpableObject<TestA, CS_PROTO_NAMESPACE::JsonSerializer<>> {
+class TestA : public DumpableObject<TestA, JsonSerializer> {
 
 public:
     int a = 1;
@@ -36,9 +36,9 @@ TEST(DumpObject, Test) {
     t1.d.b = "uuuuuos";
     
     auto t = t1.dumpToString();
-    IDumpableObject::dumpToFile("test.json", &t1);
-    IDumpableObject *d = nullptr;
-    IDumpableObject::loadFromFile("test.json", &d);
+    t1.dumpToFile("test.json");
+    IDumpableObject *d = IDumpableObject::create("TestA");
+    d->loadFromFile("test.json");
     ASSERT_NE(d, nullptr);
     
     TestA* a = dynamic_cast<TestA *>(d);

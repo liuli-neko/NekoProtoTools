@@ -66,14 +66,14 @@ struct JsonConvert<WriterT, ValueT, StructA, void> {
 CS_PROTO_END_NAMESPACE
 #endif
 
-struct TestA : public ProtoBase<TestA, JsonSerializer<>> {
+struct TestA : public ProtoBase<TestA, JsonSerializer> {
     int a = 1;
     std::string b = "dsadfsd";
 
     CS_SERIALIZER(a, b)
 };
 
-struct TestB : public ProtoBase<TestB, JsonSerializer<>> {
+struct TestB : public ProtoBase<TestB, JsonSerializer> {
     double a = 12.9;
     std::vector<double> b = {1, 2, 3, 4, 5};
     TestA c;
@@ -81,20 +81,20 @@ struct TestB : public ProtoBase<TestB, JsonSerializer<>> {
     CS_SERIALIZER(a, b)
 };
 
-struct TestC : public ProtoBase<TestC, JsonSerializer<>> {
+struct TestC : public ProtoBase<TestC, JsonSerializer> {
     std::vector<TestB> a = {TestB(), TestB(), TestB()};
 
     CS_SERIALIZER(a)
 };
 
-struct TestD : public ProtoBase<TestD, JsonSerializer<>> {
+struct TestD : public ProtoBase<TestD, JsonSerializer> {
     std::tuple<TestA, TestB, TestC> a = {TestA(), TestB(), TestC()};
 
     CS_SERIALIZER(a)
 };
 
 
-struct TestP : public ProtoBase<TestP, JsonSerializer<>> {
+struct TestP : public ProtoBase<TestP, JsonSerializer> {
     int a = 1;
     std::string b = "hello";
     bool c = true;
@@ -124,7 +124,7 @@ protected:
         writer.reset();
     }
     std::shared_ptr<WriterType> writer;
-    VectorBuffer buffer;
+    OutBufferWrapper buffer;
 };
 
 TEST_F(JsonSerializerTest, Int) {
@@ -238,7 +238,7 @@ TEST_F(JsonSerializerTest, Struct) {
     EXPECT_STREQ(str, answer);
 
     TestP testp2;
-    JsonSerializer<> serializer;
+    JsonSerializer serializer;
     serializer.startDeserialize(std::vector<char>{str, str + strlen(str)});
     serializer.get("a", 1, &testp2);
     serializer.endDeserialize();

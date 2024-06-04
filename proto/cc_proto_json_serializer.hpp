@@ -2,6 +2,9 @@
 
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
+#include <rapidjson/istreamwrapper.h>
+#include <rapidjson/ostreamwrapper.h>
+#include <fstream>
 
 #include <vector>
 
@@ -15,54 +18,62 @@ using JsonDocument = rapidjson::Document;
 template <typename WriterT, typename ValueT, typename T, class enable = void>
 struct JsonConvert;
 
-class VectorBuffer {
+// TODO: make it to be a interface ?
+class OutBufferWrapper {
 public:
     using Ch = char;
 
-    inline VectorBuffer() : mVec(new std::vector<Ch>()), mIsOwner(true) {}
-    inline VectorBuffer(std::vector<Ch>* vec) : mVec(vec), mIsOwner(false) {}
-    inline void setVector(std::vector<Ch>* vec) { 
-        if (vec != nullptr) {
-            if (mIsOwner) {
-                delete mVec;
-                mIsOwner = false;
-            }
-            mVec = vec;
-        } else {
-            if (!mIsOwner) {
-                mVec = new std::vector<Ch>();
-                mIsOwner = true;
-            }
-        }
-    }
-    inline void Put(Ch c) {
-        mVec->push_back(c);
-    }
-    inline void Flush() {}
-    inline const Ch* GetString() const {
-        return mVec->data();
-    }
-    inline std::size_t GetSize() const {
-        return mVec->size();
-    }
-    inline void Clear() {
-        mVec->clear();
-    }
+    OutBufferWrapper();
+    OutBufferWrapper(std::vector<Ch>* vec);
+    void setVector(std::vector<Ch>* vec);
+    void Put(Ch c);
+    void Flush();
+    const Ch* GetString() const;
+    std::size_t GetSize() const;
+    void Clear();
 
 private:
     std::vector<Ch>* mVec = nullptr;
     bool mIsOwner = false;
 };
 
-template<typename BufferT = VectorBuffer>
+inline OutBufferWrapper::OutBufferWrapper() : mVec(new std::vector<Ch>()), mIsOwner(true) {}
+inline OutBufferWrapper::OutBufferWrapper(std::vector<Ch>* vec) : mVec(vec), mIsOwner(false) {}
+inline void OutBufferWrapper::setVector(std::vector<Ch>* vec) { 
+    if (vec != nullptr) {
+        if (mIsOwner) {
+            delete mVec;
+            mIsOwner = false;
+        }
+        mVec = vec;
+    } else {
+        if (!mIsOwner) {
+            mVec = new std::vector<Ch>();
+            mIsOwner = true;
+        }
+    }
+}
+inline void OutBufferWrapper::Put(Ch c) {
+    mVec->push_back(c);
+}
+inline void OutBufferWrapper::Flush() {}
+inline const OutBufferWrapper::Ch* OutBufferWrapper::GetString() const {
+    return mVec->data();
+}
+inline std::size_t OutBufferWrapper::GetSize() const {
+    return mVec->size();
+}
+inline void OutBufferWrapper::Clear() {
+    mVec->clear();
+}
+
+template<typename BufferT = OutBufferWrapper>
 using JsonWriter = rapidjson::Writer<BufferT>;
 
-template<typename BufferT = VectorBuffer>
 class JsonSerializer {
 public:
     using ValueType = JsonValue;
-    using BufferType = BufferT;
-    using WriterType = JsonWriter<BufferT>;
+    using WriterType = JsonWriter<>;
 
 public:
     JsonSerializer();
@@ -76,12 +87,13 @@ public:
 
     /**
      * @brief start serialize
-     *  while calling this function before traversing all fields,
-     * can clear the buffer in this function or initialize the buffer and serializor.
+     * calling this function before traversing all fields to initialize the writer.
+     * can serialize multiple objects to one buffer.
      *
      * @param[out] data the buf to output
      */
     void startSerialize(std::vector<char>* data);
+    void startSerialize(const CS_STRING_VIEW& filename);
     /**
      * @brief end serialize
      *  while calling this function after traversing all fields.
@@ -112,6 +124,7 @@ public:
      * @return false
      */
     bool startDeserialize(const std::vector<char>& data);
+    bool startDeserialize(const CS_STRING_VIEW& filename);
     /**
      * @brief end deserialize
      *  while calling this function after traversing all fields.
@@ -136,41 +149,33 @@ public:
 private:
     JsonDocument mDocument;
     const JsonValue& mRoot;
-    VectorBuffer mBuffer;
+    OutBufferWrapper mBuffer;
     std::unique_ptr<WriterType, void (*)(WriterType*)> mWriter;
 };
 
-template<typename BufferT>
-inline JsonSerializer<BufferT>::JsonSerializer()
+inline JsonSerializer::JsonSerializer()
     : mDocument(), mRoot(JsonValue()), mBuffer(), mWriter(nullptr, [](WriterType* writer) {}) {}
 
-template<typename BufferT>
-inline JsonSerializer<BufferT>::JsonSerializer(const JsonSerializer&)
+inline JsonSerializer::JsonSerializer(const JsonSerializer&)
     : mDocument(), mRoot(JsonValue()), mBuffer(), mWriter(nullptr, [](WriterType* writer) {}) {}
 
-template<typename BufferT>
-inline JsonSerializer<BufferT>::JsonSerializer(JsonSerializer&& other)
+inline JsonSerializer::JsonSerializer(JsonSerializer&& other)
     : mDocument(), mRoot(JsonValue()), mBuffer(), mWriter(nullptr, [](WriterType* writer) {}) {}
 
-template<typename BufferT>
-inline JsonSerializer<BufferT>::JsonSerializer(WriterType* writer)
+inline JsonSerializer::JsonSerializer(WriterType* writer)
     : mDocument(),
       mRoot(JsonValue()),
       mBuffer(),
       mWriter(std::unique_ptr<WriterType, void (*)(WriterType*)>(writer, [](WriterType* writer) {})) {}
 
-template<typename BufferT>
-inline JsonSerializer<BufferT>::JsonSerializer(const JsonValue& root)
+inline JsonSerializer::JsonSerializer(const JsonValue& root)
     : mDocument(), mRoot(root), mBuffer(), mWriter(nullptr, [](WriterType* writer) {}) {}
 
-template<typename BufferT>
-inline JsonSerializer<BufferT>& JsonSerializer<BufferT>::operator=(const JsonSerializer&) { return *this; }
+inline JsonSerializer& JsonSerializer::operator=(const JsonSerializer&) { return *this; }
 
-template<typename BufferT>
-inline JsonSerializer<BufferT>& JsonSerializer<BufferT>::operator=(JsonSerializer&& other) { return *this; }
+inline JsonSerializer& JsonSerializer::operator=(JsonSerializer&& other) { return *this; }
 
-template<typename BufferT>
-inline void JsonSerializer<BufferT>::startSerialize(std::vector<char> *data) {
+inline void JsonSerializer::startSerialize(std::vector<char> *data) {
     if (!mWriter) {
         mBuffer.Clear();
         mBuffer.setVector(data);
@@ -180,8 +185,13 @@ inline void JsonSerializer<BufferT>::startSerialize(std::vector<char> *data) {
     mWriter->StartObject();
 }
 
-template<typename BufferT>
-inline bool JsonSerializer<BufferT>::endSerialize() {
+inline void startSerialize(const CS_STRING_VIEW& filename) {
+    // TODO:
+    CS_LOG_ERROR("not implemented");
+}
+
+
+inline bool JsonSerializer::endSerialize() {
     mWriter->EndObject();
     if (!mWriter || !mWriter->IsComplete()) {
         mBuffer.Clear();
@@ -191,17 +201,30 @@ inline bool JsonSerializer<BufferT>::endSerialize() {
     return true;
 }
 
-template<typename BufferT>
 template <typename T>
-bool JsonSerializer<BufferT>::insert(const char* name, const size_t len, const T& value) {
+bool JsonSerializer::insert(const char* name, const size_t len, const T& value) {
     if (!mWriter->Key(name, len)) {
         return false;
     }
     return JsonConvert<WriterType, ValueType, T>::toJsonValue(*mWriter, value);
 }
 
-template<typename BufferT>
-inline bool JsonSerializer<BufferT>::startDeserialize(const std::vector<char>& data) {
+inline bool JsonSerializer::startDeserialize(const CS_STRING_VIEW& filename) {
+    std::ifstream file(filename.data(), std::ios::binary);
+    if (!file.is_open()) {
+        CS_LOG_ERROR("open file {} failed", filename.data());
+        return false;
+    }
+    rapidjson::IStreamWrapper stream(file);
+    mDocument.ParseStream(stream);
+    if (mDocument.HasParseError()) {
+        CS_LOG_ERROR("parse error {}", (int)mDocument.GetParseError());
+        return false;
+    }
+    return true;
+}
+
+inline bool JsonSerializer::startDeserialize(const std::vector<char>& data) {
     mDocument.Parse(data.data(), data.size());
     if (mDocument.HasParseError()) {
         CS_LOG_ERROR("parse error {}", (int)mDocument.GetParseError());
@@ -210,16 +233,14 @@ inline bool JsonSerializer<BufferT>::startDeserialize(const std::vector<char>& d
     return true;
 }
 
-template<typename BufferT>
-inline bool JsonSerializer<BufferT>::endDeserialize() {
+inline bool JsonSerializer::endDeserialize() {
     mDocument.SetNull();
     mDocument.GetAllocator().Clear();
     return true;
 }
 
-template<typename BufferT>
 template <typename T>
-bool JsonSerializer<BufferT>::get(const char* name, const size_t len, T* value) {
+bool JsonSerializer::get(const char* name, const size_t len, T* value) {
     std::string name_str(name, len);
     if (!mDocument.IsNull() && mDocument.HasMember(name_str.c_str())) {
         return JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mDocument[name_str.c_str()]);
@@ -334,7 +355,7 @@ struct JsonConvert<WriterT, ValueT, std::vector<T>, void> {
 };
 
 template <typename WriterT, typename ValueT, typename T>
-struct JsonConvert<WriterT, ValueT, T, typename std::enable_if<std::is_same<typename T::SerializerType, JsonSerializer<typename T::SerializerType::BufferType>>::value>::type> {
+struct JsonConvert<WriterT, ValueT, T, typename std::enable_if<std::is_same<typename T::SerializerType, JsonSerializer>::value>::type> {
     static bool toJsonValue(WriterT& writer, const T& value) {
         auto jsonS = typename T::SerializerType(&writer);
         writer.StartObject();
