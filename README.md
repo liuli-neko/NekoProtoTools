@@ -24,10 +24,10 @@ int main() {
     sa.a = 1;
     sa.b = "hello";
     JsonSerializer serializer; // you can implement your own serializer, of course this repository provides a json serializer in header cc_proto_json_serializer.hpp and more details while introducing later.
-    serializer.startSerialize()
-    sa.serialize(serializer);
     std::vector<char> data;
-    serializer.endSerialize(data);
+    serializer.startSerialize(&data)
+    sa.serialize(serializer);
+    serializer.endSerialize();
     std::string str(data.begin(), data.size());
     std::cout << str << std::endl;
     return 0;

@@ -27,7 +27,7 @@
  *
  * CS_PROTO_USE_NAMESPACE
  *
- * class MyObject : public DumpableObject<MyObject, JsonSerializer<>> {
+ * class MyObject : public DumpableObject<MyObject, JsonSerializer> {
  * public:
  *     MyObject(int a, std::string b, std::vector<int> c, std::map<std::string, int> d) :
  *         mA(a), mB(b), mC(c), mD(d) {}
@@ -44,9 +44,6 @@
  *
  * int main() {
  *     MyObject obj(1, "hello", {1, 2}, {{"a", 1}});
- *     IDumpableObject::dumpToFile("test.json", &obj);
- *     IDumpableObject *obj1 = nullptr;
- *     IDumpableObject::loadFromFile("test.json", &obj1);
  * }
  * @endcode
  *
@@ -85,8 +82,8 @@ class CS_PROTO_API IDumpableObject {
 public:
     virtual std::string dumpToString() const = 0;
     virtual bool loadFromString(const std::string& str) = 0;
-    static bool dumpToFile(const std::string& filePath, IDumpableObject* obj);
-    static bool loadFromFile(const std::string& filePath, IDumpableObject** obj);
+    virtual bool dumpToFile(const std::string& filePath) = 0;
+    virtual bool loadFromFile(const std::string& filePath) = 0;
     virtual ~IDumpableObject() = default;
     virtual CS_STRING_VIEW className() const = 0;
     static IDumpableObject* create(const CS_STRING_VIEW& className);
@@ -105,7 +102,7 @@ inline IDumpableObject* IDumpableObject::create(const CS_STRING_VIEW& className)
     return nullptr;
 }
 
-template <typename T, typename SerializerT = JsonSerializer<>>
+template <typename T, typename SerializerT = JsonSerializer>
 class DumpableObject : public IDumpableObject {
 public:
     using ObjectType = T;
@@ -113,6 +110,9 @@ public:
 
     virtual std::string dumpToString() const override;
     virtual bool loadFromString(const std::string& str) override;
+
+    virtual bool dumpToFile(const std::string& filePath) override;
+    virtual bool loadFromFile(const std::string& filePath) override;
 
     CS_STRING_VIEW className() const override;
 
@@ -167,75 +167,46 @@ bool DumpableObject<T, SerializerT>::loadFromString(const std::string& str) {
     return true;
 }
 
-template <typename WriterT,typename ValueT>
-struct JsonConvert<WriterT, ValueT, IDumpableObject*> {
-    static bool toJsonValue(WriterT& writer, const IDumpableObject* value) {
-        auto ret = writer.StartObject();
-        ret = writer.Key("className") && ret;
-        if (value == nullptr) {
-            ret = writer.String("null") && ret;
-            ret = writer.EndObject() && ret;
-            return ret;
-        }
-        ret = writer.String(value->className().data(), value->className().length()) && ret;
-        ret = writer.Key("value") && ret;
-        auto str = value->dumpToString();
-        ret = (!str.empty() && ret);
-        ret = writer.RawValue(str.c_str(), str.length(), rapidjson::kObjectType) && ret;
-        ret = writer.EndObject() && ret;
-        return ret;
-    }
-    static bool fromJsonValue(IDumpableObject** dst, const ValueT& value) {
-        if (!value.IsObject() || dst == nullptr) {
-            return false;
-        }
-        if (!value.HasMember("className") || !value["className"].IsString()) {
-            return false;
-        }
-        std::string className = value["className"].GetString();
-        if (className == "null") {
-            (*dst) = nullptr;
-            return true;
-        }
-        auto d = IDumpableObject::create(className);
-        CS_ASSERT(d != nullptr, "DumpableObject {} create failed", className);
-        VectorBuffer buffer;
-        JsonWriter<VectorBuffer> writer(buffer);
-        const auto& o = value["value"];
-        auto ret = o.Accept(writer);
-        buffer.Put('\0');
-        buffer.Flush();
-        ret = d->loadFromString(buffer.GetString()) && ret;
-        (*dst) = d;
-        return ret;
-    }
-};
-
-inline bool IDumpableObject::dumpToFile(const std::string& filePath, IDumpableObject* obj) {
-    VectorBuffer buffer;
-    JsonWriter<VectorBuffer> writer(buffer);
-    auto ret = JsonConvert<JsonWriter<VectorBuffer>, JsonValue, IDumpableObject*>::toJsonValue(writer, obj);
-    std::ofstream file(filePath, std::ios::out | std::ios::trunc);
-    if (!file.is_open()) {
+template <typename T, typename SerializerT>
+bool DumpableObject<T, SerializerT>::dumpToFile(const std::string& filePath) {
+    SerializerT serializer;
+    std::vector<char> data;
+    serializer.startSerialize(&data);
+    auto self = static_cast<const T*>(this);
+    CS_ASSERT(self != nullptr, "please make sure that DumpableObject<{}, {}> is only inherited by {}.",
+              _init_class_name__, _cs_class_name<SerializerT>(), _init_class_name__);
+    auto ret = self->serialize(serializer);
+    if (!serializer.endSerialize() || !ret) {
+        CS_LOG_ERROR("{} dumpToString failed", _init_class_name__);
         return false;
     }
-    CS_LOG_INFO("dump file: {}\n", filePath.c_str());
-    file.write(buffer.GetString(), buffer.GetSize());
-    file.close();
-    return ret;
+
+    // write to file
+    std::ofstream ofs(filePath, std::ios::out | std::ios::binary);
+    if (!ofs.is_open()) {
+        CS_LOG_ERROR("{} dumpToString failed, can not open file {}", _init_class_name__, filePath);
+        return false;
+    }
+    ofs.write(data.data(), data.size());
+    ofs.close();
+    return true;
 }
 
-inline bool IDumpableObject::loadFromFile(const std::string& filePath, IDumpableObject** obj) {
-    std::ifstream file(filePath, std::ios::in);
-    if (!file.is_open()) {
+template <typename T, typename SerializerT>
+bool DumpableObject<T, SerializerT>::loadFromFile(const std::string& filePath) {
+    SerializerT serializer;
+
+    if (!serializer.startDeserialize(filePath)) {
         return false;
     }
-    rapidjson::IStreamWrapper isw(file);
-    rapidjson::Document document;
-    document.ParseStream(isw);
-    auto ret = JsonConvert<JsonWriter<VectorBuffer>, JsonValue, IDumpableObject*>::fromJsonValue(obj, document);
-    file.close();
-    return ret;
+    auto self = dynamic_cast<const T*>(this);
+    CS_ASSERT(self != nullptr, "please make sure that DumpableObject<{}, {}> is only inherited by {}.",
+              _init_class_name__, _cs_class_name<SerializerT>(), _init_class_name__);
+    bool ret = const_cast<T*>(self)->deserialize(serializer);
+    if (!serializer.endDeserialize() || !ret) {
+        return false;
+    }
+    return true;
 }
 
 CS_PROTO_END_NAMESPACE

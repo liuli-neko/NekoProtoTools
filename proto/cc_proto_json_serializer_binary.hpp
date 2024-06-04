@@ -138,7 +138,7 @@ struct Base64Covert {
 /// ===================end base 64=========================
 template <typename WriterT, typename ValueT, typename T>
 struct JsonConvert<WriterT, ValueT, T, typename std::enable_if<!std::is_same<
-                          typename T::SerializerType, JsonSerializer<>>::value>::type> {
+                          typename T::SerializerType, JsonSerializer>::value>::type> {
   static bool toJsonValue(WriterT &writer, const T &value) {
     auto data = Base64Covert::Encode(value.toData());
     return writer.String(data.data(), data.size(), true);

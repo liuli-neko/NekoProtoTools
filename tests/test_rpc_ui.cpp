@@ -15,7 +15,7 @@
 CS_RPC_USE_NAMESPACE
 using namespace ILIAS_NAMESPACE;
 
-class Message : public CS_PROTO_NAMESPACE::ProtoBase<Message, JsonSerializer<>> {
+class Message : public CS_PROTO_NAMESPACE::ProtoBase<Message, JsonSerializer> {
 public:
     uint64_t timestamp;
     std::string msg;
