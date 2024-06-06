@@ -55,11 +55,11 @@ MainWidget::MainWidget(QIoContext* ctxt, std::shared_ptr<CS_PROTO_NAMESPACE::Pro
 }
 
 MainWidget::~MainWidget() {
+    closeService();
     for (auto& t : mHandles) {
         t.cancel();
     }
     mExit = true;
-    mChannelFactor.close();
     delete ui;
 }
 
