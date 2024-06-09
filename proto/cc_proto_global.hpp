@@ -140,10 +140,11 @@ namespace {
     CS_CONSTEXPR_FUNC CS_STRING_VIEW _cs_class_name() {
         CS_STRING_VIEW string(__FUNCSIG__);
         size_t start = string.find("_cs_class_name<") + 15;
-        start = string.find_first_of(' ', start);
+        size_t d = string.find_first_of(' ', start);
+        if (d != CS_STRING_VIEW::npos) start = d + 1;
         size_t end = string.find('<', start);
         auto sstring = string.substr(start, end - start);
-        size_t d =  sstring.find_last_of(':');
+        d =  sstring.find_last_of(':');
         if (d != CS_STRING_VIEW::npos)
             start = d;
         else

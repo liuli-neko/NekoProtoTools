@@ -58,24 +58,20 @@
 #include <vector>
 #include <functional>
 #include <string>
+#include <bitset>
 
 #include "cc_proto_global.hpp"
 
 CS_PROTO_BEGIN_NAMESPACE
 
 #if CS_CPP_PLUS >= 17
-template <int N, typename SerializerT, typename T>
-inline bool unfoldFunctionImp1(SerializerT &serializer, const std::array<std::string_view, N> &names, int& i, T& value) {
-    CS_ASSERT(i < names.size(), "unfoldFunctionImp: index out of range");
-    ++i;
-    return serializer.get(names[i - 1].data(), names[i - 1].size(), &value);
-    
+template <size_t N, typename SerializerT, typename TupleT, std::size_t ...Indices>
+inline bool unfoldFunctionImp1(SerializerT &serializer,const std::array<std::string_view, N> &names, const TupleT& value, std::index_sequence<Indices...>) {
+    return ((serializer.get(names[Indices].data(), names[Indices].size(), std::get<Indices>(value)) && true) + ...);
 }
-template <int N, typename SerializerT, typename T>
-inline bool unfoldFunctionImp2(SerializerT &serializer, const std::array<std::string_view, N> &names, int& i,const T& value) {
-    CS_ASSERT(i < names.size(), "unfoldFunctionImp: index out of range");
-    ++i;
-    return serializer.insert(names[i - 1].data(), names[i - 1].size(), value);
+template <size_t N, typename SerializerT, typename TupleT, std::size_t ...Indices>
+inline bool unfoldFunctionImp2(SerializerT &serializer, const std::array<std::string_view, N> &names, const TupleT& value, std::index_sequence<Indices...>) {
+    return ((serializer.insert(names[Indices].data(), names[Indices].size(), std::get<Indices>(value)) && true) + ...);
 }
 
 inline constexpr int membersSize(std::string_view names) {
@@ -114,15 +110,14 @@ inline constexpr std::array<std::string_view, N> parseNames(std::string_view nam
     }
     return std::move(namesVec);
 }
+
 template <int N, typename SerializerT, typename ...Args>
 inline bool unfoldFunction1(SerializerT &serializer,const std::array<std::string_view, N> &namesVec, Args& ...args) {
-    int i = 0;
-    return (unfoldFunctionImp1<N, SerializerT, std::decay_t<Args>>(serializer, namesVec, i, args) + ...) == N;
+    return unfoldFunctionImp1<N, SerializerT>(serializer, namesVec, std::make_tuple((&args)...), std::index_sequence_for<Args...>());
 }
 template <int N, typename SerializerT, typename ...Args>
 inline bool unfoldFunction2(SerializerT &serializer,const std::array<std::string_view, N> &namesVec, const Args& ...args) {
-    int i = 0;
-    return (unfoldFunctionImp2<N, SerializerT, std::decay_t<Args>>(serializer, namesVec, i, args) + ...) == N;
+    return unfoldFunctionImp2<N, SerializerT>(serializer, namesVec, std::make_tuple(args...), std::index_sequence_for<Args...>());
 }
 #else
 

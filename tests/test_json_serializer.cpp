@@ -246,7 +246,11 @@ TEST_F(JsonSerializerTest, Struct) {
     EXPECT_STREQ(testp.b.c_str(), testp2.b.c_str());
     EXPECT_EQ(testp.c, testp2.c);
     EXPECT_DOUBLE_EQ(testp.d, testp2.d);
-    EXPECT_EQ(testp.e.size(), testp2.e.size());
+    EXPECT_EQ(testp.e, testp2.e);
+    EXPECT_EQ(testp.f, testp2.f);
+    EXPECT_EQ(testp.g, testp2.g);
+    EXPECT_EQ(testp.h, testp2.h);
+    EXPECT_EQ(testp.k, testp2.k);
 }
 
 int main(int argc, char **argv) {
