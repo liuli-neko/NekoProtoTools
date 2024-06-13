@@ -4,7 +4,6 @@ set_version("1.0.0")
 
 add_rules("plugin.compile_commands.autoupdate", {outputdir = ".vscode"})
 
-
 add_requires("rapidjson", "spdlog")
 
 if is_mode("debug") then
