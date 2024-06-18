@@ -1,16 +1,26 @@
+/**
+ * @file proto_json_serializer.hpp
+ * @author llhsdmd (llhsdmd@gmail.com)
+ * @brief
+ * @version 0.1
+ * @date 2024-06-18
+ *
+ * @copyright Copyright (c) 2024
+ *
+ */
 #pragma once
 
+#include <fstream>
 #include <rapidjson/document.h>
-#include <rapidjson/writer.h>
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/ostreamwrapper.h>
-#include <fstream>
+#include <rapidjson/writer.h>
 
 #include <vector>
 
-#include "cc_proto_global.hpp"
+#include "private/global.hpp"
 
-CS_PROTO_BEGIN_NAMESPACE
+NEKO_BEGIN_NAMESPACE
 
 using JsonValue = rapidjson::Value;
 using JsonDocument = rapidjson::Document;
@@ -39,7 +49,7 @@ private:
 
 inline OutBufferWrapper::OutBufferWrapper() : mVec(new std::vector<Ch>()), mIsOwner(true) {}
 inline OutBufferWrapper::OutBufferWrapper(std::vector<Ch>* vec) : mVec(vec), mIsOwner(false) {}
-inline void OutBufferWrapper::setVector(std::vector<Ch>* vec) { 
+inline void OutBufferWrapper::setVector(std::vector<Ch>* vec) {
     if (vec != nullptr) {
         if (mIsOwner) {
             delete mVec;
@@ -53,21 +63,13 @@ inline void OutBufferWrapper::setVector(std::vector<Ch>* vec) {
         }
     }
 }
-inline void OutBufferWrapper::Put(Ch c) {
-    mVec->push_back(c);
-}
+inline void OutBufferWrapper::Put(Ch c) { mVec->push_back(c); }
 inline void OutBufferWrapper::Flush() {}
-inline const OutBufferWrapper::Ch* OutBufferWrapper::GetString() const {
-    return mVec->data();
-}
-inline std::size_t OutBufferWrapper::GetSize() const {
-    return mVec->size();
-}
-inline void OutBufferWrapper::Clear() {
-    mVec->clear();
-}
+inline const OutBufferWrapper::Ch* OutBufferWrapper::GetString() const { return mVec->data(); }
+inline std::size_t OutBufferWrapper::GetSize() const { return mVec->size(); }
+inline void OutBufferWrapper::Clear() { mVec->clear(); }
 
-template<typename BufferT = OutBufferWrapper>
+template <typename BufferT = OutBufferWrapper>
 using JsonWriter = rapidjson::Writer<BufferT>;
 
 class JsonSerializer {
@@ -93,7 +95,7 @@ public:
      * @param[out] data the buf to output
      */
     void startSerialize(std::vector<char>* data);
-    void startSerialize(const CS_STRING_VIEW& filename);
+    void startSerialize(const NEKO_STRING_VIEW& filename);
     /**
      * @brief end serialize
      *  while calling this function after traversing all fields.
@@ -124,7 +126,7 @@ public:
      * @return false
      */
     bool startDeserialize(const std::vector<char>& data);
-    bool startDeserialize(const CS_STRING_VIEW& filename);
+    bool startDeserialize(const NEKO_STRING_VIEW& filename);
     /**
      * @brief end deserialize
      *  while calling this function after traversing all fields.
@@ -163,9 +165,7 @@ inline JsonSerializer::JsonSerializer(JsonSerializer&& other)
     : mDocument(), mRoot(JsonValue()), mBuffer(), mWriter(nullptr, [](WriterType* writer) {}) {}
 
 inline JsonSerializer::JsonSerializer(WriterType* writer)
-    : mDocument(),
-      mRoot(JsonValue()),
-      mBuffer(),
+    : mDocument(), mRoot(JsonValue()), mBuffer(),
       mWriter(std::unique_ptr<WriterType, void (*)(WriterType*)>(writer, [](WriterType* writer) {})) {}
 
 inline JsonSerializer::JsonSerializer(const JsonValue& root)
@@ -175,7 +175,7 @@ inline JsonSerializer& JsonSerializer::operator=(const JsonSerializer&) { return
 
 inline JsonSerializer& JsonSerializer::operator=(JsonSerializer&& other) { return *this; }
 
-inline void JsonSerializer::startSerialize(std::vector<char> *data) {
+inline void JsonSerializer::startSerialize(std::vector<char>* data) {
     if (!mWriter) {
         mBuffer.Clear();
         mBuffer.setVector(data);
@@ -185,11 +185,10 @@ inline void JsonSerializer::startSerialize(std::vector<char> *data) {
     mWriter->StartObject();
 }
 
-inline void startSerialize(const CS_STRING_VIEW& filename) {
+inline void startSerialize(const NEKO_STRING_VIEW& filename) {
     // TODO:
-    CS_LOG_ERROR("not implemented");
+    NEKO_LOG_ERROR("not implemented");
 }
-
 
 inline bool JsonSerializer::endSerialize() {
     mWriter->EndObject();
@@ -209,16 +208,16 @@ bool JsonSerializer::insert(const char* name, const size_t len, const T& value) 
     return JsonConvert<WriterType, ValueType, T>::toJsonValue(*mWriter, value);
 }
 
-inline bool JsonSerializer::startDeserialize(const CS_STRING_VIEW& filename) {
+inline bool JsonSerializer::startDeserialize(const NEKO_STRING_VIEW& filename) {
     std::ifstream file(filename.data(), std::ios::binary);
     if (!file.is_open()) {
-        CS_LOG_ERROR("open file {} failed", filename.data());
+        NEKO_LOG_ERROR("open file {} failed", filename.data());
         return false;
     }
     rapidjson::IStreamWrapper stream(file);
     mDocument.ParseStream(stream);
     if (mDocument.HasParseError()) {
-        CS_LOG_ERROR("parse error {}", (int)mDocument.GetParseError());
+        NEKO_LOG_ERROR("parse error {}", (int)mDocument.GetParseError());
         return false;
     }
     return true;
@@ -227,7 +226,7 @@ inline bool JsonSerializer::startDeserialize(const CS_STRING_VIEW& filename) {
 inline bool JsonSerializer::startDeserialize(const std::vector<char>& data) {
     mDocument.Parse(data.data(), data.size());
     if (mDocument.HasParseError()) {
-        CS_LOG_ERROR("parse error {}", (int)mDocument.GetParseError());
+        NEKO_LOG_ERROR("parse error {}", (int)mDocument.GetParseError());
         return false;
     }
     return true;
@@ -313,7 +312,7 @@ struct JsonConvert<WriterT, ValueT, std::string, void> {
     }
 };
 
-#if CS_CPP_PLUS >= 20
+#if NEKO_CPP_PLUS >= 20
 template <typename WriterT, typename ValueT>
 struct JsonConvert<WriterT, ValueT, std::u8string, void> {
     static bool toJsonValue(WriterT& writer, const std::u8string value) {
@@ -355,7 +354,8 @@ struct JsonConvert<WriterT, ValueT, std::vector<T>, void> {
 };
 
 template <typename WriterT, typename ValueT, typename T>
-struct JsonConvert<WriterT, ValueT, T, typename std::enable_if<std::is_same<typename T::SerializerType, JsonSerializer>::value>::type> {
+struct JsonConvert<WriterT, ValueT, T,
+                   typename std::enable_if<std::is_same<typename T::SerializerType, JsonSerializer>::value>::type> {
     static bool toJsonValue(WriterT& writer, const T& value) {
         auto jsonS = typename T::SerializerType(&writer);
         writer.StartObject();
@@ -408,4 +408,4 @@ struct JsonConvert<WriterT, ValueT, float, void> {
     }
 };
 
-CS_PROTO_END_NAMESPACE
+NEKO_END_NAMESPACE

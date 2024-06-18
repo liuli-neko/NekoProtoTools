@@ -1,9 +1,20 @@
-#include "../proto/cc_proto_base.hpp"
+/**
+ * @file proto_base.cpp
+ * @author llhsdmd (llhsdmd@gmail.com)
+ * @brief
+ * @version 0.1
+ * @date 2024-06-18
+ *
+ * @copyright Copyright (c) 2024
+ *
+ */
+
+#include "../core/proto_base.hpp"
 
 #include <functional>
 #include <vector>
 
-CS_PROTO_BEGIN_NAMESPACE
+NEKO_BEGIN_NAMESPACE
 
 void ProtoFactory::setVersion(int major, int minor, int patch) {
     mVersion = ((major & 0xFF) << 16 | (minor & 0xFF) << 8 | (patch & 0xFF));
@@ -11,15 +22,15 @@ void ProtoFactory::setVersion(int major, int minor, int patch) {
 
 uint32_t ProtoFactory::version() const { return mVersion; }
 
-std::map<CS_STRING_VIEW, std::function<void(ProtoFactory*)>>& static_init_funcs(
-    const CS_STRING_VIEW &name = "", std::function<void(ProtoFactory*)> func = nullptr) {
-    static std::map<CS_STRING_VIEW, std::function<void(ProtoFactory*)>> funcs = {};
+std::map<NEKO_STRING_VIEW, std::function<void(ProtoFactory*)>>&
+static_init_funcs(const NEKO_STRING_VIEW& name = "", std::function<void(ProtoFactory*)> func = nullptr) {
+    static std::map<NEKO_STRING_VIEW, std::function<void(ProtoFactory*)>> funcs = {};
     auto item = funcs.find(name);
     if (!name.empty() && item == funcs.end() && func) {
         funcs.insert(std::make_pair(name, func));
     }
     if (item != funcs.end()) {
-        CS_LOG_WARN("Duplicate init function: {}", name);
+        NEKO_LOG_WARN("Duplicate init function: {}", name);
     }
     return funcs;
 }
@@ -88,4 +99,4 @@ int type_counter() {
     return ++counter;
 }
 
-CS_PROTO_END_NAMESPACE
+NEKO_END_NAMESPACE

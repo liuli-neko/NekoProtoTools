@@ -1,3 +1,13 @@
+/**
+ * @file proto_binary_serializer.hpp
+ * @author llhsdmd (llhsdmd@gmail.com)
+ * @brief
+ * @version 0.1
+ * @date 2024-06-18
+ *
+ * @copyright Copyright (c) 2024
+ *
+ */
 #pragma once
 
 #include <stdint.h>
@@ -7,9 +17,9 @@
 #include <arpa/inet.h>
 #endif
 
-#include "cc_proto_global.hpp"
+#include "private/global.hpp"
 
-CS_PROTO_BEGIN_NAMESPACE
+NEKO_BEGIN_NAMESPACE
 
 #ifdef _WIN32
 inline int16_t htobe16(const int16_t value) { return _byteswap_ushort(value); }
@@ -33,6 +43,7 @@ class BinarySerializer {
 public:
     using WriterType = std::vector<char>;
     using ValueType = std::vector<char>;
+
 public:
     ~BinarySerializer();
     void startSerialize(std::vector<char>* data);
@@ -50,16 +61,14 @@ private:
     int mOffset = 0;
 };
 
-inline BinarySerializer::~BinarySerializer()  {
+inline BinarySerializer::~BinarySerializer() {
     if (mDeserializing) {
         delete mData;
         mData = nullptr;
     }
 }
 
-inline void BinarySerializer::startSerialize(std::vector<char>* data) {
-    mData = data;
-}
+inline void BinarySerializer::startSerialize(std::vector<char>* data) { mData = data; }
 
 inline bool BinarySerializer::endSerialize() {
     mData = nullptr;
@@ -80,7 +89,7 @@ inline bool BinarySerializer::startDeserialize(const std::vector<char>& data) {
 
 inline bool BinarySerializer::endDeserialize() {
     if (mOffset != mData->size() && mData->size() > 0 && mData->back() != '\0') {
-        CS_LOG_WARN("binary data deserialize warning, read size{} != buf szie{}.", mOffset, mData->size());
+        NEKO_LOG_WARN("binary data deserialize warning, read size{} != buf szie{}.", mOffset, mData->size());
     }
     mData->clear();
     delete mData;
@@ -270,7 +279,7 @@ struct BinaryConvert<WriterT, ValueT, std::string, void> {
     }
 };
 
-#if CS_CPP_PLUS >= 20
+#if NEKO_CPP_PLUS >= 20
 template <typename WriterT, typename ValueT>
 struct BinaryConvert<WriterT, ValueT, std::u8string, void> {
     static bool toBinaryArray(WriterT& buf, const std::u8string& value) {
@@ -297,4 +306,4 @@ struct BinaryConvert<WriterT, ValueT, std::u8string, void> {
 };
 #endif
 
-CS_PROTO_END_NAMESPACE
+NEKO_END_NAMESPACE
