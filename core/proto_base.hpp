@@ -139,7 +139,6 @@ public:
     ProtoFactory& operator=(ProtoFactory&&);
     ~ProtoFactory();
 
-    void init();
     template <typename T>
     void regist(const NEKO_STRING_VIEW& name);
     template <typename T>
@@ -159,7 +158,7 @@ public:
      * @param name
      * @return IProto*
      */
-    inline IProto* create(const char* name) const;
+    IProto* create(const char* name) const;
     /**
      * @brief create a object
      * this object is a pointer, you need to delete it by yourself
@@ -170,13 +169,15 @@ public:
     uint32_t version() const;
 
 private:
-    std::map<int, std::function<IProto*()>> mProtoMap;
-    std::map<NEKO_STRING_VIEW, int> mProtoNameMap;
-    uint32_t mVersion = 0;
-
+    void init();
     template <typename T>
     static IProto* creater();
     void setVersion(int major, int minor, int patch);
+
+private:
+    std::map<int, std::function<IProto*()>> mProtoMap;
+    std::map<NEKO_STRING_VIEW, int> mProtoNameMap;
+    uint32_t mVersion = 0;
 };
 
 template <typename T>

@@ -11,7 +11,7 @@ Through the macros provided by this library, you only need to add a small number
 |:---:|:---:|
 |Linux|[![Build Status](https://github.com/liuli-neko/neko-proto-tools/workflows/CI%20for%20linux%20by%20xmake/badge.svg?branch=master)](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-linux.yml)|
 |Windows|[![Build Status](https://github.com/liuli-neko/neko-proto-tools/workflows/C/C++%20CI%20on%20Windows/badge.svg?branch=master)](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-windows.yml)|
-|Codecov|[![codecov](https://codecov.io/gh/liuli-neko/neko-proto-tools/graph/badge.svg?token=F5OR647TV7)](https://codecov.io/gh/liuli-neko/neko-proto-tools)|
+|Codecov|[![codecov](https://codecov.io/gh/liuli-neko/NekoProtoTools/graph/badge.svg?token=F5OR647TV7)](https://codecov.io/gh/liuli-neko/NekoProtoTools)|
 
 ### 2. Usage
 
