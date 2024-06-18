@@ -3,11 +3,11 @@
  * @author llhsdmd (llhsdmd@gmail.com)
  * @brief provide base interface for proto message and proto factory
  *
- * @mainpage ccproto
+ * @mainpage NekoProtoTools
  *
  * @section intro_sec Introduction
  *
- * ccproto is a c++ library for serialize and deserialize proto message.
+ * NekoProtoTools is a c++ library for serialize and deserialize proto message.
  * no external code generator required, more easy to use. but support only c++.
  * If you don't need cross language protocols, this would be a good choice
  *
@@ -17,9 +17,9 @@
  * 
  * @section example_sec Example
  * @code {.c++}
- * #include "cc_proto_base.hpp"
- * #include "cc_proto_json_serializer.hpp"
- * #include "cc_serializer_base.hpp"
+ * #include "proto_base.hpp"
+ * #include "proto_json_serializer.hpp"
+ * #include "serializer_base.hpp"
  *
  * struct ProtoMessage ProtoBase<ProtoMessage, JsonSerializer<>> {
  *     int a;
@@ -31,8 +31,9 @@
  * int main() {
  *     ProtoFactory factory(1, 0, 0);
  *     IProto* msg = factory.create("ProtoMessage");
- *     msg->a = 1;
- *     msg->b = "hello";
+ *     auto proto = dynamic_cast<ProtoMessage*>(msg);
+ *     proto->a = 1;
+ *     proto->b = "hello";
  *     std::vector<char> data;
  *     data = msg->toData();
  *     // do something
@@ -49,7 +50,7 @@
  * when using an ID to interact between different protocol libraries.
  *
  * @par license
- *  GPL-3.0 license
+ *  GPL-2.0 license
  * @version 0.1
  * @date 2024-05-23
  *
@@ -63,16 +64,16 @@
 #include <map>
 #include <vector>
 
-#include "cc_proto_global.hpp"
+#include "private/global.hpp"
 
-CS_PROTO_BEGIN_NAMESPACE
+NEKO_BEGIN_NAMESPACE
 class ProtoFactory;
 
-auto static_init_funcs(const CS_STRING_VIEW&, std::function<void(ProtoFactory*)>)
-    -> std::map<CS_STRING_VIEW, std::function<void(ProtoFactory*)>>&;
+auto static_init_funcs(const NEKO_STRING_VIEW&, std::function<void(ProtoFactory*)>)
+    -> std::map<NEKO_STRING_VIEW, std::function<void(ProtoFactory*)>>&;
 int type_counter();
 
-class CS_PROTO_API IProto {
+class NEKO_PROTO_API IProto {
 public:
     IProto() = default;
     virtual ~IProto() = default;
@@ -100,9 +101,9 @@ public:
     /**
      * @brief proto message class name
      *
-     * @return CS_STRING_VIEW is std::string_view after c++17 and std::string before c++14
+     * @return NEKO_STRING_VIEW is std::string_view after c++17 and std::string before c++14
      */
-    virtual CS_STRING_VIEW className() const = 0;
+    virtual NEKO_STRING_VIEW className() const = 0;
 };
 
 template <typename ProtoT, typename SerializerT>
@@ -122,14 +123,14 @@ public:
     std::vector<char> toData() const override;
     int type() const override;
     bool formData(const std::vector<char>& data) override;
-    CS_STRING_VIEW className() const override;
+    NEKO_STRING_VIEW className() const override;
 
 private:
     mutable SerializerT mSerializer;
-    static CS_STRING_VIEW _init_class_name__;
+    static NEKO_STRING_VIEW _init_class_name__;
 };
 
-class CS_PROTO_API ProtoFactory {
+class NEKO_PROTO_API ProtoFactory {
 public:
     ProtoFactory(int major = 0, int minor = 0, int patch = 1);
     ProtoFactory(const ProtoFactory&);
@@ -140,11 +141,11 @@ public:
 
     void init();
     template <typename T>
-    void regist(const CS_STRING_VIEW& name);
+    void regist(const NEKO_STRING_VIEW& name);
     template <typename T>
     static int proto_type();
     template <typename T>
-    static CS_STRING_VIEW proto_name();
+    static NEKO_STRING_VIEW proto_name();
     /**
      * @brief create a proto object by type
      *  this object is a pointer, you need to delete it by yourself
@@ -170,7 +171,7 @@ public:
 
 private:
     std::map<int, std::function<IProto*()>> mProtoMap;
-    std::map<CS_STRING_VIEW, int> mProtoNameMap;
+    std::map<NEKO_STRING_VIEW, int> mProtoNameMap;
     uint32_t mVersion = 0;
 
     template <typename T>
@@ -179,23 +180,23 @@ private:
 };
 
 template <typename T>
-void ProtoFactory::regist(const CS_STRING_VIEW& name) {
+void ProtoFactory::regist(const NEKO_STRING_VIEW& name) {
     auto itemType = mProtoMap.find(proto_type<T>());
     auto itemName = mProtoNameMap.find(name);
     if (itemType != mProtoMap.end()) {
-        CS_STRING_VIEW rname = "";
+        NEKO_STRING_VIEW rname = "";
         for (auto item : mProtoNameMap) {
             if (item.second == proto_type<T>()) {
                 rname = item.first;
                 break;
             }
         }
-        CS_LOG_WARN("type {} is regist by proto({}), proto({}) can't regist again", proto_type<T>(), rname, name);
+        NEKO_LOG_WARN("type {} is regist by proto({}), proto({}) can't regist again", proto_type<T>(), rname, name);
     }
     if (itemName != mProtoNameMap.end()) {
-        CS_LOG_WARN("proto({}) is regist type {}, can't regist type {} again", name, itemName->second, proto_type<T>());
+        NEKO_LOG_WARN("proto({}) is regist type {}, can't regist type {} again", name, itemName->second, proto_type<T>());
     }
-    CS_LOG_INFO("Init proto {}:{} for factory({})", name, proto_type<T>(), (void*)this);
+    NEKO_LOG_INFO("Init proto {}:{} for factory({})", name, proto_type<T>(), (void*)this);
     mProtoNameMap.insert(std::make_pair(name, proto_type<T>()));
     mProtoMap.insert(std::make_pair(proto_type<T>(), creater<T>));
 }
@@ -210,8 +211,8 @@ int ProtoFactory::proto_type() {
 }
 
 template <typename T>
-CS_STRING_VIEW ProtoFactory::proto_name() {
-    return _cs_class_name<T>();
+NEKO_STRING_VIEW ProtoFactory::proto_name() {
+    return _class_name<T>();
 }
 
 template <typename T>
@@ -225,10 +226,10 @@ IProto* ProtoFactory::creater() {
 }
 
 template <typename ProtoT, typename SerializerT>
-CS_STRING_VIEW ProtoBase<ProtoT, SerializerT>::_init_class_name__ = []() {
+NEKO_STRING_VIEW ProtoBase<ProtoT, SerializerT>::_init_class_name__ = []() {
     static_assert(std::is_base_of<ProtoBaseType, ProtoT>::value, "ProtoT must inherit from ProtoBase<ProtoT>");
-    CS_STRING_VIEW name = _cs_class_name<ProtoT>();
-    static_init_funcs(name, [name](CS_PROTO_NAMESPACE::ProtoFactory* self) { self->regist<ProtoT>(name); });
+    NEKO_STRING_VIEW name = _class_name<ProtoT>();
+    static_init_funcs(name, [name](NEKO_NAMESPACE::ProtoFactory* self) { self->regist<ProtoT>(name); });
     return name;
 }();
 
@@ -255,7 +256,7 @@ ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, Ser
 }
 
 template <typename T, typename SerializerT>
-CS_STRING_VIEW ProtoBase<T, SerializerT>::className() const {
+NEKO_STRING_VIEW ProtoBase<T, SerializerT>::className() const {
     return _init_class_name__;
 }
 
@@ -264,11 +265,11 @@ std::vector<char> ProtoBase<T, SerializerT>::toData() const {
     std::vector<char> data;
     mSerializer.startSerialize(&data);
     auto self = dynamic_cast<const ProtoType*>(this);
-    CS_ASSERT(self != nullptr, "please make sure that ProtoBase<{}, {}> is only inherited by {}.", _init_class_name__,
-              _cs_class_name<SerializerT>(), _init_class_name__);
+    NEKO_ASSERT(self != nullptr, "please make sure that ProtoBase<{}, {}> is only inherited by {}.", _init_class_name__,
+              _class_name<SerializerT>(), _init_class_name__);
     auto ret = const_cast<ProtoType*>(self)->serialize(mSerializer);
     if (!mSerializer.endSerialize()) {
-        CS_LOG_ERROR("{} serialize error", _init_class_name__);
+        NEKO_LOG_ERROR("{} serialize error", _init_class_name__);
     }
     return std::move(data);
 }
@@ -284,14 +285,14 @@ bool ProtoBase<T, SerializerT>::formData(const std::vector<char>& data) {
         return false;
     }
     auto self = dynamic_cast<const ProtoType*>(this);
-    CS_ASSERT(self != nullptr, "please make sure that ProtoBase<{}, {}> is only inherited by {}.", _init_class_name__,
-              _cs_class_name<SerializerT>(), _init_class_name__);
+    NEKO_ASSERT(self != nullptr, "please make sure that ProtoBase<{}, {}> is only inherited by {}.", _init_class_name__,
+              _class_name<SerializerT>(), _init_class_name__);
     bool ret = const_cast<ProtoType*>(self)->deserialize(mSerializer);
     if (!mSerializer.endDeserialize() || !ret) {
-        CS_LOG_ERROR("{} deserialize error", _init_class_name__);
+        NEKO_LOG_ERROR("{} deserialize error", _init_class_name__);
         return false;
     }
     return true;
 }
 
-CS_PROTO_END_NAMESPACE
+NEKO_END_NAMESPACE

@@ -15,16 +15,15 @@
 #include <functional>
 #include <string>
 
-#include "../private/cc_zip.hpp"
+#include "../core/private/zip.hpp"
 // #include "../private/zip.hpp"
-#include "../proto/cc_proto_global.hpp"
 
 #ifdef TRACER_ENABLE
 #define TRACER printf("%s:%d [%s]\n", __FILE__, __LINE__, __FUNCTION__);
-#define TRACER_CONTEXT(ctx)                               \
-private:                                                  \
-    constexpr static const char* tracer_ctx_name_ = #ctx; \
-                                                          \
+#define TRACER_CONTEXT(ctx)                                                                                            \
+private:                                                                                                               \
+    constexpr static const char* tracer_ctx_name_ = #ctx;                                                              \
+                                                                                                                       \
 public:
 #define CTXTRACER printf("%s -- %s:%d [%s]\n", tracer_ctx_name_, __FILE__, __LINE__, __FUNCTION__);
 #else
@@ -39,10 +38,10 @@ public:
 #define LOG(fmt, ...)
 #endif
 
-#define ASSERT(cond, fmt, ...)           \
-    if (!(cond)) {                       \
-        printf(fmt "\n", ##__VA_ARGS__); \
-        ::exit(-1);                      \
+#define ASSERT(cond, fmt, ...)                                                                                         \
+    if (!(cond)) {                                                                                                     \
+        printf(fmt "\n", ##__VA_ARGS__);                                                                               \
+        ::exit(-1);                                                                                                    \
     }
 
 struct TaskBase;
@@ -424,8 +423,7 @@ struct Awaitable<Task<T>, Task<U>> {
     TRACER_CONTEXT(Awaitable_Task)
 
     Awaitable(Task<T>&& task, const Task<U>& waiter)
-        : task_(task),
-          waiter_(waiter){CTXTRACER} Awaitable(const Task<T>& task, const Task<U>& waiter)
+        : task_(task), waiter_(waiter){CTXTRACER} Awaitable(const Task<T>& task, const Task<U>& waiter)
         : task_(task), waiter_(waiter) {
         CTXTRACER
     }
@@ -500,11 +498,13 @@ Task<void> exit(Scheduler* scheduler) {
     co_return;
 }
 
-#define go *Scheduler::current() <<
+#define go    *Scheduler::current() <<
 #define await *Scheduler::current() >>
 
+NEKO_USE_NAMESPACE
+
 int main() {
-    std::cout << "CS_CPP_PLUS: " << CS_CPP_PLUS << std::endl;
+    std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
     auto scheduler = Scheduler::current();
 
     auto t = go test();
@@ -521,23 +521,22 @@ int main() {
     std::map<std::string, int> vd{
         {"1", 1}, {"12", 2}, {"123", 3}, {"1234", 4}, {"12345", 5}, {"123456", 6}, {"1234567", 7}, {"12345678", 8},
     };
-    for (auto [a, b, c, d] : CCZip(va, vb, vc, vd)) {
+    for (auto [a, b, c, d] : Zip(va, vb, vc, vd)) {
         std::cout << "a = " << a << ", b = " << b << ", c = " << c << " key:" << d.first << " value: " << d.second
                   << std::endl;
     }
-    for (auto [a, b, c, d] : CCReverseZip(va, vb, vc, vd)) {
+    for (auto [a, b, c, d] : ReverseZip(va, vb, vc, vd)) {
         std::cout << "a = " << a << ", b = " << b << ", c = " << c << " key:" << d.first << " value: " << d.second
-                    << std::endl;
+                  << std::endl;
     }
-   //  auto zipd = CCZip(va, vb, vc, vd);
-   //  for (auto items = zipd.begin(); items != zipd.end(); ++items) {
-   //    auto [a ,b ,c ,d] = *items;
-   //    std::cout << "a = " << a << ", b = " << b << ", c = " << c << " key:" << d.first << " value: " << d.second
-   //                  << std::endl;
-   //  }
+    //  auto zipd = Zip(va, vb, vc, vd);
+    //  for (auto items = zipd.begin(); items != zipd.end(); ++items) {
+    //    auto [a ,b ,c ,d] = *items;
+    //    std::cout << "a = " << a << ", b = " << b << ", c = " << c << " key:" << d.first << " value: " << d.second
+    //                  << std::endl;
+    //  }
 
     std::cout << "end" << std::endl;
-   
 
     return 0;
 }

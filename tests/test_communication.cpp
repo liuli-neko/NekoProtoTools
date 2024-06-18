@@ -1,23 +1,23 @@
 #include <iostream>
 #include <sstream>
 
-#include "../proto/cc_proto_json_serializer.hpp"
-#include "../rpc/cc_rpc_base.hpp"
+#include "../core/proto_json_serializer.hpp"
+#include "../communication/communication_base.hpp"
 
 #include "ilias_networking.hpp"
 #ifdef _WIN32
 #include "ilias_iocp.cpp"
 #endif
-CS_RPC_USE_NAMESPACE
+NEKO_USE_NAMESPACE
 using namespace ILIAS_NAMESPACE;
 
-class Message : public CS_PROTO_NAMESPACE::ProtoBase<Message, JsonSerializer> {
+class Message : public NEKO_NAMESPACE::ProtoBase<Message, JsonSerializer> {
 public:
     uint64_t timestamp;
     std::string msg;
     std::vector<int> numbers;
 
-    CS_SERIALIZER(timestamp, msg, numbers);
+    NEKO_SERIALIZER(timestamp, msg, numbers);
 };
 
 std::string to_hex(const std::vector<char>& data) {
@@ -38,24 +38,24 @@ Task<void> ClientLoop(IoContext& ioContext, ChannelFactory& channelFactor) {
     int count = 10;
     while (count-- > 0) {
         if (auto cl = channel.lock(); cl != nullptr) {
-            CS_LOG_INFO("send message to channel {}", cl->channelId());
+            NEKO_LOG_INFO("send message to channel {}", cl->channelId());
             auto msg = std::make_unique<Message>();
             msg->msg = "this is a message from client";
             msg->timestamp = time(NULL);
             msg->numbers = (std::vector<int>{1, 2, 3, 5});
             auto ret1 = co_await cl->send(std::move(msg));
             if (!ret1) {
-                CS_LOG_ERROR("send failed: {}", ret1.error().message());
+                NEKO_LOG_ERROR("send failed: {}", ret1.error().message());
                 co_return Unexpected(ret1.error());
             }
         } else {
-            CS_LOG_ERROR("channel expired");
+            NEKO_LOG_ERROR("channel expired");
             co_return Result<>();
         }
         if (auto cl = channel.lock(); cl != nullptr) {
             auto ret = co_await cl->recv();
             if (!ret) {
-                CS_LOG_ERROR("recv failed: {}", ret.error().message());
+                NEKO_LOG_ERROR("recv failed: {}", ret.error().message());
                 co_return Unexpected(ret.error());
             }
             auto retMsg = std::shared_ptr<IProto>(ret.value().release());
@@ -73,7 +73,7 @@ Task<void> ClientLoop(IoContext& ioContext, ChannelFactory& channelFactor) {
                 std::cout << "recv: " << to_hex(retMsg->toData()) << std::endl;
             }
         } else {
-            CS_LOG_ERROR("channel expired");
+            NEKO_LOG_ERROR("channel expired");
             co_return Result<>();
         }
     }
@@ -83,13 +83,13 @@ Task<void> ClientLoop(IoContext& ioContext, ChannelFactory& channelFactor) {
     co_return Result<>();
 }
 
-Task<void> HandleLoop(std::weak_ptr<cs_ccproto::ChannelBase> channel) {
+Task<void> HandleLoop(std::weak_ptr<NEKO_NAMESPACE::ChannelBase> channel) {
     while (true) {
-        CS_LOG_INFO("HandleLoop");
+        NEKO_LOG_INFO("HandleLoop");
         if (auto cl = channel.lock(); cl != nullptr) {
             auto ret = co_await cl->recv();
             if (!ret) {
-                CS_LOG_ERROR("recv failed: {}", ret.error().message());
+                NEKO_LOG_ERROR("recv failed: {}", ret.error().message());
                 cl->destroy();
                 co_return Unexpected(ret.error());
             }
@@ -108,7 +108,7 @@ Task<void> HandleLoop(std::weak_ptr<cs_ccproto::ChannelBase> channel) {
                 std::cout << "recv: " << to_hex(retMsg->toData()) << std::endl;
             }
         } else {
-            CS_LOG_ERROR("channel expired");
+            NEKO_LOG_ERROR("channel expired");
             co_return Result<>();
         }
         auto msg = std::make_unique<Message>();
@@ -122,7 +122,7 @@ Task<void> HandleLoop(std::weak_ptr<cs_ccproto::ChannelBase> channel) {
                 co_return Unexpected(ret1.error());
             }
         } else {
-            CS_LOG_ERROR("channel expired");
+            NEKO_LOG_ERROR("channel expired");
             co_return Result<>();
         }
     }
@@ -132,13 +132,13 @@ Task<void> HandleLoop(std::weak_ptr<cs_ccproto::ChannelBase> channel) {
     co_return Result<>();
 }
 Task<void> serverLoop(IoContext& ioContext, ChannelFactory& channelFactor) {
-    CS_LOG_INFO("serverLoop");
+    NEKO_LOG_INFO("serverLoop");
     auto ret = co_await channelFactor.accept();
     if (!ret) {
-        CS_LOG_ERROR("accept failed: {}", ret.error().message());
+        NEKO_LOG_ERROR("accept failed: {}", ret.error().message());
         co_return Unexpected(ret.error());
     }
-    CS_LOG_INFO("accept successed");
+    NEKO_LOG_INFO("accept successed");
     auto ret1 = co_await HandleLoop(ret.value());
     co_return !ret1 ? Unexpected(ret1.error()) : Result<>();
 }
@@ -149,10 +149,10 @@ Task<void> test(IoContext& ioContext, ChannelFactory& channelFactor, ChannelFact
 }
 
 int main(int argc, char** argv) {
-    std::cout << "CS_CPP_PLUS: " << CS_CPP_PLUS << std::endl;
+    std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
     spdlog::set_level(spdlog::level::debug);
     PlatformIoContext ioContext;
-    std::shared_ptr<CS_PROTO_NAMESPACE::ProtoFactory> protoFactory(new CS_PROTO_NAMESPACE::ProtoFactory());
+    std::shared_ptr<NEKO_NAMESPACE::ProtoFactory> protoFactory(new NEKO_NAMESPACE::ProtoFactory());
     ChannelFactory channelFactor(ioContext, protoFactory);
     ChannelFactory channelFactor1(ioContext, protoFactory);
     channelFactor.listen("tcp://127.0.0.1:1234");

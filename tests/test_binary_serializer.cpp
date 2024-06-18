@@ -1,25 +1,25 @@
-#include "../proto/cc_proto_binary_serializer.hpp"
-#include "../proto/cc_serializer_base.hpp"
+#include "../core/proto_binary_serializer.hpp"
+#include "../core/serializer_base.hpp"
 
 #include <gtest/gtest.h>
 #include <vector>
 
-using namespace CS_PROTO_NAMESPACE;
+using namespace NEKO_NAMESPACE;
 
 class TestP {
 public:
-    int8_t a = 1; // 1 byte
-    int16_t b = 2; // 2 bytes
-    int32_t c = 3; // 4 bytes
-    int64_t d = 4; // 8 bytes
-    uint8_t e = 5; // 1 byte
+    int8_t a = 1;   // 1 byte
+    int16_t b = 2;  // 2 bytes
+    int32_t c = 3;  // 4 bytes
+    int64_t d = 4;  // 8 bytes
+    uint8_t e = 5;  // 1 byte
     uint16_t f = 6; // 2 bytes
     uint32_t g = 7; // 4 bytes
     uint64_t h = 8; // 8 bytes
     std::string i = "hello";
     // 30
 
-    CS_SERIALIZER(a, b, c, d, e, f, g, h, i)
+    NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i)
 };
 
 TEST(BinarySerializer, Serialize) {
@@ -56,7 +56,7 @@ TEST(BinarySerializer, Serialize) {
     EXPECT_STREQ(p2.i.c_str(), "test string");
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

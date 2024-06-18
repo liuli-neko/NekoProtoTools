@@ -1,8 +1,8 @@
 /**
- * @file cc_dumpable_object.hpp
+ * @file dumpable_object.hpp
  * @brief Serialize a class to a file through a serializer
  *
- * @mainpage ccproto
+ * @mainpage NekoProtoTools
  *
  * @section intro_sec Introduction
  * Here is a simple auxiliary base class that helps you
@@ -16,16 +16,16 @@
  *
  * @section usage_sec Usage
  * If you want to make your class serializable, you need to inherit
- * the DumpableObject class. and make use macro CS_SERIALIZER generator
+ * the DumpableObject class. and make use macro NEKO_SERIALIZER generator
  * serializer and deserializer function.
  *
  * @section example_sec Example
  * @code
- * #include "cc_dumpable_object.hpp"
- * #include "cc_serializer_base.hpp"
- * #include "cc_proto_json_serializer.hpp"
+ * #include "dumpable_object.hpp"
+ * #include "serializer_base.hpp"
+ * #include "proto_json_serializer.hpp"
  *
- * CS_PROTO_USE_NAMESPACE
+ * NEKO_USE_NAMESPACE
  *
  * class MyObject : public DumpableObject<MyObject, JsonSerializer> {
  * public:
@@ -34,7 +34,7 @@
  *     MyObject() = default;
  *     ~MyObject() = default;
  *
- *     CS_SERIALIZER(mA, mB, mC, mD);
+ *     NEKO_SERIALIZER(mA, mB, mC, mD);
  * private:
  *     int mA;
  *     std::string mB;
@@ -48,7 +48,7 @@
  * @endcode
  *
  * @par license
- *  GPL-3.0 license
+ *  GPL-2.0 license
  *
  * @author llhsdmd (llhsdmd@gmail.com)
  * @version 0.1
@@ -64,7 +64,7 @@
 #include <map>
 #include <string>
 
-#include "cc_proto_global.hpp"
+#include "private/global.hpp"
 
 #if defined(_WIN32)
 #ifdef GetObject
@@ -74,27 +74,27 @@
 
 #include <rapidjson/istreamwrapper.h>
 
-#include "cc_proto_json_serializer.hpp"
+#include "proto_json_serializer.hpp"
 
-CS_PROTO_BEGIN_NAMESPACE
+NEKO_BEGIN_NAMESPACE
 
-class CS_PROTO_API IDumpableObject {
+class NEKO_PROTO_API IDumpableObject {
 public:
     virtual std::string dumpToString() const = 0;
     virtual bool loadFromString(const std::string& str) = 0;
     virtual bool dumpToFile(const std::string& filePath) = 0;
     virtual bool loadFromFile(const std::string& filePath) = 0;
     virtual ~IDumpableObject() = default;
-    virtual CS_STRING_VIEW className() const = 0;
-    static IDumpableObject* create(const CS_STRING_VIEW& className);
+    virtual NEKO_STRING_VIEW className() const = 0;
+    static IDumpableObject* create(const NEKO_STRING_VIEW& className);
 
 protected:
-    static std::map<CS_STRING_VIEW, std::function<IDumpableObject*()>> mObjectMap;
+    static std::map<NEKO_STRING_VIEW, std::function<IDumpableObject*()>> mObjectMap;
 };
 
-inline std::map<CS_STRING_VIEW, std::function<IDumpableObject*()>> IDumpableObject::mObjectMap;
+inline std::map<NEKO_STRING_VIEW, std::function<IDumpableObject*()>> IDumpableObject::mObjectMap;
 
-inline IDumpableObject* IDumpableObject::create(const CS_STRING_VIEW& className) {
+inline IDumpableObject* IDumpableObject::create(const NEKO_STRING_VIEW& className) {
     auto it = mObjectMap.find(className);
     if (it != mObjectMap.end()) {
         return (it->second)();
@@ -114,24 +114,24 @@ public:
     virtual bool dumpToFile(const std::string& filePath) override;
     virtual bool loadFromFile(const std::string& filePath) override;
 
-    CS_STRING_VIEW className() const override;
+    NEKO_STRING_VIEW className() const override;
 
 private:
-    static CS_STRING_VIEW _init_class_name__;
+    static NEKO_STRING_VIEW _init_class_name__;
 };
 
 template <typename T, typename SerializerT>
-CS_STRING_VIEW DumpableObject<T, SerializerT>::_init_class_name__ = []() {
-    CS_STRING_VIEW name = _cs_class_name<T>();
+NEKO_STRING_VIEW DumpableObject<T, SerializerT>::_init_class_name__ = []() {
+    NEKO_STRING_VIEW name = _class_name<T>();
     static_assert(std::is_base_of<DumpableObject<T, SerializerT>, T>::value,
                   "T must be derived from DumpableObject<T, SerializerT>");
-    CS_LOG_INFO("Dumpable Object {}({}) init", name, _cs_class_name<SerializerT>());
+    NEKO_LOG_INFO("Dumpable Object {}({}) init", name, _class_name<SerializerT>());
     mObjectMap.insert(std::make_pair(name, []() { return new T(); }));
     return name;
 }();
 
 template <typename T, typename SerializerT>
-CS_STRING_VIEW DumpableObject<T, SerializerT>::className() const {
+NEKO_STRING_VIEW DumpableObject<T, SerializerT>::className() const {
     return _init_class_name__;
 }
 
@@ -141,11 +141,11 @@ std::string DumpableObject<T, SerializerT>::dumpToString() const {
     std::vector<char> data;
     serializer.startSerialize(&data);
     auto self = static_cast<const T*>(this);
-    CS_ASSERT(self != nullptr, "please make sure that DumpableObject<{}, {}> is only inherited by {}.",
-              _init_class_name__, _cs_class_name<SerializerT>(), _init_class_name__);
+    NEKO_ASSERT(self != nullptr, "please make sure that DumpableObject<{}, {}> is only inherited by {}.",
+              _init_class_name__, _class_name<SerializerT>(), _init_class_name__);
     auto ret = self->serialize(serializer);
     if (!serializer.endSerialize() || !ret) {
-        CS_LOG_ERROR("{} dumpToString failed", _init_class_name__);
+        NEKO_LOG_ERROR("{} dumpToString failed", _init_class_name__);
         return "";
     }
     return std::string(data.begin(), data.end());
@@ -158,8 +158,8 @@ bool DumpableObject<T, SerializerT>::loadFromString(const std::string& str) {
         return false;
     }
     auto self = dynamic_cast<const T*>(this);
-    CS_ASSERT(self != nullptr, "please make sure that DumpableObject<{}, {}> is only inherited by {}.",
-              _init_class_name__, _cs_class_name<SerializerT>(), _init_class_name__);
+    NEKO_ASSERT(self != nullptr, "please make sure that DumpableObject<{}, {}> is only inherited by {}.",
+              _init_class_name__, _class_name<SerializerT>(), _init_class_name__);
     bool ret = const_cast<T*>(self)->deserialize(serializer);
     if (!serializer.endDeserialize() || !ret) {
         return false;
@@ -173,18 +173,18 @@ bool DumpableObject<T, SerializerT>::dumpToFile(const std::string& filePath) {
     std::vector<char> data;
     serializer.startSerialize(&data);
     auto self = static_cast<const T*>(this);
-    CS_ASSERT(self != nullptr, "please make sure that DumpableObject<{}, {}> is only inherited by {}.",
-              _init_class_name__, _cs_class_name<SerializerT>(), _init_class_name__);
+    NEKO_ASSERT(self != nullptr, "please make sure that DumpableObject<{}, {}> is only inherited by {}.",
+              _init_class_name__, _class_name<SerializerT>(), _init_class_name__);
     auto ret = self->serialize(serializer);
     if (!serializer.endSerialize() || !ret) {
-        CS_LOG_ERROR("{} dumpToString failed", _init_class_name__);
+        NEKO_LOG_ERROR("{} dumpToString failed", _init_class_name__);
         return false;
     }
 
     // write to file
     std::ofstream ofs(filePath, std::ios::out | std::ios::binary);
     if (!ofs.is_open()) {
-        CS_LOG_ERROR("{} dumpToString failed, can not open file {}", _init_class_name__, filePath);
+        NEKO_LOG_ERROR("{} dumpToString failed, can not open file {}", _init_class_name__, filePath);
         return false;
     }
     ofs.write(data.data(), data.size());
@@ -200,8 +200,8 @@ bool DumpableObject<T, SerializerT>::loadFromFile(const std::string& filePath) {
         return false;
     }
     auto self = dynamic_cast<const T*>(this);
-    CS_ASSERT(self != nullptr, "please make sure that DumpableObject<{}, {}> is only inherited by {}.",
-              _init_class_name__, _cs_class_name<SerializerT>(), _init_class_name__);
+    NEKO_ASSERT(self != nullptr, "please make sure that DumpableObject<{}, {}> is only inherited by {}.",
+              _init_class_name__, _class_name<SerializerT>(), _init_class_name__);
     bool ret = const_cast<T*>(self)->deserialize(serializer);
     if (!serializer.endDeserialize() || !ret) {
         return false;
@@ -209,4 +209,4 @@ bool DumpableObject<T, SerializerT>::loadFromFile(const std::string& filePath) {
     return true;
 }
 
-CS_PROTO_END_NAMESPACE
+NEKO_END_NAMESPACE
