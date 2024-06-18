@@ -1,5 +1,5 @@
 set_project("cc-proto")
-add_rules("mode.debug", "mode.release", "mode.valgrind")
+add_rules("mode.debug", "mode.release", "mode.valgrind", "mode.coverage")
 set_version("1.0.0")
 
 add_rules("plugin.compile_commands.autoupdate", {outputdir = ".vscode"})
@@ -18,6 +18,7 @@ target("test_co")
     set_languages("c++20")
     set_kind("binary")
     add_packages("spdlog")
+    add_tests("co")
     add_files("tests/test_co.cpp")
 target_end()
 
@@ -44,7 +45,7 @@ target("test_js")
     add_files("tests/test_json_serializer.cpp")
 target_end()
 
-target("test_proto1")
+target("test_proto")
     set_kind("binary")
     add_defines("CS_PROTO_STATIC")
     set_languages("c++20")
@@ -52,7 +53,7 @@ target("test_proto1")
     add_tests("proto")
     set_group("serializer")
     add_files("src/cc_proto_base.cpp")
-    add_files("tests/test_proto1.cpp")
+    add_files("tests/test_proto.cpp")
 target_end()
 
 target("test_rpc")
@@ -115,5 +116,29 @@ if has_config("ui_test") then
         add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
         add_packages("rapidjson", "spdlog")
         add_frameworks("QtCore", "QtNetwork", "QtWidgets", "QtGui")
+    target_end()
+end 
+
+if is_mode("coverage") and is_plat("linux") then 
+    target("coverage-report")
+        set_kind("phony")
+        -- 执行脚本命令
+        on_run(function (target)
+            print("Generating coverage report...")
+            -- 在这里编写您想要执行的脚本命令
+            os.execv("lcov ", {"--capture", 
+                "--directory", os.projectdir() .. "/build/.objs/", 
+                "--output-file", os.projectdir() .. "/build/coverage.info",
+                "--exclude", "/usr/include/*",
+                "--exclude", "/usr/local/include/*",
+                "--exclude", "*.xmake/packages/*",
+                "--exclude", "*modules/Ilias/*",
+                "--exclude", "*/tests/test_*",
+                "--directory", os.projectdir()})
+            os.execv("genhtml ", {
+                "--output-directory", os.projectdir() .. "/build/coverage-report",
+                "--title", "'Coverage Report'", 
+                os.projectdir() .. "/build/coverage.info"})
+        end)
     target_end()
 end 

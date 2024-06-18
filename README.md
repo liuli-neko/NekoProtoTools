@@ -5,6 +5,14 @@
 This repository is a pure C++ proto auxiliary library. The library provides abstract template class with common functions of proto Message. It also provides very convenient and easy-to-extend serialization and deserialization support by macros, which are used to generate large and repetitive proto. code.
 Through the macros provided by this library, you only need to add a small number of macros to the original data class. A base class can register it as the message type of proto, implement serialization and deserialization, and automatically use the protocol factory. generate.
 
+#### 1.2 CI status
+
+|name|status|
+|:---:|:---:|
+|Linux|[![Build Status](https://github.com/liuli-neko/neko-proto-tools/workflows/CI%20for%20linux%20by%20xmake/badge.svg?branch=master)](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-linux.yml)|
+|Windows|[![Build Status](https://github.com/liuli-neko/neko-proto-tools/workflows/C/C++%20CI%20on%20Windows/badge.svg?branch=master)](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-windows.yml)|
+|Codecov|[![codecov](https://codecov.io/gh/liuli-neko/neko-proto-tools/graph/badge.svg?token=F5OR647TV7)](https://codecov.io/gh/liuli-neko/neko-proto-tools)|
+
 ### 2. Usage
 
 If you only need to use the serialization and deserialization support of the library, you will only need headers :
@@ -235,8 +243,9 @@ struct ProtoMessage ProtoBase<ProtoMessage, JsonSerializer<>> {
 int main() {
     ProtoFactory factory(1, 0, 0);
     IProto* msg = factory.create("ProtoMessage");
-    msg->a = 1;
-    msg->b = "hello";
+    auto proto = dynamic_cast<ProtoMessage*>(msg);
+    proto->a = 1;
+    proto->b = "hello";
     std::vector<char> data;
     data = msg->toData();
     // do something
