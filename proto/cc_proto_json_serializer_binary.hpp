@@ -64,7 +64,7 @@ struct Base64Covert {
         // only 1 char
         // xxxxxx|xx 0000|00 00|000000
         bufptr[0] = table[(cptr[0] >> 2) & 0x3f];
-        bufptr[1] = table[(cptr[1] << 4) & 0x3f];
+        bufptr[1] = table[(cptr[0] << 4) & 0x3f];
         bufptr += 4;
         break;
       }
