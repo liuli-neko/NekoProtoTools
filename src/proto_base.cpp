@@ -70,22 +70,22 @@ ProtoFactory& ProtoFactory::operator=(ProtoFactory&& other) {
     return *this;
 }
 
-IProto* ProtoFactory::create(int type) const {
+std::unique_ptr<IProto> ProtoFactory::create(int type) const {
     auto item = mProtoMap.find(type);
     if (mProtoMap.end() != item) {
-        return (item->second)();
+        return std::unique_ptr<IProto>((item->second)());
     }
     return nullptr;
 }
 
-IProto* ProtoFactory::create(const char* name) const {
+std::unique_ptr<IProto> ProtoFactory::create(const char* name) const {
     auto item = mProtoNameMap.find(name);
     if (mProtoNameMap.end() == item) {
         return nullptr;
     }
     auto itemType = mProtoMap.find(item->second);
     if (mProtoMap.end() != itemType) {
-        return (itemType->second)();
+        return std::unique_ptr<IProto>((itemType->second)());
     }
     return nullptr;
 }

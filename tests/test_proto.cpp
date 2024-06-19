@@ -1,13 +1,13 @@
 #include <gtest/gtest.h>
 
 #include "../core/proto_base.hpp"
+#include "../core/proto_binary_serializer.hpp"
 #include "../core/proto_json_serializer.hpp"
 #include "../core/proto_json_serializer_binary.hpp"
 #include "../core/proto_json_serializer_contrain.hpp"
 #include "../core/proto_json_serializer_enum.hpp"
 #include "../core/proto_json_serializer_struct.hpp"
 #include "../core/serializer_base.hpp"
-#include "../core/proto_binary_serializer.hpp"
 
 NEKO_USE_NAMESPACE
 
@@ -60,7 +60,7 @@ struct JsonConvert<WriterT, ValueT, StructA, void> {
 NEKO_END_NAMESPACE
 #endif
 
-struct TestP : public ProtoBase<TestP, JsonSerializer> {
+struct TestP {
     int a = 1;
     std::string b = "hello";
     bool c = true;
@@ -73,39 +73,38 @@ struct TestP : public ProtoBase<TestP, JsonSerializer> {
     std::tuple<int, std::string> j = {1, "hello"};
 
     NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j)
+    NEKO_DECLARE_PROTOCOL(TestP, JsonSerializer)
 };
 
-struct BinaryProto : public ProtoBase<BinaryProto, BinarySerializer> {
+struct BinaryProto {
     int32_t a = 1;
     std::string b = "hello";
     uint32_t c = 3;
 
     NEKO_SERIALIZER(a, b, c)
+    NEKO_DECLARE_PROTOCOL(BinaryProto, BinarySerializer)
 };
 
 class ProtoTest : public testing::Test {
 protected:
-    virtual void SetUp() {
-        factory.reset(new ProtoFactory());
-    }
-    virtual void TearDown() { }
+    virtual void SetUp() { factory.reset(new ProtoFactory()); }
+    virtual void TearDown() {}
     std::unique_ptr<ProtoFactory> factory;
 };
 
 TEST_F(ProtoTest, StructSerialize) {
-    TestP testp;
-    testp.setField("a", 3);
-    testp.setField<std::string>("b", "Struct test");
-    testp.setField("c", true);
-    testp.setField("d", 3.141592654);
-    testp.e = {1, 2, 3};
-    testp.f = {{"a", 1}, {"b", 2}};
-    testp.g = {1, 2, 3};
-    testp.h = TEnum_A;
-    testp.i = {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
-    testp.j = {1, "hello"};
+    TestP testp{3,
+                "Struct test",
+                true,
+                3.141592654,
+                {1, 2, 3},
+                {{"a", 1}, {"b", 2}},
+                {1, 2, 3},
+                TEnum_A,
+                {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A},
+                {1, "hello"}};
     std::vector<char> data;
-    data = testp.toData();
+    data = testp.makeProto().toData();
     data.push_back('\0');
 #if NEKO_CPP_PLUS >= 17
     EXPECT_STREQ(data.data(), "{\"a\":3,\"b\":\"Struct "
@@ -121,13 +120,13 @@ TEST_F(ProtoTest, StructSerialize) {
 }
 
 TEST_F(ProtoTest, StructDeserialize) {
-    TestP testp;
     std::string str = "{\"a\":3,\"b\":\"Struct "
                       "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
                       "\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
                       "\"TEnum_A(1)\"],\"j\":[1,\"hello\"]}";
     std::vector<char> data(str.begin(), str.end());
-    testp.formData(data);
+    TestP testp;
+    EXPECT_TRUE(testp.makeProto().formData(data));
     EXPECT_EQ(testp.a, 3);
     EXPECT_STREQ(testp.b.c_str(), "Struct test");
     EXPECT_TRUE(testp.c);
@@ -214,39 +213,41 @@ TEST_F(ProtoTest, JsonProto) {
                       "\"TEnum_A(1)\"],\"j\":[1,\"hello\"]}";
     auto proto = factory->create("TestP");
     proto->formData(std::vector<char>(str.data(), str.data() + str.length()));
-    auto p = dynamic_cast<TestP*>(proto);
+    auto rawp = proto->cast<TestP>();
     int a = {};
     EXPECT_TRUE(proto->getField("a", &a));
     EXPECT_EQ(a, 3);
+    proto->setField("a", 14);
+    EXPECT_EQ(rawp->a, 14);
     EXPECT_STREQ(proto->getField<std::string>("b", "").c_str(), "Struct test");
     EXPECT_TRUE(proto->getField<bool>("c", false));
-    EXPECT_DOUBLE_EQ(p->d, 3.141592654);
-    EXPECT_EQ(p->e.size(), 3);
-    EXPECT_EQ(p->f.size(), 2);
-    EXPECT_EQ(p->f["a"], 1);
-    EXPECT_EQ(p->f["b"], 2);
-    EXPECT_EQ(p->g.size(), 5);
-    EXPECT_EQ(p->g[0], 1);
-    EXPECT_EQ(p->g[1], 2);
-    EXPECT_EQ(p->g[2], 3);
-    EXPECT_EQ(p->h, TEnum_A);
-    EXPECT_EQ(p->i.a, 1);
-    EXPECT_STREQ(p->i.b.c_str(), "hello");
-    EXPECT_TRUE(p->i.c);
-    EXPECT_DOUBLE_EQ(p->i.d, 3.141592654);
-    EXPECT_EQ(p->i.e.size(), 3);
-    EXPECT_EQ(p->i.f.size(), 2);
-    EXPECT_EQ(p->i.f["a"], 1);
-    EXPECT_EQ(p->i.f["b"], 2);
-    EXPECT_EQ(p->i.g.size(), 5);
-    EXPECT_EQ(p->i.g[0], 1);
-    EXPECT_EQ(p->i.g[1], 2);
-    EXPECT_EQ(p->i.g[2], 3);
-    EXPECT_EQ(p->i.g[3], 0);
-    EXPECT_EQ(p->i.g[4], 0);
-    EXPECT_EQ(p->i.h, TEnum_A);
-    EXPECT_EQ(std::get<0>(p->j), 1);
-    EXPECT_STREQ(std::get<1>(p->j).c_str(), "hello");
+    EXPECT_DOUBLE_EQ(rawp->d, 3.141592654);
+    EXPECT_EQ(rawp->e.size(), 3);
+    EXPECT_EQ(rawp->f.size(), 2);
+    EXPECT_EQ(rawp->f["a"], 1);
+    EXPECT_EQ(rawp->f["b"], 2);
+    EXPECT_EQ(rawp->g.size(), 5);
+    EXPECT_EQ(rawp->g[0], 1);
+    EXPECT_EQ(rawp->g[1], 2);
+    EXPECT_EQ(rawp->g[2], 3);
+    EXPECT_EQ(rawp->h, TEnum_A);
+    EXPECT_EQ(rawp->i.a, 1);
+    EXPECT_STREQ(rawp->i.b.c_str(), "hello");
+    EXPECT_TRUE(rawp->i.c);
+    EXPECT_DOUBLE_EQ(rawp->i.d, 3.141592654);
+    EXPECT_EQ(rawp->i.e.size(), 3);
+    EXPECT_EQ(rawp->i.f.size(), 2);
+    EXPECT_EQ(rawp->i.f["a"], 1);
+    EXPECT_EQ(rawp->i.f["b"], 2);
+    EXPECT_EQ(rawp->i.g.size(), 5);
+    EXPECT_EQ(rawp->i.g[0], 1);
+    EXPECT_EQ(rawp->i.g[1], 2);
+    EXPECT_EQ(rawp->i.g[2], 3);
+    EXPECT_EQ(rawp->i.g[3], 0);
+    EXPECT_EQ(rawp->i.g[4], 0);
+    EXPECT_EQ(rawp->i.h, TEnum_A);
+    EXPECT_EQ(std::get<0>(rawp->j), 1);
+    EXPECT_STREQ(std::get<1>(rawp->j).c_str(), "hello");
 }
 
 TEST_F(ProtoTest, InvalidParams) {
@@ -259,7 +260,7 @@ TEST_F(ProtoTest, BinaryProto) {
     proto.a = 24;
     proto.b = "hello Neko Proto";
     proto.c = 0x3f3f3f;
-    auto data = proto.toData();
+    auto data = proto.makeProto().toData();
     auto base64str = Base64Covert::Encode(data);
     base64str.push_back('\0');
     EXPECT_STREQ(base64str.data(), "AAAAGAAAAAAAAAAQaGVsbG8gTmVrbyBQcm90bwA/Pz8=");

@@ -15,7 +15,6 @@
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/ostreamwrapper.h>
 #include <rapidjson/writer.h>
-
 #include <vector>
 
 #include "private/global.hpp"
@@ -354,10 +353,11 @@ struct JsonConvert<WriterT, ValueT, std::vector<T>, void> {
 };
 
 template <typename WriterT, typename ValueT, typename T>
-struct JsonConvert<WriterT, ValueT, T,
-                   typename std::enable_if<std::is_same<typename T::SerializerType, JsonSerializer>::value>::type> {
+struct JsonConvert<
+    WriterT, ValueT, T,
+    typename std::enable_if<std::is_same<typename T::ProtoType::SerializerType, JsonSerializer>::value>::type> {
     static bool toJsonValue(WriterT& writer, const T& value) {
-        auto jsonS = typename T::SerializerType(&writer);
+        auto jsonS = JsonSerializer(&writer);
         writer.StartObject();
         auto ret = value.serialize(jsonS);
         writer.EndObject();
@@ -367,7 +367,7 @@ struct JsonConvert<WriterT, ValueT, T,
         if (!value.IsObject() || dst == nullptr) {
             return false;
         }
-        auto jsonS = typename T::SerializerType(value);
+        auto jsonS = JsonSerializer(value);
         return dst->deserialize(jsonS);
     }
 };

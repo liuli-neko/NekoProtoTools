@@ -61,34 +61,39 @@ struct JsonConvert<WriterT, ValueT, StructA, void> {
 NEKO_END_NAMESPACE
 #endif
 
-struct TestA : public ProtoBase<TestA, JsonSerializer> {
+struct TestA {
     int a = 1;
     std::string b = "dsadfsd";
 
     NEKO_SERIALIZER(a, b)
+    NEKO_DECLARE_PROTOCOL(TestA, JsonSerializer)
 };
 
-struct TestB : public ProtoBase<TestB, JsonSerializer> {
+struct TestB {
     double a = 12.9;
     std::vector<double> b = {1, 2, 3, 4, 5};
     TestA c;
 
     NEKO_SERIALIZER(a, b)
+    NEKO_DECLARE_PROTOCOL(TestB, JsonSerializer)
 };
 
-struct TestC : public ProtoBase<TestC, JsonSerializer> {
+struct TestC {
     std::vector<TestB> a = {TestB(), TestB(), TestB()};
 
     NEKO_SERIALIZER(a)
+    NEKO_DECLARE_PROTOCOL(TestC, JsonSerializer)
 };
 
-struct TestD : public ProtoBase<TestD, JsonSerializer> {
+struct TestD {
     std::tuple<TestA, TestB, TestC> a = {TestA(), TestB(), TestC()};
 
     NEKO_SERIALIZER(a)
+    NEKO_DECLARE_PROTOCOL(TestD, JsonSerializer)
 };
 
-struct TestP : public ProtoBase<TestP, JsonSerializer> {
+
+struct TestP {
     int a = 1;
     std::string b = "hello";
     bool c = true;
@@ -103,6 +108,7 @@ struct TestP : public ProtoBase<TestP, JsonSerializer> {
     TestD l;
 
     NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k, l)
+    NEKO_DECLARE_PROTOCOL(TestP, JsonSerializer)
 };
 
 class JsonSerializerTest : public testing::Test {

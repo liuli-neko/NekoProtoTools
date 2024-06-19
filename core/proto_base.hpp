@@ -12,28 +12,29 @@
  * If you don't need cross language protocols, this would be a good choice
  *
  * @section usage_sec Usage
- * you need only include this header file, and inherit the ProtoBase, and 
+ * you need only include this header file, and inherit the ProtoBase, and
  * use CS_SERIALIZE specify the members you want to serialize.
- * 
+ *
  * @section example_sec Example
  * @code {.c++}
  * #include "proto_base.hpp"
  * #include "proto_json_serializer.hpp"
  * #include "serializer_base.hpp"
  *
- * struct ProtoMessage ProtoBase<ProtoMessage, JsonSerializer<>> {
+ * struct ProtoMessage {
  *     int a;
  *     std::string b;
  *
  *     CS_SERIALIZE(a, b)
  * }
+ * NEKO_DECLARE_PROTOCOL(ProtoMessage, JsonSerializer)
  *
  * int main() {
  *     ProtoFactory factory(1, 0, 0);
- *     IProto* msg = factory.create("ProtoMessage");
- *     auto proto = dynamic_cast<ProtoMessage*>(msg);
- *     proto->a = 1;
- *     proto->b = "hello";
+ *     IProto* msg = factory.create("ProtoMessage"); // or auto msg = makeProtocol(ProtoMessage{});
+ *     auto raw = msg->cast<ProtoMessage>();
+ *     raw->a = 1;
+ *     raw->b = "hello";
  *     std::vector<char> data;
  *     data = msg->toData();
  *     // do something
@@ -108,21 +109,39 @@ public:
 
     template <typename T>
     bool getField(const NEKO_STRING_VIEW& name, T* result) {
-        return getReflectionObject()->getField(name, result);
+        auto reflectionObject = getReflectionObject();
+        if (reflectionObject == nullptr) {
+            return false;
+        }
+        return reflectionObject->getField(name, result);
     }
 
     template <typename T>
     T getField(const NEKO_STRING_VIEW& name, const T& defaultValue) {
-        return getReflectionObject()->getField(name, defaultValue);
+        auto reflectionObject = getReflectionObject();
+        if (reflectionObject == nullptr) {
+            return defaultValue;
+        }
+        return reflectionObject->getField(name, defaultValue);
     }
 
     template <typename T>
     bool setField(const NEKO_STRING_VIEW& name, const T& value) {
-        return getReflectionObject()->setField(name, value);
+        auto reflectionObject = getReflectionObject();
+        if (reflectionObject == nullptr) {
+            return false;
+        }
+        return reflectionObject->setField(name, value);
     }
+
+    template <typename T>
+    T* cast();
 
 private:
     virtual ReflectionObject* getReflectionObject() = 0;
+
+protected:
+    virtual void* data() = 0;
 };
 
 template <typename ProtoT, typename SerializerT>
@@ -132,23 +151,39 @@ public:
     using SerializerType = SerializerT;
     using ProtoBaseType = ProtoBase;
 
-    ProtoBase() = default;
-    ProtoBase(const ProtoBase& other);
+    ProtoBase();
+    ProtoBase(const ProtoT&);
+    ProtoBase(ProtoT&&);
+    ProtoBase(ProtoT*);
     ProtoBase(ProtoBase&& other);
     virtual ~ProtoBase();
-    ProtoBase& operator=(const ProtoBase& other);
     ProtoBase& operator=(ProtoBase&& other);
+    ProtoBase& operator=(const ProtoT& other);
+    ProtoBase& operator=(ProtoT&& other);
+
+    ProtoT& operator*() { return *mData; }
+    ProtoT* operator->() { return mData.get(); }
+    const ProtoT& operator*() const { return *mData; }
+    const ProtoT* operator->() const { return mData.get(); }
+    operator const ProtoT&() const { return *mData; }
+    operator ProtoT&() { return *mData; }
 
     std::vector<char> toData() const override;
     int type() const override;
     bool formData(const std::vector<char>& data) override;
     NEKO_STRING_VIEW className() const override;
-    ReflectionObject* getReflectionObject() override;
+    inline ReflectionObject* getReflectionObject() override;
+
+protected:
+    ProtoBase(const ProtoBase& other) = delete;
+    ProtoBase& operator=(const ProtoBase& other) = delete;
+    virtual void* data() override;
 
 private:
-    mutable SerializerT mSerializer;
-    ReflectionSerializer* mReflectionSerializer = {};
-    
+    mutable SerializerT mSerializer = {};
+    std::shared_ptr<ReflectionSerializer> mReflectionSerializer = {};
+    std::shared_ptr<ProtoT> mData = {};
+
     static NEKO_STRING_VIEW _init_class_name__;
 };
 
@@ -171,23 +206,16 @@ public:
      * @brief create a proto object by type
      *  this object is a pointer, you need to delete it by yourself
      * @param type
-     * @return IProto*
+     * @return std::unique_ptr<IProto>
      */
-    IProto* create(int type) const;
+    std::unique_ptr<IProto> create(int type) const;
     /**
      * @brief create a proto object by name
      *  this object is a pointer, you need to delete it by yourself
      * @param name
      * @return IProto*
      */
-    IProto* create(const char* name) const;
-    /**
-     * @brief create a object
-     * this object is a pointer, you need to delete it by yourself
-     * @return T*
-     */
-    template <typename T>
-    inline T* create() const;
+    std::unique_ptr<IProto> create(const char* name) const;
     uint32_t version() const;
 
 private:
@@ -204,24 +232,25 @@ private:
 
 template <typename T>
 void ProtoFactory::regist(const NEKO_STRING_VIEW& name) {
-    auto itemType = mProtoMap.find(proto_type<T>());
+    auto itemType = mProtoMap.find(proto_type<typename T::ProtoType>());
     auto itemName = mProtoNameMap.find(name);
     if (itemType != mProtoMap.end()) {
         NEKO_STRING_VIEW rname = "";
         for (auto item : mProtoNameMap) {
-            if (item.second == proto_type<T>()) {
+            if (item.second == proto_type<typename T::ProtoType>()) {
                 rname = item.first;
                 break;
             }
         }
-        NEKO_LOG_WARN("type {} is regist by proto({}), proto({}) can't regist again", proto_type<T>(), rname, name);
+        NEKO_LOG_WARN("type {} is regist by proto({}), proto({}) can't regist again", proto_type<typename T::ProtoType>(), rname, name);
     }
     if (itemName != mProtoNameMap.end()) {
-        NEKO_LOG_WARN("proto({}) is regist type {}, can't regist type {} again", name, itemName->second, proto_type<T>());
+        NEKO_LOG_WARN("proto({}) is regist type {}, can't regist type {} again", name, itemName->second,
+                      proto_type<typename T::ProtoType>());
     }
-    NEKO_LOG_INFO("Init proto {}:{} for factory({})", name, proto_type<T>(), (void*)this);
-    mProtoNameMap.insert(std::make_pair(name, proto_type<T>()));
-    mProtoMap.insert(std::make_pair(proto_type<T>(), creater<T>));
+    NEKO_LOG_INFO("Init proto {}:{} for factory({})", name, proto_type<typename T::ProtoType>(), (void*)this);
+    mProtoNameMap.insert(std::make_pair(name, proto_type<typename T::ProtoType>()));
+    mProtoMap.insert(std::make_pair(proto_type<typename T::ProtoType>(), creater<T>));
 }
 
 template <typename T>
@@ -239,48 +268,78 @@ NEKO_STRING_VIEW ProtoFactory::proto_name() {
 }
 
 template <typename T>
-T* ProtoFactory::create() const {
-    return new T();
-}
-
-template <typename T>
 IProto* ProtoFactory::creater() {
     return new T();
 }
 
 template <typename ProtoT, typename SerializerT>
 NEKO_STRING_VIEW ProtoBase<ProtoT, SerializerT>::_init_class_name__ = []() {
-    static_assert(std::is_base_of<ProtoBaseType, ProtoT>::value, "ProtoT must inherit from ProtoBase<ProtoT>");
     NEKO_STRING_VIEW name = _class_name<ProtoT>();
-    static_init_funcs(name, [name](NEKO_NAMESPACE::ProtoFactory* self) { self->regist<ProtoT>(name); });
+    static_init_funcs(name, [name](NEKO_NAMESPACE::ProtoFactory* self) { self->regist<ProtoBaseType>(name); });
     return name;
 }();
 
-template <typename T, typename SerializerT>
-ProtoBase<T, SerializerT>::ProtoBase(const ProtoBase<T, SerializerT>& other) {
-    mSerializer = other.mSerializer;
+template <typename T>
+inline T* IProto::cast() {
+    if (type() == ProtoFactory::proto_type<T>()) {
+        return reinterpret_cast<T*>(data());
+    }
+    return nullptr;
 }
+template <typename ProtoT, typename SerializerT>
+inline void* ProtoBase<ProtoT, SerializerT>::data() {
+    return (void*)(mData.get());
+}
+
+template <typename ProtoT, typename SerializerT>
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase() : mData(new ProtoT(), [](const ProtoT* p) { delete p; }) {}
+
+template <typename ProtoT, typename SerializerT>
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase(const ProtoT& p)
+    : mData(new ProtoT(p), [](const ProtoT* p) { delete p; }) {}
+
+template <typename ProtoT, typename SerializerT>
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT&& p)
+    : mData(new ProtoT(std::move(p)), [](const ProtoT* p) { delete p; }) {}
+
+template <typename ProtoT, typename SerializerT>
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT* p) : mData(p, [](const ProtoT* p) {}) {}
 
 template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>::ProtoBase(ProtoBase<T, SerializerT>&& other) {
     mSerializer = std::move(other.mSerializer);
+    mReflectionSerializer = std::move(other.mReflectionSerializer);
+    mData = std::move(other.mData);
 }
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::~ProtoBase() {
-    delete mReflectionSerializer;
-    mReflectionSerializer = nullptr;
-}
-
-template <typename T, typename SerializerT>
-ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(const ProtoBase<T, SerializerT>& other) {
-    mSerializer = other.mSerializer;
-    return *this;
-}
+inline ProtoBase<ProtoT, SerializerT>::~ProtoBase() {}
 
 template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, SerializerT>&& other) {
     mSerializer = std::move(other.mSerializer);
+    mReflectionSerializer = std::move(other.mReflectionSerializer);
+    mData = std::move(other.mData);
+    return *this;
+}
+
+template <typename ProtoT, typename SerializerT>
+inline ProtoBase<ProtoT, SerializerT>& ProtoBase<ProtoT, SerializerT>::operator=(const ProtoT& other) {
+    if (mData != nullptr) {
+        (*mData) = other;
+    } else {
+        mData.reset(new ProtoT(other));
+    }
+    return *this;
+}
+
+template <typename ProtoT, typename SerializerT>
+inline ProtoBase<ProtoT, SerializerT>& ProtoBase<ProtoT, SerializerT>::operator=(ProtoT&& other) {
+    if (mData != nullptr) {
+        (*mData) = std::move(other);
+    } else {
+        mData.reset(new ProtoT(std::move(other)));
+    }
     return *this;
 }
 
@@ -291,26 +350,26 @@ NEKO_STRING_VIEW ProtoBase<T, SerializerT>::className() const {
 
 template <typename ProtoT, typename SerializerT>
 inline ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() {
+    if (mData == nullptr) {
+        return nullptr;
+    }
     if (mReflectionSerializer != nullptr) {
         return mReflectionSerializer->getObject();
     }
-    mReflectionSerializer = new ReflectionSerializer();
+    mReflectionSerializer.reset(new ReflectionSerializer());
     mReflectionSerializer->start();
-    auto self = dynamic_cast<const ProtoType*>(this);
-    NEKO_ASSERT(self != nullptr, "please make sure that ProtoBase<{}, {}> is only inherited by {}.", _init_class_name__,
-            _class_name<SerializerT>(), _init_class_name__);
-    bool ret = const_cast<ProtoType*>(self)->deserialize(*mReflectionSerializer);
+    bool ret = mData->deserialize(*mReflectionSerializer);
     return mReflectionSerializer->getObject();
 }
 
 template <typename T, typename SerializerT>
 std::vector<char> ProtoBase<T, SerializerT>::toData() const {
     std::vector<char> data;
+    if (mData == nullptr) {
+        return data;
+    }
     mSerializer.startSerialize(&data);
-    auto self = dynamic_cast<const ProtoType*>(this);
-    NEKO_ASSERT(self != nullptr, "please make sure that ProtoBase<{}, {}> is only inherited by {}.", _init_class_name__,
-              _class_name<SerializerT>(), _init_class_name__);
-    auto ret = const_cast<ProtoType*>(self)->serialize(mSerializer);
+    auto ret = mData->serialize(mSerializer);
     if (!mSerializer.endSerialize()) {
         NEKO_LOG_ERROR("{} serialize error", _init_class_name__);
     }
@@ -324,18 +383,24 @@ int ProtoBase<T, SerializerT>::type() const {
 
 template <typename T, typename SerializerT>
 bool ProtoBase<T, SerializerT>::formData(const std::vector<char>& data) {
+    if (mData == nullptr) {
+        return false;
+    }
     if (!mSerializer.startDeserialize(data)) {
         return false;
     }
-    auto self = dynamic_cast<const ProtoType*>(this);
-    NEKO_ASSERT(self != nullptr, "please make sure that ProtoBase<{}, {}> is only inherited by {}.", _init_class_name__,
-              _class_name<SerializerT>(), _init_class_name__);
-    bool ret = const_cast<ProtoType*>(self)->deserialize(mSerializer);
+    bool ret = mData->deserialize(mSerializer);
     if (!mSerializer.endDeserialize() || !ret) {
         NEKO_LOG_ERROR("{} deserialize error", _init_class_name__);
         return false;
     }
     return true;
 }
+
+#define NEKO_DECLARE_PROTOCOL(className, Serializer)                                                                   \
+public:                                                                                                                \
+    using ProtoType = typename NEKO_NAMESPACE::ProtoBase<className, Serializer>;                                       \
+    ProtoType makeProto() { return ProtoType(this); }                                                                  \
+    static ProtoType makeProto(const className& other) { return ProtoType(other); }
 
 NEKO_END_NAMESPACE

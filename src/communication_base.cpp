@@ -34,7 +34,7 @@ Expected<std::tuple<std::string, std::string, uint16_t>, Error> parseUrl(const s
         port = std::stoi(match[3]);
     } else {
         NEKO_LOG_ERROR("Invalid url {}", url);
-        return Unexpected<Error>(CCErrorCode::InvalidUrl);
+        return Unexpected<Error>(ErrorCode::InvalidUrl);
     }
 
     std::transform(protocol.begin(), protocol.end(), protocol.begin(), [](unsigned char c) { return std::tolower(c); });
@@ -65,7 +65,7 @@ Expected<void, Error> ChannelFactory::listen(std::string_view hostname) {
     }
 
     NEKO_LOG_ERROR("unsupported protocol {}", protocol);
-    return Unexpected<Error>(Error(CCErrorCode::InvalidUrl));
+    return Unexpected<Error>(Error(ErrorCode::InvalidUrl));
 }
 
 Task<std::weak_ptr<ChannelBase>> ChannelFactory::connect(std::string_view hostname, const uint16_t channelId) {
@@ -88,7 +88,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::connect(std::string_view hostna
         co_return ret1.value();
     }
 
-    co_return Unexpected<Error>(CCErrorCode::InvalidUrl);
+    co_return Unexpected<Error>(ErrorCode::InvalidUrl);
 }
 
 Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
@@ -105,7 +105,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
         NEKO_LOG_ERROR("recv msg header error");
         co_return Unexpected<Error>(ret.error());
     }
-    NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
+    // NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     MessageHeader hmsg;
     BinarySerializer serializer;
     serializer.startDeserialize(buf);
@@ -115,7 +115,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
     ChannelHeader cmsg;
     if (hmsg.transType != static_cast<uint16_t>(TransType::Channel) || hmsg.protoType != 0) {
         NEKO_LOG_ERROR("trans type {} or protoType {} is not channel", hmsg.transType, hmsg.protoType);
-        co_return Unexpected<Error>(Error(CCErrorCode::ConnectionMessageTypeError));
+        co_return Unexpected<Error>(Error(ErrorCode::ConnectionMessageTypeError));
     }
     buf.resize(hmsg.length);
     ret1 = co_await client1.recvAll(buf.data(), buf.size());
@@ -123,18 +123,18 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
         NEKO_LOG_ERROR("recv data error");
         co_return Unexpected(ret.error());
     }
-    NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
+    // NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     serializer.startDeserialize(buf);
     cmsg.deserialize(serializer);
     serializer.endDeserialize();
     buf.clear();
     if (cmsg.messageType != static_cast<uint8_t>(ChannelHeader::MessageType::ConnectMessage)) {
         NEKO_LOG_ERROR("message type {} is not connect message", cmsg.messageType);
-        co_return Unexpected(Error(CCErrorCode::ConnectionMessageTypeError));
+        co_return Unexpected(Error(ErrorCode::ConnectionMessageTypeError));
     }
     if (cmsg.factoryVersion != getProtoFactory().version()) {
         NEKO_LOG_ERROR("factory version {} is not {}", cmsg.factoryVersion, getProtoFactory().version());
-        co_return Unexpected(Error(CCErrorCode::ProtoVersionUnsupported));
+        co_return Unexpected(Error(ErrorCode::ProtoVersionUnsupported));
     }
     uint32_t channelId = 0;
     if (cmsg.channelId == 0) {
@@ -151,7 +151,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
     cmsg.serialize(serializer);
     serializer.endSerialize();
     NEKO_ASSERT(buf.size() == ChannelHeader::size() + MessageHeader::size(), "buf size error");
-    NEKO_LOG_INFO("send: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
+    // NEKO_LOG_INFO("send: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     ret1 = co_await client1.sendAll(buf.data(), buf.size());
     if (!ret1) {
         NEKO_LOG_ERROR("send data error");
@@ -208,7 +208,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::makeChannel(IStreamClient&& cli
         NEKO_LOG_ERROR("recv msg header error");
         co_return Unexpected(ret.error());
     }
-    NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
+    // NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     serializer.startDeserialize(buf);
     hmsg.deserialize(serializer);
     serializer.endDeserialize();
@@ -219,28 +219,28 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::makeChannel(IStreamClient&& cli
         NEKO_LOG_ERROR("recv data error");
         co_return Unexpected(ret.error());
     }
-    NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
+    // NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     serializer.startDeserialize(buf);
     cmsg.deserialize(serializer);
     serializer.endDeserialize();
     if (hmsg.transType != static_cast<uint16_t>(TransType::Channel) || hmsg.protoType != 0) {
         NEKO_LOG_ERROR("transType {} or type {} is not channel header", hmsg.transType, hmsg.protoType);
-        co_return Unexpected(Error(CCErrorCode::ConnectionMessageTypeError));
+        co_return Unexpected(Error(ErrorCode::ConnectionMessageTypeError));
     }
 
     if (cmsg.messageType != static_cast<uint8_t>(ChannelHeader::MessageType::ConnectMessage)) {
         NEKO_LOG_ERROR("message type {} is not connect message", cmsg.messageType);
-        co_return Unexpected(Error(CCErrorCode::ConnectionMessageTypeError));
+        co_return Unexpected(Error(ErrorCode::ConnectionMessageTypeError));
     }
 
     if (cmsg.factoryVersion != mFactory->version()) {
         NEKO_LOG_ERROR("factory version {} is not {}", cmsg.factoryVersion, mFactory->version());
-        co_return Unexpected(Error(CCErrorCode::ProtoVersionUnsupported));
+        co_return Unexpected(Error(ErrorCode::ProtoVersionUnsupported));
     }
 
     if (channelId != 0 && cmsg.channelId != channelId) {
         NEKO_LOG_ERROR("channel id {} is not {}", cmsg.channelId, channelId);
-        co_return Unexpected(Error(CCErrorCode::ChannelIdInconsistent));
+        co_return Unexpected(Error(ErrorCode::ChannelIdInconsistent));
     }
 
     std::shared_ptr<ChannelBase> channel(new ByteStreamChannel(this, std::move(client1), cmsg.channelId));
@@ -297,7 +297,7 @@ ILIAS_NAMESPACE::Task<void> ByteStreamChannel::send(std::unique_ptr<NEKO_NAMESPA
 
 ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> ByteStreamChannel::recv() {
     if (mState != ChannelBase::ChannelState::Connected) {
-        co_return ILIAS_NAMESPACE::Error(CCErrorCode::ChannelClosed);
+        co_return ILIAS_NAMESPACE::Error(ErrorCode::ChannelClosed);
     }
     std::vector<char> headerData;
     headerData.resize(MessageHeader::size(), 0);
@@ -313,7 +313,7 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> ByteStreamChannel
     serializer.endDeserialize();
     if (msgHeader.length == 0 && msgHeader.protoType == 0 && msgHeader.transType == 0) {
         close();
-        co_return ILIAS_NAMESPACE::Error(CCErrorCode::ChannelBroken);
+        co_return ILIAS_NAMESPACE::Error(ErrorCode::ChannelBroken);
     }
     std::vector<char> data(msgHeader.length, 0);
     ret = co_await mClient.recvAll(data.data(), data.size());
@@ -328,16 +328,16 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> ByteStreamChannel
         serializer.endDeserialize();
         if (cmsg.messageType == ChannelHeader::MessageType::CloseMessage) {
             close();
-            co_return ILIAS_NAMESPACE::Error(CCErrorCode::ChannelClosedByPeer);
+            co_return ILIAS_NAMESPACE::Error(ErrorCode::ChannelClosedByPeer);
         } else {
-            co_return ILIAS_NAMESPACE::Error(CCErrorCode::InvalidChannelHeader);
+            co_return ILIAS_NAMESPACE::Error(ErrorCode::InvalidChannelHeader);
         }
     }
 
     std::unique_ptr<NEKO_NAMESPACE::IProto> message(mChannelFactory->getProtoFactory().create(msgHeader.protoType));
     if (message == nullptr) {
         NEKO_LOG_ERROR("unknown proto type: {}", msgHeader.protoType);
-        co_return ILIAS_NAMESPACE::Error(CCErrorCode::InvalidProtoType);
+        co_return ILIAS_NAMESPACE::Error(ErrorCode::InvalidProtoType);
     }
     auto desRet = message->formData(std::move(data));
     if (!desRet) {
@@ -348,7 +348,7 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> ByteStreamChannel
 
 Task<void> _closeLater(ILIAS_NAMESPACE::ByteStream<> client, std::vector<char> buf, uint16_t id,
                        NEKO_NAMESPACE::ChannelFactory* const mf) {
-    NEKO_LOG_INFO("send: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
+    // NEKO_LOG_INFO("send: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     mf->destroyChannel(id);
     auto ret = co_await client.send(buf.data(), buf.size());
     co_return !ret ? Unexpected(ret.error()) : ILIAS_NAMESPACE::Result<>();
@@ -375,12 +375,12 @@ void ByteStreamChannel::close() {
 
 void ByteStreamChannel::destroy() { mChannelFactory->destroyChannel(mChannelId); }
 
-auto CCErrorCategory::instance() -> const CCErrorCategory& {
-    static CCErrorCategory instance;
+auto ErrorCategory::instance() -> const ErrorCategory& {
+    static ErrorCategory instance;
     return instance;
 }
 
-auto CCErrorCategory::message(uint32_t value) const -> std::string {
+auto ErrorCategory::message(uint32_t value) const -> std::string {
     switch (value) {
 #define NEKO_CHANNEL_ERROR(name, code, message, _)                                                                     \
     case code:                                                                                                         \
@@ -392,8 +392,13 @@ auto CCErrorCategory::message(uint32_t value) const -> std::string {
     }
 }
 
-auto CCErrorCategory::name() const -> std::string_view { return "CCRpcError"; }
+auto ErrorCategory::name() const -> std::string_view { return "NekoCommunicationError"; }
 
-auto CCErrorCategory::equivalent(uint32_t self, const ILIAS_NAMESPACE::Error& other) const -> bool { return false; }
+auto ErrorCategory::equivalent(uint32_t self, const ILIAS_NAMESPACE::Error& other) const -> bool { 
+    if (self == static_cast<uint32_t>(ErrorCode::ChannelClosedByPeer) && other == ILIAS_NAMESPACE::Error::ConnectionReset) {
+        return true;
+    }
+    return other.category().name() == name() && self == static_cast<uint32_t>(other.value()); 
+}
 
 NEKO_END_NAMESPACE

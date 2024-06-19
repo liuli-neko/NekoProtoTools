@@ -38,14 +38,16 @@
 #endif
 #if NEKO_CPP_PLUS >= 17
 #include <string>
-#define NEKO_CONSTEXPR_FUNC constexpr
-#define NEKO_CONSTEXPR_VAR  constexpr
-#define NEKO_STRING_VIEW    std::string_view
+#define NEKO_CONSTEXPR_FUNC       constexpr
+#define NEKO_CONSTEXPR_VAR        constexpr
+#define NEKO_STRING_VIEW          std::string_view
+#define NEKO_MAKE_UNIQUE(type, ...) std::make_unique<type>(__VA_ARGS__)
 #else
 #include <string>
 #define NEKO_CONSTEXPR_FUNC
-#define NEKO_CONSTEXPR_VAR constexpr
-#define NEKO_STRING_VIEW   std::string
+#define NEKO_CONSTEXPR_VAR        constexpr
+#define NEKO_STRING_VIEW          std::string
+#define NEKO_MAKE_UNIQUE(type, ...) std::unique_ptr<type>(new type(__VA_ARGS__))
 #endif
 
 #define NEKO_PROTO_ASSERT(cond, fmt, ...)                                                                              \
