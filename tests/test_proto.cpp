@@ -94,10 +94,10 @@ protected:
 
 TEST_F(ProtoTest, StructSerialize) {
     TestP testp;
-    testp.a = 3;
-    testp.b = "Struct test";
-    testp.c = true;
-    testp.d = 3.141592654;
+    testp.setField("a", 3);
+    testp.setField<std::string>("b", "Struct test");
+    testp.setField("c", true);
+    testp.setField("d", 3.141592654);
     testp.e = {1, 2, 3};
     testp.f = {{"a", 1}, {"b", 2}};
     testp.g = {1, 2, 3};
@@ -215,9 +215,11 @@ TEST_F(ProtoTest, JsonProto) {
     auto proto = factory->create("TestP");
     proto->formData(std::vector<char>(str.data(), str.data() + str.length()));
     auto p = dynamic_cast<TestP*>(proto);
-    EXPECT_EQ(p->a, 3);
-    EXPECT_STREQ(p->b.c_str(), "Struct test");
-    EXPECT_TRUE(p->c);
+    int a = {};
+    EXPECT_TRUE(proto->getField("a", &a));
+    EXPECT_EQ(a, 3);
+    EXPECT_STREQ(proto->getField<std::string>("b", "").c_str(), "Struct test");
+    EXPECT_TRUE(proto->getField<bool>("c", false));
     EXPECT_DOUBLE_EQ(p->d, 3.141592654);
     EXPECT_EQ(p->e.size(), 3);
     EXPECT_EQ(p->f.size(), 2);

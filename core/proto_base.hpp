@@ -65,6 +65,7 @@
 #include <vector>
 
 #include "private/global.hpp"
+#include "private/reflection_serializer.hpp"
 
 NEKO_BEGIN_NAMESPACE
 class ProtoFactory;
@@ -104,6 +105,24 @@ public:
      * @return NEKO_STRING_VIEW is std::string_view after c++17 and std::string before c++14
      */
     virtual NEKO_STRING_VIEW className() const = 0;
+
+    template <typename T>
+    bool getField(const NEKO_STRING_VIEW& name, T* result) {
+        return getReflectionObject()->getField(name, result);
+    }
+
+    template <typename T>
+    T getField(const NEKO_STRING_VIEW& name, const T& defaultValue) {
+        return getReflectionObject()->getField(name, defaultValue);
+    }
+
+    template <typename T>
+    bool setField(const NEKO_STRING_VIEW& name, const T& value) {
+        return getReflectionObject()->setField(name, value);
+    }
+
+private:
+    virtual ReflectionObject* getReflectionObject() = 0;
 };
 
 template <typename ProtoT, typename SerializerT>
@@ -116,7 +135,7 @@ public:
     ProtoBase() = default;
     ProtoBase(const ProtoBase& other);
     ProtoBase(ProtoBase&& other);
-    virtual ~ProtoBase() = default;
+    virtual ~ProtoBase();
     ProtoBase& operator=(const ProtoBase& other);
     ProtoBase& operator=(ProtoBase&& other);
 
@@ -124,9 +143,12 @@ public:
     int type() const override;
     bool formData(const std::vector<char>& data) override;
     NEKO_STRING_VIEW className() const override;
+    ReflectionObject* getReflectionObject() override;
 
 private:
     mutable SerializerT mSerializer;
+    ReflectionSerializer* mReflectionSerializer = {};
+    
     static NEKO_STRING_VIEW _init_class_name__;
 };
 
@@ -244,6 +266,12 @@ ProtoBase<T, SerializerT>::ProtoBase(ProtoBase<T, SerializerT>&& other) {
     mSerializer = std::move(other.mSerializer);
 }
 
+template <typename ProtoT, typename SerializerT>
+inline ProtoBase<ProtoT, SerializerT>::~ProtoBase() {
+    delete mReflectionSerializer;
+    mReflectionSerializer = nullptr;
+}
+
 template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(const ProtoBase<T, SerializerT>& other) {
     mSerializer = other.mSerializer;
@@ -259,6 +287,20 @@ ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, Ser
 template <typename T, typename SerializerT>
 NEKO_STRING_VIEW ProtoBase<T, SerializerT>::className() const {
     return _init_class_name__;
+}
+
+template <typename ProtoT, typename SerializerT>
+inline ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() {
+    if (mReflectionSerializer != nullptr) {
+        return mReflectionSerializer->getObject();
+    }
+    mReflectionSerializer = new ReflectionSerializer();
+    mReflectionSerializer->start();
+    auto self = dynamic_cast<const ProtoType*>(this);
+    NEKO_ASSERT(self != nullptr, "please make sure that ProtoBase<{}, {}> is only inherited by {}.", _init_class_name__,
+            _class_name<SerializerT>(), _init_class_name__);
+    bool ret = const_cast<ProtoType*>(self)->deserialize(*mReflectionSerializer);
+    return mReflectionSerializer->getObject();
 }
 
 template <typename T, typename SerializerT>
