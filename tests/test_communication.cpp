@@ -11,13 +11,14 @@
 NEKO_USE_NAMESPACE
 using namespace ILIAS_NAMESPACE;
 
-class Message : public NEKO_NAMESPACE::ProtoBase<Message, JsonSerializer> {
+class Message {
 public:
     uint64_t timestamp;
     std::string msg;
     std::vector<int> numbers;
 
     NEKO_SERIALIZER(timestamp, msg, numbers);
+    NEKO_DECLARE_PROTOCOL(Message, JsonSerializer)
 };
 
 std::string to_hex(const std::vector<char>& data) {
@@ -39,10 +40,10 @@ Task<void> ClientLoop(IoContext& ioContext, ChannelFactory& channelFactor) {
     while (count-- > 0) {
         if (auto cl = channel.lock(); cl != nullptr) {
             NEKO_LOG_INFO("send message to channel {}", cl->channelId());
-            auto msg = std::make_unique<Message>();
-            msg->msg = "this is a message from client";
-            msg->timestamp = time(NULL);
-            msg->numbers = (std::vector<int>{1, 2, 3, 5});
+            auto msg = NEKO_MAKE_UNIQUE(Message::ProtoType, Message{});
+            (*msg)->msg = "this is a message from client";
+            (*msg)->timestamp = time(NULL);
+            (*msg)->numbers = (std::vector<int>{1, 2, 3, 5});
             auto ret1 = co_await cl->send(std::move(msg));
             if (!ret1) {
                 NEKO_LOG_ERROR("send failed: {}", ret1.error().message());
@@ -111,10 +112,10 @@ Task<void> HandleLoop(std::weak_ptr<NEKO_NAMESPACE::ChannelBase> channel) {
             NEKO_LOG_ERROR("channel expired");
             co_return Result<>();
         }
-        auto msg = std::make_unique<Message>();
-        msg->msg = ("this is a message from server");
-        msg->timestamp = (time(NULL));
-        msg->numbers = (std::vector<int>{1, 2, 3});
+        auto msg = NEKO_MAKE_UNIQUE(Message::ProtoType, Message{});
+        (*msg)->msg = ("this is a message from server");
+        (*msg)->timestamp = (time(NULL));
+        (*msg)->numbers = (std::vector<int>{1, 2, 3});
         if (auto cl = channel.lock(); cl != nullptr) {
             auto ret1 = co_await cl->send(std::move(msg));
             if (!ret1) {
@@ -140,11 +141,18 @@ Task<void> serverLoop(IoContext& ioContext, ChannelFactory& channelFactor) {
     }
     NEKO_LOG_INFO("accept successed");
     auto ret1 = co_await HandleLoop(ret.value());
-    co_return !ret1 ? Unexpected(ret1.error()) : Result<>();
+    if (!ret1 && ret1.error() != ErrorCode::ChannelClosedByPeer) {
+        co_return ret1.error();
+    }
+    co_return Result<>();
 }
 
 Task<void> test(IoContext& ioContext, ChannelFactory& channelFactor, ChannelFactory& channelFactor1) {
-    co_await WhenAll(serverLoop(ioContext, channelFactor), ClientLoop(ioContext, channelFactor1));
+    auto [ret1, ret2] = co_await WhenAll(serverLoop(ioContext, channelFactor), ClientLoop(ioContext, channelFactor1));
+    if ((!ret1 && ret1.error() != ErrorCode::ChannelClosedByPeer) ||
+        (!ret2)) {
+        exit(-1);
+    }
     co_return Result<>();
 }
 

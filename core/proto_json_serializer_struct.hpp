@@ -184,6 +184,18 @@ struct is_std_array<std::array<T, N>> : std::true_type {};
 template <typename T>
 constexpr bool can_unwrap_v = std::is_aggregate_v<std::remove_cv_t<T>> && !is_std_array<T>::value;
 
+template <typename T, class enable = void>
+struct can_serialize : std::false_type {};
+
+template <typename T>
+struct can_serialize<T, typename std::enable_if<std::is_same<
+                            decltype(std::declval<T>().serialize(std::declval<JsonSerializer&>())),
+                            decltype(std::declval<T>().deserialize(std::declval<JsonSerializer&>()))>::value>::type>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool can_serialize_v = can_serialize<T>::value;
+
 /**
  * @brief Convert the struct reference to tuple
  *
@@ -199,7 +211,7 @@ constexpr auto unwrap_struct(T& data) noexcept {
 } // namespace
 
 template <typename WriterT, typename ValueT, typename T>
-struct JsonConvert<WriterT, ValueT, T, std::enable_if_t<can_unwrap_v<T>>> {
+struct JsonConvert<WriterT, ValueT, T, std::enable_if_t<can_unwrap_v<T> && !can_serialize_v<T>>> {
     template <typename U>
     static void serializeTupleImpl(bool& ret, WriterT& writer, U& value) {
         using Type = std::remove_reference_t<std::remove_cv_t<U>>;

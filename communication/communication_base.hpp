@@ -77,12 +77,12 @@ public:
 };
 
 #define NEKO_CHANNEL_ERROR(name, code, message, _) name = code,
-enum class CCErrorCode { NEKO_CHANNEL_ERROR_CODE_TABLE };
+enum class ErrorCode { NEKO_CHANNEL_ERROR_CODE_TABLE };
 #undef NEKO_CHANNEL_ERROR
 
-class NEKO_PROTO_API CCErrorCategory : public ILIAS_NAMESPACE::ErrorCategory {
+class NEKO_PROTO_API ErrorCategory : public ILIAS_NAMESPACE::ErrorCategory {
 public:
-    static auto instance() -> const CCErrorCategory&;
+    static auto instance() -> const ErrorCategory&;
     auto message(uint32_t value) const -> std::string override;
     auto name() const -> std::string_view override;
     auto equivalent(uint32_t self, const ILIAS_NAMESPACE::Error& other) const -> bool override;
@@ -166,5 +166,5 @@ inline ChannelBase::ChannelState ChannelBase::state() { return mState; }
 NEKO_END_NAMESPACE
 
 ILIAS_NS_BEGIN
-ILIAS_DECLARE_ERROR(NEKO_NAMESPACE::CCErrorCode, NEKO_NAMESPACE::CCErrorCategory);
+ILIAS_DECLARE_ERROR(NEKO_NAMESPACE::ErrorCode, NEKO_NAMESPACE::ErrorCategory);
 ILIAS_NS_END

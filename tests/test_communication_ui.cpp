@@ -15,13 +15,13 @@
 NEKO_USE_NAMESPACE
 using namespace ILIAS_NAMESPACE;
 
-class Message : public NEKO_NAMESPACE::ProtoBase<Message, JsonSerializer> {
-public:
+struct Message {
     uint64_t timestamp;
     std::string msg;
     std::vector<int> numbers;
 
     NEKO_SERIALIZER(timestamp, msg, numbers)
+    NEKO_DECLARE_PROTOCOL(Message, JsonSerializer)
 };
 
 std::string to_hex(const std::vector<char>& data) {
@@ -49,7 +49,6 @@ MainWidget::MainWidget(QIoContext* ctxt, std::shared_ptr<NEKO_NAMESPACE::ProtoFa
                 }
             });
     ui->send->setDisabled(true);
-    ui->makeSubChannel->setDisabled(true);
 }
 
 MainWidget::~MainWidget() {
@@ -132,12 +131,12 @@ ILIAS_NAMESPACE::Task<void> MainWidget::makeMainChannel() {
 
 ILIAS_NAMESPACE::Task<void> MainWidget::sendMessage(std::weak_ptr<NEKO_NAMESPACE::ChannelBase> channel) {
     if (auto cl = channel.lock(); cl != nullptr) {
-        // NEKO_LOG_INFO("send message to channel {}", cl->channelId());
-        auto msg = std::make_unique<Message>();
-        msg->msg = std::string(ui->sendEdit->toPlainText().toUtf8());
-        msg->timestamp = (time(NULL));
+        // CS_LOG_INFO("send message to channel {}", cl->channelId());
+        auto msg = NEKO_MAKE_UNIQUE(Message::ProtoType, Message{});
+        (*msg)->msg = std::string(ui->sendEdit->toPlainText().toUtf8());
+        (*msg)->timestamp = (time(NULL));
         auto ids = mChannelFactor.getChannelIds();
-        msg->numbers = std::vector<int>(ids.begin(), ids.end());
+        (*msg)->numbers = std::vector<int>(ids.begin(), ids.end());
         auto ret1 = co_await cl->send(std::move(msg));
         if (!ret1) {
             NEKO_LOG_ERROR("send failed: {}", ret1.error().message());
@@ -157,9 +156,9 @@ ILIAS_NAMESPACE::Task<void> MainWidget::recvMessage(std::weak_ptr<NEKO_NAMESPACE
             NEKO_LOG_ERROR("recv failed: {}", ret.error().message());
             co_return Unexpected(ret.error());
         }
-        auto retMsg = std::shared_ptr<IProto>(ret.value().release());
+        auto retMsg = std::move(ret.value());
 
-        auto msg = std::dynamic_pointer_cast<Message>(retMsg);
+        auto msg = retMsg->cast<Message>();
         if (msg) {
             ui->recvEdit->append(QString("from %1 [%2]:\n%3\n")
                                      .arg(cl->channelId())
