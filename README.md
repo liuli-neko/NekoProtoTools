@@ -263,6 +263,6 @@ At the same time, the simpler this thing is done, the better.
 
 ### 5. the future
 
-- [ ] support visit feilds by name
+- [x] support visit fields by name
 - [ ] support udp protocol in communication channel
 - [ ] support more protocol in communication channel
