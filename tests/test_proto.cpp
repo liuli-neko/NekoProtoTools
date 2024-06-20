@@ -76,6 +76,12 @@ struct TestP {
     NEKO_DECLARE_PROTOCOL(TestP, JsonSerializer)
 };
 
+struct UnusedProto {
+    int a;
+    NEKO_SERIALIZER(a)
+    NEKO_DECLARE_PROTOCOL(UnusedProto, JsonSerializer)
+};
+
 struct BinaryProto {
     int32_t a = 1;
     std::string b = "hello";
@@ -208,21 +214,38 @@ TEST_F(ProtoTest, Base64Covert) {
     EXPECT_STREQ(str10.data(), "");
 }
 
-TEST_F(ProtoTest, JsonProto) {
+TEST_F(ProtoTest, JsonProtoRef) {
     std::string str = "{\"a\":3,\"b\":\"Struct "
                       "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
                       "\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
                       "\"TEnum_A(1)\"],\"j\":[1,\"hello\"]}";
     auto proto = factory->create("TestP");
     proto->formData(std::vector<char>(str.data(), str.data() + str.length()));
-    auto rawp = proto->cast<TestP>();
+    auto rawp = proto->cast<TestP>(); // success cast
+
+    EXPECT_TRUE(proto->cast<BinaryProto>() == nullptr); // failed cast
+
+    // get field test
     int a = {};
-    EXPECT_TRUE(proto->getField("a", &a));
+    EXPECT_TRUE(proto->getField("a", &a));                                      // success get field
+    EXPECT_FALSE(proto->getField("b", &a));                                     // get field by wrong type
+    EXPECT_FALSE(proto->getField("unexist field", &a));                         // get unexist field
+    EXPECT_STREQ(proto->getField<std::string>("b", "").c_str(), "Struct test"); // success get field
+    EXPECT_TRUE(proto->getField<bool>("c", false));                             // success get field
+    EXPECT_FALSE(proto->getField<bool>("b", false));                            // get field by wrong type
+    EXPECT_FALSE(proto->getField<bool>("unexist field", false));                // get unexist field
     EXPECT_EQ(a, 3);
-    proto->setField("a", 14);
+
+    // set field test
+    EXPECT_TRUE(proto->setField("a", 14));                            // success set field
+    EXPECT_TRUE(proto->setField("b", std::string("field set test"))); // success set field
+    EXPECT_TRUE(proto->setField("c", false));                         // success set field
+    EXPECT_FALSE(proto->setField("a", 3.1234));                       // set field by wrong type
+    EXPECT_FALSE(proto->setField("unexist field", 3.1234));           // set unexist field
     EXPECT_EQ(rawp->a, 14);
-    EXPECT_STREQ(proto->getField<std::string>("b", "").c_str(), "Struct test");
-    EXPECT_TRUE(proto->getField<bool>("c", false));
+    EXPECT_STREQ(rawp->b.c_str(), "field set test");
+    EXPECT_FALSE(rawp->c);
+
     EXPECT_DOUBLE_EQ(rawp->d, 3.141592654);
     EXPECT_EQ(rawp->e.size(), 3);
     EXPECT_EQ(rawp->f.size(), 2);
