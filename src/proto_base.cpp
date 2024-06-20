@@ -16,11 +16,11 @@
 
 NEKO_BEGIN_NAMESPACE
 
-void ProtoFactory::setVersion(int major, int minor, int patch) {
+void ProtoFactory::setVersion(int major, int minor, int patch) NEKO_NOEXCEPT {
     mVersion = ((major & 0xFF) << 16 | (minor & 0xFF) << 8 | (patch & 0xFF));
 }
 
-uint32_t ProtoFactory::version() const { return mVersion; }
+uint32_t ProtoFactory::version() const NEKO_NOEXCEPT { return mVersion; }
 
 std::map<NEKO_STRING_VIEW, std::function<void(ProtoFactory*)>>&
 static_init_funcs(const NEKO_STRING_VIEW& name = "", std::function<void(ProtoFactory*)> func = nullptr) {
@@ -35,7 +35,7 @@ static_init_funcs(const NEKO_STRING_VIEW& name = "", std::function<void(ProtoFac
     return funcs;
 }
 
-void ProtoFactory::init() {
+void ProtoFactory::init() NEKO_NOEXCEPT {
     for (auto& item : static_init_funcs()) {
         item.second(this);
     }
@@ -52,7 +52,7 @@ ProtoFactory::ProtoFactory(const ProtoFactory& other)
 ProtoFactory::ProtoFactory(ProtoFactory&& other)
     : mProtoMap(std::move(other.mProtoMap)), mProtoNameMap(std::move(other.mProtoNameMap)), mVersion(other.mVersion) {}
 
-ProtoFactory& ProtoFactory::operator=(const ProtoFactory& other) {
+ProtoFactory& ProtoFactory::operator=(const ProtoFactory& other) NEKO_NOEXCEPT {
     if (this != &other) {
         mProtoMap = other.mProtoMap;
         mProtoNameMap = other.mProtoNameMap;
@@ -61,7 +61,7 @@ ProtoFactory& ProtoFactory::operator=(const ProtoFactory& other) {
     return *this;
 }
 
-ProtoFactory& ProtoFactory::operator=(ProtoFactory&& other) {
+ProtoFactory& ProtoFactory::operator=(ProtoFactory&& other) NEKO_NOEXCEPT {
     if (this != &other) {
         mProtoMap = std::move(other.mProtoMap);
         mProtoNameMap = std::move(other.mProtoNameMap);
@@ -70,7 +70,7 @@ ProtoFactory& ProtoFactory::operator=(ProtoFactory&& other) {
     return *this;
 }
 
-std::unique_ptr<IProto> ProtoFactory::create(int type) const {
+std::unique_ptr<IProto> ProtoFactory::create(int type) const NEKO_NOEXCEPT {
     auto item = mProtoMap.find(type);
     if (mProtoMap.end() != item) {
         return std::unique_ptr<IProto>((item->second)());
@@ -78,7 +78,7 @@ std::unique_ptr<IProto> ProtoFactory::create(int type) const {
     return nullptr;
 }
 
-std::unique_ptr<IProto> ProtoFactory::create(const char* name) const {
+std::unique_ptr<IProto> ProtoFactory::create(const char* name) const NEKO_NOEXCEPT {
     auto item = mProtoNameMap.find(name);
     if (mProtoNameMap.end() == item) {
         return nullptr;

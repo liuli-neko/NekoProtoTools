@@ -19,7 +19,11 @@ NEKO_BEGIN_NAMESPACE
 
 /// ================== Base 64 ==========================
 struct Base64Covert {
+#if NEKO_CPP_PLUS >= 17
     constexpr static const char Table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+#else
+    static const char Table[65];
+#endif
     static inline uint8_t QueryTable(uint8_t ch) noexcept {
         // search on table
         return strchr(Table, ch) - Table;
@@ -134,6 +138,9 @@ struct Base64Covert {
         return true;
     }
 };
+#if NEKO_CPP_PLUS < 17
+const char Base64Covert::Table[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+#endif
 /// ===================end base 64=========================
 template <typename WriterT, typename ValueT, typename T>
 struct JsonConvert<WriterT, ValueT, T,
