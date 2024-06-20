@@ -18,22 +18,24 @@
 
 #include "global.hpp"
 
+NEKO_BEGIN_NAMESPACE
+
 class ReflectionFieldBase {
 public:
     ReflectionFieldBase() = default;
     virtual ~ReflectionFieldBase() = default;
-    virtual const NEKO_STRING_VIEW& getFieldName() const = 0;
-    virtual const std::type_info& getFieldType() const = 0;
+    virtual const NEKO_STRING_VIEW& getFieldName() const NEKO_NOEXCEPT = 0;
+    virtual const std::type_info& getFieldType() const NEKO_NOEXCEPT = 0;
 };
 
 template <typename T>
 class ReflectionField : public ReflectionFieldBase {
 public:
-    ReflectionField(const NEKO_STRING_VIEW &name, T* value) : mValue(value), mName(name) {}
-    const T& getField() const { return *mValue; }
-    void setField(const T& value) { (*mValue) = value; }
-    const NEKO_STRING_VIEW& getFieldName() const override { return mName; }
-    const std::type_info& getFieldType() const override { return typeid(T); }
+    explicit ReflectionField(const NEKO_STRING_VIEW &name, T* value) : mValue(value), mName(name) {}
+    const T& getField() const NEKO_NOEXCEPT { return *mValue; }
+    void setField(const T& value) NEKO_NOEXCEPT { (*mValue) = value; }
+    const NEKO_STRING_VIEW& getFieldName() const NEKO_NOEXCEPT override { return mName; }
+    const std::type_info& getFieldType() const NEKO_NOEXCEPT override { return typeid(T); }
 private:
     T *const mValue;
     const NEKO_STRING_VIEW mName;
@@ -45,7 +47,7 @@ public:
     inline ~ReflectionObject() {
         clear();
     }
-    inline void clear() {
+    inline void clear() NEKO_NOEXCEPT {
         for (auto& it : mFields) {
             delete it.second;
             it.second = nullptr;
@@ -54,7 +56,7 @@ public:
     }
 
     template <typename T>
-    T getField(const NEKO_STRING_VIEW& name, const T& defaultValue) const {
+    T getField(const NEKO_STRING_VIEW& name, const T& defaultValue) const NEKO_NOEXCEPT {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             NEKO_LOG_ERROR("[ReflectionObject] field {} not found.", name);
@@ -73,7 +75,7 @@ public:
     }
 
     template <typename T>
-    bool getField(const NEKO_STRING_VIEW& name, T* result) const {
+    bool getField(const NEKO_STRING_VIEW& name, T* result) const NEKO_NOEXCEPT {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             NEKO_LOG_ERROR("[ReflectionObject] field {} not found.", name);
@@ -94,7 +96,7 @@ public:
         return true;
     }
     template <typename T>
-    bool setField(const NEKO_STRING_VIEW& name, const T& value) {
+    bool setField(const NEKO_STRING_VIEW& name, const T& value) NEKO_NOEXCEPT {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             NEKO_LOG_ERROR("[ReflectionObject] field {} not found.", name);
@@ -114,7 +116,7 @@ public:
     }
 
     template <typename T>
-    ReflectionField<T>* bindField(const NEKO_STRING_VIEW & name, T* value) {
+    ReflectionField<T>* bindField(const NEKO_STRING_VIEW & name, T* value) NEKO_NOEXCEPT {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             mFields.insert(std::make_pair(name, new ReflectionField<T>(name, value)));
@@ -136,11 +138,11 @@ public:
     ReflectionSerializer() = default;
     ~ReflectionSerializer() = default;
 
-    inline void start() {
+    inline void start() NEKO_NOEXCEPT {
         mObject.clear();
     }
     template <typename T>
-    bool get(const char* name, const size_t len, T* value) {
+    bool get(const char* name, const size_t len, T* value) NEKO_NOEXCEPT {
         return mObject.bindField(NEKO_STRING_VIEW(name, len) , value) != nullptr;
     }
     inline ReflectionObject* getObject() {
@@ -150,3 +152,5 @@ public:
 private:
     ReflectionObject mObject;
 };
+
+NEKO_END_NAMESPACE

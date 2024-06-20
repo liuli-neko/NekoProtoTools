@@ -93,16 +93,18 @@ protected:
 };
 
 TEST_F(ProtoTest, StructSerialize) {
-    TestP testp{3,
-                "Struct test",
-                true,
-                3.141592654,
-                {1, 2, 3},
-                {{"a", 1}, {"b", 2}},
-                {1, 2, 3},
-                TEnum_A,
-                {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A},
-                {1, "hello"}};
+    TestP testp;
+    testp.a = 3;
+    testp.b = "Struct test";
+    testp.c = true;
+    testp.d = 3.141592654;
+    testp.e = std::list<int>{1, 2, 3};
+    testp.f = std::map<std::string, int>{{"a", 1}, {"b", 2}};
+    testp.g = std::array<int, 5>{1, 2, 3, 0, 0};
+    testp.h = TEnum_A;
+    testp.i = StructA{1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
+    testp.j = std::make_tuple(1, "hello");
+
     std::vector<char> data;
     data = testp.makeProto().toData();
     data.push_back('\0');

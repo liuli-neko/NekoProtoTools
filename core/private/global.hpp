@@ -42,12 +42,14 @@
 #define NEKO_CONSTEXPR_VAR        constexpr
 #define NEKO_STRING_VIEW          std::string_view
 #define NEKO_MAKE_UNIQUE(type, ...) std::make_unique<type>(__VA_ARGS__)
+#define NEKO_NOEXCEPT noexcept
 #else
 #include <string>
 #define NEKO_CONSTEXPR_FUNC
 #define NEKO_CONSTEXPR_VAR        constexpr
 #define NEKO_STRING_VIEW          std::string
 #define NEKO_MAKE_UNIQUE(type, ...) std::unique_ptr<type>(new type(__VA_ARGS__))
+#define NEKO_NOEXCEPT noexcept
 #endif
 
 #define NEKO_PROTO_ASSERT(cond, fmt, ...)                                                                              \
@@ -113,7 +115,7 @@ NEKO_BEGIN_NAMESPACE
 #if defined(__GNUC__) || defined(__MINGW__)
 namespace {
 template <class T>
-NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() {
+NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() NEKO_NOEXCEPT {
     NEKO_STRING_VIEW pretty_function = __PRETTY_FUNCTION__;
     size_t start = pretty_function.find_last_of('[');
     size_t end = start;
@@ -141,7 +143,7 @@ NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() {
 #elif defined(_WIN32)
 namespace {
 template <class T>
-NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() {
+NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() NEKO_NOEXCEPT {
     NEKO_STRING_VIEW string(__FUNCSIG__);
     size_t start = string.find("_class_name<") + 15;
     size_t d = string.find_first_of(' ', start);

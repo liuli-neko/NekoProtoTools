@@ -32,41 +32,33 @@ class OutBufferWrapper {
 public:
     using Ch = char;
 
-    OutBufferWrapper();
-    OutBufferWrapper(std::vector<Ch>* vec);
-    void setVector(std::vector<Ch>* vec);
-    void Put(Ch c);
-    void Flush();
-    const Ch* GetString() const;
-    std::size_t GetSize() const;
-    void Clear();
+    OutBufferWrapper() NEKO_NOEXCEPT;
+    OutBufferWrapper(std::vector<Ch>* vec) NEKO_NOEXCEPT;
+    void setVector(std::vector<Ch>* vec) NEKO_NOEXCEPT;
+    void Put(Ch c) NEKO_NOEXCEPT;
+    void Flush() NEKO_NOEXCEPT;
+    const Ch* GetString() const NEKO_NOEXCEPT;
+    std::size_t GetSize() const NEKO_NOEXCEPT;
+    void Clear() NEKO_NOEXCEPT;
 
 private:
-    std::vector<Ch>* mVec = nullptr;
-    bool mIsOwner = false;
+    std::shared_ptr<std::vector<Ch>> mVec;
 };
 
-inline OutBufferWrapper::OutBufferWrapper() : mVec(new std::vector<Ch>()), mIsOwner(true) {}
-inline OutBufferWrapper::OutBufferWrapper(std::vector<Ch>* vec) : mVec(vec), mIsOwner(false) {}
-inline void OutBufferWrapper::setVector(std::vector<Ch>* vec) {
+inline OutBufferWrapper::OutBufferWrapper() NEKO_NOEXCEPT : mVec(new std::vector<Ch>()) {}
+inline OutBufferWrapper::OutBufferWrapper(std::vector<Ch>* vec) NEKO_NOEXCEPT : mVec(vec, [](std::vector<Ch>* ptr) {}) {}
+inline void OutBufferWrapper::setVector(std::vector<Ch>* vec) NEKO_NOEXCEPT {
     if (vec != nullptr) {
-        if (mIsOwner) {
-            delete mVec;
-            mIsOwner = false;
-        }
-        mVec = vec;
+        mVec.reset(vec, [](std::vector<Ch>* ptr) {});
     } else {
-        if (!mIsOwner) {
-            mVec = new std::vector<Ch>();
-            mIsOwner = true;
-        }
+        mVec.reset(new std::vector<Ch>(), [](std::vector<Ch>* ptr) { delete ptr; });
     }
 }
-inline void OutBufferWrapper::Put(Ch c) { mVec->push_back(c); }
-inline void OutBufferWrapper::Flush() {}
-inline const OutBufferWrapper::Ch* OutBufferWrapper::GetString() const { return mVec->data(); }
-inline std::size_t OutBufferWrapper::GetSize() const { return mVec->size(); }
-inline void OutBufferWrapper::Clear() { mVec->clear(); }
+inline void OutBufferWrapper::Put(Ch c) NEKO_NOEXCEPT { mVec->push_back(c); }
+inline void OutBufferWrapper::Flush() NEKO_NOEXCEPT {}
+inline const OutBufferWrapper::Ch* OutBufferWrapper::GetString() const NEKO_NOEXCEPT { return mVec->data(); }
+inline std::size_t OutBufferWrapper::GetSize() const NEKO_NOEXCEPT { return mVec->size(); }
+inline void OutBufferWrapper::Clear() NEKO_NOEXCEPT { mVec->clear(); }
 
 template <typename BufferT = OutBufferWrapper>
 using JsonWriter = rapidjson::Writer<BufferT>;
@@ -77,14 +69,14 @@ public:
     using WriterType = JsonWriter<>;
 
 public:
-    JsonSerializer();
-    JsonSerializer(const JsonSerializer&);
-    JsonSerializer(JsonSerializer&& other);
-    JsonSerializer(WriterType* writer);
-    JsonSerializer(const JsonValue& root);
-    JsonSerializer& operator=(const JsonSerializer&);
-    JsonSerializer& operator=(JsonSerializer&& other);
-    ~JsonSerializer() = default;
+    JsonSerializer() NEKO_NOEXCEPT;
+    JsonSerializer(const JsonSerializer&) NEKO_NOEXCEPT;
+    JsonSerializer(JsonSerializer&& other) NEKO_NOEXCEPT;
+    explicit JsonSerializer(WriterType* writer) NEKO_NOEXCEPT;
+    explicit JsonSerializer(const JsonValue& root) NEKO_NOEXCEPT;
+    JsonSerializer& operator=(const JsonSerializer&) NEKO_NOEXCEPT;
+    JsonSerializer& operator=(JsonSerializer&& other) NEKO_NOEXCEPT;
+    ~JsonSerializer() NEKO_NOEXCEPT = default;
 
     /**
      * @brief start serialize
@@ -93,8 +85,8 @@ public:
      *
      * @param[out] data the buf to output
      */
-    void startSerialize(std::vector<char>* data);
-    void startSerialize(const NEKO_STRING_VIEW& filename);
+    void startSerialize(std::vector<char>* data) NEKO_NOEXCEPT;
+    void startSerialize(const NEKO_STRING_VIEW& filename) NEKO_NOEXCEPT;
     /**
      * @brief end serialize
      *  while calling this function after traversing all fields.
@@ -103,7 +95,7 @@ public:
      * @return true
      * @return false
      */
-    bool endSerialize();
+    bool endSerialize() NEKO_NOEXCEPT;
     /**
      * @brief insert value
      * for all fields, this function will be called by original class.
@@ -115,7 +107,7 @@ public:
      * @return false
      */
     template <typename T>
-    bool insert(const char* name, const size_t len, const T& value);
+    bool insert(const char* name, const size_t len, const T& value) NEKO_NOEXCEPT;
     /**
      * @brief start deserialize
      *  while calling this function before traversing all fields,
@@ -124,8 +116,8 @@ public:
      * @return true
      * @return false
      */
-    bool startDeserialize(const std::vector<char>& data);
-    bool startDeserialize(const NEKO_STRING_VIEW& filename);
+    bool startDeserialize(const std::vector<char>& data) NEKO_NOEXCEPT;
+    bool startDeserialize(const NEKO_STRING_VIEW& filename) NEKO_NOEXCEPT;
     /**
      * @brief end deserialize
      *  while calling this function after traversing all fields.
@@ -133,7 +125,7 @@ public:
      * @return true
      * @return false
      */
-    inline bool endDeserialize();
+    inline bool endDeserialize() NEKO_NOEXCEPT;
     /**
      * @brief get value
      * for all fields, this function will be called by original class.
@@ -145,7 +137,7 @@ public:
      * @return false
      */
     template <typename T>
-    bool get(const char* name, const size_t len, T* value);
+    bool get(const char* name, const size_t len, T* value) NEKO_NOEXCEPT;
 
 private:
     JsonDocument mDocument;
@@ -154,27 +146,27 @@ private:
     std::unique_ptr<WriterType, void (*)(WriterType*)> mWriter;
 };
 
-inline JsonSerializer::JsonSerializer()
+inline JsonSerializer::JsonSerializer() NEKO_NOEXCEPT
     : mDocument(), mRoot(JsonValue()), mBuffer(), mWriter(nullptr, [](WriterType* writer) {}) {}
 
-inline JsonSerializer::JsonSerializer(const JsonSerializer&)
+inline JsonSerializer::JsonSerializer(const JsonSerializer&) NEKO_NOEXCEPT
     : mDocument(), mRoot(JsonValue()), mBuffer(), mWriter(nullptr, [](WriterType* writer) {}) {}
 
-inline JsonSerializer::JsonSerializer(JsonSerializer&& other)
+inline JsonSerializer::JsonSerializer(JsonSerializer&& other) NEKO_NOEXCEPT
     : mDocument(), mRoot(JsonValue()), mBuffer(), mWriter(nullptr, [](WriterType* writer) {}) {}
 
-inline JsonSerializer::JsonSerializer(WriterType* writer)
+inline JsonSerializer::JsonSerializer(WriterType* writer) NEKO_NOEXCEPT
     : mDocument(), mRoot(JsonValue()), mBuffer(),
       mWriter(std::unique_ptr<WriterType, void (*)(WriterType*)>(writer, [](WriterType* writer) {})) {}
 
-inline JsonSerializer::JsonSerializer(const JsonValue& root)
+inline JsonSerializer::JsonSerializer(const JsonValue& root) NEKO_NOEXCEPT
     : mDocument(), mRoot(root), mBuffer(), mWriter(nullptr, [](WriterType* writer) {}) {}
 
-inline JsonSerializer& JsonSerializer::operator=(const JsonSerializer&) { return *this; }
+inline JsonSerializer& JsonSerializer::operator=(const JsonSerializer&) NEKO_NOEXCEPT { return *this; }
 
-inline JsonSerializer& JsonSerializer::operator=(JsonSerializer&& other) { return *this; }
+inline JsonSerializer& JsonSerializer::operator=(JsonSerializer&& other) NEKO_NOEXCEPT { return *this; }
 
-inline void JsonSerializer::startSerialize(std::vector<char>* data) {
+inline void JsonSerializer::startSerialize(std::vector<char>* data) NEKO_NOEXCEPT {
     if (!mWriter) {
         mBuffer.Clear();
         mBuffer.setVector(data);
@@ -184,12 +176,12 @@ inline void JsonSerializer::startSerialize(std::vector<char>* data) {
     mWriter->StartObject();
 }
 
-inline void startSerialize(const NEKO_STRING_VIEW& filename) {
+inline void startSerialize(const NEKO_STRING_VIEW& filename) NEKO_NOEXCEPT {
     // TODO:
     NEKO_LOG_ERROR("not implemented");
 }
 
-inline bool JsonSerializer::endSerialize() {
+inline bool JsonSerializer::endSerialize() NEKO_NOEXCEPT {
     mWriter->EndObject();
     if (!mWriter || !mWriter->IsComplete()) {
         mBuffer.Clear();
@@ -200,14 +192,14 @@ inline bool JsonSerializer::endSerialize() {
 }
 
 template <typename T>
-bool JsonSerializer::insert(const char* name, const size_t len, const T& value) {
+bool JsonSerializer::insert(const char* name, const size_t len, const T& value) NEKO_NOEXCEPT {
     if (!mWriter->Key(name, len)) {
         return false;
     }
     return JsonConvert<WriterType, ValueType, T>::toJsonValue(*mWriter, value);
 }
 
-inline bool JsonSerializer::startDeserialize(const NEKO_STRING_VIEW& filename) {
+inline bool JsonSerializer::startDeserialize(const NEKO_STRING_VIEW& filename) NEKO_NOEXCEPT {
     std::ifstream file(filename.data(), std::ios::binary);
     if (!file.is_open()) {
         NEKO_LOG_ERROR("open file {} failed", filename.data());
@@ -222,7 +214,7 @@ inline bool JsonSerializer::startDeserialize(const NEKO_STRING_VIEW& filename) {
     return true;
 }
 
-inline bool JsonSerializer::startDeserialize(const std::vector<char>& data) {
+inline bool JsonSerializer::startDeserialize(const std::vector<char>& data) NEKO_NOEXCEPT {
     mDocument.Parse(data.data(), data.size());
     if (mDocument.HasParseError()) {
         NEKO_LOG_ERROR("parse error {}", (int)mDocument.GetParseError());
@@ -231,14 +223,14 @@ inline bool JsonSerializer::startDeserialize(const std::vector<char>& data) {
     return true;
 }
 
-inline bool JsonSerializer::endDeserialize() {
+inline bool JsonSerializer::endDeserialize() NEKO_NOEXCEPT {
     mDocument.SetNull();
     mDocument.GetAllocator().Clear();
     return true;
 }
 
 template <typename T>
-bool JsonSerializer::get(const char* name, const size_t len, T* value) {
+bool JsonSerializer::get(const char* name, const size_t len, T* value) NEKO_NOEXCEPT {
     std::string name_str(name, len);
     if (!mDocument.IsNull() && mDocument.HasMember(name_str.c_str())) {
         return JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mDocument[name_str.c_str()]);
@@ -250,7 +242,7 @@ bool JsonSerializer::get(const char* name, const size_t len, T* value) {
 }
 
 template <typename WriterT, typename ValueT>
-struct JsonConvert<WriterT, ValueT, int, void> {
+struct JsonConvert<WriterT, ValueT, int, void>  {
     static bool toJsonValue(WriterT& writer, const int value) { return writer.Int(value); }
     static bool fromJsonValue(int* dst, const ValueT& value) {
         if (!value.IsInt() || dst == nullptr) {
