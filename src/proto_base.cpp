@@ -36,7 +36,9 @@ static_init_funcs(const NEKO_STRING_VIEW& name = "", std::function<void(ProtoFac
 }
 
 void ProtoFactory::init() NEKO_NOEXCEPT {
-    for (auto& item : static_init_funcs()) {
+    const auto& funcs = static_init_funcs();
+    mCreaterList.resize(funcs.size() + 1);
+    for (const auto& item : funcs) {
         item.second(this);
     }
 }
@@ -46,57 +48,45 @@ ProtoFactory::ProtoFactory(int major, int minor, int patch) {
     setVersion(major, minor, patch);
 }
 
-ProtoFactory::ProtoFactory(const ProtoFactory& other)
-    : mProtoMap(other.mProtoMap), mProtoNameMap(other.mProtoNameMap), mVersion(other.mVersion) {}
-
-ProtoFactory::ProtoFactory(ProtoFactory&& other)
-    : mProtoMap(std::move(other.mProtoMap)), mProtoNameMap(std::move(other.mProtoNameMap)), mVersion(other.mVersion) {}
-
-ProtoFactory& ProtoFactory::operator=(const ProtoFactory& other) NEKO_NOEXCEPT {
-    if (this != &other) {
-        mProtoMap = other.mProtoMap;
-        mProtoNameMap = other.mProtoNameMap;
-        mVersion = other.mVersion;
-    }
-    return *this;
+void ProtoFactory::regist(const NEKO_STRING_VIEW& name, std::function<IProto*()> creator) NEKO_NOEXCEPT {
+    auto type = proto_type(name, true);
+    mCreaterList[type] = creator;
 }
 
-ProtoFactory& ProtoFactory::operator=(ProtoFactory&& other) NEKO_NOEXCEPT {
-    if (this != &other) {
-        mProtoMap = std::move(other.mProtoMap);
-        mProtoNameMap = std::move(other.mProtoNameMap);
-        mVersion = other.mVersion;
+int ProtoFactory::proto_type(const NEKO_STRING_VIEW& name, const bool isGeneric) NEKO_NOEXCEPT {
+    static std::map<NEKO_STRING_VIEW, int> protoNameMap;
+    static int counter = 0;
+    auto item = protoNameMap.find(name);
+    if (protoNameMap.end() == item) {
+        if (isGeneric) {
+            protoNameMap.insert(std::make_pair(name, ++counter));
+            return counter;
+        } else {
+            NEKO_LOG_ERROR("Proto type not generic: {}, are you created a ProtoFactory and declare this type?", name);
+            return -1;
+        }
     }
-    return *this;
+    return item->second;
 }
+
 
 std::unique_ptr<IProto> ProtoFactory::create(int type) const NEKO_NOEXCEPT {
-    auto item = mProtoMap.find(type);
-    if (mProtoMap.end() != item) {
-        return std::unique_ptr<IProto>((item->second)());
+    if (type > 0 && type < mCreaterList.size() && nullptr != mCreaterList[type]) {
+        return std::unique_ptr<IProto>(mCreaterList[type]());
     }
     return nullptr;
 }
 
 std::unique_ptr<IProto> ProtoFactory::create(const char* name) const NEKO_NOEXCEPT {
-    auto item = mProtoNameMap.find(name);
-    if (mProtoNameMap.end() == item) {
-        return nullptr;
-    }
-    auto itemType = mProtoMap.find(item->second);
-    if (mProtoMap.end() != itemType) {
-        return std::unique_ptr<IProto>((itemType->second)());
+    auto index = proto_type(name, false);
+    if (index > 0 && index < mCreaterList.size() && nullptr != mCreaterList[index]) {
+        return std::unique_ptr<IProto>(mCreaterList[index]());
     }
     return nullptr;
 }
 
 ProtoFactory::~ProtoFactory() {
     // Nothing to do
-}
-
-int type_counter() {
-    static int counter = 0;
-    return ++counter;
 }
 
 NEKO_END_NAMESPACE

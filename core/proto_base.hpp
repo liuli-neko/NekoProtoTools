@@ -101,11 +101,11 @@ public:
      */
     virtual int type() const NEKO_NOEXCEPT = 0;
     /**
-     * @brief proto message class name
+     * @brief proto message name
      *
      * @return NEKO_STRING_VIEW is std::string_view after c++17 and std::string before c++14
      */
-    virtual NEKO_STRING_VIEW className() const NEKO_NOEXCEPT = 0;
+    virtual NEKO_STRING_VIEW protoName() const NEKO_NOEXCEPT = 0;
 
     template <typename T>
     bool getField(const NEKO_STRING_VIEW& name, T* result) NEKO_NOEXCEPT {
@@ -171,7 +171,8 @@ public:
     std::vector<char> toData() const NEKO_NOEXCEPT override;
     int type() const NEKO_NOEXCEPT override;
     bool formData(const std::vector<char>& data) NEKO_NOEXCEPT override;
-    NEKO_STRING_VIEW className() const NEKO_NOEXCEPT override;
+    NEKO_STRING_VIEW protoName() const NEKO_NOEXCEPT override;
+    static NEKO_STRING_VIEW name() NEKO_NOEXCEPT;
 
 protected:
     inline ReflectionObject* getReflectionObject() NEKO_NOEXCEPT override;
@@ -184,20 +185,17 @@ private:
     std::shared_ptr<ReflectionSerializer> mReflectionSerializer = {};
     std::shared_ptr<ProtoT> mData = {};
 
-    static NEKO_STRING_VIEW _init_class_name__;
+    static NEKO_STRING_VIEW kProtoName;
 };
 
 class NEKO_PROTO_API ProtoFactory {
 public:
     explicit ProtoFactory(int major = 0, int minor = 0, int patch = 1);
-    ProtoFactory(const ProtoFactory&);
-    ProtoFactory(ProtoFactory&&);
-    ProtoFactory& operator=(const ProtoFactory&) NEKO_NOEXCEPT;
-    ProtoFactory& operator=(ProtoFactory&&) NEKO_NOEXCEPT;
     ~ProtoFactory();
 
     template <typename T>
     void regist(const NEKO_STRING_VIEW& name) NEKO_NOEXCEPT;
+    void regist(const NEKO_STRING_VIEW& name, std::function<IProto*()> creator) NEKO_NOEXCEPT;
     template <typename T>
     static int proto_type() NEKO_NOEXCEPT;
     template <typename T>
@@ -219,53 +217,32 @@ public:
     uint32_t version() const NEKO_NOEXCEPT;
 
 private:
+    ProtoFactory& operator=(const ProtoFactory&) = delete;
+    ProtoFactory& operator=(ProtoFactory&&) = delete;
     void init() NEKO_NOEXCEPT;
     template <typename T>
     static IProto* creater() NEKO_NOEXCEPT;
     void setVersion(int major, int minor, int patch) NEKO_NOEXCEPT;
+    static int proto_type(const NEKO_STRING_VIEW& name, const bool isGeneric = false) NEKO_NOEXCEPT;
 
 private:
-    std::map<int, std::function<IProto*()>> mProtoMap;
-    std::map<NEKO_STRING_VIEW, int> mProtoNameMap;
-    uint32_t mVersion = 0;
+    std::vector<std::function<IProto*()>> mCreaterList;
+    uint32_t mVersion;
 };
 
 template <typename T>
 void ProtoFactory::regist(const NEKO_STRING_VIEW& name) NEKO_NOEXCEPT {
-    auto itemType = mProtoMap.find(proto_type<typename T::ProtoType>());
-    auto itemName = mProtoNameMap.find(name);
-    if (itemType != mProtoMap.end()) {
-        NEKO_STRING_VIEW rname = "";
-        for (auto item : mProtoNameMap) {
-            if (item.second == proto_type<typename T::ProtoType>()) {
-                rname = item.first;
-                break;
-            }
-        }
-        NEKO_LOG_WARN("type {} is regist by proto({}), proto({}) can't regist again",
-                      proto_type<typename T::ProtoType>(), rname, name);
-    }
-    if (itemName != mProtoNameMap.end()) {
-        NEKO_LOG_WARN("proto({}) is regist type {}, can't regist type {} again", name, itemName->second,
-                      proto_type<typename T::ProtoType>());
-    }
-    NEKO_LOG_INFO("Init proto {}:{} for factory({})", name, proto_type<typename T::ProtoType>(), (void*)this);
-    mProtoNameMap.insert(std::make_pair(name, proto_type<typename T::ProtoType>()));
-    mProtoMap.insert(std::make_pair(proto_type<typename T::ProtoType>(), creater<T>));
+    regist(name, creater<T>);
 }
 
 template <typename T>
 int ProtoFactory::proto_type() NEKO_NOEXCEPT {
-    static int _proto_type = 0;
-    if (_proto_type == 0) {
-        _proto_type = type_counter();
-    }
-    return _proto_type;
+    return proto_type(proto_name<T>(), false);
 }
 
 template <typename T>
 NEKO_STRING_VIEW ProtoFactory::proto_name() NEKO_NOEXCEPT {
-    return _class_name<T>();
+    return decltype(T::makeProto(std::declval<T>()))::name();
 }
 
 template <typename T>
@@ -274,7 +251,7 @@ IProto* ProtoFactory::creater() NEKO_NOEXCEPT {
 }
 
 template <typename ProtoT, typename SerializerT>
-NEKO_STRING_VIEW ProtoBase<ProtoT, SerializerT>::_init_class_name__ = []() NEKO_NOEXCEPT {
+NEKO_STRING_VIEW ProtoBase<ProtoT, SerializerT>::kProtoName = []() NEKO_NOEXCEPT {
     NEKO_STRING_VIEW name = _class_name<ProtoT>();
     static_init_funcs(name, [name](NEKO_NAMESPACE::ProtoFactory* self) { self->regist<ProtoBaseType>(name); });
     return name;
@@ -345,8 +322,13 @@ inline ProtoBase<ProtoT, SerializerT>& ProtoBase<ProtoT, SerializerT>::operator=
 }
 
 template <typename T, typename SerializerT>
-NEKO_STRING_VIEW ProtoBase<T, SerializerT>::className() const NEKO_NOEXCEPT {
-    return _init_class_name__;
+NEKO_STRING_VIEW ProtoBase<T, SerializerT>::protoName() const NEKO_NOEXCEPT {
+    return kProtoName;
+}
+
+template <typename T, typename SerializerT>
+NEKO_STRING_VIEW ProtoBase<T, SerializerT>::name() NEKO_NOEXCEPT {
+    return kProtoName;
 }
 
 template <typename ProtoT, typename SerializerT>
@@ -372,7 +354,7 @@ std::vector<char> ProtoBase<T, SerializerT>::toData() const NEKO_NOEXCEPT {
     mSerializer.startSerialize(&data);
     auto ret = mData->serialize(mSerializer);
     if (!mSerializer.endSerialize()) {
-        NEKO_LOG_ERROR("{} serialize error", _init_class_name__);
+        NEKO_LOG_ERROR("{} serialize error", kProtoName);
     }
     return std::move(data);
 }
@@ -392,7 +374,7 @@ bool ProtoBase<T, SerializerT>::formData(const std::vector<char>& data) NEKO_NOE
     }
     bool ret = mData->deserialize(mSerializer);
     if (!mSerializer.endDeserialize() || !ret) {
-        NEKO_LOG_ERROR("{} deserialize error", _init_class_name__);
+        NEKO_LOG_ERROR("{} deserialize error", kProtoName);
         return false;
     }
     return true;
