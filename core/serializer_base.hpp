@@ -224,12 +224,26 @@ struct SerializableFormater {
         str += ret;
         return true;
     }
+    template <typename T>
+    bool get(const char* name, const size_t len, T* value) NEKO_NOEXCEPT {
+        return true;
+    }
 };
+
+template <typename T, class enable = void>
+struct can_serialize : std::false_type {};
+
+template <typename T>
+struct can_serialize<
+    T, typename std::enable_if<
+           std::is_same<decltype(std::declval<T>().serialize(std::declval<SerializableFormater&>())),
+                        decltype(std::declval<T>().deserialize(std::declval<SerializableFormater&>()))>::value>::type>
+    : std::true_type {};
 
 template <typename T>
 std::string SerializableToString(const T& p) {
     SerializableFormater formater;
-    formater.str = std::string(_class_name<T>()) + std::string(" {");
+    formater.str = std::string(_class_name<T>()) + std::string("{");
     p.serialize(formater);
     formater.str.pop_back();
     formater.str.back() = '}';
@@ -314,6 +328,16 @@ struct FormatStringCovert<const T*, typename std::enable_if<std::is_void<T>::val
 };
 
 template <typename T>
+struct FormatStringCovert<const T*, typename std::enable_if<can_serialize<T>::vaule>::type> {
+    static std::string toString(const char* name, const size_t len, const T& p) {
+        std::string ret;
+        if (len == 0)
+            ret = std::string(name, len) + std::string(" = ");
+        return ret += SerializableToString(p);
+    }
+};
+
+template <typename T>
 struct FormatStringCovert<const T*,
                           typename std::enable_if<!std::is_void<T>::value && !std::is_same<T, char>::value>::type> {
     static std::string toString(const char* name, const size_t len, const T* p) {
@@ -326,7 +350,10 @@ struct FormatStringCovert<const T*,
 template <typename T>
 struct FormatStringCovert<std::vector<T>, void> {
     static std::string toString(const char* name, const size_t len, const std::vector<T>& p) {
-        std::string ret = std::string(name, len) + std::string(" = vector[");
+        std::string ret;
+        if (len > 0)
+            ret = std::string(name, len) + std::string(" = ");
+        ret += "vector[";
         for (auto& v : p) {
             ret += FormatStringCovert<T>::toString(nullptr, 0, v) + std::string(", ");
         }

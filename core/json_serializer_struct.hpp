@@ -185,15 +185,6 @@ struct is_std_array<std::array<T, N>> : std::true_type {};
 template <typename T>
 constexpr bool can_unwrap_v = std::is_aggregate_v<std::remove_cv_t<T>> && !is_std_array<T>::value;
 
-template <typename T, class enable = void>
-struct can_serialize : std::false_type {};
-
-template <typename T>
-struct can_serialize<T, typename std::enable_if<std::is_same<
-                            decltype(std::declval<T>().serialize(std::declval<JsonSerializer&>())),
-                            decltype(std::declval<T>().deserialize(std::declval<JsonSerializer&>()))>::value>::type>
-    : std::true_type {};
-
 template <typename T>
 constexpr bool can_serialize_v = can_serialize<T>::value;
 
