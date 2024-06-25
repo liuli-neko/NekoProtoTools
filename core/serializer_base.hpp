@@ -435,13 +435,13 @@ NEKO_END_NAMESPACE
 public:                                                                                                                \
     template <typename SerializerT>                                                                                    \
     bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {                                                      \
-        static auto names = NEKO_NAMESPACE::_parse_names(#__VA_ARGS__);                                                \
-        return NEKO_NAMESPACE::_unfold_function1<SerializerT>(serializer, #__VA_ARGS__, names, __VA_ARGS__);           \
+        static auto _kNames_ = NEKO_NAMESPACE::_parse_names(#__VA_ARGS__);                                             \
+        return NEKO_NAMESPACE::_unfold_function1<SerializerT>(serializer, #__VA_ARGS__, _kNames_, __VA_ARGS__);        \
     }                                                                                                                  \
     template <typename SerializerT>                                                                                    \
     bool deserialize(SerializerT& serializer) NEKO_NOEXCEPT {                                                          \
-        static auto names = NEKO_NAMESPACE::_parse_names(#__VA_ARGS__);                                                \
-        return NEKO_NAMESPACE::_unfold_function2<SerializerT>(serializer, #__VA_ARGS__, names, __VA_ARGS__);           \
+        static auto _kNames_ = NEKO_NAMESPACE::_parse_names(#__VA_ARGS__);                                             \
+        return NEKO_NAMESPACE::_unfold_function2<SerializerT>(serializer, #__VA_ARGS__, _kNames_, __VA_ARGS__);        \
     }
 #else
 /**
@@ -473,15 +473,17 @@ private:                                                                        
 public:                                                                                                                \
     template <typename SerializerT>                                                                                    \
     bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {                                                      \
-        constexpr uint32_t size                            = NEKO_NAMESPACE::_members_size(#__VA_ARGS__);              \
-        constexpr std::array<std::string_view, size> names = NEKO_NAMESPACE::_parse_names<size>(#__VA_ARGS__);         \
-        return NEKO_NAMESPACE::_unfold_function2<size, SerializerT>(serializer, names, __VA_ARGS__);                   \
+        constexpr uint32_t _kSize_ = NEKO_NAMESPACE::_members_size(#__VA_ARGS__);                                      \
+        constexpr std::array<std::string_view, _kSize_> _kNames_ =                                                     \
+            NEKO_NAMESPACE::_parse_names<_kSize_>(#__VA_ARGS__);                                                       \
+        return NEKO_NAMESPACE::_unfold_function2<_kSize_, SerializerT>(serializer, _kNames_, __VA_ARGS__);             \
     }                                                                                                                  \
     template <typename SerializerT>                                                                                    \
     bool deserialize(SerializerT& serializer) NEKO_NOEXCEPT {                                                          \
-        constexpr uint32_t size                            = NEKO_NAMESPACE::_members_size(#__VA_ARGS__);              \
-        constexpr std::array<std::string_view, size> names = NEKO_NAMESPACE::_parse_names<size>(#__VA_ARGS__);         \
-        return NEKO_NAMESPACE::_unfold_function1<size, SerializerT>(serializer, names, __VA_ARGS__);                   \
+        constexpr uint32_t _kSize_ = NEKO_NAMESPACE::_members_size(#__VA_ARGS__);                                      \
+        constexpr std::array<std::string_view, _kSize_> _kNames_ =                                                     \
+            NEKO_NAMESPACE::_parse_names<_kSize_>(#__VA_ARGS__);                                                       \
+        return NEKO_NAMESPACE::_unfold_function1<_kSize_, SerializerT>(serializer, _kNames_, __VA_ARGS__);             \
     }
 
 #endif
