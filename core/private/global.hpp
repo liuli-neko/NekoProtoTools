@@ -38,18 +38,18 @@
 #endif
 #if NEKO_CPP_PLUS >= 17
 #include <string>
-#define NEKO_CONSTEXPR_FUNC       constexpr
-#define NEKO_CONSTEXPR_VAR        constexpr
-#define NEKO_STRING_VIEW          std::string_view
+#define NEKO_CONSTEXPR_FUNC         constexpr
+#define NEKO_CONSTEXPR_VAR          constexpr
+#define NEKO_STRING_VIEW            std::string_view
 #define NEKO_MAKE_UNIQUE(type, ...) std::make_unique<type>(__VA_ARGS__)
-#define NEKO_NOEXCEPT noexcept
+#define NEKO_NOEXCEPT               noexcept
 #else
 #include <string>
 #define NEKO_CONSTEXPR_FUNC
-#define NEKO_CONSTEXPR_VAR        constexpr
-#define NEKO_STRING_VIEW          std::string
+#define NEKO_CONSTEXPR_VAR          constexpr
+#define NEKO_STRING_VIEW            std::string
 #define NEKO_MAKE_UNIQUE(type, ...) std::unique_ptr<type>(new type(__VA_ARGS__))
-#define NEKO_NOEXCEPT noexcept
+#define NEKO_NOEXCEPT               noexcept
 #endif
 
 #define NEKO_PROTO_ASSERT(cond, fmt, ...)                                                                              \
@@ -117,13 +117,13 @@ namespace {
 template <class T>
 NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() NEKO_NOEXCEPT {
     NEKO_STRING_VIEW pretty_function = __PRETTY_FUNCTION__;
-    size_t start = pretty_function.find_last_of('[');
-    size_t end = start;
+    size_t start                     = pretty_function.find_last_of('[');
+    size_t end                       = start;
     while (end < pretty_function.size() && (pretty_function[end] != ';')) {
         end++;
     }
     auto sstring = pretty_function.substr(start, end - start);
-    size_t d = sstring.find_first_of('<');
+    size_t d     = sstring.find_first_of('<');
     if (d != NEKO_STRING_VIEW::npos)
         sstring = sstring.substr(0, d);
     d = sstring.find_last_of(':');
@@ -146,12 +146,12 @@ template <class T>
 NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() NEKO_NOEXCEPT {
     NEKO_STRING_VIEW string(__FUNCSIG__);
     size_t start = string.find("_class_name<") + 15;
-    size_t d = string.find_first_of(' ', start);
+    size_t d     = string.find_first_of(' ', start);
     if (d != NEKO_STRING_VIEW::npos)
         start = d + 1;
-    size_t end = string.find('<', start);
+    size_t end   = string.find('<', start);
     auto sstring = string.substr(start, end - start);
-    d = sstring.find_last_of(':');
+    d            = sstring.find_last_of(':');
     if (d != NEKO_STRING_VIEW::npos)
         start = d;
     else

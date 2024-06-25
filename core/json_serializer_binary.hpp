@@ -10,7 +10,7 @@
  */
 #pragma once
 
-#include "proto_json_serializer.hpp"
+#include "json_serializer.hpp"
 
 #include <string>
 #include <vector>
@@ -40,7 +40,7 @@ struct Base64Covert {
         return std::vector<char>((char*)(buf.data()), (char*)(buf.data()) + buf.size());
     }
     static void Encode(const uint8_t* data, size_t datalen, std::vector<uint8_t>& buf) {
-        auto cptr = data;
+        auto cptr  = data;
         auto table = Table;
         buf.resize(((datalen + 2) / 3) * 4, '=');
         auto bufptr = buf.data();
@@ -93,7 +93,7 @@ struct Base64Covert {
             return false;
         }
 
-        int len = (datalen / 4) * 3;
+        int len   = (datalen / 4) * 3;
         auto cptr = data;
         while (data[datalen - 1] == '=') {
             --datalen; // remove '='
@@ -104,10 +104,10 @@ struct Base64Covert {
         uint8_t array[4];
         auto bufptr = buf.data();
         while (datalen > 3) {
-            array[0] = QueryTable(cptr[0]);
-            array[1] = QueryTable(cptr[1]);
-            array[2] = QueryTable(cptr[2]);
-            array[3] = QueryTable(cptr[3]);
+            array[0]  = QueryTable(cptr[0]);
+            array[1]  = QueryTable(cptr[1]);
+            array[2]  = QueryTable(cptr[2]);
+            array[3]  = QueryTable(cptr[3]);
             bufptr[0] = ((array[0] << 2) | (array[1] >> 4));
             bufptr[1] = ((array[1] << 4) | (array[2] >> 2));
             bufptr[2] = ((array[2] << 6) | array[3]);
@@ -118,16 +118,16 @@ struct Base64Covert {
         NEKO_PROTO_ASSERT(datalen != 1, "Bad Base64 String");
         switch (datalen) {
         case 2: {
-            array[0] = QueryTable(cptr[0]);
-            array[1] = QueryTable(cptr[1]);
+            array[0]  = QueryTable(cptr[0]);
+            array[1]  = QueryTable(cptr[1]);
             bufptr[0] = ((array[0] << 2) | (array[1] >> 4));
             bufptr += 1;
             break;
         }
         case 3: {
-            array[0] = QueryTable(cptr[0]);
-            array[1] = QueryTable(cptr[1]);
-            array[2] = QueryTable(cptr[2]);
+            array[0]  = QueryTable(cptr[0]);
+            array[1]  = QueryTable(cptr[1]);
+            array[2]  = QueryTable(cptr[2]);
             bufptr[0] = ((array[0] << 2) | (array[1] >> 4));
             bufptr[1] = ((array[1] << 4) | (array[2] >> 2));
             bufptr += 2;

@@ -21,7 +21,7 @@
 
 NEKO_BEGIN_NAMESPACE
 
-using JsonValue = rapidjson::Value;
+using JsonValue    = rapidjson::Value;
 using JsonDocument = rapidjson::Document;
 
 template <typename WriterT, typename ValueT, typename T, class enable = void>
@@ -46,7 +46,8 @@ private:
 };
 
 inline OutBufferWrapper::OutBufferWrapper() NEKO_NOEXCEPT : mVec(new std::vector<Ch>()) {}
-inline OutBufferWrapper::OutBufferWrapper(std::vector<Ch>* vec) NEKO_NOEXCEPT : mVec(vec, [](std::vector<Ch>* ptr) {}) {}
+inline OutBufferWrapper::OutBufferWrapper(std::vector<Ch>* vec) NEKO_NOEXCEPT : mVec(vec, [](std::vector<Ch>* ptr) {}) {
+}
 inline void OutBufferWrapper::setVector(std::vector<Ch>* vec) NEKO_NOEXCEPT {
     if (vec != nullptr) {
         mVec.reset(vec, [](std::vector<Ch>* ptr) {});
@@ -65,7 +66,7 @@ using JsonWriter = rapidjson::Writer<BufferT>;
 
 class JsonSerializer {
 public:
-    using ValueType = JsonValue;
+    using ValueType  = JsonValue;
     using WriterType = JsonWriter<>;
 
 public:
@@ -146,21 +147,34 @@ private:
     std::unique_ptr<WriterType, void (*)(WriterType*)> mWriter;
 };
 
-inline JsonSerializer::JsonSerializer() NEKO_NOEXCEPT
-    : mDocument(), mRoot(JsonValue()), mBuffer(), mWriter(nullptr, [](WriterType* writer) {}) {}
+inline JsonSerializer::JsonSerializer() NEKO_NOEXCEPT : mDocument(),
+                                                        mRoot(JsonValue()),
+                                                        mBuffer(),
+                                                        mWriter(nullptr, [](WriterType* writer) {}) {}
 
 inline JsonSerializer::JsonSerializer(const JsonSerializer&) NEKO_NOEXCEPT
-    : mDocument(), mRoot(JsonValue()), mBuffer(), mWriter(nullptr, [](WriterType* writer) {}) {}
+    : mDocument(),
+      mRoot(JsonValue()),
+      mBuffer(),
+      mWriter(nullptr, [](WriterType* writer) {}) {}
 
 inline JsonSerializer::JsonSerializer(JsonSerializer&& other) NEKO_NOEXCEPT
-    : mDocument(), mRoot(JsonValue()), mBuffer(), mWriter(nullptr, [](WriterType* writer) {}) {}
+    : mDocument(),
+      mRoot(JsonValue()),
+      mBuffer(),
+      mWriter(nullptr, [](WriterType* writer) {}) {}
 
 inline JsonSerializer::JsonSerializer(WriterType* writer) NEKO_NOEXCEPT
-    : mDocument(), mRoot(JsonValue()), mBuffer(),
+    : mDocument(),
+      mRoot(JsonValue()),
+      mBuffer(),
       mWriter(std::unique_ptr<WriterType, void (*)(WriterType*)>(writer, [](WriterType* writer) {})) {}
 
 inline JsonSerializer::JsonSerializer(const JsonValue& root) NEKO_NOEXCEPT
-    : mDocument(), mRoot(root), mBuffer(), mWriter(nullptr, [](WriterType* writer) {}) {}
+    : mDocument(),
+      mRoot(root),
+      mBuffer(),
+      mWriter(nullptr, [](WriterType* writer) {}) {}
 
 inline JsonSerializer& JsonSerializer::operator=(const JsonSerializer&) NEKO_NOEXCEPT { return *this; }
 
@@ -242,7 +256,7 @@ bool JsonSerializer::get(const char* name, const size_t len, T* value) NEKO_NOEX
 }
 
 template <typename WriterT, typename ValueT>
-struct JsonConvert<WriterT, ValueT, int, void>  {
+struct JsonConvert<WriterT, ValueT, int, void> {
     static bool toJsonValue(WriterT& writer, const int value) { return writer.Int(value); }
     static bool fromJsonValue(int* dst, const ValueT& value) {
         if (!value.IsInt() || dst == nullptr) {

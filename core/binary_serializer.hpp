@@ -42,7 +42,7 @@ struct BinaryConvert;
 class BinarySerializer {
 public:
     using WriterType = std::vector<char>;
-    using ValueType = std::vector<char>;
+    using ValueType  = std::vector<char>;
 
 public:
     ~BinarySerializer();
@@ -56,55 +56,49 @@ public:
     bool get(const char* name, const size_t len, T* value) NEKO_NOEXCEPT;
 
 private:
-    std::vector<char>* mData = nullptr;
-    bool mDeserializing = false;
+    union {
+        std::vector<char>* data = nullptr;
+        const std::vector<char>* constData;
+    } mData;
+
     int mOffset = 0;
 };
 
-inline BinarySerializer::~BinarySerializer() {
-    if (mDeserializing) {
-        delete mData;
-        mData = nullptr;
-    }
-}
+inline BinarySerializer::~BinarySerializer() {}
 
-inline void BinarySerializer::startSerialize(std::vector<char>* data) NEKO_NOEXCEPT { mData = data; }
+inline void BinarySerializer::startSerialize(std::vector<char>* data) NEKO_NOEXCEPT { mData.data = data; }
 
 inline bool BinarySerializer::endSerialize() NEKO_NOEXCEPT {
-    mData = nullptr;
+    mData.data = nullptr;
     return true;
 }
 
 template <typename T>
 bool BinarySerializer::insert(const char* name, const size_t len, const T& value) NEKO_NOEXCEPT {
-    return BinaryConvert<WriterType, ValueType, T>::toBinaryArray(*mData, value);
+    return BinaryConvert<WriterType, ValueType, T>::toBinaryArray(*(mData.data), value);
 }
 
 inline bool BinarySerializer::startDeserialize(const std::vector<char>& data) NEKO_NOEXCEPT {
-    mData = new std::vector<char>(data);
-    mOffset = 0;
-    mDeserializing = true;
+    mData.constData = &data;
+    mOffset         = 0;
     return true;
 }
 
 inline bool BinarySerializer::endDeserialize() NEKO_NOEXCEPT {
-    if (mOffset != mData->size() && mData->size() > 0 && mData->back() != '\0') {
-        NEKO_LOG_WARN("binary data deserialize warning, read size{} != buf szie{}.", mOffset, mData->size());
+    if (mOffset != mData.constData->size() && mData.constData->size() > 0 && mData.constData->back() != '\0') {
+        NEKO_LOG_WARN("binary data deserialize warning, read size{} != buf szie{}.", mOffset, mData.constData->size());
     }
-    mData->clear();
-    delete mData;
-    mData = nullptr;
-    mDeserializing = false;
+    mData.constData = nullptr;
     return true;
 }
 
 template <typename T>
 bool BinarySerializer::get(const char* name, const size_t len, T* value) NEKO_NOEXCEPT {
-    return BinaryConvert<WriterType, ValueType, T>::fromBinaryArray(value, *mData, mOffset);
+    return BinaryConvert<WriterType, ValueType, T>::fromBinaryArray(value, *(mData.constData), mOffset);
 }
 
 template <typename WriterT, typename ValueT>
-struct BinaryConvert<WriterT, ValueT, uint8_t, void>  {
+struct BinaryConvert<WriterT, ValueT, uint8_t, void> {
     static bool toBinaryArray(WriterT& buf, const uint8_t value) {
         buf.push_back(value);
         return true;

@@ -1,12 +1,12 @@
 #include <gtest/gtest.h>
 
+#include "../core/binary_serializer.hpp"
+#include "../core/json_serializer.hpp"
+#include "../core/json_serializer_binary.hpp"
+#include "../core/json_serializer_contrain.hpp"
+#include "../core/json_serializer_enum.hpp"
+#include "../core/json_serializer_struct.hpp"
 #include "../core/proto_base.hpp"
-#include "../core/proto_binary_serializer.hpp"
-#include "../core/proto_json_serializer.hpp"
-#include "../core/proto_json_serializer_binary.hpp"
-#include "../core/proto_json_serializer_contrain.hpp"
-#include "../core/proto_json_serializer_enum.hpp"
-#include "../core/proto_json_serializer_struct.hpp"
 #include "../core/serializer_base.hpp"
 
 NEKO_USE_NAMESPACE
@@ -30,15 +30,15 @@ template <typename WriterT, typename ValueT>
 struct JsonConvert<WriterT, ValueT, StructA, void> {
     static bool toJsonValue(WriterT& writer, const StructA& value) {
         auto ret = writer.StartArray();
-        ret = JsonConvert<WriterT, ValueT, int>::toJsonValue(writer, value.a) && ret;
-        ret = JsonConvert<WriterT, ValueT, std::string>::toJsonValue(writer, value.b) && ret;
-        ret = JsonConvert<WriterT, ValueT, bool>::toJsonValue(writer, value.c) && ret;
-        ret = JsonConvert<WriterT, ValueT, double>::toJsonValue(writer, value.d) && ret;
-        ret = JsonConvert<WriterT, ValueT, std::list<int>>::toJsonValue(writer, value.e) && ret;
-        ret = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::toJsonValue(writer, value.f) && ret;
-        ret = JsonConvert<WriterT, ValueT, std::array<int, 5>>::toJsonValue(writer, value.g) && ret;
-        ret = JsonConvert<WriterT, ValueT, TEnum>::toJsonValue(writer, value.h) && ret;
-        ret = writer.EndArray() && ret;
+        ret      = JsonConvert<WriterT, ValueT, int>::toJsonValue(writer, value.a) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::string>::toJsonValue(writer, value.b) && ret;
+        ret      = JsonConvert<WriterT, ValueT, bool>::toJsonValue(writer, value.c) && ret;
+        ret      = JsonConvert<WriterT, ValueT, double>::toJsonValue(writer, value.d) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::list<int>>::toJsonValue(writer, value.e) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::toJsonValue(writer, value.f) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::array<int, 5>>::toJsonValue(writer, value.g) && ret;
+        ret      = JsonConvert<WriterT, ValueT, TEnum>::toJsonValue(writer, value.h) && ret;
+        ret      = writer.EndArray() && ret;
         return ret;
     }
     static bool fromJsonValue(StructA* result, const ValueT& value) {
@@ -46,13 +46,13 @@ struct JsonConvert<WriterT, ValueT, StructA, void> {
             return false;
         }
         auto ret = JsonConvert<WriterT, ValueT, int>::fromJsonValue(&result->a, value[0]);
-        ret = JsonConvert<WriterT, ValueT, std::string>::fromJsonValue(&result->b, value[1]) && ret;
-        ret = JsonConvert<WriterT, ValueT, bool>::fromJsonValue(&result->c, value[2]) && ret;
-        ret = JsonConvert<WriterT, ValueT, double>::fromJsonValue(&result->d, value[3]) && ret;
-        ret = JsonConvert<WriterT, ValueT, std::list<int>>::fromJsonValue(&result->e, value[4]) && ret;
-        ret = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::fromJsonValue(&result->f, value[5]) && ret;
-        ret = JsonConvert<WriterT, ValueT, std::array<int, 5>>::fromJsonValue(&result->g, value[6]) && ret;
-        ret = JsonConvert<WriterT, ValueT, TEnum>::fromJsonValue(&result->h, value[7]) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::string>::fromJsonValue(&result->b, value[1]) && ret;
+        ret      = JsonConvert<WriterT, ValueT, bool>::fromJsonValue(&result->c, value[2]) && ret;
+        ret      = JsonConvert<WriterT, ValueT, double>::fromJsonValue(&result->d, value[3]) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::list<int>>::fromJsonValue(&result->e, value[4]) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::fromJsonValue(&result->f, value[5]) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::array<int, 5>>::fromJsonValue(&result->g, value[6]) && ret;
+        ret      = JsonConvert<WriterT, ValueT, TEnum>::fromJsonValue(&result->h, value[7]) && ret;
         return ret;
     }
 };
@@ -61,14 +61,14 @@ NEKO_END_NAMESPACE
 #endif
 
 struct TestP {
-    int a = 1;
-    std::string b = "hello";
-    bool c = true;
-    double d = 3.14;
-    std::list<int> e = {1, 2, 3, 4, 5};
+    int a                        = 1;
+    std::string b                = "hello";
+    bool c                       = true;
+    double d                     = 3.14;
+    std::list<int> e             = {1, 2, 3, 4, 5};
     std::map<std::string, int> f = {{"a", 1}, {"b", 2}, {"c", 3}};
-    std::array<int, 5> g = {1, 2, 3, 4, 5};
-    TEnum h = TEnum_A;
+    std::array<int, 5> g         = {1, 2, 3, 4, 5};
+    TEnum h                      = TEnum_A;
     StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum_A};
     std::tuple<int, std::string> j = {1, "hello"};
 
@@ -83,9 +83,9 @@ struct UnusedProto {
 };
 
 struct BinaryProto {
-    int32_t a = 1;
+    int32_t a     = 1;
     std::string b = "hello";
-    uint32_t c = 3;
+    uint32_t c    = 3;
 
     NEKO_SERIALIZER(a, b, c)
     NEKO_DECLARE_PROTOCOL(BinaryProto, BinarySerializer)
@@ -168,7 +168,7 @@ TEST_F(ProtoTest, StructDeserialize) {
 }
 
 TEST_F(ProtoTest, Base64Covert) {
-    const char* str = "this is a test string";
+    const char* str   = "this is a test string";
     auto base64string = Base64Covert::Encode(str);
     base64string.push_back('\0');
     EXPECT_STREQ(base64string.data(), "dGhpcyBpcyBhIHRlc3Qgc3RyaW5n");
@@ -177,7 +177,7 @@ TEST_F(ProtoTest, Base64Covert) {
     str2.push_back('\0');
     EXPECT_STREQ(str2.data(), str);
 
-    const char* str3 = "this is a test string2";
+    const char* str3   = "this is a test string2";
     auto base64string2 = Base64Covert::Encode(str3);
     base64string2.push_back('\0');
     EXPECT_STREQ(base64string2.data(), "dGhpcyBpcyBhIHRlc3Qgc3RyaW5nMg==");
@@ -186,7 +186,7 @@ TEST_F(ProtoTest, Base64Covert) {
     str4.push_back('\0');
     EXPECT_STREQ(str4.data(), str3);
 
-    const char* str5 = "this is a test string21";
+    const char* str5   = "this is a test string21";
     auto base64string3 = Base64Covert::Encode(str5);
     base64string3.push_back('\0');
     EXPECT_STREQ(base64string3.data(), "dGhpcyBpcyBhIHRlc3Qgc3RyaW5nMjE=");
@@ -195,7 +195,7 @@ TEST_F(ProtoTest, Base64Covert) {
     str6.push_back('\0');
     EXPECT_STREQ(str6.data(), str5);
 
-    const char* str7 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const char* str7   = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     auto base64string4 = Base64Covert::Encode(str7);
     base64string4.push_back('\0');
     EXPECT_STREQ(base64string4.data(),
@@ -219,7 +219,7 @@ TEST_F(ProtoTest, JsonProtoRef) {
                       "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
                       "\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
                       "\"TEnum_A(1)\"],\"j\":[1,\"hello\"]}";
-    auto proto = factory->create("TestP");
+    auto proto      = factory->create("TestP");
     proto->formData(std::vector<char>(str.data(), str.data() + str.length()));
     auto rawp = proto->cast<TestP>(); // success cast
 
@@ -273,6 +273,7 @@ TEST_F(ProtoTest, JsonProtoRef) {
     EXPECT_EQ(rawp->i.h, TEnum_A);
     EXPECT_EQ(std::get<0>(rawp->j), 1);
     EXPECT_STREQ(std::get<1>(rawp->j).c_str(), "hello");
+    NEKO_LOG_INFO("{}", SerializableToString(*rawp));
 }
 
 TEST_F(ProtoTest, InvalidParams) {
@@ -282,13 +283,14 @@ TEST_F(ProtoTest, InvalidParams) {
 
 TEST_F(ProtoTest, BinaryProto) {
     BinaryProto proto;
-    proto.a = 24;
-    proto.b = "hello Neko Proto";
-    proto.c = 0x3f3f3f;
-    auto data = proto.makeProto().toData();
+    proto.a        = 24;
+    proto.b        = "hello Neko Proto";
+    proto.c        = 0x3f3f3f;
+    auto data      = proto.makeProto().toData();
     auto base64str = Base64Covert::Encode(data);
     base64str.push_back('\0');
     EXPECT_STREQ(base64str.data(), "AAAAGAAAAAAAAAAQaGVsbG8gTmVrbyBQcm90bwA/Pz8=");
+    NEKO_LOG_INFO("{}", SerializableToString(proto));
 }
 
 int main(int argc, char** argv) {

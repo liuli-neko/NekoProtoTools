@@ -2,12 +2,12 @@
 
 #include <gtest/gtest.h>
 
+#include "../core/json_serializer.hpp"
+#include "../core/json_serializer_binary.hpp"
+#include "../core/json_serializer_contrain.hpp"
+#include "../core/json_serializer_enum.hpp"
+#include "../core/json_serializer_struct.hpp"
 #include "../core/proto_base.hpp"
-#include "../core/proto_json_serializer.hpp"
-#include "../core/proto_json_serializer_binary.hpp"
-#include "../core/proto_json_serializer_contrain.hpp"
-#include "../core/proto_json_serializer_enum.hpp"
-#include "../core/proto_json_serializer_struct.hpp"
 #include "../core/serializer_base.hpp"
 
 NEKO_USE_NAMESPACE
@@ -31,15 +31,15 @@ template <typename WriterT, typename ValueT>
 struct JsonConvert<WriterT, ValueT, StructA, void> {
     static bool toJsonValue(WriterT& writer, const StructA& value) {
         auto ret = writer.StartArray();
-        ret = JsonConvert<WriterT, ValueT, int>::toJsonValue(writer, value.a) && ret;
-        ret = JsonConvert<WriterT, ValueT, std::string>::toJsonValue(writer, value.b) && ret;
-        ret = JsonConvert<WriterT, ValueT, bool>::toJsonValue(writer, value.c) && ret;
-        ret = JsonConvert<WriterT, ValueT, double>::toJsonValue(writer, value.d) && ret;
-        ret = JsonConvert<WriterT, ValueT, std::list<int>>::toJsonValue(writer, value.e) && ret;
-        ret = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::toJsonValue(writer, value.f) && ret;
-        ret = JsonConvert<WriterT, ValueT, std::array<int, 5>>::toJsonValue(writer, value.g) && ret;
-        ret = JsonConvert<WriterT, ValueT, TEnum>::toJsonValue(writer, value.h) && ret;
-        ret = writer.EndArray() && ret;
+        ret      = JsonConvert<WriterT, ValueT, int>::toJsonValue(writer, value.a) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::string>::toJsonValue(writer, value.b) && ret;
+        ret      = JsonConvert<WriterT, ValueT, bool>::toJsonValue(writer, value.c) && ret;
+        ret      = JsonConvert<WriterT, ValueT, double>::toJsonValue(writer, value.d) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::list<int>>::toJsonValue(writer, value.e) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::toJsonValue(writer, value.f) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::array<int, 5>>::toJsonValue(writer, value.g) && ret;
+        ret      = JsonConvert<WriterT, ValueT, TEnum>::toJsonValue(writer, value.h) && ret;
+        ret      = writer.EndArray() && ret;
         return ret;
     }
     static bool fromJsonValue(StructA* result, const ValueT& value) {
@@ -47,13 +47,13 @@ struct JsonConvert<WriterT, ValueT, StructA, void> {
             return false;
         }
         auto ret = JsonConvert<WriterT, ValueT, int>::fromJsonValue(&result->a, value[0]);
-        ret = JsonConvert<WriterT, ValueT, std::string>::fromJsonValue(&result->b, value[1]) && ret;
-        ret = JsonConvert<WriterT, ValueT, bool>::fromJsonValue(&result->c, value[2]) && ret;
-        ret = JsonConvert<WriterT, ValueT, double>::fromJsonValue(&result->d, value[3]) && ret;
-        ret = JsonConvert<WriterT, ValueT, std::list<int>>::fromJsonValue(&result->e, value[4]) && ret;
-        ret = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::fromJsonValue(&result->f, value[5]) && ret;
-        ret = JsonConvert<WriterT, ValueT, std::array<int, 5>>::fromJsonValue(&result->g, value[6]) && ret;
-        ret = JsonConvert<WriterT, ValueT, TEnum>::fromJsonValue(&result->h, value[7]) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::string>::fromJsonValue(&result->b, value[1]) && ret;
+        ret      = JsonConvert<WriterT, ValueT, bool>::fromJsonValue(&result->c, value[2]) && ret;
+        ret      = JsonConvert<WriterT, ValueT, double>::fromJsonValue(&result->d, value[3]) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::list<int>>::fromJsonValue(&result->e, value[4]) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::fromJsonValue(&result->f, value[5]) && ret;
+        ret      = JsonConvert<WriterT, ValueT, std::array<int, 5>>::fromJsonValue(&result->g, value[6]) && ret;
+        ret      = JsonConvert<WriterT, ValueT, TEnum>::fromJsonValue(&result->h, value[7]) && ret;
         return ret;
     }
 };
@@ -62,7 +62,7 @@ NEKO_END_NAMESPACE
 #endif
 
 struct TestA {
-    int a = 1;
+    int a         = 1;
     std::string b = "dsadfsd";
 
     NEKO_SERIALIZER(a, b)
@@ -70,7 +70,7 @@ struct TestA {
 };
 
 struct TestB {
-    double a = 12.9;
+    double a              = 12.9;
     std::vector<double> b = {1, 2, 3, 4, 5};
     TestA c;
 
@@ -92,19 +92,18 @@ struct TestD {
     NEKO_DECLARE_PROTOCOL(TestD, JsonSerializer)
 };
 
-
 struct TestP {
-    int a = 1;
-    std::string b = "hello";
-    bool c = true;
-    double d = 3.14;
-    std::list<int> e = {1, 2, 3, 4, 5};
+    int a                        = 1;
+    std::string b                = "hello";
+    bool c                       = true;
+    double d                     = 3.14;
+    std::list<int> e             = {1, 2, 3, 4, 5};
     std::map<std::string, int> f = {{"a", 1}, {"b", 2}, {"c", 3}};
-    std::array<int, 5> g = {1, 2, 3, 4, 5};
-    TEnum h = TEnum_A;
+    std::array<int, 5> g         = {1, 2, 3, 4, 5};
+    TEnum h                      = TEnum_A;
     StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum_A};
     std::tuple<int, std::string> j = {1, "hello"};
-    std::vector<int> k = {1, 2, 3, 4, 5};
+    std::vector<int> k             = {1, 2, 3, 4, 5};
     TestD l;
 
     NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k, l)
@@ -114,7 +113,7 @@ struct TestP {
 class JsonSerializerTest : public testing::Test {
 public:
     using WriterType = JsonWriter<>;
-    using ValueType = JsonValue;
+    using ValueType  = JsonValue;
 
 protected:
     virtual void SetUp() {
