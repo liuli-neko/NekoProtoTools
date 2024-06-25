@@ -18,8 +18,9 @@
 #include <vector>
 #endif
 
+#include "json_serializer.hpp"
 #include "private/global.hpp"
-#include "proto_json_serializer.hpp"
+#include "serializer_base.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
@@ -40,8 +41,8 @@ constexpr auto _Neko_GetEnumName() noexcept {
     // constexpr auto _Neko_GetEnumName() [with T = MyEnum; T Value =
     // (MyEnum)114514]"
     std::string_view name(__PRETTY_FUNCTION__);
-    size_t eqBegin = name.find_last_of(' ');
-    size_t end = name.find_last_of(']');
+    size_t eqBegin        = name.find_last_of(' ');
+    size_t end            = name.find_last_of(']');
     std::string_view body = name.substr(eqBegin + 1, end - eqBegin - 1);
     if (body[0] == '(') {
         // Failed
@@ -84,8 +85,8 @@ constexpr auto _Neko_GetEnumName() noexcept {
     // main::MyEnum)0x2>(void) auto __cdecl _Neko_GetEnumName<enum
     // main::MyEnum,main::MyEnum::Wtf>(void)
     std::string_view name(__FUNCSIG__);
-    size_t dotBegin = name.find_first_of(',');
-    size_t end = name.find_last_of('>');
+    size_t dotBegin       = name.find_first_of(',');
+    size_t end            = name.find_last_of('>');
     std::string_view body = name.substr(dotBegin + 1, end - dotBegin - 1);
     if (body[0] == '(') {
         // Failed
@@ -117,14 +118,14 @@ constexpr auto _Neko_GetValidEnumNames(std::index_sequence<N...> seq) noexcept {
     std::array<std::pair<T, std::string_view>, validCount> arr;
     std::string_view vstr[sizeof...(N)]{_Neko_GetEnumName<T, T(N)>()...};
 
-    size_t n = 0;
+    size_t n    = 0;
     size_t left = validCount;
-    auto iter = arr.begin();
+    auto iter   = arr.begin();
 
     for (auto i : vstr) {
         if (!i.empty()) {
             // Valid name
-            iter->first = T(n);
+            iter->first  = T(n);
             iter->second = i;
             ++iter;
         }
@@ -158,10 +159,10 @@ struct JsonConvert<WriterT, ValueT, T, typename std::enable_if<std::is_enum<T>::
         }
         if (value.IsString()) {
             std::string str(value.GetString(), value.GetStringLength());
-            size_t left = str.find_last_of(')');
+            size_t left  = str.find_last_of(')');
             size_t right = str.find_last_of('(');
-            int32_t v = std::stoi(str.substr(right + 1, left - right - 1));
-            *dst = static_cast<T>(v);
+            int32_t v    = std::stoi(str.substr(right + 1, left - right - 1));
+            *dst         = static_cast<T>(v);
             return true;
         }
         if (value.IsInt()) {
@@ -169,6 +170,26 @@ struct JsonConvert<WriterT, ValueT, T, typename std::enable_if<std::is_enum<T>::
             return true;
         }
         return false;
+    }
+};
+
+template <typename T>
+struct FormatStringCovert<T, typename std::enable_if<std::is_enum<T>::value>::type> {
+    constexpr static auto kEnumArr = _Neko_GetValidEnumNames<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
+    static std::string toString(const char* name, const size_t len, const T& value) {
+        std::string ret;
+        if (len > 0)
+            ret = std::string(name, len) + std::string(" = ");
+        bool isFind = false;
+        for (int i = 0; i < kEnumArr.size(); ++i) {
+            if (kEnumArr[i].first == value) {
+                isFind = true;
+                ret += std::string(kEnumArr[i].second);
+            }
+        }
+        if (!isFind)
+            ret += std::string(_class_name<T>()) + "(" + std::to_string(static_cast<int32_t>(value)) + ")";
+        return ret;
     }
 };
 /// ====================== end enum string =====================
@@ -185,8 +206,8 @@ struct JsonConvert<WriterT, ValueT, T, typename std::enable_if<std::is_enum<T>::
             size_t left = str.find_last_of(')');
             ;
             size_t right = str.find_last_of('(');
-            int32_t v = std::stoi(str.substr(right + 1, left - right - 1));
-            *dst = static_cast<T>(v);
+            int32_t v    = std::stoi(str.substr(right + 1, left - right - 1));
+            *dst         = static_cast<T>(v);
             return true;
         }
         if (value.IsInt()) {
@@ -194,6 +215,17 @@ struct JsonConvert<WriterT, ValueT, T, typename std::enable_if<std::is_enum<T>::
             return true;
         }
         return false;
+    }
+};
+
+template <typename T>
+struct FormatStringCovert<T, typename std::enable_if<std::is_enum<T>::value>::type> {
+    static std::string toString(const char* name, const size_t len, const T& value) {
+        std::string ret;
+        if (len > 0)
+            ret = std::string(name, len) + std::string(" = ");
+        ret += std::string(_class_name<T>()) + "(" + std::to_string(static_cast<int32_t>(value)) + ")";
+        return ret;
     }
 };
 #endif

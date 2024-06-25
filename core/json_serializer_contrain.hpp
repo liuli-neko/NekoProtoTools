@@ -10,7 +10,7 @@
  */
 #pragma once
 
-#include "proto_json_serializer.hpp"
+#include "json_serializer.hpp"
 
 #include <array>
 #include <list>
@@ -175,7 +175,7 @@ struct JsonConvert<WriterT, ValueT, std::tuple<Arg...>> {
         using Type = typename std::tuple_element<N - 1, TupleT>::type;
         static bool toJsonValue(WriterT& writer, const TupleT& value) {
             auto ret = toJsonValueImp<TupleT, N - 1>::toJsonValue(writer, value);
-            ret = JsonConvert<WriterT, ValueT, Type>::toJsonValue(writer, std::get<N - 1>(value)) && ret;
+            ret      = JsonConvert<WriterT, ValueT, Type>::toJsonValue(writer, std::get<N - 1>(value)) && ret;
             return ret;
         }
     };
@@ -191,7 +191,7 @@ struct JsonConvert<WriterT, ValueT, std::tuple<Arg...>> {
         using Type = typename std::tuple_element<N - 1, TupleT>::type;
         static bool fromJsonValue(TupleT* dst, const ValueT& value) {
             bool ret = fromJsonValueImp<TupleT, N - 1>::fromJsonValue(dst, value);
-            ret = JsonConvert<WriterT, ValueT, Type>::fromJsonValue(&(std::get<N - 1>(*dst)), value[N - 1]) && ret;
+            ret      = JsonConvert<WriterT, ValueT, Type>::fromJsonValue(&(std::get<N - 1>(*dst)), value[N - 1]) && ret;
             return ret;
         }
     };
@@ -204,8 +204,8 @@ struct JsonConvert<WriterT, ValueT, std::tuple<Arg...>> {
     };
     static bool toJsonValue(WriterT& writer, const std::tuple<Arg...>& value) {
         auto ret = writer.StartArray();
-        ret = toJsonValueImp<std::tuple<Arg...>, sizeof...(Arg)>::toJsonValue(writer, value) && ret;
-        ret = writer.EndArray() && ret;
+        ret      = toJsonValueImp<std::tuple<Arg...>, sizeof...(Arg)>::toJsonValue(writer, value) && ret;
+        ret      = writer.EndArray() && ret;
         return ret;
     }
     static bool fromJsonValue(std::tuple<Arg...>* dst, const ValueT& value) {

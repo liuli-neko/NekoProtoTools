@@ -1,4 +1,4 @@
-#include "../core/proto_binary_serializer.hpp"
+#include "../core/binary_serializer.hpp"
 #include "../core/serializer_base.hpp"
 
 #include <gtest/gtest.h>
@@ -8,14 +8,14 @@ using namespace NEKO_NAMESPACE;
 
 class TestP {
 public:
-    int8_t a = 1;   // 1 byte
-    int16_t b = 2;  // 2 bytes
-    int32_t c = 3;  // 4 bytes
-    int64_t d = 4;  // 8 bytes
-    uint8_t e = 5;  // 1 byte
-    uint16_t f = 6; // 2 bytes
-    uint32_t g = 7; // 4 bytes
-    uint64_t h = 8; // 8 bytes
+    int8_t a      = 1; // 1 byte
+    int16_t b     = 2; // 2 bytes
+    int32_t c     = 3; // 4 bytes
+    int64_t d     = 4; // 8 bytes
+    uint8_t e     = 5; // 1 byte
+    uint16_t f    = 6; // 2 bytes
+    uint32_t g    = 7; // 4 bytes
+    uint64_t h    = 8; // 8 bytes
     std::string i = "hello";
     // 30
 

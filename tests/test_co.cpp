@@ -3,16 +3,16 @@
 #include <atomic>
 #include <condition_variable>
 #include <coroutine>
+#include <functional>
 #include <iostream>
 #include <list>
 #include <map>
 #include <mutex>
 #include <set>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
-#include <functional>
-#include <string>
 
 #include "../core/private/zip.hpp"
 

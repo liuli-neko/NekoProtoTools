@@ -15,8 +15,8 @@
 
 #include <queue>
 
+#include "../core/binary_serializer.hpp"
 #include "../core/proto_base.hpp"
-#include "../core/proto_binary_serializer.hpp"
 #include "../core/serializer_base.hpp"
 #include "ilias.hpp"
 #include "ilias_async.hpp"
@@ -29,19 +29,19 @@ NEKO_BEGIN_NAMESPACE
 class ChannelFactory;
 
 // enum | code | message | system code mapping
-#define NEKO_CHANNEL_ERROR_CODE_TABLE                                                                    \
-    NEKO_CHANNEL_ERROR(Ok, 0, "ok", 0)                                                                   \
-    NEKO_CHANNEL_ERROR(InvalidMessageHeader, 1, "receive an unrecognized message header", -1)            \
-    NEKO_CHANNEL_ERROR(InvalidChannelHeader, 2, "receive an unrecognized channel header", -1)            \
-    NEKO_CHANNEL_ERROR(InvalidProtoType, 3, "receive a message, but proto type is not registed", -1)     \
-    NEKO_CHANNEL_ERROR(InvalidUrl, 4, "unrecognized or error url", -1)                                   \
-    NEKO_CHANNEL_ERROR(ConnectFailed, 5, "can't connect to the url", -1)                                 \
-    NEKO_CHANNEL_ERROR(ProtoVersionUnsupported, 6, "proto version is not supported", -1)                 \
-    NEKO_CHANNEL_ERROR(ChannelIdInconsistent, 7, "unable to negotiate a consistent channel id", -1)      \
-    NEKO_CHANNEL_ERROR(ConnectionMessageTypeError, 8, "receive a error message in connection state", -1) \
-    NEKO_CHANNEL_ERROR(ChannelBroken, 9, "the channel is broken", -1)                                    \
-    NEKO_CHANNEL_ERROR(ChannelClosed, 10, "the channel is closed", -1)                                   \
-    NEKO_CHANNEL_ERROR(ChannelClosedByPeer, 11, "the channel is closed by peer", -1)                     \
+#define NEKO_CHANNEL_ERROR_CODE_TABLE                                                                                  \
+    NEKO_CHANNEL_ERROR(Ok, 0, "ok", 0)                                                                                 \
+    NEKO_CHANNEL_ERROR(InvalidMessageHeader, 1, "receive an unrecognized message header", -1)                          \
+    NEKO_CHANNEL_ERROR(InvalidChannelHeader, 2, "receive an unrecognized channel header", -1)                          \
+    NEKO_CHANNEL_ERROR(InvalidProtoType, 3, "receive a message, but proto type is not registed", -1)                   \
+    NEKO_CHANNEL_ERROR(InvalidUrl, 4, "unrecognized or error url", -1)                                                 \
+    NEKO_CHANNEL_ERROR(ConnectFailed, 5, "can't connect to the url", -1)                                               \
+    NEKO_CHANNEL_ERROR(ProtoVersionUnsupported, 6, "proto version is not supported", -1)                               \
+    NEKO_CHANNEL_ERROR(ChannelIdInconsistent, 7, "unable to negotiate a consistent channel id", -1)                    \
+    NEKO_CHANNEL_ERROR(ConnectionMessageTypeError, 8, "receive a error message in connection state", -1)               \
+    NEKO_CHANNEL_ERROR(ChannelBroken, 9, "the channel is broken", -1)                                                  \
+    NEKO_CHANNEL_ERROR(ChannelClosed, 10, "the channel is closed", -1)                                                 \
+    NEKO_CHANNEL_ERROR(ChannelClosedByPeer, 11, "the channel is closed by peer", -1)                                   \
     NEKO_CHANNEL_ERROR(Timeout, 12, "the operator is timeout", -1)
 
 class NEKO_PROTO_API MessageHeader {
@@ -49,10 +49,10 @@ public:
     inline MessageHeader(uint32_t length = 0, int32_t protoType = 0, uint16_t transType = 0, uint32_t reserved = 0)
         : length(length), protoType(protoType), transType(transType), reserved(reserved) {}
     inline static int size() { return 14; }
-    uint32_t length = 0;     // 4 : the length of the message, no't contain the header
-    int32_t protoType = 0;   // 4 : the type of the message in proto factory
-    uint16_t transType = 0;  // 2 : the type of this transaction
-    uint32_t reserved = 0;   // 4 : the reserved field
+    uint32_t length    = 0; // 4 : the length of the message, no't contain the header
+    int32_t protoType  = 0; // 4 : the type of the message in proto factory
+    uint16_t transType = 0; // 2 : the type of this transaction
+    uint32_t reserved  = 0; // 4 : the reserved field
 
     NEKO_SERIALIZER(length, protoType, transType, reserved)
 };
@@ -60,17 +60,17 @@ public:
 class NEKO_PROTO_API ChannelHeader {
 public:
     enum MessageType {
-        UserMessage = 1,
-        ConnectMessage = 2,
+        UserMessage      = 1,
+        ConnectMessage   = 2,
         HeartbeatMessage = 4,
-        CloseMessage = 5,
+        CloseMessage     = 5,
 
-        OkMessage = 127,
+        OkMessage    = 127,
         ErrorMessage = 128,
     };
-    uint32_t factoryVersion = 0;  // 4 : the version of the proto factory
-    uint8_t messageType = 0;      // 1
-    uint16_t channelId = 0;       // 2
+    uint32_t factoryVersion = 0; // 4 : the version of the proto factory
+    uint8_t messageType     = 0; // 1
+    uint16_t channelId      = 0; // 2
     inline static int size() { return 7; }
 
     NEKO_SERIALIZER(factoryVersion, messageType, channelId)
@@ -98,10 +98,10 @@ public:
     ChannelBase(const ChannelBase&) = delete;
     virtual ~ChannelBase() {}
     virtual ILIAS_NAMESPACE::Task<void> send(std::unique_ptr<NEKO_NAMESPACE::IProto> message) = 0;
-    virtual ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> recv() = 0;
+    virtual ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> recv()             = 0;
     ChannelState state();
     uint16_t channelId();
-    virtual void close() = 0;
+    virtual void close()   = 0;
     virtual void destroy() = 0;
 
 protected:
@@ -119,8 +119,8 @@ public:
         Closed,
     };
     enum class TransType : uint16_t {
-        ShakeHand = 0,
-        Channel = 1,
+        ShakeHand  = 0,
+        Channel    = 1,
         SubChannel = 2,
     };
     ChannelFactory(ILIAS_NAMESPACE::IoContext& ioContext, std::shared_ptr<NEKO_NAMESPACE::ProtoFactory> factory);

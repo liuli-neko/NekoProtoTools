@@ -12,8 +12,9 @@
 
 #include <cstring>
 
+#include "json_serializer.hpp"
 #include "private/global.hpp"
-#include "proto_json_serializer.hpp"
+#include "serializer_base.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
@@ -215,7 +216,7 @@ struct JsonConvert<WriterT, ValueT, T, std::enable_if_t<can_unwrap_v<T> && !can_
     template <typename U>
     static void serializeTupleImpl(bool& ret, WriterT& writer, U& value) {
         using Type = std::remove_reference_t<std::remove_cv_t<U>>;
-        ret = JsonConvert<WriterT, ValueT, Type>::toJsonValue(writer, value) && ret;
+        ret        = JsonConvert<WriterT, ValueT, Type>::toJsonValue(writer, value) && ret;
     }
     template <typename... Args>
     static bool serializeTupleTo(WriterT& writer, const std::tuple<Args...>& tp) {
@@ -225,8 +226,8 @@ struct JsonConvert<WriterT, ValueT, T, std::enable_if_t<can_unwrap_v<T> && !can_
     }
     static bool toJsonValue(WriterT& writer, const T& value) {
         auto ret = writer.StartArray();
-        ret = serializeTupleTo(writer, unwrap_struct(value)) && ret;
-        ret = writer.EndArray() && ret;
+        ret      = serializeTupleTo(writer, unwrap_struct(value)) && ret;
+        ret      = writer.EndArray() && ret;
         return ret;
     }
 
@@ -246,6 +247,30 @@ struct JsonConvert<WriterT, ValueT, T, std::enable_if_t<can_unwrap_v<T> && !can_
         }
         deserializeTupleFrom(value, unwrap_struct(*dst));
         return true;
+    }
+};
+
+template <typename T>
+struct FormatStringCovert<T, std::enable_if_t<!can_serialize_v<T> && can_unwrap_v<T>>> {
+    template <typename U>
+    static void serializeTupleImpl(std::string& ret, U& value) {
+        using Type = std::remove_reference_t<std::remove_cv_t<U>>;
+        ret += FormatStringCovert<Type>::toString(nullptr, 0, value) + ", ";
+    }
+    template <typename... Args>
+    static std::string serializeTupleTo(const std::tuple<Args...>& tp) {
+        std::string ret;
+        std::apply([&](Args&&... args) { ((serializeTupleImpl(ret, args)), ...); }, tp);
+        return ret;
+    }
+    static std::string toString(const char* name, const size_t len, const T& value) {
+        std::string ret;
+        if (len > 0)
+            ret = std::string(name, len) + std::string(" = ") + std::string(_class_name<T>());
+        ret += std::string("{") + serializeTupleTo(unwrap_struct(value));
+        ret.pop_back();
+        ret.back() = '}';
+        return ret;
     }
 };
 /// ====================== end =================================

@@ -10,3 +10,4 @@ BreakBeforeBraces: Custom
 AlignOperands: true
 AlignTrailingComments: true
 AlignConsecutiveMacros: true
+AlignConsecutiveAssignments: true

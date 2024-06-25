@@ -5,7 +5,7 @@
 #include <sstream>
 
 #include "../communication/communication_base.hpp"
-#include "../core/proto_json_serializer.hpp"
+#include "../core/json_serializer.hpp"
 #include "../core/serializer_base.hpp"
 
 #include "ilias_qt.hpp"
@@ -62,7 +62,7 @@ MainWidget::~MainWidget() {
 
 Task<void> MainWidget::clientLoop(std::weak_ptr<ChannelBase> channel) {
     auto ch = channel.lock();
-    int id = -1;
+    int id  = -1;
     if (ch == nullptr) {
         NEKO_LOG_ERROR("channel expired");
         co_return Result<void>();
@@ -132,12 +132,12 @@ ILIAS_NAMESPACE::Task<void> MainWidget::makeMainChannel() {
 ILIAS_NAMESPACE::Task<void> MainWidget::sendMessage(std::weak_ptr<NEKO_NAMESPACE::ChannelBase> channel) {
     if (auto cl = channel.lock(); cl != nullptr) {
         // CS_LOG_INFO("send message to channel {}", cl->channelId());
-        auto msg = NEKO_MAKE_UNIQUE(Message::ProtoType, Message{});
-        (*msg)->msg = std::string(ui->sendEdit->toPlainText().toUtf8());
+        auto msg          = NEKO_MAKE_UNIQUE(Message::ProtoType, Message{});
+        (*msg)->msg       = std::string(ui->sendEdit->toPlainText().toUtf8());
         (*msg)->timestamp = (time(NULL));
-        auto ids = mChannelFactor.getChannelIds();
-        (*msg)->numbers = std::vector<int>(ids.begin(), ids.end());
-        auto ret1 = co_await cl->send(std::move(msg));
+        auto ids          = mChannelFactor.getChannelIds();
+        (*msg)->numbers   = std::vector<int>(ids.begin(), ids.end());
+        auto ret1         = co_await cl->send(std::move(msg));
         if (!ret1) {
             NEKO_LOG_ERROR("send failed: {}", ret1.error().message());
             co_return Unexpected(ret1.error());
