@@ -3,7 +3,7 @@
 #include "../core/binary_serializer.hpp"
 #include "../core/json_serializer.hpp"
 #include "../core/json_serializer_binary.hpp"
-#include "../core/json_serializer_contrain.hpp"
+#include "../core/json_serializer_container.hpp"
 #include "../core/json_serializer_enum.hpp"
 #include "../core/json_serializer_struct.hpp"
 #include "../core/proto_base.hpp"
