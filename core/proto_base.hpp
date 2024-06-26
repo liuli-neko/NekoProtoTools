@@ -173,8 +173,8 @@ public:
     bool formData(const std::vector<char>& data) NEKO_NOEXCEPT override;
     NEKO_STRING_VIEW protoName() const NEKO_NOEXCEPT override;
     static NEKO_STRING_VIEW name() NEKO_NOEXCEPT;
-    static std::vector<char> serialize(const ProtoT& proto);
-    static bool deserialize(const std::vector<char>& data, ProtoT& proto);
+    static std::vector<char> Serialize(const ProtoT& proto);
+    static bool Deserialize(const std::vector<char>& data, ProtoT& proto);
 
 protected:
     inline ReflectionObject* getReflectionObject() NEKO_NOEXCEPT override;
@@ -348,7 +348,7 @@ inline ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() N
 }
 
 template <typename ProtoT, typename SerializerT>
-std::vector<char> ProtoBase<ProtoT, SerializerT>::serialize(const ProtoT& proto) {
+std::vector<char> ProtoBase<ProtoT, SerializerT>::Serialize(const ProtoT& proto) {
     std::vector<char> data;
     SerializerT serializer;
     serializer.startSerialize(&data);
@@ -360,7 +360,7 @@ std::vector<char> ProtoBase<ProtoT, SerializerT>::serialize(const ProtoT& proto)
 }
 
 template <typename ProtoT, typename SerializerT>
-bool ProtoBase<ProtoT, SerializerT>::deserialize(const std::vector<char>& data, ProtoT& proto) {
+bool ProtoBase<ProtoT, SerializerT>::Deserialize(const std::vector<char>& data, ProtoT& proto) {
     SerializerT serializer;
     if (!serializer.startDeserialize(data)) {
         return false;
