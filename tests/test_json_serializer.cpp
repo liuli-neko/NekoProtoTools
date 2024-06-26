@@ -72,9 +72,12 @@ struct TestA {
 struct TestB {
     double a              = 12.9;
     std::vector<double> b = {1, 2, 3, 4, 5};
-    TestA c;
-
+#if NEKO_CPP_PLUS >= 17
+    std::optional<TestA> c;
+    NEKO_SERIALIZER(a, b, c)
+#else
     NEKO_SERIALIZER(a, b)
+#endif
     NEKO_DECLARE_PROTOCOL(TestB, JsonSerializer)
 };
 
@@ -223,6 +226,9 @@ TEST_F(JsonSerializerTest, Struct) {
     testp.i = {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
     testp.j = {1, "hello"};
     testp.k = std::vector<int>({1, 2, 3, 4, 5});
+#if NEKO_CPP_PLUS >= 17
+    std::get<1>(testp.l.a).c = TestA{1221, "this is a test for optional"};
+#endif
     writer->Key("a");
     JsonConvert<WriterType, ValueType, TestP>::toJsonValue(*writer, testp);
     writer->EndObject();
@@ -234,8 +240,9 @@ TEST_F(JsonSerializerTest, Struct) {
         "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A(1)"
         "\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,"
         "\"hello\"],\"k\":[1,2,3,4,5],\"l\":{\"a\":[{\"a\":1,\"b\":\"dsadfsd\"},{\"a\":12.9,\"b\":[1.0,2.0,3.0,4.0,5.0]"
-        "},{\"a\":[{\"a\":12.9,\"b\":[1.0,2.0,3.0,4.0,5.0]},{\"a\":12.9,\"b\":[1.0,2.0,3.0,4.0,5.0]},{\"a\":12.9,\"b\":"
-        "[1.0,2.0,3.0,4.0,5.0]}]}]}}}";
+        ",\"c\":{\"a\":1221,\"b\":\"this is a test for "
+        "optional\"}},{\"a\":[{\"a\":12.9,\"b\":[1.0,2.0,3.0,4.0,5.0]},{\"a\":12.9,\"b\":[1.0,2.0,3.0,4.0,5.0]},{\"a\":"
+        "12.9,\"b\":[1.0,2.0,3.0,4.0,5.0]}]}]}}}";
 #else
     const char* answer =
         "{\"a\":{\"a\":3,\"b\":\"Struct "
