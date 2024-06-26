@@ -260,6 +260,7 @@ TEST_F(JsonSerializerTest, Struct) {
     EXPECT_EQ(testp.g, testp2.g);
     EXPECT_EQ(testp.h, testp2.h);
     EXPECT_EQ(testp.k, testp2.k);
+    NEKO_LOG_INFO("{}", SerializableToString(testp));
 }
 
 int main(int argc, char** argv) {

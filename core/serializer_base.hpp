@@ -203,6 +203,7 @@ inline bool _unfold_function2(SerializerT& serializer, const char* names,
 }
 #endif
 } // namespace
+
 template <typename T, class enable = void>
 struct FormatStringCovert;
 
@@ -267,6 +268,17 @@ struct FormatStringCovert<T, typename std::enable_if<has_to_string<T>::value && 
         if (len == 0)
             return std::to_string(p);
         return std::string(name, len) + std::string(" = ") + std::to_string(p);
+    }
+};
+
+template <typename T>
+struct FormatStringCovert<T, typename std::enable_if<can_serialize<T>::value>::type> {
+    static std::string toString(const char* name, const size_t len, const T& p) {
+        std::string ret;
+        if (len > 0)
+            ret = std::string(name, len) + std::string(" = ");
+        ret += SerializableToString(p);
+        return ret;
     }
 };
 

@@ -25,7 +25,7 @@ uint32_t ProtoFactory::version() const NEKO_NOEXCEPT { return mVersion; }
 std::map<NEKO_STRING_VIEW, std::function<void(ProtoFactory*)>>&
 static_init_funcs(const NEKO_STRING_VIEW& name = "", std::function<void(ProtoFactory*)> func = nullptr) {
     static std::map<NEKO_STRING_VIEW, std::function<void(ProtoFactory*)>> funcs = {};
-    auto item = funcs.find(name);
+    auto item                                                                   = funcs.find(name);
     if (!name.empty() && item == funcs.end() && func) {
         funcs.insert(std::make_pair(name, func));
     }
@@ -49,14 +49,14 @@ ProtoFactory::ProtoFactory(int major, int minor, int patch) {
 }
 
 void ProtoFactory::regist(const NEKO_STRING_VIEW& name, std::function<IProto*()> creator) NEKO_NOEXCEPT {
-    auto type = proto_type(name, true);
+    auto type          = proto_type(name, true);
     mCreaterList[type] = creator;
 }
 
 int ProtoFactory::proto_type(const NEKO_STRING_VIEW& name, const bool isGeneric) NEKO_NOEXCEPT {
     static std::map<NEKO_STRING_VIEW, int> protoNameMap;
     static int counter = 0;
-    auto item = protoNameMap.find(name);
+    auto item          = protoNameMap.find(name);
     if (protoNameMap.end() == item) {
         if (isGeneric) {
             protoNameMap.insert(std::make_pair(name, ++counter));
@@ -68,7 +68,6 @@ int ProtoFactory::proto_type(const NEKO_STRING_VIEW& name, const bool isGeneric)
     }
     return item->second;
 }
-
 
 std::unique_ptr<IProto> ProtoFactory::create(int type) const NEKO_NOEXCEPT {
     if (type > 0 && type < mCreaterList.size() && nullptr != mCreaterList[type]) {
