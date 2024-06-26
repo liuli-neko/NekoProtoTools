@@ -77,7 +77,7 @@ int type_counter();
 
 class NEKO_PROTO_API IProto {
 public:
-    IProto() = default;
+    IProto()          = default;
     virtual ~IProto() = default;
     /**
      * @brief serializer self
@@ -147,9 +147,9 @@ protected:
 template <typename ProtoT, typename SerializerT>
 class ProtoBase : public IProto {
 public:
-    using ProtoType = ProtoT;
+    using ProtoType      = ProtoT;
     using SerializerType = SerializerT;
-    using ProtoBaseType = ProtoBase;
+    using ProtoBaseType  = ProtoBase;
 
     ProtoBase();
     explicit ProtoBase(const ProtoT&);
@@ -173,17 +173,19 @@ public:
     bool formData(const std::vector<char>& data) NEKO_NOEXCEPT override;
     NEKO_STRING_VIEW protoName() const NEKO_NOEXCEPT override;
     static NEKO_STRING_VIEW name() NEKO_NOEXCEPT;
+    static std::vector<char> serialize(const ProtoT& proto);
+    static bool deserialize(const std::vector<char>& data, ProtoT& proto);
 
 protected:
     inline ReflectionObject* getReflectionObject() NEKO_NOEXCEPT override;
-    ProtoBase(const ProtoBase& other) = delete;
+    ProtoBase(const ProtoBase& other)            = delete;
     ProtoBase& operator=(const ProtoBase& other) = delete;
     virtual void* data() NEKO_NOEXCEPT override;
 
 private:
-    mutable SerializerT mSerializer = {};
+    mutable SerializerT mSerializer                             = {};
     std::shared_ptr<ReflectionSerializer> mReflectionSerializer = {};
-    std::shared_ptr<ProtoT> mData = {};
+    std::shared_ptr<ProtoT> mData                               = {};
 
     static NEKO_STRING_VIEW kProtoName;
 };
@@ -218,7 +220,7 @@ public:
 
 private:
     ProtoFactory& operator=(const ProtoFactory&) = delete;
-    ProtoFactory& operator=(ProtoFactory&&) = delete;
+    ProtoFactory& operator=(ProtoFactory&&)      = delete;
     void init() NEKO_NOEXCEPT;
     template <typename T>
     static IProto* creater() NEKO_NOEXCEPT;
@@ -285,9 +287,9 @@ inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT* p) : mData(p, [](const 
 
 template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>::ProtoBase(ProtoBase<T, SerializerT>&& other) {
-    mSerializer = std::move(other.mSerializer);
+    mSerializer           = std::move(other.mSerializer);
     mReflectionSerializer = std::move(other.mReflectionSerializer);
-    mData = std::move(other.mData);
+    mData                 = std::move(other.mData);
 }
 
 template <typename ProtoT, typename SerializerT>
@@ -295,9 +297,9 @@ inline ProtoBase<ProtoT, SerializerT>::~ProtoBase() {}
 
 template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, SerializerT>&& other) NEKO_NOEXCEPT {
-    mSerializer = std::move(other.mSerializer);
+    mSerializer           = std::move(other.mSerializer);
     mReflectionSerializer = std::move(other.mReflectionSerializer);
-    mData = std::move(other.mData);
+    mData                 = std::move(other.mData);
     return *this;
 }
 
@@ -343,6 +345,32 @@ inline ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() N
     mReflectionSerializer->start();
     bool ret = mData->deserialize(*mReflectionSerializer);
     return mReflectionSerializer->getObject();
+}
+
+template <typename ProtoT, typename SerializerT>
+std::vector<char> ProtoBase<ProtoT, SerializerT>::serialize(const ProtoT& proto) {
+    std::vector<char> data;
+    SerializerT serializer;
+    serializer.startSerialize(&data);
+    bool ret = proto.serialize(serializer);
+    if (!serializer.endSerialize() || !ret) {
+        NEKO_LOG_ERROR("{} serialize error", kProtoName);
+    }
+    return std::move(data);
+}
+
+template <typename ProtoT, typename SerializerT>
+bool ProtoBase<ProtoT, SerializerT>::deserialize(const std::vector<char>& data, ProtoT& proto) {
+    SerializerT serializer;
+    if (!serializer.startDeserialize(data)) {
+        return false;
+    }
+    bool ret = proto.deserialize(serializer);
+    if (!serializer.endDeserialize() || !ret) {
+        NEKO_LOG_ERROR("{} deserialize error", kProtoName);
+        return false;
+    }
+    return true;
 }
 
 template <typename T, typename SerializerT>
