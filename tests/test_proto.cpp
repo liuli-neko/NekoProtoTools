@@ -71,8 +71,12 @@ struct TestP {
     TEnum h                      = TEnum_A;
     StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum_A};
     std::tuple<int, std::string> j = {1, "hello"};
-
+#if NEKO_CPP_PLUS >= 17
+    std::optional<int> k;
+    NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k)
+#else
     NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j)
+#endif
     NEKO_DECLARE_PROTOCOL(TestP, JsonSerializer)
 };
 
@@ -131,7 +135,7 @@ TEST_F(ProtoTest, StructDeserialize) {
     std::string str = "{\"a\":3,\"b\":\"Struct "
                       "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
                       "\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
-                      "\"TEnum_A(1)\"],\"j\":[1,\"hello\"]}";
+                      "\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"k\":1}";
     std::vector<char> data(str.begin(), str.end());
     TestP testp;
     EXPECT_TRUE(testp.makeProto().formData(data));
@@ -165,6 +169,10 @@ TEST_F(ProtoTest, StructDeserialize) {
     EXPECT_EQ(testp.i.h, TEnum_A);
     EXPECT_EQ(std::get<0>(testp.j), 1);
     EXPECT_STREQ(std::get<1>(testp.j).c_str(), "hello");
+#if NEKO_CPP_PLUS >= 17
+    EXPECT_EQ(testp.k.value_or(-1), 1);
+#endif
+    NEKO_LOG_INFO("{}", SerializableToString(testp));
 }
 
 TEST_F(ProtoTest, Base64Covert) {

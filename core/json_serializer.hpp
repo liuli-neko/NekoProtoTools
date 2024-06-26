@@ -15,7 +15,11 @@
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/ostreamwrapper.h>
 #include <rapidjson/writer.h>
+#include <type_traits>
 #include <vector>
+#if NEKO_CPP_PLUS >= 17
+#include <optional>
+#endif
 
 #include "private/global.hpp"
 
@@ -108,7 +112,8 @@ public:
      * @return false
      */
     template <typename T>
-    bool insert(const char* name, const size_t len, const T& value) NEKO_NOEXCEPT;
+    bool insert(const char* name, const size_t len, const T& value);
+
     /**
      * @brief start deserialize
      *  while calling this function before traversing all fields,
@@ -138,7 +143,7 @@ public:
      * @return false
      */
     template <typename T>
-    bool get(const char* name, const size_t len, T* value) NEKO_NOEXCEPT;
+    bool get(const char* name, const size_t len, T* value);
 
 private:
     JsonDocument mDocument;
@@ -205,13 +210,98 @@ inline bool JsonSerializer::endSerialize() NEKO_NOEXCEPT {
     return true;
 }
 
+#if NEKO_CPP_PLUS >= 17
+namespace {
+template <typename T, class enable = void>
+struct is_optional : std::false_type {
+    using value_type = std::remove_reference_t<T>;
+};
+
 template <typename T>
-bool JsonSerializer::insert(const char* name, const size_t len, const T& value) NEKO_NOEXCEPT {
+struct is_optional<std::optional<T>, void> : std::true_type {
+    using value_type = std::remove_reference_t<T>;
+};
+} // namespace
+
+template <typename T>
+bool JsonSerializer::insert(const char* name, const size_t len, const T& value) {
+    if constexpr (is_optional<T>::value) {
+        if (!value.has_value()) {
+            return true;
+        }
+        if (!mWriter->Key(name, len)) {
+            return false;
+        }
+        return JsonConvert<WriterType, ValueType, typename is_optional<T>::value_type>::toJsonValue(*mWriter, *value);
+    } else {
+        if (!mWriter->Key(name, len)) {
+            return false;
+        }
+        return JsonConvert<WriterType, ValueType, T>::toJsonValue(*mWriter, value);
+    }
+}
+
+template <typename T>
+bool JsonSerializer::get(const char* name, const size_t len, T* value) {
+    if constexpr (is_optional<T>::value) {
+        if (nullptr == value) {
+            return false;
+        }
+        std::string name_str(name, len);
+        if (!mDocument.IsNull() && mDocument.HasMember(name_str.c_str())) {
+            typename is_optional<T>::value_type tmp;
+            if (JsonConvert<WriterType, ValueType, typename is_optional<T>::value_type>::fromJsonValue(
+                    &tmp, mDocument[name_str.c_str()])) {
+                *value = std::move(tmp);
+                return true;
+            } else {
+                return false;
+            }
+        }
+        if (!mRoot.IsNull() && mRoot.HasMember(name_str.c_str())) {
+            typename is_optional<T>::value_type tmp;
+            if (JsonConvert<WriterType, ValueType, typename is_optional<T>::value_type>::fromJsonValue(
+                    &tmp, mRoot[name_str.c_str()])) {
+                *value = std::move(tmp);
+                return true;
+            } else {
+                return false;
+            }
+        }
+        (*value).reset();
+        return true;
+    } else {
+        std::string name_str(name, len);
+        if (!mDocument.IsNull() && mDocument.HasMember(name_str.c_str())) {
+            return JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mDocument[name_str.c_str()]);
+        }
+        if (!mRoot.IsNull() && mRoot.HasMember(name_str.c_str())) {
+            return JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mRoot[name_str.c_str()]);
+        }
+        return false;
+    }
+}
+#else
+template <typename T>
+bool JsonSerializer::insert(const char* name, const size_t len, const T& value) {
     if (!mWriter->Key(name, len)) {
         return false;
     }
     return JsonConvert<WriterType, ValueType, T>::toJsonValue(*mWriter, value);
 }
+
+template <typename T>
+bool JsonSerializer::get(const char* name, const size_t len, T* value) {
+    std::string name_str(name, len);
+    if (!mDocument.IsNull() && mDocument.HasMember(name_str.c_str())) {
+        return JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mDocument[name_str.c_str()]);
+    }
+    if (!mRoot.IsNull() && mRoot.HasMember(name_str.c_str())) {
+        return JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mRoot[name_str.c_str()]);
+    }
+    return false;
+}
+#endif
 
 inline bool JsonSerializer::startDeserialize(const NEKO_STRING_VIEW& filename) NEKO_NOEXCEPT {
     std::ifstream file(filename.data(), std::ios::binary);
@@ -241,18 +331,6 @@ inline bool JsonSerializer::endDeserialize() NEKO_NOEXCEPT {
     mDocument.SetNull();
     mDocument.GetAllocator().Clear();
     return true;
-}
-
-template <typename T>
-bool JsonSerializer::get(const char* name, const size_t len, T* value) NEKO_NOEXCEPT {
-    std::string name_str(name, len);
-    if (!mDocument.IsNull() && mDocument.HasMember(name_str.c_str())) {
-        return JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mDocument[name_str.c_str()]);
-    }
-    if (!mRoot.IsNull() && mRoot.HasMember(name_str.c_str())) {
-        return JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mRoot[name_str.c_str()]);
-    }
-    return false;
 }
 
 template <typename WriterT, typename ValueT>

@@ -63,6 +63,10 @@
 #include <set>
 #include <string>
 #include <vector>
+#if NEKO_CPP_PLUS >= 17
+#include <optional>
+#include <string_view>
+#endif
 
 #include "private/global.hpp"
 
@@ -326,6 +330,20 @@ struct FormatStringCovert<std::string_view, void> {
         if (len == 0)
             return std::string("\"") + std::string(p) + std::string("\"");
         return std::string(name, len) + std::string(" = \"") + std::string(p) + "\"";
+    }
+};
+
+template <typename T>
+struct FormatStringCovert<std::optional<T>, void> {
+    static std::string toString(const char* name, const size_t len, const std::optional<T>& p) {
+        if (p.has_value()) {
+            return FormatStringCovert<T>::toString(name, len, *p);
+        } else {
+            std::string ret;
+            if (len > 0)
+                ret = std::string(name, len) + " = ";
+            return ret + "null";
+        }
     }
 };
 #endif
