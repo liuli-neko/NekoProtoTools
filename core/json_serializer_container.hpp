@@ -21,10 +21,6 @@
 #undef GetObject
 #endif
 
-#if NEKO_CPP_PLUS >= 17
-#include <variant>
-#endif
-
 #if NEKO_CPP_PLUS >= 20
 #include <string>
 #endif
