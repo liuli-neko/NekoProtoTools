@@ -73,7 +73,8 @@ struct TestP {
     std::tuple<int, std::string> j = {1, "hello"};
 #if NEKO_CPP_PLUS >= 17
     std::optional<int> k;
-    NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k)
+    std::variant<int, std::string, double> l;
+    NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k, l)
 #else
     NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j)
 #endif
@@ -114,7 +115,9 @@ TEST_F(ProtoTest, StructSerialize) {
     testp.h = TEnum_A;
     testp.i = StructA{1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
     testp.j = std::make_tuple(1, "hello");
-
+#if NEKO_CPP_PLUS >= 17
+    testp.l = "this a test for variant";
+#endif
     std::vector<char> data;
     data = testp.makeProto().toData();
     data.push_back('\0');
@@ -122,7 +125,7 @@ TEST_F(ProtoTest, StructSerialize) {
     EXPECT_STREQ(data.data(), "{\"a\":3,\"b\":\"Struct "
                               "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,"
                               "0,0],\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},"
-                              "[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,\"hello\"]}");
+                              "[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"l\":\"this a test for variant\"}");
 #else
     EXPECT_STREQ(data.data(),
                  "{\"a\":3,\"b\":\"Struct "
@@ -135,7 +138,7 @@ TEST_F(ProtoTest, StructDeserialize) {
     std::string str = "{\"a\":3,\"b\":\"Struct "
                       "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
                       "\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
-                      "\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"k\":1}";
+                      "\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"k\":1,\"l\":1.114514}";
     std::vector<char> data(str.begin(), str.end());
     TestP testp;
     EXPECT_TRUE(testp.makeProto().formData(data));
@@ -171,6 +174,8 @@ TEST_F(ProtoTest, StructDeserialize) {
     EXPECT_STREQ(std::get<1>(testp.j).c_str(), "hello");
 #if NEKO_CPP_PLUS >= 17
     EXPECT_EQ(testp.k.value_or(-1), 1);
+    EXPECT_EQ(testp.l.index(), 2);
+    EXPECT_DOUBLE_EQ(std::get<2>(testp.l), 1.114514);
 #endif
     NEKO_LOG_INFO("{}", SerializableToString(testp));
 }
@@ -226,7 +231,7 @@ TEST_F(ProtoTest, JsonProtoRef) {
     std::string str = "{\"a\":3,\"b\":\"Struct "
                       "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
                       "\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
-                      "\"TEnum_A(1)\"],\"j\":[1,\"hello\"]}";
+                      "\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"l\":23}";
     auto proto      = factory->create("TestP");
     proto->formData(std::vector<char>(str.data(), str.data() + str.length()));
     auto rawp = proto->cast<TestP>(); // success cast
@@ -285,6 +290,9 @@ TEST_F(ProtoTest, JsonProtoRef) {
 }
 
 TEST_F(ProtoTest, InvalidParams) {
+    std::string str = "{\"a\":3}";
+    TestP p;
+    EXPECT_FALSE(p.makeProto().formData(std::vector<char>(str.data(), str.data() + str.length())));
     EXPECT_TRUE(factory->create("InvalidP") == nullptr);
     EXPECT_TRUE(factory->create(-1) == nullptr);
 }

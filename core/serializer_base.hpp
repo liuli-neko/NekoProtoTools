@@ -66,6 +66,7 @@
 #if NEKO_CPP_PLUS >= 17
 #include <optional>
 #include <string_view>
+#include <variant>
 #endif
 
 #include "private/global.hpp"
@@ -77,12 +78,14 @@ namespace {
 template <size_t N, typename SerializerT, typename TupleT, std::size_t... Indices>
 inline bool unfold_function_imp1(SerializerT& serializer, const std::array<std::string_view, N>& names,
                                  const TupleT& value, std::index_sequence<Indices...>) NEKO_NOEXCEPT {
-    return ((serializer.get(names[Indices].data(), names[Indices].size(), std::get<Indices>(value)) && true) + ...);
+    return ((serializer.get(names[Indices].data(), names[Indices].size(), std::get<Indices>(value)) && true) + ...) ==
+           N;
 }
 template <size_t N, typename SerializerT, typename TupleT, std::size_t... Indices>
 inline bool unfold_function_imp2(SerializerT& serializer, const std::array<std::string_view, N>& names,
                                  const TupleT& value, std::index_sequence<Indices...>) NEKO_NOEXCEPT {
-    return ((serializer.insert(names[Indices].data(), names[Indices].size(), std::get<Indices>(value)) && true) + ...);
+    return ((serializer.insert(names[Indices].data(), names[Indices].size(), std::get<Indices>(value)) && true) +
+            ...) == N;
 }
 
 inline constexpr int _members_size(std::string_view names) NEKO_NOEXCEPT {
@@ -346,6 +349,26 @@ struct FormatStringCovert<std::optional<T>, void> {
         }
     }
 };
+
+template <typename... Ts>
+struct FormatStringCovert<std::variant<Ts...>, void> {
+    template <typename T, size_t N>
+    static std::string toStringImp(const char* name, const size_t len, const std::variant<Ts...>& value) {
+        if (value.index() != N)
+            return "";
+        return FormatStringCovert<T>::toString(name, len, std::get<N>(value));
+    }
+
+    template <size_t... Ns>
+    static std::string unfoldToString(const char* name, const size_t len, const std::variant<Ts...>& value,
+                                      std::index_sequence<Ns...>) {
+        return (toStringImp<std::variant_alternative_t<Ns, std::variant<Ts...>>, Ns>(name, len, value) + ...);
+    }
+
+    static std::string toString(const char* name, const size_t len, const std::variant<Ts...>& p) {
+        return unfoldToString(name, len, p, std::make_index_sequence<sizeof...(Ts)>());
+    }
+};
 #endif
 
 template <typename T>
@@ -387,8 +410,12 @@ struct FormatStringCovert<std::vector<T>, void> {
         for (auto& v : p) {
             ret += FormatStringCovert<T>::toString(nullptr, 0, v) + std::string(", ");
         }
-        ret.pop_back();
-        ret.back() = ']';
+        if (ret.back() == ' ') {
+            ret.pop_back();
+            ret.back() = ']';
+        } else {
+            ret.push_back(']');
+        }
         return ret;
     }
 };
@@ -404,8 +431,12 @@ struct FormatStringCovert<std::map<T, U>, void> {
             ret += FormatStringCovert<T>::toString(nullptr, 0, v.first) + std::string(":");
             ret += FormatStringCovert<U>::toString(nullptr, 0, v.second) + std::string(", ");
         }
-        ret.pop_back();
-        ret.back() = '}';
+        if (ret.back() == ' ') {
+            ret.pop_back();
+            ret.back() = '}';
+        } else {
+            ret.push_back('}');
+        }
         return ret;
     }
 };
@@ -420,8 +451,12 @@ struct FormatStringCovert<std::list<T>, void> {
         for (auto& v : p) {
             ret += FormatStringCovert<T>::toString(nullptr, 0, v) + std::string(", ");
         }
-        ret.pop_back();
-        ret.back() = ']';
+        if (ret.back() == ' ') {
+            ret.pop_back();
+            ret.back() = ']';
+        } else {
+            ret.push_back(']');
+        }
         return ret;
     }
 };
@@ -436,8 +471,12 @@ struct FormatStringCovert<std::set<T>, void> {
         for (auto& v : p) {
             ret += FormatStringCovert<T>::toString(nullptr, 0, v) + std::string(", ");
         }
-        ret.pop_back();
-        ret.back() = '}';
+        if (ret.back() == ' ') {
+            ret.pop_back();
+            ret.back() = '}';
+        } else {
+            ret.push_back('}');
+        }
         return ret;
     }
 };
@@ -452,9 +491,12 @@ struct FormatStringCovert<std::array<T, N>, void> {
         for (auto& v : p) {
             ret += FormatStringCovert<T>::toString(nullptr, 0, v) + std::string(", ");
         }
-        ret.pop_back();
-        ret.back() = '}';
-
+        if (ret.back() == ' ') {
+            ret.pop_back();
+            ret.back() = '}';
+        } else {
+            ret.push_back('}');
+        }
         return ret;
     }
 };
