@@ -486,7 +486,7 @@ template <typename WriterT, typename ValueT>
 struct JsonConvert<WriterT, ValueT, double, void> {
     static bool toJsonValue(WriterT& writer, const double value) { return writer.Double(value); }
     static bool fromJsonValue(double* dst, const ValueT& value) {
-        if (!value.IsDouble() || dst == nullptr) {
+        if (!value.IsNumber() || dst == nullptr) {
             return false;
         }
         (*dst) = value.GetDouble();
@@ -498,7 +498,7 @@ template <typename WriterT, typename ValueT>
 struct JsonConvert<WriterT, ValueT, float, void> {
     static bool toJsonValue(WriterT& writer, const float value) { return writer.Double(value); }
     static bool fromJsonValue(float* dst, const ValueT& value) {
-        if (!value.IsDouble() || dst == nullptr) {
+        if (!value.IsNumber() || dst == nullptr) {
             return false;
         }
         (*dst) = value.GetDouble();
