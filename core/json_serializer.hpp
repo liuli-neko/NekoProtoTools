@@ -10,6 +10,8 @@
  */
 #pragma once
 
+#include "private/global.hpp"
+
 #include <fstream>
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
@@ -19,9 +21,8 @@
 #include <vector>
 #if NEKO_CPP_PLUS >= 17
 #include <optional>
+#include <variant>
 #endif
-
-#include "private/global.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
@@ -243,10 +244,8 @@ bool JsonSerializer::insert(const char* name, const size_t len, const T& value) 
 
 template <typename T>
 bool JsonSerializer::get(const char* name, const size_t len, T* value) {
+    NEKO_ASSERT(value != nullptr, "{} value is null in get value function.", std::string(name, len));
     if constexpr (is_optional<T>::value) {
-        if (nullptr == value) {
-            return false;
-        }
         std::string name_str(name, len);
         if (!mDocument.IsNull() && mDocument.HasMember(name_str.c_str())) {
             typename is_optional<T>::value_type tmp;
@@ -254,9 +253,9 @@ bool JsonSerializer::get(const char* name, const size_t len, T* value) {
                     &tmp, mDocument[name_str.c_str()])) {
                 *value = std::move(tmp);
                 return true;
-            } else {
-                return false;
             }
+            NEKO_LOG_WARN("{} value is error type in json.", std::string(name, len));
+            return false;
         }
         if (!mRoot.IsNull() && mRoot.HasMember(name_str.c_str())) {
             typename is_optional<T>::value_type tmp;
@@ -264,20 +263,29 @@ bool JsonSerializer::get(const char* name, const size_t len, T* value) {
                     &tmp, mRoot[name_str.c_str()])) {
                 *value = std::move(tmp);
                 return true;
-            } else {
-                return false;
             }
+            NEKO_LOG_WARN("{} value is error type in json.", std::string(name, len));
+            return false;
         }
         (*value).reset();
         return true;
     } else {
         std::string name_str(name, len);
         if (!mDocument.IsNull() && mDocument.HasMember(name_str.c_str())) {
-            return JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mDocument[name_str.c_str()]);
+            if (JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mDocument[name_str.c_str()])) {
+                return true;
+            }
+            NEKO_LOG_WARN("{} value is error type in json.", std::string(name, len));
+            return false;
         }
         if (!mRoot.IsNull() && mRoot.HasMember(name_str.c_str())) {
-            return JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mRoot[name_str.c_str()]);
+            if (JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mRoot[name_str.c_str()])) {
+                return true;
+            }
+            NEKO_LOG_WARN("{} value is error type in json.", std::string(name, len));
+            return false;
         }
+        NEKO_LOG_WARN("{} value is not find in json.", std::string(name, len));
         return false;
     }
 }
@@ -491,5 +499,46 @@ struct JsonConvert<WriterT, ValueT, float, void> {
         return true;
     }
 };
+
+#if NEKO_CPP_PLUS >= 17
+template <typename WriterT, typename ValueT, typename... Ts>
+struct JsonConvert<WriterT, ValueT, std::variant<Ts...>, void> {
+    template <typename T, size_t N>
+    static bool toJsonValueImp(WriterT& writer, const std::variant<Ts...>& value) {
+        if (value.index() != N)
+            return false;
+        return JsonConvert<WriterT, ValueT, T>::toJsonValue(writer, std::get<N>(value));
+    }
+
+    template <size_t... Ns>
+    static bool unfoldToJsonValue(WriterT& writer, const std::variant<Ts...>& value, std::index_sequence<Ns...>) {
+        return (toJsonValueImp<std::variant_alternative_t<Ns, std::variant<Ts...>>, Ns>(writer, value) || ...);
+    }
+
+    static bool toJsonValue(WriterT& writer, const std::variant<Ts...>& value) {
+        return unfoldToJsonValue(writer, value, std::make_index_sequence<sizeof...(Ts)>());
+    }
+
+    template <typename T, size_t N>
+    static bool fromJsonValueImp(std::variant<Ts...>* dst, const ValueT& value) {
+        T tmp = {};
+        if (JsonConvert<WriterT, ValueT, T>::fromJsonValue(&tmp, value)) {
+            *dst = tmp;
+            return true;
+        }
+        return false;
+    }
+
+    template <size_t... Ns>
+    static bool unfoldFromJsonValue(std::variant<Ts...>* dst, const ValueT& value, std::index_sequence<Ns...>) {
+        return (fromJsonValueImp<std::variant_alternative_t<Ns, std::variant<Ts...>>, Ns>(dst, value) || ...);
+    }
+
+    static bool fromJsonValue(std::variant<Ts...>* dst, const ValueT& value) {
+        NEKO_ASSERT(dst != nullptr, "[qBittorrent] std::variant dst is nullptr in from json value");
+        return unfoldFromJsonValue(dst, value, std::make_index_sequence<sizeof...(Ts)>());
+    }
+};
+#endif
 
 NEKO_END_NAMESPACE
