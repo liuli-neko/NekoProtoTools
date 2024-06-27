@@ -254,8 +254,8 @@ bool JsonSerializer::get(const char* name, const size_t len, T* value) {
                 *value = std::move(tmp);
                 return true;
             }
+            // this is a optional field, so, even a type error is not considered an error.
             NEKO_LOG_WARN("{} value is error type in json.", std::string(name, len));
-            return false;
         }
         if (!mRoot.IsNull() && mRoot.HasMember(name_str.c_str())) {
             typename is_optional<T>::value_type tmp;
@@ -264,8 +264,8 @@ bool JsonSerializer::get(const char* name, const size_t len, T* value) {
                 *value = std::move(tmp);
                 return true;
             }
+            // this is a optional field, so, even a type error is not considered an error.
             NEKO_LOG_WARN("{} value is error type in json.", std::string(name, len));
-            return false;
         }
         (*value).reset();
         return true;
@@ -275,6 +275,8 @@ bool JsonSerializer::get(const char* name, const size_t len, T* value) {
             if (JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mDocument[name_str.c_str()])) {
                 return true;
             }
+            // For non-optional fields, continued use is undefined behavior because the value cannot be obtained
+            // correctly.
             NEKO_LOG_WARN("{} value is error type in json.", std::string(name, len));
             return false;
         }
@@ -282,9 +284,13 @@ bool JsonSerializer::get(const char* name, const size_t len, T* value) {
             if (JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mRoot[name_str.c_str()])) {
                 return true;
             }
+            // For non-optional fields, continued use is undefined behavior because the value cannot be obtained
+            // correctly.
             NEKO_LOG_WARN("{} value is error type in json.", std::string(name, len));
             return false;
         }
+        // For non-optional fields, continued use is undefined behavior because the value cannot be obtained
+        // correctly.
         NEKO_LOG_WARN("{} value is not find in json.", std::string(name, len));
         return false;
     }
