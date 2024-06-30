@@ -42,7 +42,7 @@ struct JsonConvert<WriterT, ValueT, StructA, void> {
         return ret;
     }
     static bool fromJsonValue(StructA* result, const ValueT& value) {
-        if (result == nullptr || !value.IsArray()) {
+        if (result == nullptr || !value.IsArray() || value.Size() != 8) {
             return false;
         }
         auto ret = JsonConvert<WriterT, ValueT, int>::fromJsonValue(&result->a, value[0]);
