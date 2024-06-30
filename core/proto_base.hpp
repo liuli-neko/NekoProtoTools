@@ -119,18 +119,14 @@ public:
     template <typename T>
     T getField(const NEKO_STRING_VIEW& name, const T& defaultValue) NEKO_NOEXCEPT {
         auto reflectionObject = getReflectionObject();
-        if (reflectionObject == nullptr) {
-            return defaultValue;
-        }
+        NEKO_ASSERT(reflectionObject != nullptr, "reflectionObject is nullptr");
         return reflectionObject->getField(name, defaultValue);
     }
 
     template <typename T>
     bool setField(const NEKO_STRING_VIEW& name, const T& value) NEKO_NOEXCEPT {
         auto reflectionObject = getReflectionObject();
-        if (reflectionObject == nullptr) {
-            return false;
-        }
+        NEKO_ASSERT(reflectionObject != nullptr, "reflectionObject is nullptr");
         return reflectionObject->setField(name, value);
     }
 
@@ -335,15 +331,15 @@ NEKO_STRING_VIEW ProtoBase<T, SerializerT>::name() NEKO_NOEXCEPT {
 
 template <typename ProtoT, typename SerializerT>
 inline ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() NEKO_NOEXCEPT {
-    if (mData == nullptr) {
-        return nullptr;
-    }
+    NEKO_ASSERT(mData != nullptr, "mData is nullptr");
     if (mReflectionSerializer != nullptr) {
         return mReflectionSerializer->getObject();
     }
     mReflectionSerializer.reset(new ReflectionSerializer());
     mReflectionSerializer->start();
     bool ret = mData->deserialize(*mReflectionSerializer);
+    NEKO_ASSERT(ret, "{} get reflection object error", kProtoName);
+    NEKO_ASSERT(mReflectionSerializer->getObject() != nullptr, "mReflectionSerializer->getObject() is nullptr");
     return mReflectionSerializer->getObject();
 }
 
@@ -376,9 +372,7 @@ bool ProtoBase<ProtoT, SerializerT>::Deserialize(const std::vector<char>& data, 
 template <typename T, typename SerializerT>
 std::vector<char> ProtoBase<T, SerializerT>::toData() const NEKO_NOEXCEPT {
     std::vector<char> data;
-    if (mData == nullptr) {
-        return data;
-    }
+    NEKO_ASSERT(mData != nullptr, "mData is nullptr");
     mSerializer.startSerialize(&data);
     auto ret = mData->serialize(mSerializer);
     if (!mSerializer.endSerialize()) {
@@ -394,9 +388,7 @@ int ProtoBase<T, SerializerT>::type() const NEKO_NOEXCEPT {
 
 template <typename T, typename SerializerT>
 bool ProtoBase<T, SerializerT>::formData(const std::vector<char>& data) NEKO_NOEXCEPT {
-    if (mData == nullptr) {
-        return false;
-    }
+    NEKO_ASSERT(mData != nullptr, "mData is nullptr");
     if (!mSerializer.startDeserialize(data)) {
         return false;
     }

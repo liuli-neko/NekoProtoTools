@@ -247,6 +247,8 @@ TEST_F(ProtoTest, JsonProtoRef) {
     EXPECT_TRUE(proto->getField<bool>("c", false));                             // success get field
     EXPECT_FALSE(proto->getField<bool>("b", false));                            // get field by wrong type
     EXPECT_FALSE(proto->getField<bool>("unexist field", false));                // get unexist field
+    EXPECT_STREQ(proto->getField<std::string>("", "false").c_str(), "false");   // get unexist field
+    EXPECT_FALSE(proto->getField<bool>("", false));                             // get unexist field
     EXPECT_EQ(a, 3);
 
     // set field test
@@ -255,6 +257,7 @@ TEST_F(ProtoTest, JsonProtoRef) {
     EXPECT_TRUE(proto->setField("c", false));                         // success set field
     EXPECT_FALSE(proto->setField("a", 3.1234));                       // set field by wrong type
     EXPECT_FALSE(proto->setField("unexist field", 3.1234));           // set unexist field
+    EXPECT_FALSE(proto->setField("", 3.1234));                        // set unexist field
     EXPECT_EQ(rawp->a, 14);
     EXPECT_STREQ(rawp->b.c_str(), "field set test");
     EXPECT_FALSE(rawp->c);
@@ -295,6 +298,21 @@ TEST_F(ProtoTest, InvalidParams) {
     EXPECT_FALSE(p.makeProto().formData(std::vector<char>(str.data(), str.data() + str.length())));
     EXPECT_TRUE(factory->create("InvalidP") == nullptr);
     EXPECT_TRUE(factory->create(-1) == nullptr);
+    str = "{\"a\":3.213123,\"b\":123"
+          ",\"c\":12,\"d\":\"dddd\",\"f\":[1,2,3],\"e\":{\"a\":1,\"b\":2},\"h\":[1,2,3,0,0],"
+          "\"g\":\"TEnum_A(1)\",\"j\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
+          "\"TEnum_A(1)\"],\"i\":[1,\"hello\"],\"l\":23}";
+    EXPECT_FALSE(p.makeProto().formData(std::vector<char>(str.data(), str.data() + str.length())));
+    str = "aaaaaaaaaaaaa";
+    EXPECT_FALSE(p.makeProto().formData(std::vector<char>(str.data(), str.data() + str.length())));
+    str = "{\"a\":3.213123,\"b\":123"
+          ",\"c\":12,\"d\":\"dddd\",\"f\":23,\"e\":null,\"h\":23.22,"
+          "\"g\":\"TEnum_A(1)\",\"j\":[1,\"hello\",true,3.141592654,[1,2,3],"
+          "\"TEnum_A(1)\"],\"i\":[1,\"hello\"],\"l\":23}";
+    EXPECT_FALSE(p.makeProto().formData(std::vector<char>(str.data(), str.data() + str.length())));
+    auto d = TestP::ProtoType::Serialize(p);
+    EXPECT_FALSE(d.empty());
+    EXPECT_FALSE(TestP::ProtoType::Deserialize(std::vector<char>(str.data(), str.data() + str.length()), p));
 }
 
 TEST_F(ProtoTest, BinaryProto) {

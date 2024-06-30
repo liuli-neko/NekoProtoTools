@@ -351,7 +351,8 @@ template <typename WriterT, typename ValueT>
 struct JsonConvert<WriterT, ValueT, int, void> {
     static bool toJsonValue(WriterT& writer, const int value) { return writer.Int(value); }
     static bool fromJsonValue(int* dst, const ValueT& value) {
-        if (!value.IsInt() || dst == nullptr) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsInt()) {
             return false;
         }
         (*dst) = value.GetInt();
@@ -363,7 +364,8 @@ template <typename WriterT, typename ValueT>
 struct JsonConvert<WriterT, ValueT, unsigned int, void> {
     static bool toJsonValue(WriterT& writer, const unsigned int value) { return writer.Uint(value); }
     static bool fromJsonValue(unsigned int* dst, const ValueT& value) {
-        if (!value.IsUint() || dst == nullptr) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsUint()) {
             return false;
         }
         (*dst) = value.GetUint();
@@ -375,7 +377,8 @@ template <typename WriterT, typename ValueT>
 struct JsonConvert<WriterT, ValueT, int64_t, void> {
     static bool toJsonValue(WriterT& writer, const int64_t value) { return writer.Int64(value); }
     static bool fromJsonValue(int64_t* dst, const ValueT& value) {
-        if (!value.IsInt64() || dst == nullptr) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsInt64()) {
             return false;
         }
         (*dst) = value.GetInt64();
@@ -387,7 +390,8 @@ template <typename WriterT, typename ValueT>
 struct JsonConvert<WriterT, ValueT, uint64_t, void> {
     static bool toJsonValue(WriterT& writer, const uint64_t value) { return writer.Uint64(value); }
     static bool fromJsonValue(uint64_t* dst, const ValueT& value) {
-        if (!value.IsUint64() || dst == nullptr) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsUint64()) {
             return false;
         }
         (*dst) = value.GetUint64();
@@ -401,7 +405,8 @@ struct JsonConvert<WriterT, ValueT, std::string, void> {
         return writer.String(value.c_str(), value.size(), true);
     }
     static bool fromJsonValue(std::string* dst, const ValueT& value) {
-        if (!value.IsString() || dst == nullptr) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsString()) {
             return false;
         }
         (*dst) = std::string(value.GetString(), value.GetStringLength());
@@ -416,7 +421,8 @@ struct JsonConvert<WriterT, ValueT, std::u8string, void> {
         return writer.String(reinterpret_cast<const char*>(value.data()), value.size(), true);
     }
     static bool fromJsonValue(std::u8string* dst, const ValueT& value) {
-        if (!value.IsString() || dst == nullptr) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsString()) {
             return false;
         }
         (*dst) = std::u8string(reinterpret_cast<const char8_t*>(value.GetString()), value.GetStringLength());
@@ -435,7 +441,8 @@ struct JsonConvert<WriterT, ValueT, std::vector<T>, void> {
         return ret;
     }
     static bool fromJsonValue(std::vector<T>* dst, const ValueT& value) {
-        if (!value.IsArray() || dst == nullptr) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsArray()) {
             return false;
         }
         dst->clear();
@@ -462,7 +469,8 @@ struct JsonConvert<
         return ret;
     }
     static bool fromJsonValue(T* dst, const ValueT& value) {
-        if (!value.IsObject() || dst == nullptr) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsObject()) {
             return false;
         }
         auto jsonS = JsonSerializer(value);
@@ -474,7 +482,8 @@ template <typename WriterT, typename ValueT>
 struct JsonConvert<WriterT, ValueT, bool, void> {
     static bool toJsonValue(WriterT& writer, const bool value) { return writer.Bool(value); }
     static bool fromJsonValue(bool* dst, const ValueT& value) {
-        if (!value.IsBool() || dst == nullptr) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsBool()) {
             return false;
         }
         (*dst) = value.GetBool();
@@ -486,7 +495,8 @@ template <typename WriterT, typename ValueT>
 struct JsonConvert<WriterT, ValueT, double, void> {
     static bool toJsonValue(WriterT& writer, const double value) { return writer.Double(value); }
     static bool fromJsonValue(double* dst, const ValueT& value) {
-        if (!value.IsNumber() || dst == nullptr) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsNumber()) {
             return false;
         }
         (*dst) = value.GetDouble();
@@ -498,7 +508,8 @@ template <typename WriterT, typename ValueT>
 struct JsonConvert<WriterT, ValueT, float, void> {
     static bool toJsonValue(WriterT& writer, const float value) { return writer.Double(value); }
     static bool fromJsonValue(float* dst, const ValueT& value) {
-        if (!value.IsNumber() || dst == nullptr) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsNumber()) {
             return false;
         }
         (*dst) = value.GetDouble();

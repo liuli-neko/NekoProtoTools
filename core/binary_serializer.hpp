@@ -94,6 +94,7 @@ inline bool BinarySerializer::endDeserialize() NEKO_NOEXCEPT {
 
 template <typename T>
 bool BinarySerializer::get(const char* name, const size_t len, T* value) NEKO_NOEXCEPT {
+    NEKO_ASSERT(value != nullptr, "{} value is nullptr in get function", std::string(name, len));
     return BinaryConvert<WriterType, ValueType, T>::fromBinaryArray(value, *(mData.constData), mOffset);
 }
 
@@ -117,6 +118,7 @@ struct BinaryConvert<WriterT, ValueT, int8_t, void> {
         return true;
     }
     static bool fromBinaryArray(int8_t* dst, const ValueT& buf, int& offset_byte) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
         if (buf.size() < offset_byte + 1) {
             return false;
         }
@@ -135,6 +137,7 @@ struct BinaryConvert<WriterT, ValueT, uint16_t, void> {
         return true;
     }
     static bool fromBinaryArray(uint16_t* dst, const ValueT& buf, int& offset_byte) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
         if (buf.size() < offset_byte + 2) {
             return false;
         }
@@ -156,6 +159,7 @@ struct BinaryConvert<WriterT, ValueT, int16_t, void> {
         return true;
     }
     static bool fromBinaryArray(int16_t* dst, const ValueT& buf, int& offset_byte) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
         if (buf.size() < offset_byte + 2) {
             return false;
         }
@@ -177,6 +181,7 @@ struct BinaryConvert<WriterT, ValueT, uint32_t, void> {
         return true;
     }
     static bool fromBinaryArray(uint32_t* dst, const ValueT& buf, int& offset_byte) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
         if (buf.size() < offset_byte + 4) {
             return false;
         }
@@ -197,6 +202,7 @@ struct BinaryConvert<WriterT, ValueT, int32_t, void> {
         return true;
     }
     static bool fromBinaryArray(int32_t* dst, const ValueT& buf, int& offset_byte) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
         if (buf.size() < offset_byte + 4) {
             return false;
         }
@@ -217,6 +223,7 @@ struct BinaryConvert<WriterT, ValueT, uint64_t, void> {
         return true;
     }
     static bool fromBinaryArray(uint64_t* dst, const ValueT& buf, int& offset_byte) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
         if (buf.size() < offset_byte + 8) {
             return false;
         }
@@ -237,6 +244,7 @@ struct BinaryConvert<WriterT, ValueT, int64_t, void> {
         return true;
     }
     static bool fromBinaryArray(int64_t* dst, const ValueT& buf, int& offset_byte) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
         if (buf.size() < offset_byte + 8) {
             return false;
         }
@@ -258,6 +266,7 @@ struct BinaryConvert<WriterT, ValueT, std::string, void> {
         return true;
     }
     static bool fromBinaryArray(std::string* dst, const ValueT& buf, int& offset_byte) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
         if (buf.size() < offset_byte + 8) {
             return false;
         }
@@ -284,6 +293,7 @@ struct BinaryConvert<WriterT, ValueT, std::u8string, void> {
         return true;
     }
     static bool fromBinaryArray(std::u8string* dst, const ValueT& buf, int& offset_byte) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
         if (buf.size() < offset_byte + 8) {
             return false;
         }
