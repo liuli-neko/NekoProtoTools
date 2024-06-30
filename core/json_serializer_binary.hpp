@@ -150,7 +150,8 @@ struct JsonConvert<WriterT, ValueT, T,
         return writer.String(data.data(), data.size(), true);
     }
     static bool fromJsonValue(T* dst, const ValueT& value) {
-        if (!value.IsString() || dst == nullptr) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsString()) {
             return false;
         }
         dst->fromData(Base64Covert::Decode(value.GetString(), value.GetStringLength()));

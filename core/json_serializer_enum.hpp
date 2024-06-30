@@ -154,9 +154,7 @@ struct JsonConvert<WriterT, ValueT, T, typename std::enable_if<std::is_enum<T>::
         return writer.String(ret.c_str(), ret.size(), true);
     }
     static bool fromJsonValue(T* dst, const ValueT& value) {
-        if (dst == nullptr) {
-            return false;
-        }
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
         if (value.IsString()) {
             std::string str(value.GetString(), value.GetStringLength());
             size_t left  = str.find_last_of(')');
@@ -198,9 +196,7 @@ template <typename WriterT, typename ValueT, typename T>
 struct JsonConvert<WriterT, ValueT, T, typename std::enable_if<std::is_enum<T>::value>::type> {
     static bool toJsonValue(WriterT& writer, const T& value) { return writer.Int(static_cast<int32_t>(value)); }
     static bool fromJsonValue(T* dst, const ValueT& value) {
-        if (dst == nullptr) {
-            return false;
-        }
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
         if (value.IsString()) {
             std::string str(value.GetString(), value.GetStringLength());
             size_t left = str.find_last_of(')');

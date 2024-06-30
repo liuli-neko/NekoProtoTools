@@ -38,7 +38,8 @@ struct JsonConvert<WriterT, ValueT, std::list<T>, void> {
         return ret;
     }
     static bool fromJsonValue(std::list<T>* dst, const ValueT& value) {
-        if (!value.IsArray() || dst == nullptr) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsArray()) {
             return false;
         }
         dst->clear();
@@ -64,7 +65,8 @@ struct JsonConvert<WriterT, ValueT, std::set<T>, void> {
         return ret;
     }
     static bool fromJsonValue(std::set<T>* dst, const ValueT& value) {
-        if (!value.IsArray() || dst == nullptr) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsArray()) {
             return false;
         }
         dst->clear();
@@ -123,10 +125,14 @@ struct JsonConvert<WriterT, ValueT, std::array<T, t>, void> {
         return ret;
     }
     static bool fromJsonValue(std::array<T, t>* dst, const ValueT& value) {
-        if (!value.IsArray() || dst == nullptr) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsArray()) {
             return false;
         }
         auto vars = value.GetArray();
+        if (vars.Size() != t) {
+            return false;
+        }
         for (int i = 0; i < t; ++i) {
             if (!JsonConvert<WriterT, ValueT, T>::fromJsonValue(&((*dst)[i]), vars[i])) {
                 return false;
@@ -209,7 +215,11 @@ struct JsonConvert<WriterT, ValueT, std::tuple<Arg...>> {
         return ret;
     }
     static bool fromJsonValue(std::tuple<Arg...>* dst, const ValueT& value) {
-        if (dst == nullptr || !value.IsArray()) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsArray()) {
+            return false;
+        }
+        if (value.Size() != sizeof...(Arg)) {
             return false;
         }
         return fromJsonValueImp<std::tuple<Arg...>, sizeof...(Arg)>::fromJsonValue(dst, value);

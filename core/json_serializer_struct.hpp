@@ -233,7 +233,11 @@ struct JsonConvert<WriterT, ValueT, T, std::enable_if_t<can_unwrap_v<T> && !can_
         std::apply([&](Args&&... args) { ((deserializeTupleImpl(value[index++], args)), ...); }, tp);
     }
     static bool fromJsonValue(T* dst, const ValueT& value) {
-        if (dst == nullptr || !value.IsArray()) {
+        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
+        if (!value.IsArray()) {
+            return false;
+        }
+        if (value.Size() != tuple_size_v<T>) {
             return false;
         }
         deserializeTupleFrom(value, unwrap_struct(*dst));
