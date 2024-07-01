@@ -31,7 +31,7 @@ int main() {
     SerializerAble sa;
     sa.a = 1;
     sa.b = "hello";
-    JsonSerializer serializer; // you can implement your own serializer, of course this repository provides a json serializer in header proto_json_serializer.hpp and more details while introducing later.
+    JsonSerializer serializer; // you can implement your own serializer, of course this repository provides a json serializer in header json_serializer.hpp and more details while introducing later.
     std::vector<char> data;
     serializer.startSerialize(&data)
     sa.serialize(serializer);
@@ -46,7 +46,7 @@ If you want to use the protocol factory to generate the message type of proto, y
 ```C++
 #include "core/proto_base.hpp"
 #include "core/serializer_base.hpp" // it is needed to use the protocol factory
-#include "core/proto_json_serializer.hpp" // it is default serializer for proto message, if you want to use your own serializer, you need provided template parameters, can remove this header if not use default serializer.
+#include "core/json_serializer.hpp" // it is default serializer for proto message, if you want to use your own serializer, you need provided template parameters, can remove this header if not use default serializer.
 ```
 and a cpp file `src/proto_base.cpp`
 
@@ -84,26 +84,26 @@ This repository provides a default json serializer. support most of commonly typ
 
 | type | support | json type| header |
 | ---- | -------- | ---- | ---- |
-| bool | yes | BOOL | proto_json_serializer.hpp |
-| int8_t | yes | INT | proto_json_serializer.hpp |
-| int32_t | yes | INT | proto_json_serializer.hpp |
-| int64_t | yes | INT | proto_json_serializer.hpp |
-| uint8_t | yes | INT | proto_json_serializer.hpp |
-| uint32_t | yes | INT | proto_json_serializer.hpp |
-| uint64_t | yes | INT | proto_json_serializer.hpp |
-| float | yes | FLOAT | proto_json_serializer.hpp |
-| double | yes | FLOAT | proto_json_serializer.hpp |
-| std::string | yes | STRING | proto_json_serializer.hpp |
-| std::u8string | yes | STRING | proto_json_serializer.hpp |
-| std::vector\<T\> | yes | ARRAY | proto_json_serializer.hpp |
-| class public PorotoBase<T, JsonSerializer> | yes | OBJECT | proto_json_serializer.hpp |
-| std::array\<T, N\> | yes | ARRAY | proto_json_serializer_contrain.hpp |
-| std::set\<T\> | yes | ARRAY | proto_json_serializer_contrain.hpp |
-| std::list\<T\> | yes | ARRAY | proto_json_serializer_contrain.hpp |
-| std::map\<std::string, T\> | yes | OBJECT | proto_json_serializer_contrain.hpp |
-| std::tuple\<T...\> | yes | ARRAY | proto_json_serializer_contrain.hpp |
-| custom struct type | yes | ARRAY | proto_json_serializer_struct.hpp |
-| enum | yes | STRING [ INT ] | proto_json_serializer_enum.hpp |
+| bool | yes | BOOL | json_serializer.hpp |
+| int8_t | yes | INT | json_serializer.hpp |
+| int32_t | yes | INT | json_serializer.hpp |
+| int64_t | yes | INT | json_serializer.hpp |
+| uint8_t | yes | INT | json_serializer.hpp |
+| uint32_t | yes | INT | json_serializer.hpp |
+| uint64_t | yes | INT | json_serializer.hpp |
+| float | yes | FLOAT | json_serializer.hpp |
+| double | yes | FLOAT | json_serializer.hpp |
+| std::string | yes | STRING | json_serializer.hpp |
+| std::u8string | yes | STRING | json_serializer.hpp |
+| std::vector\<T\> | yes | ARRAY | json_serializer.hpp |
+| class public PorotoBase<T, JsonSerializer> | yes | OBJECT | json_serializer.hpp |
+| std::array\<T, N\> | yes | ARRAY | json_serializer_contrain.hpp |
+| std::set\<T\> | yes | ARRAY | json_serializer_contrain.hpp |
+| std::list\<T\> | yes | ARRAY | json_serializer_contrain.hpp |
+| std::map\<std::string, T\> | yes | OBJECT | json_serializer_contrain.hpp |
+| std::tuple\<T...\> | yes | ARRAY | json_serializer_contrain.hpp |
+| custom struct type | yes | ARRAY | json_serializer_struct.hpp |
+| enum | yes | STRING [ INT ] | json_serializer_enum.hpp |
 
 [^1]: https://en.cppreference.com/w/cpp/language/types
 
@@ -115,17 +115,17 @@ This repository provides a default binary serializer.
 
 | type | support | binary len | header |
 | ---- | -------- | ---- | ---- |
-| bool | yes | 1 | proto_binary_serializer.hpp |
-| int8_t | yes | 1 | proto_binary_serializer.hpp |
-| int32_t | yes | 4 | proto_binary_serializer.hpp |
-| int64_t | yes | 8 | proto_binary_serializer.hpp |
-| uint8_t | yes | 1 | proto_binary_serializer.hpp |
-| uint32_t | yes | 4 | proto_binary_serializer.hpp |
-| uint64_t | yes | 8 | proto_binary_serializer.hpp |
-| float | no | 4 | - |
-| double | no | 8 | - |
-| std::string | yes | 4 + len | proto_binary_serializer.hpp |
-| std::u8string | yes | 4 + len | proto_binary_serializer.hpp |
+| bool | yes | 1 | binary_serializer.hpp |
+| int8_t | yes | 1 | binary_serializer.hpp |
+| int32_t | yes | 4 | binary_serializer.hpp |
+| int64_t | yes | 8 | binary_serializer.hpp |
+| uint8_t | yes | 1 | binary_serializer.hpp |
+| uint32_t | yes | 4 | binary_serializer.hpp |
+| uint64_t | yes | 8 | binary_serializer.hpp |
+| float | no | - | - |
+| double | no | - | - |
+| std::string | yes | 4 + len | binary_serializer.hpp |
+| std::u8string | yes | 4 + len | binary_serializer.hpp |
 
 ##### 3.1.3. custom serializer
 

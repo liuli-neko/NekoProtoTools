@@ -18,16 +18,16 @@
  * @section example_sec Example
  * @code {.c++}
  * #include "proto_base.hpp"
- * #include "proto_json_serializer.hpp"
+ * #include "json_serializer.hpp"
  * #include "serializer_base.hpp"
  *
  * struct ProtoMessage {
  *     int a;
  *     std::string b;
  *
- *     CS_SERIALIZE(a, b)
+ *     NEKO_SERIALIZE(a, b)
+ *     NEKO_DECLARE_PROTOCOL(ProtoMessage, JsonSerializer)
  * }
- * NEKO_DECLARE_PROTOCOL(ProtoMessage, JsonSerializer)
  *
  * int main() {
  *     ProtoFactory factory(1, 0, 0);
