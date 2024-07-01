@@ -327,6 +327,263 @@ TEST_F(ProtoTest, BinaryProto) {
     NEKO_LOG_INFO("{}", SerializableToString(proto));
 }
 
+// struct test
+#if NEKO_CPP_PLUS >= 17
+struct Struct1 {
+    int a = 3;
+};
+struct Struct2 {
+    int a = 23;
+    std::string b;
+};
+struct Struct3 {
+    int a    = 4;
+    bool b   = false;
+    double c = 1.24;
+};
+
+struct Struct4 {
+    int a         = 123;
+    std::string b = "sdf";
+    bool c        = false;
+    double d      = 1.123;
+};
+
+struct Struct5 {
+    int a              = 43;
+    std::string b      = "ttt";
+    bool c             = true;
+    double d           = 1.21;
+    std::vector<int> e = {12, 23, 34};
+};
+
+struct Struct6 {
+    int a                        = 23;
+    std::string b                = "str";
+    bool c                       = false;
+    double d                     = 3.141592654;
+    std::vector<int> e           = {1, 2, 3};
+    std::map<std::string, int> f = {{"a", 1}, {"b", 2}};
+};
+
+struct Struct7 {
+    int a                        = 54;
+    std::string b                = "test";
+    bool c                       = false;
+    double d                     = 1.23;
+    std::vector<int> e           = {1, 2, 3, 4, 5};
+    std::map<std::string, int> f = {{"a", 312}, {"b", 43}};
+    std::vector<int> g           = {23, 43, 54};
+};
+
+struct Struct8 {
+    int a                        = 3;
+    std::string b                = "field set test";
+    bool c                       = true;
+    double d                     = 32.3443;
+    std::vector<int> e           = {33, 3, 3};
+    std::map<std::string, int> f = {{"a", 1}, {"b", 2}};
+    int g                        = 234;
+    double h                     = 3.234;
+};
+
+struct Struct9 {
+    int a;
+    std::string b;
+    bool c;
+    double d;
+    std::vector<int> e;
+    std::map<std::string, int> f;
+    bool g;
+    uint32_t h;
+    uint32_t i;
+};
+
+struct Struct10 {
+    int a;
+    std::string b;
+    bool c;
+    double d;
+    std::vector<int> e;
+    std::map<std::string, int> f;
+    std::vector<int> g;
+    std::vector<int> h;
+    std::vector<int> i;
+    std::vector<int> j;
+};
+
+struct Struct11 {
+    int a;
+    std::string b;
+    bool c;
+    double d;
+    std::vector<int> e;
+    std::map<std::string, int> f;
+    std::vector<int> g;
+    std::vector<int> h;
+    std::vector<int> i;
+    std::vector<int> j;
+    std::vector<int> k;
+};
+
+struct Struct12 {
+    int a;
+    std::string b;
+    bool c;
+    double d;
+    std::vector<int> e;
+    std::map<std::string, int> f;
+    std::vector<int> g;
+    int h;
+    std::vector<int> i;
+    double j;
+    std::vector<int> k;
+    std::vector<int> l;
+};
+
+struct Struct13 {
+    int a;
+    std::string b;
+    bool c;
+    double d;
+    std::vector<int> e;
+    std::map<std::string, int> f;
+    std::vector<int> g;
+    std::vector<int> h;
+    std::string i;
+    std::vector<int> j;
+    std::vector<int> k;
+    double l;
+    std::vector<int> m;
+};
+
+struct Struct14 {
+    int a;
+    std::string b;
+    bool c;
+    double d;
+    std::vector<int> e;
+    std::map<std::string, int> f;
+    std::vector<int> g;
+    std::vector<int> h;
+    std::vector<int> i;
+    std::vector<int> j;
+    std::string k;
+    std::vector<int> l;
+    double m;
+    std::vector<int> n;
+};
+
+struct Struct15 {
+    int a;
+    std::string b;
+    bool c;
+    double d;
+    std::vector<int> e;
+    std::map<std::string, int> f;
+    std::vector<int> g;
+    std::vector<int> h;
+    std::vector<int> i;
+    std::vector<int> j;
+    std::vector<int> k;
+    std::vector<int> l;
+    std::vector<int> m;
+    std::vector<int> n;
+    std::vector<int> o;
+};
+
+struct Struct16 {
+    int a;
+    std::string b;
+    bool c;
+    double d;
+    std::vector<int> e;
+    std::map<std::string, int> f;
+    std::vector<int> g;
+    std::vector<int> h;
+    std::vector<int> i;
+    std::vector<int> j;
+    std::vector<int> k;
+    std::vector<int> l;
+    std::vector<int> m;
+    std::vector<int> n;
+    std::vector<int> o;
+    std::vector<int> p;
+};
+
+struct Struct17 {
+    int a;
+    std::string b;
+    bool c;
+    double d;
+    std::vector<int> e;
+    std::map<std::string, int> f;
+    std::vector<int> g;
+    std::vector<int> h;
+    std::vector<int> i;
+    std::vector<int> j;
+    std::vector<int> k;
+    std::vector<int> l;
+    std::vector<int> m;
+    std::vector<int> n;
+    std::vector<int> o;
+    std::vector<int> p;
+    std::vector<int> q;
+};
+
+struct Struct18 {
+    int a;
+    std::string b;
+    bool c;
+    double d;
+    std::vector<int> e;
+    std::map<std::string, int> f;
+    std::vector<int> g;
+    std::string h;
+    std::list<int> i;
+    int j;
+    double k;
+    uint32_t l;
+    uint64_t m;
+    int32_t n;
+    ino64_t o;
+    int32_t p;
+    uint32_t q;
+    std::vector<int> r;
+};
+
+struct StructProto {
+    Struct1 a  = {};
+    Struct2 b  = {};
+    Struct3 c  = {};
+    Struct4 d  = {};
+    Struct5 e  = {};
+    Struct6 f  = {};
+    Struct7 g  = {};
+    Struct8 h  = {};
+    Struct9 i  = {};
+    Struct10 j = {};
+    Struct11 k = {};
+    Struct12 l = {};
+    Struct13 m = {};
+    Struct14 n = {};
+    Struct15 o = {};
+    Struct16 p = {};
+    Struct17 q = {};
+    Struct18 r = {};
+
+    NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r)
+    NEKO_DECLARE_PROTOCOL(StructProto, JsonSerializer)
+};
+
+TEST_F(ProtoTest, StructProto) {
+    StructProto proto;
+    proto.a = {1};
+    NEKO_LOG_INFO("{}", SerializableToString(proto));
+}
+
+#endif
+
 int main(int argc, char** argv) {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
     testing::InitGoogleTest(&argc, argv);
