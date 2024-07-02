@@ -378,7 +378,7 @@ std::vector<char> ProtoBase<T, SerializerT>::toData() const NEKO_NOEXCEPT {
     if (!mSerializer.endSerialize()) {
         NEKO_LOG_ERROR("{} serialize error", kProtoName);
     }
-    return std::move(data);
+    return data;
 }
 
 template <typename T, typename SerializerT>

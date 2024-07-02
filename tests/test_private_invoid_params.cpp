@@ -1,9 +1,10 @@
 #include <gtest/gtest.h>
 
-#define protected public // for test private member
-#define private public   // for test private member
+// #define protected public // for test private member
+// #define private   public // for test private member
 
 #include "../core/binary_serializer.hpp"
+#include "../core/dump_to_string.hpp"
 #include "../core/json_serializer.hpp"
 #include "../core/json_serializer_binary.hpp"
 #include "../core/json_serializer_container.hpp"
@@ -12,21 +13,30 @@
 #include "../core/proto_base.hpp"
 #include "../core/serializer_base.hpp"
 
+NEKO_USE_NAMESPACE
+
 struct TestStruct {
-    int a;
-    double b;
-    int c;
-    NEKO_SERIALIZER(a, b, c)
-    NEKO_DECLARE_PROTOCOL(TestStruct, NEKO_NAMESPACE::JsonSerializer)
+    int a                        = 1;
+    double b                     = 12.12;
+    int c                        = 3;
+    double d                     = 3.14;
+    std::list<int> e             = {1, 2, 3, 4, 5};
+    std::map<std::string, int> f = {{"a", 1}, {"b", 2}, {"c", 3}};
+    std::array<int, 5> g         = {1, 2, 3, 4, 5};
+    NEKO_SERIALIZER(a, b, c, d, e, f, g)
+    NEKO_DECLARE_PROTOCOL(TestStruct, JsonSerializer)
 };
 
 TEST(PrivateInvoidParams, RefTest) {
-    TestStruct ts{1, 2.0, 3};
+    TestStruct ts;
     auto p = ts.makeProto();
     p.setField("a", 4);
     p.setField("b", 5.0);
     p.setField("c", 6);
-    auto refObject = p.getReflectionObject();
+    ReflectionSerializer refs;
+    refs.start();
+    bool ret       = ts.deserialize(refs);
+    auto refObject = refs.getObject();
     const int a    = 1;
     refObject->bindField("test_a", &a);
     EXPECT_FALSE(refObject->setField("test_a", 4));
