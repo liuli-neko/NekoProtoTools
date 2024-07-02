@@ -1,6 +1,7 @@
 .vscode
 .xmake
 .cache
+.ipynb_checkpoints
 compile_commands.json
 *.pseudocode.*
 /build

@@ -63,6 +63,11 @@ target("tests")
     add_tests("bs_cpp17", {group = "bs", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_binary_serializer.cpp", "src/proto_base.cpp"}, languages = "c++17", run_timeout = 1000})
     add_tests("bs_cpp20", {group = "bs", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_binary_serializer.cpp", "src/proto_base.cpp"}, languages = "c++20", run_timeout = 1000})
 
+    -- private invoid params
+    add_tests("private_cpp14", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_private_invoid_params.cpp", "src/proto_base.cpp"}, languages = "c++14", run_timeout = 1000})
+    add_tests("private_cpp17", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_private_invoid_params.cpp", "src/proto_base.cpp"}, languages = "c++17", run_timeout = 1000})
+    add_tests("private_cpp20", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_private_invoid_params.cpp", "src/proto_base.cpp"}, languages = "c++20", run_timeout = 1000})
+
 target_end()
 
 target("test_communication")
