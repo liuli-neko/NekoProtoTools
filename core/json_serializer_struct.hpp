@@ -1,5 +1,5 @@
 /**
- * @file proto_json_serializer_struct.hpp
+ * @file json_serializer_struct.hpp
  * @author llhsdmd (llhsdmd@gmail.com)
  * @brief
  * @version 0.1
@@ -244,7 +244,7 @@ struct JsonConvert<WriterT, ValueT, T, std::enable_if_t<can_unwrap_v<T> && !can_
         return true;
     }
 };
-
+#if NEKO_SERIALIZABLE_TO_STRING_ENABLE == 1
 template <typename T>
 struct FormatStringCovert<T, std::enable_if_t<!can_serialize_v<T> && can_unwrap_v<T>>> {
     template <typename U>
@@ -268,6 +268,7 @@ struct FormatStringCovert<T, std::enable_if_t<!can_serialize_v<T> && can_unwrap_
         return ret;
     }
 };
+#endif
 /// ====================== end =================================
 #else
 #endif

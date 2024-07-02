@@ -12,9 +12,9 @@
 #pragma once
 
 #include <cstddef>
+#include <map>
 #include <string>
 #include <typeinfo>
-#include <map>
 
 #include "global.hpp"
 
@@ -22,31 +22,34 @@ NEKO_BEGIN_NAMESPACE
 
 class ReflectionFieldBase {
 public:
-    ReflectionFieldBase() = default;
-    virtual ~ReflectionFieldBase() = default;
-    virtual const NEKO_STRING_VIEW& getFieldName() const NEKO_NOEXCEPT = 0;
-    virtual const std::type_info& getFieldType() const NEKO_NOEXCEPT = 0;
+    ReflectionFieldBase()                                        = default;
+    virtual ~ReflectionFieldBase()                               = default;
+    virtual const NEKO_STRING_VIEW& name() const NEKO_NOEXCEPT   = 0;
+    virtual const std::type_info& typeInfo() const NEKO_NOEXCEPT = 0;
 };
 
 template <typename T>
 class ReflectionField : public ReflectionFieldBase {
 public:
-    explicit ReflectionField(const NEKO_STRING_VIEW &name, T* value) : mValue(value), mName(name) {}
+    explicit ReflectionField(const NEKO_STRING_VIEW& name, T* value) : mValue(value), mName(name) {
+        if (value == nullptr) {
+            throw std::invalid_argument("can not make reflection object " + std::string(name) + " for nullptr");
+        }
+    }
     const T& getField() const NEKO_NOEXCEPT { return *mValue; }
     void setField(const T& value) NEKO_NOEXCEPT { (*mValue) = value; }
-    const NEKO_STRING_VIEW& getFieldName() const NEKO_NOEXCEPT override { return mName; }
-    const std::type_info& getFieldType() const NEKO_NOEXCEPT override { return typeid(T); }
+    const NEKO_STRING_VIEW& name() const NEKO_NOEXCEPT override { return mName; }
+    const std::type_info& typeInfo() const NEKO_NOEXCEPT override { return typeid(T); }
+
 private:
-    T *const mValue;
+    T* const mValue;
     const NEKO_STRING_VIEW mName;
 };
 
 class ReflectionObject {
 public:
     ReflectionObject() = default;
-    inline ~ReflectionObject() {
-        clear();
-    }
+    inline ~ReflectionObject() { clear(); }
     inline void clear() NEKO_NOEXCEPT {
         for (auto& it : mFields) {
             delete it.second;
@@ -62,16 +65,21 @@ public:
             NEKO_LOG_ERROR("[ReflectionObject] field {} not found.", name);
             return defaultValue;
         }
-        if (typeid(T) != it->second->getFieldType()) {
-            NEKO_LOG_ERROR("[ReflectionObject] field {} type mismatch, expected {} but got {}.", name, typeid(T).name(), it->second->getFieldType().name());
+        if (typeid(T) != it->second->typeInfo()) {
+            NEKO_LOG_ERROR("[ReflectionObject] field {} type mismatch, expected {} but got {}.", name, typeid(T).name(),
+                           it->second->typeInfo().name());
             return defaultValue;
         }
-        auto reflectionField = dynamic_cast<ReflectionField<T>*>(it->second);
-        if (reflectionField == nullptr) {
-            NEKO_LOG_ERROR("[ReflectionObject] field {} type mismatch, expected {} but got {}.", name, typeid(T).name(), it->second->getFieldType().name());
+        auto reflectionField  = dynamic_cast<ReflectionField<T>*>(it->second);
+        auto reflectionField1 = dynamic_cast<ReflectionField<const T>*>(it->second);
+        if (reflectionField == nullptr && reflectionField1 == nullptr) {
+            NEKO_LOG_ERROR("[ReflectionObject] field {} type mismatch, expected {} but got {}.", name, typeid(T).name(),
+                           it->second->typeInfo().name());
             return defaultValue;
         }
-        return reflectionField->getField();
+        NEKO_ASSERT(((reflectionField != nullptr ? reflectionField->name() : reflectionField1->name()) == name),
+                    "field name mismatch");
+        return reflectionField != nullptr ? reflectionField->getField() : reflectionField1->getField();
     }
 
     template <typename T>
@@ -81,15 +89,18 @@ public:
             NEKO_LOG_ERROR("[ReflectionObject] field {} not found.", name);
             return false;
         }
-        if (typeid(T) != it->second->getFieldType()) {
-            NEKO_LOG_ERROR("[ReflectionObject] field {} type mismatch, expected {} but got {}.", name, typeid(T).name(), it->second->getFieldType().name());
+        if (typeid(T) != it->second->typeInfo()) {
+            NEKO_LOG_ERROR("[ReflectionObject] field {} type mismatch, expected {} but got {}.", name, typeid(T).name(),
+                           it->second->typeInfo().name());
             return false;
         }
         auto reflectionField = dynamic_cast<ReflectionField<T>*>(it->second);
         if (reflectionField == nullptr) {
-            NEKO_LOG_ERROR("[ReflectionObject] field {} type mismatch, expected {} but got {}.", name, typeid(T).name(), it->second->getFieldType().name());
+            NEKO_LOG_ERROR("[ReflectionObject] field {} type mismatch, expected {} but got {}.", name, typeid(T).name(),
+                           it->second->typeInfo().name());
             return false;
         }
+        NEKO_ASSERT(reflectionField->name() == name, "field name mismatch");
         if (result != nullptr) {
             *result = reflectionField->getField();
         }
@@ -102,13 +113,15 @@ public:
             NEKO_LOG_ERROR("[ReflectionObject] field {} not found.", name);
             return false;
         }
-        if (typeid(T) != it->second->getFieldType()) {
-            NEKO_LOG_ERROR("[ReflectionObject] field {} type mismatch, expected {} but got {}.", name, typeid(T).name(), it->second->getFieldType().name());
+        if (typeid(T) != it->second->typeInfo()) {
+            NEKO_LOG_ERROR("[ReflectionObject] field {} type mismatch, expected {} but got {}.", name, typeid(T).name(),
+                           it->second->typeInfo().name());
             return false;
         }
         auto reflectionField = dynamic_cast<ReflectionField<T>*>(it->second);
         if (reflectionField == nullptr) {
-            NEKO_LOG_ERROR("[ReflectionObject] field {} type mismatch, expected {} but got {}.", name, typeid(T).name(), it->second->getFieldType().name());
+            NEKO_LOG_ERROR("[ReflectionObject] field {} type mismatch, expected {} but got {}.", name, typeid(T).name(),
+                           it->second->typeInfo().name());
             return false;
         }
         reflectionField->setField(value);
@@ -116,7 +129,7 @@ public:
     }
 
     template <typename T>
-    ReflectionField<T>* bindField(const NEKO_STRING_VIEW & name, T* value) NEKO_NOEXCEPT {
+    ReflectionField<T>* bindField(const NEKO_STRING_VIEW& name, T* value) {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             mFields.insert(std::make_pair(name, new ReflectionField<T>(name, value)));
@@ -135,19 +148,15 @@ private:
 class ReflectionSerializer {
 
 public:
-    ReflectionSerializer() = default;
+    ReflectionSerializer()  = default;
     ~ReflectionSerializer() = default;
 
-    inline void start() NEKO_NOEXCEPT {
-        mObject.clear();
-    }
+    inline void start() NEKO_NOEXCEPT { mObject.clear(); }
     template <typename T>
-    bool get(const char* name, const size_t len, T* value) NEKO_NOEXCEPT {
-        return mObject.bindField(NEKO_STRING_VIEW(name, len) , value) != nullptr;
+    bool get(const char* name, const size_t len, T* value) {
+        return mObject.bindField(NEKO_STRING_VIEW(name, len), value) != nullptr;
     }
-    inline ReflectionObject* getObject() {
-        return &mObject;
-    }
+    inline ReflectionObject* getObject() { return &mObject; }
 
 private:
     ReflectionObject mObject;

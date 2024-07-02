@@ -1,5 +1,5 @@
 /**
- * @file proto_json_serializer_enum.hpp
+ * @file json_serializer_enum.hpp
  * @author llhsdmd (llhsdmd@gmail.com)
  * @brief
  * @version 0.1
@@ -170,7 +170,7 @@ struct JsonConvert<WriterT, ValueT, T, typename std::enable_if<std::is_enum<T>::
         return false;
     }
 };
-
+#if NEKO_SERIALIZABLE_TO_STRING_ENABLE == 1
 template <typename T>
 struct FormatStringCovert<T, typename std::enable_if<std::is_enum<T>::value>::type> {
     constexpr static auto kEnumArr = _Neko_GetValidEnumNames<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
@@ -190,6 +190,7 @@ struct FormatStringCovert<T, typename std::enable_if<std::is_enum<T>::value>::ty
         return ret;
     }
 };
+#endif
 /// ====================== end enum string =====================
 #else
 template <typename WriterT, typename ValueT, typename T>
@@ -213,7 +214,7 @@ struct JsonConvert<WriterT, ValueT, T, typename std::enable_if<std::is_enum<T>::
         return false;
     }
 };
-
+#if NEKO_SERIALIZABLE_TO_STRING_ENABLE == 1
 template <typename T>
 struct FormatStringCovert<T, typename std::enable_if<std::is_enum<T>::value>::type> {
     static std::string toString(const char* name, const size_t len, const T& value) {
@@ -224,6 +225,7 @@ struct FormatStringCovert<T, typename std::enable_if<std::is_enum<T>::value>::ty
         return ret;
     }
 };
+#endif
 #endif
 
 NEKO_END_NAMESPACE

@@ -1,5 +1,5 @@
 /**
- * @file cc_proto_base.hpp
+ * @file proto_base.hpp
  * @author llhsdmd (llhsdmd@gmail.com)
  * @brief provide base interface for proto message and proto factory
  *

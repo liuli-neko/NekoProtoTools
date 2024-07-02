@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include "../core/dump_to_string.hpp"
 #include "../core/json_serializer.hpp"
 #include "../core/json_serializer_binary.hpp"
 #include "../core/json_serializer_container.hpp"
@@ -13,7 +14,70 @@
 NEKO_USE_NAMESPACE
 
 enum TEnum { TEnum_A = 1, TEnum_B = 2, TEnum_C = 3 };
-
+enum TestEnum1 {
+    enum_0_XUkn4,
+    enum_1_YMSdV,
+    enum_2_PJ6Xe,
+    enum_3_kYXH2,
+    enum_4_0vdiP,
+    enum_5_q2ADI,
+    enum_6_ta3MV,
+    enum_7_Aqnvo,
+    enum_8_egy6x,
+    enum_9_SI7Dy,
+    enum_10_WptnZ,
+    enum_11_WfH50,
+    enum_12_hl2Wr,
+    enum_13_X6CL2,
+    enum_14_tcJUA,
+    enum_15_HSCo0,
+    enum_16_mTNzx,
+    enum_17_GN4LJ,
+    enum_18_outw4,
+    enum_19_AEh93,
+    enum_20_Gv7x0,
+    enum_21_IbIft,
+    enum_22_DWOCC,
+    enum_23_67NYr,
+    enum_24_soFRN,
+    enum_25_lMBrw,
+    enum_26_N32ms,
+    enum_27_QbL6M,
+    enum_28_UkQY7,
+    enum_29_iFlm1,
+    enum_30_xDcyI,
+    enum_31_Z3JmU,
+    enum_32_51B4h,
+    enum_33_F8r7J,
+    enum_34_qFziz,
+    enum_35_mB1aj,
+    enum_36_tQbNI,
+    enum_37_kTE9u,
+    enum_38_LjLkL,
+    enum_39_KGrOD,
+    enum_40_blZ9c,
+    enum_41_fpVJT,
+    enum_42_sswid,
+    enum_43_RHBX8,
+    enum_44_6DJuE,
+    enum_45_Qq1J4,
+    enum_46_0oVZ2,
+    enum_47_wcvjG,
+    enum_48_RIrJc,
+    enum_49_tclKP,
+    enum_50_sR6GQ,
+    enum_51_uZfn4,
+    enum_52_Kpwmh,
+    enum_53_cQ9dO,
+    enum_54_KsoeM,
+    enum_55_aabfa,
+    enum_56_CmFqx,
+    enum_57_SNkgj,
+    enum_58_Y5Gis,
+    enum_59_8I7Dd,
+    enum_60_vPXle,
+    enum_61_gocq7
+};
 struct StructA {
     int a;
     std::string b;
@@ -199,16 +263,32 @@ TEST_F(JsonSerializerTest, Array) {
 }
 
 TEST_F(JsonSerializerTest, Enum) {
-    TEnum a = TEnum_A;
+    TestEnum1 a = enum_0_XUkn4;
     writer->Key("a");
-    JsonConvert<WriterType, ValueType, TEnum>::toJsonValue(*writer, a);
+    JsonConvert<WriterType, ValueType, TestEnum1>::toJsonValue(*writer, a);
+    writer->Key("b");
+    JsonConvert<WriterType, ValueType, TestEnum1>::toJsonValue(*writer, enum_10_WptnZ);
+    writer->Key("c");
+    JsonConvert<WriterType, ValueType, TestEnum1>::toJsonValue(*writer, enum_20_Gv7x0);
+    writer->Key("d");
+    JsonConvert<WriterType, ValueType, TestEnum1>::toJsonValue(*writer, enum_30_xDcyI);
+    writer->Key("e");
+    JsonConvert<WriterType, ValueType, TestEnum1>::toJsonValue(*writer, enum_40_blZ9c);
+    writer->Key("f");
+    JsonConvert<WriterType, ValueType, TestEnum1>::toJsonValue(*writer, enum_50_sR6GQ);
+    writer->Key("g");
+    JsonConvert<WriterType, ValueType, TestEnum1>::toJsonValue(*writer, enum_60_vPXle);
+    writer->Key("h");
+    JsonConvert<WriterType, ValueType, TestEnum1>::toJsonValue(*writer, enum_61_gocq7);
     writer->EndObject();
     buffer.Put('\0');
     const char* str = buffer.GetString();
 #if __cplusplus >= 201703L || _MSVC_LANG > 201402L
-    EXPECT_STREQ(str, "{\"a\":\"TEnum_A(1)\"}");
+    EXPECT_STREQ(str,
+                 "{\"a\":\"enum_0_XUkn4(0)\",\"b\":\"enum_10_WptnZ(10)\",\"c\":\"enum_20_Gv7x0(20)\",\"d\":\"enum_30_"
+                 "xDcyI(30)\",\"e\":\"enum_40_blZ9c(40)\",\"f\":\"enum_50_sR6GQ(50)\",\"g\":\"(60)\",\"h\":\"(61)\"}");
 #else
-    EXPECT_STREQ(str, "{\"a\":1}");
+    EXPECT_STREQ(str, "{\"a\":0,\"b\":10,\"c\":20,\"d\":30,\"e\":40,\"f\":50,\"g\":60,\"h\":61}");
 #endif
 }
 
