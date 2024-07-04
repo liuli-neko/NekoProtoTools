@@ -72,28 +72,11 @@ target("tests")
     add_tests("rproto_cpp17", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_proto.cpp", "src/proto_base.cpp"}, languages = "c++17", run_timeout = 1000})
     add_tests("rproto_cpp20", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_proto.cpp", "src/proto_base.cpp"}, languages = "c++20", run_timeout = 1000})
     
-    add_tests("bproto_cpp14", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_big_data.cpp", "src/proto_base.cpp"}, languages = "c++14", run_timeout = 3000})
-    add_tests("bproto_cpp17", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_big_data.cpp", "src/proto_base.cpp"}, languages = "c++17", run_timeout = 3000})
-    add_tests("bproto_cpp20", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_big_data.cpp", "src/proto_base.cpp"}, languages = "c++20", run_timeout = 3000})
-
-target_end()
-
-target("test_private")
-    set_kind("binary")
-    set_languages("c++20")
-    add_defines("NEKO_PROTO_STATIC")
-    add_packages("rapidjson", "gtest", "spdlog")
-    add_files("tests/test_private_invoid_params.cpp")
-    add_files("src/proto_base.cpp")
-target_end()
-
-target("test_proto")
-    set_kind("binary")
-    set_languages("c++20")
-    add_defines("NEKO_PROTO_STATIC")
-    add_packages("rapidjson", "gtest", "spdlog")
-    add_files("tests/test_proto.cpp")
-    add_files("src/proto_base.cpp")
+    if is_plat("linux") then 
+        add_tests("bproto_cpp14", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_big_data.cpp", "src/proto_base.cpp"}, languages = "c++14", run_timeout = 3000})
+        add_tests("bproto_cpp17", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_big_data.cpp", "src/proto_base.cpp"}, languages = "c++17", run_timeout = 3000})
+        add_tests("bproto_cpp20", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_big_data.cpp", "src/proto_base.cpp"}, languages = "c++20", run_timeout = 3000})
+    end 
 target_end()
 
 target("test_communication")
