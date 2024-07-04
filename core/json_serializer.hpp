@@ -247,46 +247,53 @@ bool JsonSerializer::get(const char* name, const size_t len, T* value) {
     NEKO_ASSERT(value != nullptr, "{} value is null in get value function.", std::string(name, len));
     if constexpr (is_optional<T>::value) {
         std::string name_str(name, len);
-        if (!mDocument.IsNull() && mDocument.HasMember(name_str.c_str())) {
+        if (!mDocument.IsNull()) {
+            const auto& item = mDocument.FindMember(name_str.c_str());
             typename is_optional<T>::value_type tmp;
-            if (JsonConvert<WriterType, ValueType, typename is_optional<T>::value_type>::fromJsonValue(
-                    &tmp, mDocument[name_str.c_str()])) {
+            if (item != mDocument.MemberEnd() &&
+                JsonConvert<WriterType, ValueType, typename is_optional<T>::value_type>::fromJsonValue(&tmp,
+                                                                                                       item->value)) {
                 *value = std::move(tmp);
                 return true;
             }
             // this is a optional field, so, even a type error is not considered an error.
-            NEKO_LOG_WARN("{} value is error type in json.", std::string(name, len));
+            NEKO_LOG_WARN("{} value is error type or not exist in json.", std::string(name, len));
         }
-        if (!mRoot.IsNull() && mRoot.HasMember(name_str.c_str())) {
+        if (!mRoot.IsNull()) {
+            const auto& item = mRoot.FindMember(name_str.c_str());
             typename is_optional<T>::value_type tmp;
-            if (JsonConvert<WriterType, ValueType, typename is_optional<T>::value_type>::fromJsonValue(
-                    &tmp, mRoot[name_str.c_str()])) {
+            if (item != mRoot.MemberEnd() &&
+                JsonConvert<WriterType, ValueType, typename is_optional<T>::value_type>::fromJsonValue(&tmp,
+                                                                                                       item->value)) {
                 *value = std::move(tmp);
                 return true;
             }
             // this is a optional field, so, even a type error is not considered an error.
-            NEKO_LOG_WARN("{} value is error type in json.", std::string(name, len));
+            NEKO_LOG_WARN("{} value is error type or not exist in json.", std::string(name, len));
         }
         (*value).reset();
         return true;
     } else {
         std::string name_str(name, len);
-        if (!mDocument.IsNull() && mDocument.HasMember(name_str.c_str())) {
-            if (JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mDocument[name_str.c_str()])) {
+        if (!mDocument.IsNull()) {
+            const auto& item = mDocument.FindMember(name_str.c_str());
+            if (item != mDocument.MemberEnd() &&
+                JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, item->value)) {
                 return true;
             }
             // For non-optional fields, continued use is undefined behavior because the value cannot be obtained
             // correctly.
-            NEKO_LOG_WARN("{} value is error type in json.", std::string(name, len));
+            NEKO_LOG_WARN("{} value is error type or not exist in json.", std::string(name, len));
             return false;
         }
-        if (!mRoot.IsNull() && mRoot.HasMember(name_str.c_str())) {
-            if (JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mRoot[name_str.c_str()])) {
+        if (!mRoot.IsNull()) {
+            const auto& item = mRoot.FindMember(name_str.c_str());
+            if (item != mRoot.MemberEnd() && JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, item->value)) {
                 return true;
             }
             // For non-optional fields, continued use is undefined behavior because the value cannot be obtained
             // correctly.
-            NEKO_LOG_WARN("{} value is error type in json.", std::string(name, len));
+            NEKO_LOG_WARN("{} value is error type or not exist in json.", std::string(name, len));
             return false;
         }
         // For non-optional fields, continued use is undefined behavior because the value cannot be obtained
@@ -307,11 +314,25 @@ bool JsonSerializer::insert(const char* name, const size_t len, const T& value) 
 template <typename T>
 bool JsonSerializer::get(const char* name, const size_t len, T* value) {
     std::string name_str(name, len);
-    if (!mDocument.IsNull() && mDocument.HasMember(name_str.c_str())) {
-        return JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mDocument[name_str.c_str()]);
+    if (!mDocument.IsNull()) {
+        const auto& item = mDocument.FindMember(name_str.c_str());
+        if (item != mDocument.MemberEnd() && JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, item->value)) {
+            return true;
+        }
+        // For non-optional fields, continued use is undefined behavior because the value cannot be obtained
+        // correctly.
+        NEKO_LOG_WARN("{} value is error type or not exist in json.", std::string(name, len));
+        return false;
     }
-    if (!mRoot.IsNull() && mRoot.HasMember(name_str.c_str())) {
-        return JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, mRoot[name_str.c_str()]);
+    if (!mRoot.IsNull()) {
+        const auto& item = mRoot.FindMember(name_str.c_str());
+        if (item != mRoot.MemberEnd() && JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, item->value)) {
+            return true;
+        }
+        // For non-optional fields, continued use is undefined behavior because the value cannot be obtained
+        // correctly.
+        NEKO_LOG_WARN("{} value is error type or not exist in json.", std::string(name, len));
+        return false;
     }
     return false;
 }
