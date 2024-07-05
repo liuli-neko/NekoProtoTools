@@ -63,19 +63,33 @@
 
 NEKO_BEGIN_NAMESPACE
 
+template <typename T>
+struct NamedField {
+    using value_type = T;
+    const char* name;
+    const std::size_t nameLen;
+    T& value;
+    NamedField(const char* name, T& value) : name(name), nameLen(std::strlen(name)), value(value) {}
+    NamedField(const char* name, const std::size_t nameLen, T& value) : name(name), nameLen(nameLen), value(value) {}
+#if NEKO_CPP_PLUS >= 17
+    NamedField(const std::string_view name, T& value) : name(name.data()), nameLen(name.size()), value(value) {}
+#endif
+};
+struct FieldSize {
+    std::size_t size;
+};
 namespace {
 #if NEKO_CPP_PLUS >= 17
 template <size_t N, typename SerializerT, typename TupleT, std::size_t... Indices>
 inline bool unfold_function_imp1(SerializerT& serializer, const std::array<std::string_view, N>& names,
                                  const TupleT& value, std::index_sequence<Indices...>) NEKO_NOEXCEPT {
-    return ((serializer.get(names[Indices].data(), names[Indices].size(), std::get<Indices>(value)) && true) + ...) ==
-           N;
+    return ((serializer(NamedField(names[Indices], *std::get<Indices>(value))) && true) + ...) == N;
 }
+
 template <size_t N, typename SerializerT, typename TupleT, std::size_t... Indices>
 inline bool unfold_function_imp2(SerializerT& serializer, const std::array<std::string_view, N>& names,
                                  const TupleT& value, std::index_sequence<Indices...>) NEKO_NOEXCEPT {
-    return ((serializer.insert(names[Indices].data(), names[Indices].size(), std::get<Indices>(value)) && true) +
-            ...) == N;
+    return ((serializer(NamedField(names[Indices], std::get<Indices>(value))) && true) + ...) == N;
 }
 
 inline constexpr int _members_size(std::string_view names) NEKO_NOEXCEPT {
@@ -121,12 +135,14 @@ inline bool _unfold_function1(SerializerT& serializer, const std::array<std::str
     return unfold_function_imp1<N, SerializerT>(serializer, namesVec, std::make_tuple((&args)...),
                                                 std::index_sequence_for<Args...>());
 }
+
 template <int N, typename SerializerT, typename... Args>
 inline bool _unfold_function2(SerializerT& serializer, const std::array<std::string_view, N>& namesVec,
                               const Args&... args) NEKO_NOEXCEPT {
     return unfold_function_imp2<N, SerializerT>(serializer, namesVec, std::make_tuple(args...),
                                                 std::index_sequence_for<Args...>());
 }
+
 #else
 
 inline std::vector<std::pair<size_t, size_t>> _parse_names(const char* names) NEKO_NOEXCEPT {

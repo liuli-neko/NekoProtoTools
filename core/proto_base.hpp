@@ -179,7 +179,6 @@ protected:
     virtual void* data() NEKO_NOEXCEPT override;
 
 private:
-    mutable SerializerT mSerializer                             = {};
     std::shared_ptr<ReflectionSerializer> mReflectionSerializer = {};
     std::shared_ptr<ProtoT> mData                               = {};
 
@@ -283,7 +282,6 @@ inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT* p) : mData(p, [](const 
 
 template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>::ProtoBase(ProtoBase<T, SerializerT>&& other) {
-    mSerializer           = std::move(other.mSerializer);
     mReflectionSerializer = std::move(other.mReflectionSerializer);
     mData                 = std::move(other.mData);
 }
@@ -293,7 +291,6 @@ inline ProtoBase<ProtoT, SerializerT>::~ProtoBase() {}
 
 template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, SerializerT>&& other) NEKO_NOEXCEPT {
-    mSerializer           = std::move(other.mSerializer);
     mReflectionSerializer = std::move(other.mReflectionSerializer);
     mData                 = std::move(other.mData);
     return *this;
@@ -346,23 +343,22 @@ inline ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() N
 template <typename ProtoT, typename SerializerT>
 std::vector<char> ProtoBase<ProtoT, SerializerT>::Serialize(const ProtoT& proto) {
     std::vector<char> data;
-    SerializerT serializer;
-    serializer.startSerialize(&data);
-    bool ret = proto.serialize(serializer);
-    if (!serializer.endSerialize() || !ret) {
+    typename SerializerT::InputSerializer<std::vector<char>> serializer(data);
+    auto ret = proto.serialize(serializer);
+    if (!serializer.end()) {
         NEKO_LOG_ERROR("{} serialize error", kProtoName);
     }
-    return std::move(data);
+    return data;
 }
 
 template <typename ProtoT, typename SerializerT>
 bool ProtoBase<ProtoT, SerializerT>::Deserialize(const std::vector<char>& data, ProtoT& proto) {
-    SerializerT serializer;
-    if (!serializer.startDeserialize(data)) {
+    typename SerializerT::OutputSerializer<> serializer(data);
+    if (!serializer) {
         return false;
     }
     bool ret = proto.deserialize(serializer);
-    if (!serializer.endDeserialize() || !ret) {
+    if (!ret) {
         NEKO_LOG_ERROR("{} deserialize error", kProtoName);
         return false;
     }
@@ -371,14 +367,8 @@ bool ProtoBase<ProtoT, SerializerT>::Deserialize(const std::vector<char>& data, 
 
 template <typename T, typename SerializerT>
 std::vector<char> ProtoBase<T, SerializerT>::toData() const NEKO_NOEXCEPT {
-    std::vector<char> data;
     NEKO_ASSERT(mData != nullptr, "mData is nullptr");
-    mSerializer.startSerialize(&data);
-    auto ret = mData->serialize(mSerializer);
-    if (!mSerializer.endSerialize()) {
-        NEKO_LOG_ERROR("{} serialize error", kProtoName);
-    }
-    return data;
+    return Serialize(*mData);
 }
 
 template <typename T, typename SerializerT>
@@ -389,15 +379,7 @@ int ProtoBase<T, SerializerT>::type() const NEKO_NOEXCEPT {
 template <typename T, typename SerializerT>
 bool ProtoBase<T, SerializerT>::formData(const std::vector<char>& data) NEKO_NOEXCEPT {
     NEKO_ASSERT(mData != nullptr, "mData is nullptr");
-    if (!mSerializer.startDeserialize(data)) {
-        return false;
-    }
-    bool ret = mData->deserialize(mSerializer);
-    if (!mSerializer.endDeserialize() || !ret) {
-        NEKO_LOG_ERROR("{} deserialize error", kProtoName);
-        return false;
-    }
-    return true;
+    return Deserialize(data, *mData);
 }
 
 #define NEKO_DECLARE_PROTOCOL(className, Serializer)                                                                   \

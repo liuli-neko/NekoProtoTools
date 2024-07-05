@@ -99,6 +99,21 @@ option("ui_test")
     set_showmenu(true)
 option_end()
 
+option("cereal_test")
+    set_default(false)
+    set_showmenu(true)
+option_end()
+
+if has_config("cereal_test") then
+add_requires("cereal")
+target("test_cbproto")
+    set_kind("binary")
+    set_languages("c++17")
+    add_packages("spdlog", "gtest", "cereal", "rapidjson")
+    add_files("tests/test_random_big_data_cereal.cpp")
+target_end()
+end 
+
 if has_config("ui_test") then 
     add_requires("qt6base")
     

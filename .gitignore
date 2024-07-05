@@ -5,6 +5,8 @@
 compile_commands.json
 *.pseudocode.*
 /build
+callgrind.out.*
+output-report.*
 
 *.o
 *.obj

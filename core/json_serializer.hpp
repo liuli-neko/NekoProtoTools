@@ -24,13 +24,32 @@
 #include <variant>
 #endif
 
+#include "serializer_base.hpp"
+
 NEKO_BEGIN_NAMESPACE
+template <typename... Args>
+bool save(const Args&... args) {
+    static_assert(((!std::is_class<Args>::value) && ...), "not implemented");
+};
+template <typename... Args>
+bool load(const Args&... args) {
+    static_assert(((!std::is_class<Args>::value) && ...), "not implemented");
+}
 
 using JsonValue    = rapidjson::Value;
 using JsonDocument = rapidjson::Document;
 
 template <typename WriterT, typename ValueT, typename T, class enable = void>
 struct JsonConvert;
+
+template <typename ValueType = JsonDocument, class enable = void>
+class JsonDeserializer;
+
+template <typename BufferT = OutBufferWrapper>
+using JsonWriter = rapidjson::Writer<BufferT>;
+
+template <typename BufferType = std::vector<char>, typename Writer = OutBufferWrapper>
+class JsonInputSerializer;
 
 // TODO: make it to be a interface ?
 class OutBufferWrapper {
@@ -66,373 +85,433 @@ inline const OutBufferWrapper::Ch* OutBufferWrapper::GetString() const NEKO_NOEX
 inline std::size_t OutBufferWrapper::GetSize() const NEKO_NOEXCEPT { return mVec->size(); }
 inline void OutBufferWrapper::Clear() NEKO_NOEXCEPT { mVec->clear(); }
 
-template <typename BufferT = OutBufferWrapper>
-using JsonWriter = rapidjson::Writer<BufferT>;
+namespace {
+inline auto makeJsonBufferWrapper(std::vector<char>& data) -> OutBufferWrapper { return OutBufferWrapper(&data); }
+auto makeJsonBufferWrapper(OutBufferWrapper& bufferWrapper) -> OutBufferWrapper& { return bufferWrapper; }
 
-class JsonSerializer {
-public:
-    using ValueType  = JsonValue;
-    using WriterType = JsonWriter<>;
-
-public:
-    JsonSerializer() NEKO_NOEXCEPT;
-    JsonSerializer(const JsonSerializer&) NEKO_NOEXCEPT;
-    JsonSerializer(JsonSerializer&& other) NEKO_NOEXCEPT;
-    explicit JsonSerializer(WriterType* writer) NEKO_NOEXCEPT;
-    explicit JsonSerializer(const JsonValue& root) NEKO_NOEXCEPT;
-    JsonSerializer& operator=(const JsonSerializer&) NEKO_NOEXCEPT;
-    JsonSerializer& operator=(JsonSerializer&& other) NEKO_NOEXCEPT;
-    ~JsonSerializer() NEKO_NOEXCEPT = default;
-
-    /**
-     * @brief start serialize
-     * calling this function before traversing all fields to initialize the writer.
-     * can serialize multiple objects to one buffer.
-     *
-     * @param[out] data the buf to output
-     */
-    void startSerialize(std::vector<char>* data) NEKO_NOEXCEPT;
-    void startSerialize(const NEKO_STRING_VIEW& filename) NEKO_NOEXCEPT;
-    /**
-     * @brief end serialize
-     *  while calling this function after traversing all fields.
-     *  if success serialize all fields, return true, otherwise return false.
-     *
-     * @return true
-     * @return false
-     */
-    bool endSerialize() NEKO_NOEXCEPT;
-    /**
-     * @brief insert value
-     * for all fields, this function will be called by original class.
-     * if success serialize this field, return true, otherwise return false.
-     * @tparam T the type of value
-     * @param[in] name the field name
-     * @param[in] value the field value
-     * @return true
-     * @return false
-     */
-    template <typename T>
-    bool insert(const char* name, const size_t len, const T& value);
-
-    /**
-     * @brief start deserialize
-     *  while calling this function before traversing all fields,
-     * can clear the last time deserialize states in this function and initialize the deserializor.
-     * @param[in] data the buf to input
-     * @return true
-     * @return false
-     */
-    bool startDeserialize(const std::vector<char>& data) NEKO_NOEXCEPT;
-    bool startDeserialize(const NEKO_STRING_VIEW& filename) NEKO_NOEXCEPT;
-    /**
-     * @brief end deserialize
-     *  while calling this function after traversing all fields.
-     *  if success deserialize all fields, return true, otherwise return false.
-     * @return true
-     * @return false
-     */
-    inline bool endDeserialize() NEKO_NOEXCEPT;
-    /**
-     * @brief get value
-     * for all fields, this function will be called by original class.
-     * if success deserialize this field, return true, otherwise return false.
-     * @tparam T the type of value
-     * @param[in] name the field name
-     * @param[out] value the field value
-     * @return true
-     * @return false
-     */
-    template <typename T>
-    bool get(const char* name, const size_t len, T* value);
-
-private:
-    JsonDocument mDocument;
-    const JsonValue& mRoot;
-    OutBufferWrapper mBuffer;
-    std::unique_ptr<WriterType, void (*)(WriterType*)> mWriter;
-};
-
-inline JsonSerializer::JsonSerializer() NEKO_NOEXCEPT : mDocument(),
-                                                        mRoot(JsonValue()),
-                                                        mBuffer(),
-                                                        mWriter(nullptr, [](WriterType* writer) {}) {}
-
-inline JsonSerializer::JsonSerializer(const JsonSerializer&) NEKO_NOEXCEPT
-    : mDocument(),
-      mRoot(JsonValue()),
-      mBuffer(),
-      mWriter(nullptr, [](WriterType* writer) {}) {}
-
-inline JsonSerializer::JsonSerializer(JsonSerializer&& other) NEKO_NOEXCEPT
-    : mDocument(),
-      mRoot(JsonValue()),
-      mBuffer(),
-      mWriter(nullptr, [](WriterType* writer) {}) {}
-
-inline JsonSerializer::JsonSerializer(WriterType* writer) NEKO_NOEXCEPT
-    : mDocument(),
-      mRoot(JsonValue()),
-      mBuffer(),
-      mWriter(std::unique_ptr<WriterType, void (*)(WriterType*)>(writer, [](WriterType* writer) {})) {}
-
-inline JsonSerializer::JsonSerializer(const JsonValue& root) NEKO_NOEXCEPT
-    : mDocument(),
-      mRoot(root),
-      mBuffer(),
-      mWriter(nullptr, [](WriterType* writer) {}) {}
-
-inline JsonSerializer& JsonSerializer::operator=(const JsonSerializer&) NEKO_NOEXCEPT { return *this; }
-
-inline JsonSerializer& JsonSerializer::operator=(JsonSerializer&& other) NEKO_NOEXCEPT { return *this; }
-
-inline void JsonSerializer::startSerialize(std::vector<char>* data) NEKO_NOEXCEPT {
-    if (!mWriter) {
-        mBuffer.Clear();
-        mBuffer.setVector(data);
-        mWriter = std::unique_ptr<WriterType, void (*)(WriterType*)>(new WriterType(mBuffer),
-                                                                     [](WriterType* writer) { delete writer; });
-    }
-    mWriter->StartObject();
-}
-
-inline void startSerialize(const NEKO_STRING_VIEW& filename) NEKO_NOEXCEPT {
-    // TODO:
-    NEKO_LOG_ERROR("not implemented");
-}
-
-inline bool JsonSerializer::endSerialize() NEKO_NOEXCEPT {
-    mWriter->EndObject();
-    if (!mWriter || !mWriter->IsComplete()) {
-        mBuffer.Clear();
-        return false;
-    }
-    mBuffer.setVector(nullptr);
+template <typename Writer>
+inline bool saveValue(FieldSize const& value, Writer& writer) {
+    (void)value;
+    (void)writer;
     return true;
 }
 
-#if NEKO_CPP_PLUS >= 17
-namespace {
-template <typename T, class enable = void>
-struct is_optional : std::false_type {
-    using value_type = std::remove_reference_t<T>;
-};
+template <typename Writer>
+inline bool saveValue(const int16_t value, Writer& writer) {
+    return writer.Int(value);
+}
 
-template <typename T>
-struct is_optional<std::optional<T>, void> : std::true_type {
-    using value_type = std::remove_reference_t<T>;
-};
+template <typename Writer>
+inline bool saveValue(const uint16_t value, Writer& writer) {
+    return writer.Uint(value);
+}
+
+template <typename Writer>
+inline bool saveValue(const int32_t value, Writer& writer) {
+    return writer.Int(value);
+}
+
+template <typename Writer>
+inline bool saveValue(const uint32_t value, Writer& writer) {
+    return writer.Uint(value);
+}
+
+template <typename Writer>
+inline bool saveValue(const int64_t value, Writer& writer) {
+    return writer.Int64(value);
+}
+
+template <typename Writer>
+inline bool saveValue(const uint64_t value, Writer& writer) {
+    return writer.Uint64(value);
+}
+
+template <typename Writer>
+inline bool saveValue(const float value, Writer& writer) {
+    return writer.Double(value);
+}
+
+template <typename Writer>
+inline bool saveValue(const double value, Writer& writer) {
+    return writer.Double(value);
+}
+
+template <typename Writer>
+inline bool saveValue(const bool value, Writer& writer) {
+    return writer.Bool(value);
+}
+
+template <typename Writer>
+inline bool saveValue(const std::string& value, Writer& writer) {
+    return writer.String(value.c_str(), value.size());
+}
+
+template <typename Writer>
+inline bool saveValue(const char* value, Writer& writer) {
+    return writer.String(value);
+}
+
+template <typename JsonValue>
+inline bool loadValue(std::string& value, const JsonValue& json) {
+    if (!json.IsString())
+        return false;
+    value = {json.GetString(), json.GetStringLength()};
+    return true;
+}
+
+template <typename JsonValue>
+inline bool loadValue(int16_t& value, const JsonValue& json) {
+    if (!json.IsInt())
+        return false;
+    value = json.GetInt();
+    return true;
+}
+
+template <typename JsonValue>
+inline bool loadValue(int32_t& value, const JsonValue& json) {
+    if (!json.IsInt())
+        return false;
+    value = json.GetInt();
+    return true;
+}
+
+template <typename JsonValue>
+inline bool loadValue(int64_t& value, const JsonValue& json) {
+    if (!json.IsInt64())
+        return false;
+    value = json.GetInt64();
+    return true;
+}
+
+template <typename JsonValue>
+inline bool loadValue(uint16_t& value, const JsonValue& json) {
+    if (!json.IsUint())
+        return false;
+    value = json.GetUint();
+    return true;
+}
+
+template <typename JsonValue>
+inline bool loadValue(uint32_t& value, const JsonValue& json) {
+    if (!json.IsUint())
+        return false;
+    value = json.GetUint();
+    return true;
+}
+
+template <typename JsonValue>
+inline bool loadValue(uint64_t& value, const JsonValue& json) {
+    if (!json.IsUint64())
+        return false;
+    value = json.GetUint64();
+    return true;
+}
+
+template <typename JsonValue>
+inline bool loadValue(float& value, const JsonValue& json) {
+    if (!json.IsNumber())
+        return false;
+    value = json.GetFloat();
+    return true;
+}
+
+template <typename JsonValue>
+inline bool loadValue(double& value, const JsonValue& json) {
+    if (!json.IsNumber())
+        return false;
+    value = json.GetDouble();
+    return true;
+}
+
+template <typename JsonValue>
+inline bool loadValue(bool& value, const JsonValue& json) {
+    if (!json.IsBool())
+        return false;
+    value = json.GetBool();
+    return true;
+}
+
+template <typename T, typename JsonValue>
+inline bool loadValue(const NamedField<T>& value, const JsonValue& json) {
+    std::unique_ptr<char[]> buf(new char[value.nameLen + 1]{0});
+    std::memcpy(buf.get(), value.name, value.nameLen);
+    auto it = json.FindMember(buf.get());
+    if (it != json.MemberEnd() && it->value.IsArray()) {
+        auto tmp = JsonDeserializer<JsonDocument::ConstArray>(it->value.GetArray());
+        return tmp(value.value);
+    }
+    auto tmp = JsonDeserializer<::NekoProto::JsonValue>(it->value);
+    return tmp(value.value);
+}
+
+template <typename JsonValue>
+inline bool loadValue(FieldSize& value, const JsonValue& json) {
+    if (!json.IsArray())
+        return false;
+    value.size = json.ArraySize();
+    return true;
+}
+
 } // namespace
 
-template <typename T>
-bool JsonSerializer::insert(const char* name, const size_t len, const T& value) {
-    if constexpr (is_optional<T>::value) {
-        if (!value.has_value()) {
-            return true;
-        }
-        if (!mWriter->Key(name, len)) {
-            return false;
-        }
-        return JsonConvert<WriterType, ValueType, typename is_optional<T>::value_type>::toJsonValue(*mWriter, *value);
-    } else {
-        if (!mWriter->Key(name, len)) {
-            return false;
-        }
-        return JsonConvert<WriterType, ValueType, T>::toJsonValue(*mWriter, value);
-    }
-}
+template <typename BufferType, typename Writer>
+class JsonInputSerializer {
+public:
+    using BufferWrapperType = decltype(makeJsonBufferWrapper(std::declval<BufferType&>()));
+    using WriterType        = Writer;
 
-template <typename T>
-bool JsonSerializer::get(const char* name, const size_t len, T* value) {
-    NEKO_ASSERT(value != nullptr, "{} value is null in get value function.", std::string(name, len));
-    if constexpr (is_optional<T>::value) {
-        std::string name_str(name, len);
-        if (!mDocument.IsNull()) {
-            const auto& item = mDocument.FindMember(name_str.c_str());
-            typename is_optional<T>::value_type tmp;
-            if (item != mDocument.MemberEnd() &&
-                JsonConvert<WriterType, ValueType, typename is_optional<T>::value_type>::fromJsonValue(&tmp,
-                                                                                                       item->value)) {
-                *value = std::move(tmp);
-                return true;
-            }
-            // this is a optional field, so, even a type error is not considered an error.
-            NEKO_LOG_WARN("{} value is error type or not exist in json.", std::string(name, len));
+private:
+    template <typename T, typename G, class enable = void>
+    struct can_save : std::false_type {};
+
+    template <typename T, typename G>
+    struct can_save<T, G,
+                    typename std::enable_if<
+                        std::is_same<decltype(std::declval<T>().saveValue(std::declval<G>())), bool>::value>::type>
+        : std::true_type {};
+
+    template <typename T, class enable = void>
+    struct is_named_field : std::false_type {};
+
+    template <typename T>
+    struct is_named_field<NamedField<T>, void> : std::true_type {};
+
+    template <typename T, class enable = void>
+    struct selector {
+        static inline bool save(JsonInputSerializer& self, T& value) { return ::NekoProto::save(self, value); }
+    };
+
+    template <typename T>
+    struct selector<T, typename std::enable_if<can_save<T, JsonInputSerializer>::value>::type> {
+        static inline bool save(JsonInputSerializer& self, T& value) { return self.saveValue(value); }
+    };
+
+    template <typename T>
+    struct selector<T, typename std::enable_if<can_serialize<T>::value>::type> {
+        static inline bool save(JsonInputSerializer& self, T& value) {
+            return value.serialize(JsonInputSerializer<BufferType&, Writer&>(self));
         }
-        if (!mRoot.IsNull()) {
-            const auto& item = mRoot.FindMember(name_str.c_str());
-            typename is_optional<T>::value_type tmp;
-            if (item != mRoot.MemberEnd() &&
-                JsonConvert<WriterType, ValueType, typename is_optional<T>::value_type>::fromJsonValue(&tmp,
-                                                                                                       item->value)) {
-                *value = std::move(tmp);
-                return true;
-            }
-            // this is a optional field, so, even a type error is not considered an error.
-            NEKO_LOG_WARN("{} value is error type or not exist in json.", std::string(name, len));
-        }
-        (*value).reset();
-        return true;
-    } else {
-        std::string name_str(name, len);
-        if (!mDocument.IsNull()) {
-            const auto& item = mDocument.FindMember(name_str.c_str());
-            if (item != mDocument.MemberEnd() &&
-                JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, item->value)) {
-                return true;
-            }
-            // For non-optional fields, continued use is undefined behavior because the value cannot be obtained
-            // correctly.
-            NEKO_LOG_WARN("{} value is error type or not exist in json.", std::string(name, len));
-            return false;
-        }
-        if (!mRoot.IsNull()) {
-            const auto& item = mRoot.FindMember(name_str.c_str());
-            if (item != mRoot.MemberEnd() && JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, item->value)) {
-                return true;
-            }
-            // For non-optional fields, continued use is undefined behavior because the value cannot be obtained
-            // correctly.
-            NEKO_LOG_WARN("{} value is error type or not exist in json.", std::string(name, len));
-            return false;
-        }
-        // For non-optional fields, continued use is undefined behavior because the value cannot be obtained
-        // correctly.
-        NEKO_LOG_WARN("{} value is not find in json.", std::string(name, len));
-        return false;
+    };
+
+public:
+    JsonInputSerializer(BufferType& out) NEKO_NOEXCEPT : mBuffer(makeJsonBufferWrapper(out)), mWriter(mBuffer) {
+        mWriter.StartObject();
     }
-}
+    JsonInputSerializer(const JsonInputSerializer& other) NEKO_NOEXCEPT : mBuffer(other.mBuffer),
+                                                                          mWriter(other.mWriter) {}
+    JsonInputSerializer(JsonInputSerializer&& other) NEKO_NOEXCEPT : mBuffer(std::move(other.mBuffer)),
+                                                                     mWriter(std::move(other.mWriter)) {}
+    template <typename T>
+    inline bool saveValue(const T& value) {
+        return ::NekoProto::saveValue(value, mWriter);
+    }
+    template <typename T>
+    inline bool saveValue(const NamedField<T>& value) {
+        return mWriter.Key(value.name.c_str(), value.nameLen) && saveValue(value.value);
+    }
+
+    bool startArray(const std::size_t size) { return mWriter.StartArray(); }
+    bool endArray() { return mWriter.EndArray(); }
+    bool startObject() { return mWriter.StartObject(); }
+    bool endObject() { return mWriter.EndObject(); }
+    template <typename T>
+    bool operator()(const T& value) {
+#if NEKO_CPP_PLUS >= 17
+        if constexpr (can_save<T, JsonInputSerializer>::value) {
+            return saveValue(value);
+        } else if constexpr (can_serialize<T>::value) {
+            return value.serialize(JsonInputSerializer<BufferType&, Writer&>(*this));
+        } else {
+            return ::NekoProto::save(*this, value);
+        }
 #else
-template <typename T>
-bool JsonSerializer::insert(const char* name, const size_t len, const T& value) {
-    if (!mWriter->Key(name, len)) {
-        return false;
-    }
-    return JsonConvert<WriterType, ValueType, T>::toJsonValue(*mWriter, value);
-}
-
-template <typename T>
-bool JsonSerializer::get(const char* name, const size_t len, T* value) {
-    std::string name_str(name, len);
-    if (!mDocument.IsNull()) {
-        const auto& item = mDocument.FindMember(name_str.c_str());
-        if (item != mDocument.MemberEnd() && JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, item->value)) {
-            return true;
-        }
-        // For non-optional fields, continued use is undefined behavior because the value cannot be obtained
-        // correctly.
-        NEKO_LOG_WARN("{} value is error type or not exist in json.", std::string(name, len));
-        return false;
-    }
-    if (!mRoot.IsNull()) {
-        const auto& item = mRoot.FindMember(name_str.c_str());
-        if (item != mRoot.MemberEnd() && JsonConvert<WriterType, ValueType, T>::fromJsonValue(value, item->value)) {
-            return true;
-        }
-        // For non-optional fields, continued use is undefined behavior because the value cannot be obtained
-        // correctly.
-        NEKO_LOG_WARN("{} value is error type or not exist in json.", std::string(name, len));
-        return false;
-    }
-    return false;
-}
+        return selector<T>::save(*this, value);
 #endif
-
-inline bool JsonSerializer::startDeserialize(const NEKO_STRING_VIEW& filename) NEKO_NOEXCEPT {
-    std::ifstream file(filename.data(), std::ios::binary);
-    if (!file.is_open()) {
-        NEKO_LOG_ERROR("open file {} failed", filename.data());
-        return false;
     }
-    rapidjson::IStreamWrapper stream(file);
-    mDocument.ParseStream(stream);
-    if (mDocument.HasParseError()) {
-        NEKO_LOG_ERROR("parse error {}", (int)mDocument.GetParseError());
-        return false;
-    }
-    return true;
-}
 
-inline bool JsonSerializer::startDeserialize(const std::vector<char>& data) NEKO_NOEXCEPT {
-    mDocument.Parse(data.data(), data.size());
-    if (mDocument.HasParseError()) {
-        NEKO_LOG_ERROR("parse error {}", (int)mDocument.GetParseError());
-        return false;
+    bool end() {
+        auto ret = mWriter.EndObject();
+        mWriter.Flush();
+        return ret;
     }
-    return true;
-}
 
-inline bool JsonSerializer::endDeserialize() NEKO_NOEXCEPT {
-    mDocument.SetNull();
-    mDocument.GetAllocator().Clear();
-    return true;
-}
+private:
+    JsonInputSerializer& operator=(const JsonInputSerializer&) = delete;
+    JsonInputSerializer& operator=(JsonInputSerializer&&)      = delete;
 
-template <typename WriterT, typename ValueT>
-struct JsonConvert<WriterT, ValueT, int, void> {
-    static bool toJsonValue(WriterT& writer, const int value) { return writer.Int(value); }
-    static bool fromJsonValue(int* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (!value.IsInt()) {
-            return false;
-        }
-        (*dst) = value.GetInt();
-        return true;
-    }
+private:
+    WriterType mWriter;
+    BufferWrapperType mBuffer;
 };
 
-template <typename WriterT, typename ValueT>
-struct JsonConvert<WriterT, ValueT, unsigned int, void> {
-    static bool toJsonValue(WriterT& writer, const unsigned int value) { return writer.Uint(value); }
-    static bool fromJsonValue(unsigned int* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (!value.IsUint()) {
-            return false;
+template <typename ValueType, class enable>
+class JsonDeserializer {
+public:
+    using NodeType = JsonDocument;
+
+    template <typename T, typename G, class enable1 = void>
+    struct can_load : std::false_type {};
+
+    template <typename T, typename G>
+    struct can_load<T, G,
+                    typename std::enable_if<
+                        std::is_same<decltype(std::declval<T>().loadValue(std::declval<G>())), bool>::value>::type>
+        : std::true_type {};
+
+    template <typename U, typename T, class enable2 = void>
+    struct selector {
+        static inline bool save(::NekoProto::JsonDeserializer<U>& self, T& value) { ::NekoProto::load(self, value); }
+    };
+
+    template <typename U>
+    struct selector<U, FieldSize, void> {
+        static inline bool save(::NekoProto::JsonDeserializer<U>& self, FieldSize& value) {
+            value.size = self.size();
+            return true;
         }
-        (*dst) = value.GetUint();
-        return true;
+    };
+
+    template <typename U, typename T>
+    struct selector<U, NamedField<T>, void> {
+        static inline bool save(::NekoProto::JsonDeserializer<U>& self, const NamedField<T>& value) {
+            return self.loadValue(value);
+        }
+    };
+    template <typename U, typename T>
+    struct selector<U, T,
+                    typename std::enable_if<can_load<T, typename ::NekoProto::JsonDeserializer<U>>::value>::type> {
+        static inline bool save(::NekoProto::JsonDeserializer<U>& self, T& value) { return self.loadValue(value); }
+    };
+
+    template <typename U, typename T>
+    struct selector<U, T, typename std::enable_if<can_serialize<T>::value>::type> {
+        static inline bool save(::NekoProto::JsonDeserializer<U>& self, T& value) {
+            return value.serialize(::NekoProto::JsonDeserializer<U>(self));
+        }
+    };
+
+public:
+    JsonDeserializer(const std::vector<char>& buf) { mNode.Parse(buf.data(), buf.size()); }
+    JsonDeserializer(const char* buf, std::size_t size) { mNode.Parse(buf, size); }
+    JsonDeserializer(rapidjson::IStreamWrapper& stream) { mNode.ParseStream(stream); }
+    JsonDeserializer(JsonDeserializer&& other) NEKO_NOEXCEPT : mNode(std::move(other.mNode)) {}
+    operator bool() const { return mNode.GetParseError() == rapidjson::kParseErrorNone; }
+    std::size_t size() const { return mNode.Size(); }
+
+    template <typename T>
+    bool loadValue(T& value) const {
+        return ::NekoProto::loadValue(value, mNode);
     }
+
+    template <typename T>
+    bool loadValue(T&& value) const {
+        return ::NekoProto::loadValue(std::forward<T>(value), mNode);
+    }
+
+    template <typename T>
+    bool operator()(T&& values) {
+        return (selector<NodeType, T>::save(*this, std::forward<T>(values)));
+    }
+
+private:
+    JsonDeserializer& operator=(const JsonDeserializer&) = delete;
+    JsonDeserializer& operator=(JsonDeserializer&&)      = delete;
+
+private:
+    JsonDocument mNode;
 };
 
-template <typename WriterT, typename ValueT>
-struct JsonConvert<WriterT, ValueT, int64_t, void> {
-    static bool toJsonValue(WriterT& writer, const int64_t value) { return writer.Int64(value); }
-    static bool fromJsonValue(int64_t* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (!value.IsInt64()) {
-            return false;
-        }
-        (*dst) = value.GetInt64();
-        return true;
+template <>
+class JsonDeserializer<JsonValue, void> {
+public:
+    using NodeType = JsonValue;
+
+public:
+    JsonDeserializer(const NodeType& node) NEKO_NOEXCEPT : mNode(node) {}
+    operator bool() const { return true; }
+
+    std::size_t size() const { return mNode.Size(); }
+    template <typename T>
+    bool loadValue(T& value) const {
+        return ::NekoProto::loadValue(value, mNode);
     }
+    template <typename T>
+    bool loadValue(T&& value) const {
+        return ::NekoProto::loadValue(std::forward<T>(value), mNode);
+    }
+
+    // template <typename T>
+    // bool operator()(T& value) {
+    //     return JsonDeserializer<JsonDocument>::selector<NodeType, T>::save(*this, value);
+    // }
+
+    template <typename T>
+    bool operator()(T&& value) {
+        return JsonDeserializer<JsonDocument>::selector<NodeType, T>::save(*this, std::forward<T>(value));
+    }
+
+private:
+    JsonDeserializer& operator=(const JsonDeserializer&) = delete;
+    JsonDeserializer& operator=(JsonDeserializer&&)      = delete;
+
+private:
+    const NodeType& mNode;
 };
 
-template <typename WriterT, typename ValueT>
-struct JsonConvert<WriterT, ValueT, uint64_t, void> {
-    static bool toJsonValue(WriterT& writer, const uint64_t value) { return writer.Uint64(value); }
-    static bool fromJsonValue(uint64_t* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (!value.IsUint64()) {
-            return false;
-        }
-        (*dst) = value.GetUint64();
-        return true;
+template <>
+class JsonDeserializer<JsonDocument::ConstArray, void> {
+public:
+    using NodeType = JsonDocument::ConstArray;
+
+public:
+    JsonDeserializer(const NodeType& node) NEKO_NOEXCEPT : mNode(node), mIter(node.begin()) {}
+    std::size_t size() const { return mNode.Size(); }
+
+    template <typename T>
+    bool loadValue(T& value) const {
+        return ::NekoProto::loadValue(value, mIter);
     }
+    template <typename T>
+    bool loadValue(T&& value) const {
+        return ::NekoProto::loadValue(std::forward<T>(value), mNode);
+    }
+
+    // template <typename T>
+    // bool operator()(T& value) {
+    //     if (std::is_same<T, FieldSize>::value) {
+    //         return JsonDeserializer<JsonDocument>::selector<NodeType, T>::save(*this, value);
+    //     } else {
+    //         auto ret = JsonDeserializer<JsonDocument>::selector<NodeType, T>::save(*this, value);
+    //         ++mIter;
+    //         return ret;
+    //     }
+    // }
+
+    template <typename T>
+    bool operator()(T&& value) {
+        if (std::is_same<T, FieldSize>::value) {
+            return JsonDeserializer<JsonDocument>::selector<NodeType, T>::save(*this, std::forward<T>(value));
+        } else {
+            auto ret = JsonDeserializer<JsonDocument>::selector<NodeType, T>::save(*this, std::forward<T>(value));
+            ++mIter;
+            return ret;
+        }
+    }
+
+private:
+    JsonDeserializer& operator=(const JsonDeserializer&) = delete;
+    JsonDeserializer& operator=(JsonDeserializer&&)      = delete;
+
+private:
+    const NodeType& mNode;
+    mutable JsonDocument::Array::ConstValueIterator mIter;
 };
 
-template <typename WriterT, typename ValueT>
-struct JsonConvert<WriterT, ValueT, std::string, void> {
-    static bool toJsonValue(WriterT& writer, const std::string& value) {
-        return writer.String(value.c_str(), value.size(), true);
-    }
-    static bool fromJsonValue(std::string* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (!value.IsString()) {
-            return false;
-        }
-        (*dst) = std::string(value.GetString(), value.GetStringLength());
-        return true;
-    }
+struct JsonSerializer {
+    template <typename T = std::vector<char>>
+    using InputSerializer = JsonInputSerializer<T>;
+    template <typename T = JsonDocument>
+    using OutputSerializer = JsonDeserializer<T>;
 };
 
 #if NEKO_CPP_PLUS >= 20
@@ -474,66 +553,6 @@ struct JsonConvert<WriterT, ValueT, std::vector<T>, void> {
             }
             dst->push_back(t);
         }
-        return true;
-    }
-};
-
-template <typename WriterT, typename ValueT, typename T>
-struct JsonConvert<
-    WriterT, ValueT, T,
-    typename std::enable_if<std::is_same<typename T::ProtoType::SerializerType, JsonSerializer>::value>::type> {
-    static bool toJsonValue(WriterT& writer, const T& value) {
-        auto jsonS = JsonSerializer(&writer);
-        writer.StartObject();
-        auto ret = value.serialize(jsonS);
-        writer.EndObject();
-        return ret;
-    }
-    static bool fromJsonValue(T* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (!value.IsObject()) {
-            return false;
-        }
-        auto jsonS = JsonSerializer(value);
-        return dst->deserialize(jsonS);
-    }
-};
-
-template <typename WriterT, typename ValueT>
-struct JsonConvert<WriterT, ValueT, bool, void> {
-    static bool toJsonValue(WriterT& writer, const bool value) { return writer.Bool(value); }
-    static bool fromJsonValue(bool* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (!value.IsBool()) {
-            return false;
-        }
-        (*dst) = value.GetBool();
-        return true;
-    }
-};
-
-template <typename WriterT, typename ValueT>
-struct JsonConvert<WriterT, ValueT, double, void> {
-    static bool toJsonValue(WriterT& writer, const double value) { return writer.Double(value); }
-    static bool fromJsonValue(double* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (!value.IsNumber()) {
-            return false;
-        }
-        (*dst) = value.GetDouble();
-        return true;
-    }
-};
-
-template <typename WriterT, typename ValueT>
-struct JsonConvert<WriterT, ValueT, float, void> {
-    static bool toJsonValue(WriterT& writer, const float value) { return writer.Double(value); }
-    static bool fromJsonValue(float* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (!value.IsNumber()) {
-            return false;
-        }
-        (*dst) = value.GetDouble();
         return true;
     }
 };
