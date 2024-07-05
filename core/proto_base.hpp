@@ -333,7 +333,6 @@ inline ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() N
         return mReflectionSerializer->getObject();
     }
     mReflectionSerializer.reset(new ReflectionSerializer());
-    mReflectionSerializer->start();
     bool ret = mData->deserialize(*mReflectionSerializer);
     NEKO_ASSERT(ret, "{} get reflection object error", kProtoName);
     NEKO_ASSERT(mReflectionSerializer->getObject() != nullptr, "mReflectionSerializer->getObject() is nullptr");
@@ -343,7 +342,7 @@ inline ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() N
 template <typename ProtoT, typename SerializerT>
 std::vector<char> ProtoBase<ProtoT, SerializerT>::Serialize(const ProtoT& proto) {
     std::vector<char> data;
-    typename SerializerT::InputSerializer<std::vector<char>> serializer(data);
+    typename SerializerT::template InputSerializer<> serializer(data);
     auto ret = proto.serialize(serializer);
     if (!serializer.end()) {
         NEKO_LOG_ERROR("{} serialize error", kProtoName);
@@ -353,7 +352,7 @@ std::vector<char> ProtoBase<ProtoT, SerializerT>::Serialize(const ProtoT& proto)
 
 template <typename ProtoT, typename SerializerT>
 bool ProtoBase<ProtoT, SerializerT>::Deserialize(const std::vector<char>& data, ProtoT& proto) {
-    typename SerializerT::OutputSerializer<> serializer(data);
+    typename SerializerT::template OutputSerializer<> serializer(data);
     if (!serializer) {
         return false;
     }

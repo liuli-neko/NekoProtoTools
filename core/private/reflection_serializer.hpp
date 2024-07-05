@@ -15,10 +15,14 @@
 #include <map>
 #include <string>
 #include <typeinfo>
+#include <memory>
 
 #include "global.hpp"
 
 NEKO_BEGIN_NAMESPACE
+
+template <typename T>
+struct NamedField;
 
 class ReflectionFieldBase {
 public:
@@ -146,16 +150,16 @@ private:
 };
 
 class ReflectionSerializer {
-
 public:
-    ReflectionSerializer()  = default;
+    ReflectionSerializer() { mObject.clear(); }
     ~ReflectionSerializer() = default;
+    operator bool() const { return true; }
 
-    inline void start() NEKO_NOEXCEPT { mObject.clear(); }
     template <typename T>
-    bool get(const char* name, const size_t len, T* value) {
-        return mObject.bindField(NEKO_STRING_VIEW(name, len), value) != nullptr;
+    inline bool operator()(const NamedField<T> &field) {
+        return nullptr != mObject.bindField(NEKO_STRING_VIEW(field.name, field.nameLen), std::addressof(field.value));
     }
+
     inline ReflectionObject* getObject() { return &mObject; }
 
 private:
