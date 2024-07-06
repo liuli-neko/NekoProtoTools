@@ -73,7 +73,8 @@ struct NamedField {
     NamedField(const char* name, T&& value) : name(name), nameLen(std::strlen(name)), value(std::forward<T>(value)) {}
     NamedField(const char* name, const std::size_t nameLen, T& value) : name(name), nameLen(nameLen), value(value) {}
 #if NEKO_CPP_PLUS >= 17
-    NamedField(const std::string_view name, T&& value) : name(name.data()), nameLen(name.size()), value(std::forward<T>(value)) {}
+    NamedField(const std::string_view name, T&& value)
+        : name(name.data()), nameLen(name.size()), value(std::forward<T>(value)) {}
     NamedField(const std::string_view name, T& value) : name(name.data()), nameLen(name.size()), value(value) {}
 #endif
 };
@@ -84,8 +85,8 @@ struct FieldSize {
 namespace {
 #if NEKO_CPP_PLUS >= 17
 template <size_t N, typename SerializerT, typename TupleT, std::size_t... Indices>
-inline bool unfold_function_imp1(SerializerT& serializer, const std::array<std::string_view, N>& names,
-                                 const TupleT& value, std::index_sequence<Indices...>) NEKO_NOEXCEPT {
+inline bool unfold_function_imp1(SerializerT& serializer, const std::array<std::string_view, N>& names, TupleT value,
+                                 std::index_sequence<Indices...>) NEKO_NOEXCEPT {
     return ((serializer(NamedField(names[Indices], std::get<Indices>(value))) && true) + ...) == N;
 }
 

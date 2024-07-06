@@ -16,6 +16,7 @@
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/ostreamwrapper.h>
+#include <rapidjson/rapidjson.h>
 #include <rapidjson/writer.h>
 #include <type_traits>
 #include <vector>
@@ -34,14 +35,8 @@ using JsonDocument = rapidjson::Document;
 template <typename WriterT, typename ValueT, typename T, class enable = void>
 struct JsonConvert;
 
-template <typename ValueType = JsonDocument, class enable = void>
+template <typename ValueType, class enable>
 class JsonDeserializer;
-
-template <typename BufferT = OutBufferWrapper>
-using JsonWriter = rapidjson::Writer<BufferT>;
-
-template <typename BufferType = std::vector<char>, typename Writer = OutBufferWrapper>
-class JsonInputSerializer;
 
 // TODO: make it to be a interface ?
 class OutBufferWrapper {
@@ -76,6 +71,12 @@ inline void OutBufferWrapper::Flush() NEKO_NOEXCEPT {}
 inline const OutBufferWrapper::Ch* OutBufferWrapper::GetString() const NEKO_NOEXCEPT { return mVec->data(); }
 inline std::size_t OutBufferWrapper::GetSize() const NEKO_NOEXCEPT { return mVec->size(); }
 inline void OutBufferWrapper::Clear() NEKO_NOEXCEPT { mVec->clear(); }
+
+template <typename BufferT = OutBufferWrapper>
+using JsonWriter = rapidjson::Writer<BufferT>;
+
+template <typename BufferType = std::vector<char>, typename Writer = OutBufferWrapper>
+class JsonInputSerializer;
 
 namespace {
 inline auto makeJsonBufferWrapper(std::vector<char>& data) -> OutBufferWrapper { return OutBufferWrapper(&data); }
@@ -142,6 +143,13 @@ template <typename Writer>
 inline bool saveValue(const char* value, Writer& writer) {
     return writer.String(value);
 }
+
+#if NEKO_CPP_PLUS >= 17
+template <typename Writer>
+inline bool saveValue(const std::string_view value, Writer& writer) {
+    return writer.String(value.data(), value.size());
+}
+#endif
 
 template <typename JsonValue>
 inline bool loadValue(std::string& value, const JsonValue& json) {
@@ -223,45 +231,6 @@ inline bool loadValue(bool& value, const JsonValue& json) {
     return true;
 }
 
-template <typename T, class enable = void>
-struct _get_refer {
-    static T& get(T& value) {
-        return value;
-    }
-};
-template <typename T>
-struct _get_refer<T&, void> {
-    static T& get(T& value) {
-        return value;
-    }
-};
-template <typename T>
-struct _get_refer<T*, void> {
-    static T& get(T* value) {
-        return *value;
-    }
-};
-
-template <typename T>
-struct _get_refer<T* const, void> {
-    static T& get(T* const value) {
-        return *value;
-    }
-};
-
-template <typename T, typename JsonValue>
-inline bool loadNamedValue(const NamedField<T>& value, const JsonValue& json) {
-    std::unique_ptr<char[]> buf(new char[value.nameLen + 1]{0});
-    std::memcpy(buf.get(), value.name, value.nameLen);
-    auto it = json.FindMember(buf.get());
-    if (it != json.MemberEnd() && it->value.IsArray()) {
-        JsonDeserializer<JsonDocument::ConstArray> tmp(it->value.GetArray());
-        return tmp.operator()(_get_refer<T>::get(value.value));
-    }
-    JsonDeserializer<::NekoProto::JsonValue> tmp(it->value);
-    return tmp.operator()(_get_refer<T>::get(value.value));
-}
-
 template <typename JsonValue>
 inline bool loadValue(FieldSize& value, const JsonValue& json) {
     if (!json.IsArray())
@@ -283,33 +252,38 @@ private:
     struct can_save : std::false_type {};
 
     template <typename T, typename G>
-    struct can_save<T, G,
-                    typename std::enable_if<
-                        std::is_same<decltype(::NekoProto::saveValue(std::declval<const T&>(), std::declval<G&>())), bool>::value>::type>
+    struct can_save<
+        T, G,
+        typename std::enable_if<std::is_same<
+            decltype(::NekoProto::saveValue(std::declval<const T&>(), std::declval<G&>())), bool>::value>::type>
         : std::true_type {};
 
     template <typename T, class enable = void>
     struct selector {
         template <char = 0>
-        static inline bool save(JsonInputSerializer& self,const T& value) { return ::NekoProto::save(self, value); }
+        static inline bool processImp(JsonInputSerializer& self, const T& value) {
+            return save(self, value);
+        }
     };
     template <typename T>
     struct selector<NamedField<T>, void> {
         template <char = 0>
-        static inline bool save(JsonInputSerializer& self, const NamedField<T>& value) {
-            return  self.saveNamedValue<T>(value);
+        static inline bool processImp(JsonInputSerializer& self, const NamedField<T>& value) {
+            return self.saveNamedValue<T>(value);
         }
     };
     template <typename T>
     struct selector<T, typename std::enable_if<can_save<T, WriterType>::value>::type> {
         template <char = 0>
-        static inline bool save(JsonInputSerializer& self,const T& value) { return self.saveValue(value); }
+        static inline bool processImp(JsonInputSerializer& self, const T& value) {
+            return self.saveValue(value);
+        }
     };
 
     template <typename T>
     struct selector<T, typename std::enable_if<can_serialize<T>::value>::type> {
         template <char = 0>
-        static inline bool save(JsonInputSerializer& self,const T& value) {
+        static inline bool processImp(JsonInputSerializer& self, const T& value) {
             self.startObject();
             auto ret = value.serialize(self);
             self.endObject();
@@ -331,7 +305,7 @@ public:
     }
     template <typename T>
     inline bool saveNamedValue(const NamedField<T>& value) {
-        return mWriter.Key(value.name, value.nameLen) && this->operator()<typename std::remove_const<T>::type>(value.value);
+        return mWriter.Key(value.name, value.nameLen) && this->operator()(value.value);
     }
 
     bool startArray(const std::size_t size) { return mWriter.StartArray(); }
@@ -340,7 +314,7 @@ public:
     bool endObject() { return mWriter.EndObject(); }
     template <typename T>
     bool operator()(const T& value) {
-        return selector<T>::save(*this, value);
+        return selector<T>::processImp(*this, value);
     }
 
     bool end() {
@@ -358,7 +332,7 @@ private:
     BufferWrapperType mBuffer;
 };
 
-template <typename ValueType, class enable>
+template <typename ValueType = JsonDocument, class enable = void>
 class JsonDeserializer {
 public:
     using NodeType = JsonDocument;
@@ -367,21 +341,24 @@ public:
     struct can_load : std::false_type {};
 
     template <typename T, typename G>
-    struct can_load<T, G,
-                    typename std::enable_if<
-                        std::is_same<decltype(::NekoProto::loadValue(std::declval<T&>(), std::declval<const G&>())), bool>::value>::type>
+    struct can_load<
+        T, G,
+        typename std::enable_if<std::is_same<
+            decltype(::NekoProto::loadValue(std::declval<T&>(), std::declval<const G&>())), bool>::value>::type>
         : std::true_type {};
 
     template <typename U, typename T, class enable2 = void>
     struct selector {
         template <char = 0>
-        static inline bool load(::NekoProto::JsonDeserializer<U>& self, T& value) { return ::NekoProto::load(self, value); }
+        static inline bool doLoad(U& self, T& value) {
+            return load(self, value);
+        }
     };
 
     template <typename U>
     struct selector<U, FieldSize, void> {
         template <char = 0>
-        static inline bool load(::NekoProto::JsonDeserializer<U>& self, FieldSize& value) {
+        static inline bool doLoad(U& self, FieldSize& value) {
             value.size = self.size();
             return true;
         }
@@ -390,46 +367,66 @@ public:
     template <typename U, typename T>
     struct selector<U, NamedField<T>, void> {
         template <char = 0>
-        static inline bool load(::NekoProto::JsonDeserializer<U>& self, const NamedField<T>& value) {
-            return self.loadNamedValue<T>(value);
+        static inline bool doLoad(U& self, const NamedField<T>& value) {
+            return self.loadNamedValue(value);
         }
     };
     template <typename U, typename T>
-    struct selector<U, T,
-                    typename std::enable_if<can_load<T, NodeType>::value>::type> {
+    struct selector<U, T, typename std::enable_if<can_load<T, NodeType>::value>::type> {
         template <char = 0>
-        static inline bool load(::NekoProto::JsonDeserializer<U>& self, T& value) { return self.loadValue(value); }
+        static inline bool doLoad(U& self, T& value) {
+            return self.loadValue(value);
+        }
     };
 
     template <typename U, typename T>
     struct selector<U, T, typename std::enable_if<can_serialize<T>::value>::type> {
         template <char = 0>
-        static inline bool load(::NekoProto::JsonDeserializer<U>& self, T& value) {
-            return value.serialize(self);
+        static inline bool doLoad(U& self, T& value) {
+            return value.deserialize(self);
         }
     };
 
 public:
-    JsonDeserializer(const std::vector<char>& buf) { mNode.Parse(buf.data(), buf.size()); }
-    JsonDeserializer(const char* buf, std::size_t size) { mNode.Parse(buf, size); }
-    JsonDeserializer(rapidjson::IStreamWrapper& stream) { mNode.ParseStream(stream); }
-    JsonDeserializer(JsonDeserializer&& other) NEKO_NOEXCEPT : mNode(std::move(other.mNode)) {}
+    JsonDeserializer(const std::vector<char>& buf) {
+        mNode.Parse(buf.data(), buf.size());
+        mIter = mNode.MemberBegin();
+    }
+    JsonDeserializer(const char* buf, std::size_t size) {
+        mNode.Parse(buf, size);
+        mIter = mNode.MemberBegin();
+    }
+    JsonDeserializer(rapidjson::IStreamWrapper& stream) {
+        mNode.ParseStream(stream);
+        mIter = mNode.MemberBegin();
+    }
+    JsonDeserializer(JsonDeserializer&& other) NEKO_NOEXCEPT : mNode(std::move(other.mNode)),
+                                                               mIter(std::move(other.mIter)) {}
+
     operator bool() const { return mNode.GetParseError() == rapidjson::kParseErrorNone; }
     std::size_t size() const { return mNode.Size(); }
-
+    std::string name() const {
+        if (mIter == mNode.MemberEnd())
+            return {};
+        return {mIter->name.GetString(), mIter->name.GetStringLength()};
+    }
     template <typename T>
     bool loadValue(T& value) const {
-        return ::NekoProto::loadValue(value, mNode);
+        if (mIter == mNode.MemberEnd())
+            return false;
+        return ::NekoProto::loadValue(value, mIter->value);
     }
 
     template <typename T>
     bool loadNamedValue(const NamedField<T>& value) const {
-        return ::NekoProto::loadNamedValue(value, mNode);
+        return load(value, mNode);
     }
 
     template <typename T>
     bool operator()(T&& values) {
-        return (selector<NodeType, T>::load(*this, std::forward<T>(values)));
+        auto ret = (selector<JsonDeserializer, T>::doLoad(*this, std::forward<T>(values)));
+        ++mIter;
+        return ret;
     }
 
 private:
@@ -438,6 +435,7 @@ private:
 
 private:
     JsonDocument mNode;
+    JsonDocument::ConstMemberIterator mIter;
 };
 
 template <>
@@ -448,7 +446,7 @@ public:
 public:
     JsonDeserializer(const NodeType& node) NEKO_NOEXCEPT : mNode(node) {}
     operator bool() const { return true; }
-
+    std::string name() const { return {}; }
     std::size_t size() const { return mNode.Size(); }
     template <typename T>
     bool loadValue(T& value) const {
@@ -456,12 +454,12 @@ public:
     }
     template <typename T>
     bool loadNamedValue(const NamedField<T>& value) const {
-        return ::NekoProto::loadNamedValue(value, mNode);
+        return load(value, mNode);
     }
 
     template <typename T>
     bool operator()(T&& value) {
-        return JsonDeserializer<JsonDocument>::selector<NodeType, T>::load(*this, std::forward<T>(value));
+        return JsonDeserializer<JsonDocument>::selector<JsonDeserializer, T>::doLoad(*this, std::forward<T>(value));
     }
 
 private:
@@ -473,6 +471,47 @@ private:
 };
 
 template <>
+class JsonDeserializer<JsonValue::Object, void> {
+public:
+    using NodeType = JsonValue;
+
+public:
+    JsonDeserializer(const NodeType& node) NEKO_NOEXCEPT : mNode(node), mIter(mNode.MemberBegin()) {}
+    operator bool() const { return true; }
+    std::string name() const {
+        if (mIter == mNode.MemberEnd())
+            return {};
+        return {mIter->name.GetString(), mIter->name.GetStringLength()};
+    }
+    std::size_t size() const { return mNode.Size(); }
+    template <typename T>
+    bool loadValue(T& value) const {
+        if (mIter == mNode.MemberEnd())
+            return false;
+        return ::NekoProto::loadValue(value, mIter->value);
+    }
+    template <typename T>
+    bool loadNamedValue(const NamedField<T>& value) const {
+        return load(value, mNode);
+    }
+
+    template <typename T>
+    bool operator()(T&& value) {
+        auto ret = JsonDeserializer<JsonDocument>::selector<JsonDeserializer, T>::doLoad(*this, std::forward<T>(value));
+        ++mIter;
+        return ret;
+    }
+
+private:
+    JsonDeserializer& operator=(const JsonDeserializer&) = delete;
+    JsonDeserializer& operator=(JsonDeserializer&&)      = delete;
+
+private:
+    const NodeType& mNode;
+    JsonValue::ConstMemberIterator mIter;
+};
+
+template <>
 class JsonDeserializer<JsonDocument::ConstArray, void> {
 public:
     using NodeType = JsonDocument::ConstArray;
@@ -480,6 +519,7 @@ public:
 public:
     JsonDeserializer(const NodeType& node) NEKO_NOEXCEPT : mNode(node), mIter(node.begin()) {}
     std::size_t size() const { return mNode.Size(); }
+    std::string name() const { return {}; }
 
     template <typename T>
     bool loadValue(T& value) const {
@@ -494,9 +534,10 @@ public:
     template <typename T>
     bool operator()(T&& value) {
         if (std::is_same<T, FieldSize>::value) {
-            return JsonDeserializer<JsonDocument>::selector<NodeType, T>::load(*this, std::forward<T>(value));
+            return JsonDeserializer<JsonDocument>::selector<JsonDeserializer, T>::doLoad(*this, std::forward<T>(value));
         } else {
-            auto ret = JsonDeserializer<JsonDocument>::selector<NodeType, T>::load(*this, std::forward<T>(value));
+            auto ret =
+                JsonDeserializer<JsonDocument>::selector<JsonDeserializer, T>::doLoad(*this, std::forward<T>(value));
             ++mIter;
             return ret;
         }
@@ -508,7 +549,7 @@ private:
 
 private:
     const NodeType& mNode;
-    mutable JsonDocument::Array::ConstValueIterator mIter;
+    JsonDocument::Array::ConstValueIterator mIter;
 };
 
 struct JsonSerializer {
@@ -518,88 +559,33 @@ struct JsonSerializer {
     using OutputSerializer = JsonDeserializer<T>;
 };
 
-#if NEKO_CPP_PLUS >= 20
-template <typename WriterT, typename ValueT>
-struct JsonConvert<WriterT, ValueT, std::u8string, void> {
-    static bool toJsonValue(WriterT& writer, const std::u8string value) {
-        return writer.String(reinterpret_cast<const char*>(value.data()), value.size(), true);
-    }
-    static bool fromJsonValue(std::u8string* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (!value.IsString()) {
-            return false;
-        }
-        (*dst) = std::u8string(reinterpret_cast<const char8_t*>(value.GetString()), value.GetStringLength());
-        return true;
-    }
+template <typename T, class enable = void>
+struct _get_refer {
+    using type = T&;
+    static T& get(T& value) { return value; }
 };
-#endif
-template <typename WriterT, typename ValueT, typename T>
-struct JsonConvert<WriterT, ValueT, std::vector<T>, void> {
-    static bool toJsonValue(WriterT& writer, const std::vector<T>& value) {
-        bool ret = writer.StartArray();
-        for (auto& v : value) {
-            ret = JsonConvert<WriterT, ValueT, T>::toJsonValue(writer, v) && ret;
-        }
-        ret = writer.EndArray() && ret;
-        return ret;
-    }
-    static bool fromJsonValue(std::vector<T>* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (!value.IsArray()) {
-            return false;
-        }
-        dst->clear();
-        for (auto& v : value.GetArray()) {
-            T t;
-            if (!JsonConvert<WriterT, ValueT, T>::fromJsonValue(&t, v)) {
-                return false;
-            }
-            dst->push_back(t);
-        }
-        return true;
-    }
+template <typename T>
+struct _get_refer<T&, void> {
+    using type = T&;
+    static T& get(T& value) { return value; }
+};
+template <typename T>
+struct _get_refer<T*, void> {
+    using type = T&;
+    static T& get(T* value) { return *value; }
 };
 
-#if NEKO_CPP_PLUS >= 17
-template <typename WriterT, typename ValueT, typename... Ts>
-struct JsonConvert<WriterT, ValueT, std::variant<Ts...>, void> {
-    template <typename T, size_t N>
-    static bool toJsonValueImp(WriterT& writer, const std::variant<Ts...>& value) {
-        if (value.index() != N)
-            return false;
-        return JsonConvert<WriterT, ValueT, T>::toJsonValue(writer, std::get<N>(value));
+template <typename T, typename JsonValueT>
+inline bool load(const NamedField<T>& value, const JsonValueT& json) {
+    std::unique_ptr<char[]> buf(new char[value.nameLen + 1]{0});
+    std::memcpy(buf.get(), value.name, value.nameLen);
+    auto it = json.FindMember(buf.get());
+    if (it != json.MemberEnd() && it->value.IsArray()) {
+        return JsonDeserializer<JsonDocument::ConstArray>(it->value.GetArray())(_get_refer<T>::get(value.value));
+    } else if (it != json.MemberEnd() && it->value.IsObject()) {
+        return JsonDeserializer<JsonValue::Object>(it->value)(_get_refer<T>::get(value.value));
     }
-
-    template <size_t... Ns>
-    static bool unfoldToJsonValue(WriterT& writer, const std::variant<Ts...>& value, std::index_sequence<Ns...>) {
-        return (toJsonValueImp<std::variant_alternative_t<Ns, std::variant<Ts...>>, Ns>(writer, value) || ...);
-    }
-
-    static bool toJsonValue(WriterT& writer, const std::variant<Ts...>& value) {
-        return unfoldToJsonValue(writer, value, std::make_index_sequence<sizeof...(Ts)>());
-    }
-
-    template <typename T, size_t N>
-    static bool fromJsonValueImp(std::variant<Ts...>* dst, const ValueT& value) {
-        T tmp = {};
-        if (JsonConvert<WriterT, ValueT, T>::fromJsonValue(&tmp, value)) {
-            *dst = tmp;
-            return true;
-        }
-        return false;
-    }
-
-    template <size_t... Ns>
-    static bool unfoldFromJsonValue(std::variant<Ts...>* dst, const ValueT& value, std::index_sequence<Ns...>) {
-        return (fromJsonValueImp<std::variant_alternative_t<Ns, std::variant<Ts...>>, Ns>(dst, value) || ...);
-    }
-
-    static bool fromJsonValue(std::variant<Ts...>* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "[qBittorrent] std::variant dst is nullptr in from json value");
-        return unfoldFromJsonValue(dst, value, std::make_index_sequence<sizeof...(Ts)>());
-    }
-};
-#endif
+    return JsonDeserializer<JsonValue>(it->value)(_get_refer<T>::get(value.value));
+}
 
 NEKO_END_NAMESPACE

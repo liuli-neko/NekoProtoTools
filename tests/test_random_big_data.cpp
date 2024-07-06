@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <string>
 
 #include "../core/json_serializer.hpp"
 #include "../core/proto_base.hpp"
@@ -133,8 +134,7 @@ struct TestStruct2 {
     double f36                     = {};
     double f37                     = {};
     std::string f38                = {};
-    NEKO_SERIALIZER(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20,
-    f21,
+    NEKO_SERIALIZER(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21,
                     f22, f23, f24, f25, f26, f27, f28, f29, f30, f31, f32, f33, f34, f35, f36, f37, f38)
     NEKO_DECLARE_PROTOCOL(TestStruct2, JsonSerializer)
 };
@@ -162,8 +162,8 @@ struct TestStruct3 {
     TestStruct1 f19                = {};
     std::string f20                = {};
     TestStruct1 f21                = {};
-    NEKO_SERIALIZER(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20,
-    f21) NEKO_DECLARE_PROTOCOL(TestStruct3, JsonSerializer)
+    NEKO_SERIALIZER(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21)
+    NEKO_DECLARE_PROTOCOL(TestStruct3, JsonSerializer)
 };
 
 struct TestStruct4 {
@@ -230,23 +230,22 @@ struct TestStruct4 {
     std::map<std::string, int> f60 = {};
     TestStruct3 f61                = {};
     std::vector<int> f62           = {};
-    NEKO_SERIALIZER(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20,
-    f21,
-                    f22, f23, f24, f25, f26, f27, f28, f29, f30, f31, f32, f33, f34, f35, f36, f37, f38, f39, f40,
-                    f41, f42, f43, f44, f45, f46, f47, f48, f49, f50, f51, f52, f53, f54, f55, f56, f57, f58, f59,
-                    f60, f61, f62)
+    NEKO_SERIALIZER(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21,
+                    f22, f23, f24, f25, f26, f27, f28, f29, f30, f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41,
+                    f42, f43, f44, f45, f46, f47, f48, f49, f50, f51, f52, f53, f54, f55, f56, f57, f58, f59, f60, f61,
+                    f62)
     NEKO_DECLARE_PROTOCOL(TestStruct4, JsonSerializer)
 };
 
 #include "big_data_test_data_1.cpp"
 #include "big_data_test_data_2.cpp"
-// #include "big_data_test_data_3.cpp"
-// #include "big_data_test_data_4.cpp"
-// #include "big_data_test_data_5.cpp"
-// #include "big_data_test_data_6.cpp"
-// #include "big_data_test_data_7.cpp"
-// #include "big_data_test_data_8.cpp"
-// #include "big_data_test_data_9.cpp"
+#include "big_data_test_data_3.cpp"
+#include "big_data_test_data_4.cpp"
+#include "big_data_test_data_5.cpp"
+#include "big_data_test_data_6.cpp"
+#include "big_data_test_data_7.cpp"
+#include "big_data_test_data_8.cpp"
+#include "big_data_test_data_9.cpp"
 
 TEST(BigProtoTest, Serializer) {
     NEKO_LOG_INFO("Proto1 size {}", sizeof(TestStruct1));
@@ -278,55 +277,55 @@ TEST(BigProtoTest, Serializer) {
                                               .count());
     NEKO_LOG_INFO("Serializer data: {}", proto2.f0.size());
     end = std::chrono::high_resolution_clock::now();
-    // TestStruct4 proto3;
-    // proto3.makeProto().formData({data_3, data_3 + sizeof(data_3)});
-    // NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-    //                                           std::chrono::high_resolution_clock::now() - end)
-    //                                           .count());
-    // NEKO_LOG_INFO("Serializer data: {}", proto3.f0.size());
-    // end = std::chrono::high_resolution_clock::now();
-    // TestStruct4 proto4;
-    // proto4.makeProto().formData({data_4, data_4 + sizeof(data_4)});
-    // NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-    //                                           std::chrono::high_resolution_clock::now() - end)
-    //                                           .count());
-    // NEKO_LOG_INFO("Serializer data: {}", proto4.f0.size());
-    // end = std::chrono::high_resolution_clock::now();
-    // TestStruct4 proto5;
-    // proto5.makeProto().formData({data_5, data_5 + sizeof(data_5)});
-    // NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-    //                                           std::chrono::high_resolution_clock::now() - end)
-    //                                           .count());
-    // NEKO_LOG_INFO("Serializer data: {}", proto5.f0.size());
-    // end = std::chrono::high_resolution_clock::now();
-    // TestStruct4 proto6;
-    // proto6.makeProto().formData({data_6, data_6 + sizeof(data_6)});
-    // NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-    //                                           std::chrono::high_resolution_clock::now() - end)
-    //                                           .count());
-    // NEKO_LOG_INFO("Serializer data: {}", proto6.f0.size());
-    // end = std::chrono::high_resolution_clock::now();
-    // TestStruct4 proto7;
-    // proto7.makeProto().formData({data_7, data_7 + sizeof(data_7)});
-    // NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-    //                                           std::chrono::high_resolution_clock::now() - end)
-    //                                           .count());
-    // NEKO_LOG_INFO("Serializer data: {}", proto7.f0.size());
-    // end = std::chrono::high_resolution_clock::now();
-    // TestStruct4 proto8;
-    // proto8.makeProto().formData({data_8, data_8 + sizeof(data_8)});
-    // NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-    //                                           std::chrono::high_resolution_clock::now() - end)
-    //                                           .count());
-    // NEKO_LOG_INFO("Serializer data: {}", proto8.f0.size());
-    // end = std::chrono::high_resolution_clock::now();
-    // TestStruct4 proto9;
-    // proto9.makeProto().formData({data_9, data_9 + sizeof(data_9)});
-    // NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-    //                                           std::chrono::high_resolution_clock::now() - end)
-    //                                           .count());
-    // NEKO_LOG_INFO("Serializer data: {}", proto9.f0.size());
-    // end = std::chrono::high_resolution_clock::now();
+    TestStruct4 proto3;
+    proto3.makeProto().formData({data_3, data_3 + sizeof(data_3)});
+    NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
+                                              std::chrono::high_resolution_clock::now() - end)
+                                              .count());
+    NEKO_LOG_INFO("Serializer data: {}", proto3.f0.size());
+    end = std::chrono::high_resolution_clock::now();
+    TestStruct4 proto4;
+    proto4.makeProto().formData({data_4, data_4 + sizeof(data_4)});
+    NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
+                                              std::chrono::high_resolution_clock::now() - end)
+                                              .count());
+    NEKO_LOG_INFO("Serializer data: {}", proto4.f0.size());
+    end = std::chrono::high_resolution_clock::now();
+    TestStruct4 proto5;
+    proto5.makeProto().formData({data_5, data_5 + sizeof(data_5)});
+    NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
+                                              std::chrono::high_resolution_clock::now() - end)
+                                              .count());
+    NEKO_LOG_INFO("Serializer data: {}", proto5.f0.size());
+    end = std::chrono::high_resolution_clock::now();
+    TestStruct4 proto6;
+    proto6.makeProto().formData({data_6, data_6 + sizeof(data_6)});
+    NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
+                                              std::chrono::high_resolution_clock::now() - end)
+                                              .count());
+    NEKO_LOG_INFO("Serializer data: {}", proto6.f0.size());
+    end = std::chrono::high_resolution_clock::now();
+    TestStruct4 proto7;
+    proto7.makeProto().formData({data_7, data_7 + sizeof(data_7)});
+    NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
+                                              std::chrono::high_resolution_clock::now() - end)
+                                              .count());
+    NEKO_LOG_INFO("Serializer data: {}", proto7.f0.size());
+    end = std::chrono::high_resolution_clock::now();
+    TestStruct4 proto8;
+    proto8.makeProto().formData({data_8, data_8 + sizeof(data_8)});
+    NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
+                                              std::chrono::high_resolution_clock::now() - end)
+                                              .count());
+    NEKO_LOG_INFO("Serializer data: {}", proto8.f0.size());
+    end = std::chrono::high_resolution_clock::now();
+    TestStruct4 proto9;
+    proto9.makeProto().formData({data_9, data_9 + sizeof(data_9)});
+    NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
+                                              std::chrono::high_resolution_clock::now() - end)
+                                              .count());
+    NEKO_LOG_INFO("Serializer data: {}", proto9.f0.size());
+    end = std::chrono::high_resolution_clock::now();
     NEKO_LOG_INFO("total time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count());
 }
 
