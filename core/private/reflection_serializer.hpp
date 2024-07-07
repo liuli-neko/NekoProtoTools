@@ -22,7 +22,7 @@
 NEKO_BEGIN_NAMESPACE
 
 template <typename T>
-struct NamedField;
+struct NameValuePair;
 
 class ReflectionFieldBase {
 public:
@@ -156,7 +156,7 @@ public:
     operator bool() const { return true; }
 
     template <typename T>
-    inline bool operator()(const NamedField<T> &field) {
+    inline bool operator()(const NameValuePair<T> &field) {
         return nullptr != mObject.bindField(NEKO_STRING_VIEW(field.name, field.nameLen), std::addressof(field.value));
     }
 

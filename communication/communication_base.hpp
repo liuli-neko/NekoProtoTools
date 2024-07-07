@@ -96,7 +96,7 @@ public:
         Closed,
     };
     ChannelBase(const ChannelBase&) = delete;
-    virtual ~ChannelBase() {}
+    virtual ~ChannelBase() noexcept {}
     virtual ILIAS_NAMESPACE::Task<void> send(std::unique_ptr<NEKO_NAMESPACE::IProto> message) = 0;
     virtual ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> recv()             = 0;
     ChannelState state();
@@ -146,7 +146,7 @@ protected:
 class NEKO_PROTO_API ByteStreamChannel : public ChannelBase {
 public:
     ByteStreamChannel(ChannelFactory* ctxt, ILIAS_NAMESPACE::ByteStream<>&& client, uint16_t channelId);
-    ~ByteStreamChannel() = default;
+    ~ByteStreamChannel() noexcept = default;
     ILIAS_NAMESPACE::Task<void> send(std::unique_ptr<NEKO_NAMESPACE::IProto> message) override;
     ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> recv() override;
     void close() override;

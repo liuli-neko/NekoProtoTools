@@ -60,40 +60,23 @@
 #include <vector>
 
 #include "private/global.hpp"
+#include "private/helpers.hpp"
 
 NEKO_BEGIN_NAMESPACE
-
-template <typename T>
-struct NamedField {
-    using value_type = T;
-    const char* name;
-    const std::size_t nameLen;
-    value_type& value;
-    NamedField(const char* name, T& value) : name(name), nameLen(std::strlen(name)), value(value) {}
-    NamedField(const char* name, T&& value) : name(name), nameLen(std::strlen(name)), value(std::forward<T>(value)) {}
-    NamedField(const char* name, const std::size_t nameLen, T& value) : name(name), nameLen(nameLen), value(value) {}
-#if NEKO_CPP_PLUS >= 17
-    NamedField(const std::string_view name, T&& value)
-        : name(name.data()), nameLen(name.size()), value(std::forward<T>(value)) {}
-    NamedField(const std::string_view name, T& value) : name(name.data()), nameLen(name.size()), value(value) {}
-#endif
-};
-
-struct FieldSize {
-    std::size_t size;
-};
 namespace {
 #if NEKO_CPP_PLUS >= 17
 template <size_t N, typename SerializerT, typename TupleT, std::size_t... Indices>
-inline bool unfold_function_imp1(SerializerT& serializer, const std::array<std::string_view, N>& names, TupleT value,
+inline bool unfold_function_imp1(SerializerT& serializer, const std::array<std::string_view, N>& names, TupleT&& value,
                                  std::index_sequence<Indices...>) NEKO_NOEXCEPT {
-    return ((serializer(NamedField(names[Indices], std::get<Indices>(value))) && true) + ...) == N;
+    return ((serializer(NameValuePair(names[Indices], std::move(traits::dereference(std::get<Indices>(value))))) &&
+             true) +
+            ...) == N;
 }
 
 template <size_t N, typename SerializerT, typename TupleT, std::size_t... Indices>
 inline bool unfold_function_imp2(SerializerT& serializer, const std::array<std::string_view, N>& names,
                                  const TupleT& value, std::index_sequence<Indices...>) NEKO_NOEXCEPT {
-    return ((serializer(NamedField(names[Indices], std::get<Indices>(value))) && true) + ...) == N;
+    return ((serializer(NameValuePair(names[Indices], std::move(std::get<Indices>(value)))) && true) + ...) == N;
 }
 
 inline constexpr int _members_size(std::string_view names) NEKO_NOEXCEPT {
@@ -219,27 +202,6 @@ inline bool _unfold_function2(SerializerT& serializer, const char* names,
     return unfold_function_imp2<SerializerT>(serializer, names, namesVec, i, args...);
 }
 #endif
-
-struct _SerializableCheckHelper {
-    template <typename T>
-    bool insert(const char* name, const size_t len, const T& value) NEKO_NOEXCEPT {
-        return true;
-    }
-    template <typename T>
-    bool get(const char* name, const size_t len, T* value) NEKO_NOEXCEPT {
-        return true;
-    }
-};
-template <typename T, class enable = void>
-struct can_serialize : std::false_type {};
-
-template <typename T>
-struct can_serialize<
-    T, typename std::enable_if<std::is_same<
-           decltype(std::declval<T>().serialize(std::declval<_SerializableCheckHelper&>())),
-           decltype(std::declval<T>().deserialize(std::declval<_SerializableCheckHelper&>()))>::value>::type>
-    : std::true_type {};
-
 } // namespace
 
 NEKO_END_NAMESPACE

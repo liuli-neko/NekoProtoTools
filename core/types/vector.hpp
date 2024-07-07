@@ -16,7 +16,7 @@ inline bool save(Serializer& sa, const std::vector<T>& value) {
 
 template <typename Serializer, typename T>
 inline bool load(Serializer& sa, std::vector<T>& value) {
-    auto s   = FieldSize();
+    auto s   = SizeTag();
     auto ret = sa(s);
     if (!ret)
         return false;

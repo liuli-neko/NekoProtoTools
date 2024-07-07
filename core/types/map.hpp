@@ -12,8 +12,8 @@ inline bool save(Serializer& sa, const std::map<K, V>& value) {
     bool ret = sa.startArray(value.size());
     for (const auto& v : value) {
         ret = sa.startObject() && ret;
-        ret = sa(NamedField("key", 4, v.first)) && ret;
-        ret = sa(NamedField("value", 6, v.second)) && ret;
+        ret = sa(NameValuePair("key", 4, v.first)) && ret;
+        ret = sa(NameValuePair("value", 6, v.second)) && ret;
         ret = sa.endObject() && ret;
     }
     return ret && sa.endArray();
@@ -24,7 +24,7 @@ inline bool save(Serializer& sa, const std::map<std::string, V>& value) {
     bool ret = true;
     ret      = sa.startObject() && ret;
     for (const auto& v : value) {
-        ret = sa(NamedField(v.first.c_str(), v.first.size(), v.second)) && ret;
+        ret = sa(NameValuePair(v.first.c_str(), v.first.size(), v.second)) && ret;
     }
     ret = sa.endObject() && ret;
     return ret;
@@ -36,10 +36,10 @@ inline bool load(Serializer& sa, std::map<K, V>& value) {
     K k;
     V v;
     bool ret;
-    FieldSize s;
+    SizeTag s;
     ret = sa(s);
     while (ret) {
-        if (sa(NamedField("key", 4, k)) && sa(NamedField("value", 6, v))) {
+        if (sa(NameValuePair("key", 4, k)) && sa(NameValuePair("value", 6, v))) {
             value.insert(std::make_pair(k, v));
         } else {
             break;
@@ -58,7 +58,7 @@ inline bool load(Serializer& sa, std::map<std::string, V>& value) {
         if (name == "") {
             break;
         }
-        if (sa(NamedField(name.data(), name.size(), v))) {
+        if (sa(NameValuePair(name.data(), name.size(), v))) {
             value.insert(std::make_pair(name, v));
         } else {
             break;
