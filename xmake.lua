@@ -79,6 +79,17 @@ target("tests")
     end 
 target_end()
 
+target("test_traits")
+    set_kind("binary")
+    set_languages("c++17")
+    add_defines("NEKO_PROTO_STATIC")
+    add_packages("rapidjson", "gtest", "spdlog")
+    add_tests("traits_cpp17")
+    set_group("traits")
+    add_files("src/proto_base.cpp")
+    add_files("tests/test_traits.cpp")
+target_end()
+
 target("test_communication")
     set_kind("binary")
     set_languages("c++20")

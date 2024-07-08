@@ -54,33 +54,33 @@ using disable_if_t = typename detail::disable_if<Conditions...>::type;
 
 class method_access {
 public:
-    template <typename Serializer, typename T>
-    static auto method_serialize(Serializer& s, T& t) -> decltype(t.serialize(s)) {
+    template <typename SerializerT, typename T>
+    static auto method_serialize(SerializerT& s, T& t) -> decltype(t.serialize(s)) {
         return t.serialize(s);
     }
 
-    template <typename Serializer, typename T>
-    static auto method_deserialize(Serializer& s, T& t) -> decltype(t.deserialize(s)) {
+    template <typename SerializerT, typename T>
+    static auto method_deserialize(SerializerT& s, T& t) -> decltype(t.deserialize(s)) {
         return t.deserialize(s);
     }
 
-    template <typename Serializer, typename T>
-    static auto method_const_serialize(Serializer& s, const T& t) -> decltype(t.serialize(s)) {
+    template <typename SerializerT, typename T>
+    static auto method_const_serialize(SerializerT& s, const T& t) -> decltype(t.serialize(s)) {
         return t.serialize(s);
     }
 
-    template <typename Serializer, typename T>
-    static auto method_load(Serializer& s, T& t) -> decltype(t.load(s)) {
+    template <typename SerializerT, typename T>
+    static auto method_load(SerializerT& s, T& t) -> decltype(t.load(s)) {
         return t.load(s);
     }
 
-    template <typename Serializer, typename T>
-    static auto method_const_save(Serializer& s, const T& t) -> decltype(t.save(s)) {
+    template <typename SerializerT, typename T>
+    static auto method_const_save(SerializerT& s, const T& t) -> decltype(t.save(s)) {
         return t.save(s);
     }
 
-    template <typename Serializer, typename T>
-    static auto method_save(Serializer& s, T& t) -> decltype(t.save(s)) {
+    template <typename SerializerT, typename T>
+    static auto method_save(SerializerT& s, T& t) -> decltype(t.save(s)) {
         return t.save(s);
     }
 };
@@ -169,6 +169,18 @@ template <typename T, class enable = void>
 struct is_optional : std::false_type {};
 template <typename T>
 struct is_optional<std::optional<T>, void> : std::true_type {
+    using value_type = T;
+};
+template <typename T>
+struct is_optional<std::optional<T>&, void> : std::true_type {
+    using value_type = T;
+};
+template <typename T>
+struct is_optional<const std::optional<T>&, void> : std::true_type {
+    using value_type = T;
+};
+template <typename T>
+struct is_optional<const std::optional<T>, void> : std::true_type {
     using value_type = T;
 };
 #endif

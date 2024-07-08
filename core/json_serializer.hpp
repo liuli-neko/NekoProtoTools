@@ -104,7 +104,7 @@ public:
 
     template <typename T>
     inline bool saveValue(const NameValuePair<T>& value) {
-        if constexpr (traits::is_optional<T>::value) {
+        if constexpr (traits::is_optional<std::remove_cv_t<T>>::value) {
             if (value.value.has_value())
                 return mWriter.Key(value.name, value.nameLen) && this->operator()(value.value.value());
         } else {
@@ -409,7 +409,7 @@ public:
             if (nullptr == v) {
                 value.value.reset();
             } else if (v->IsArray()) {
-                typename traits::is_optional<T>::value_type result;
+                typename traits::is_optional<std::remove_cv_t<T>>::value_type result;
                 ret = JsonInputSerializer<ConstJsonArray>(v->GetArray())(result);
                 value.value.emplace(std::move(result));
             } else if (v->IsObject()) {

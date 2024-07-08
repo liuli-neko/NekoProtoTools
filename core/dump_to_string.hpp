@@ -132,7 +132,9 @@ private:
 template <typename T>
 inline std::string SerializableToString(T&& value) {
     std::ostringstream buffer;
-    PrintSerializer(buffer)(value);
+    PrintSerializer print(buffer);
+    print(value);
+    print.end();
     return buffer.str();
 };
 

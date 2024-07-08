@@ -1,24 +1,38 @@
 #pragma once
+#include "../private/global.hpp"
+
+#if NEKO_CPP_PLUS >= 17
 #include <variant>
 
 #include "../serializer_base.hpp"
-
 NEKO_BEGIN_NAMESPACE
 
 template <typename Serializer, typename... Ts>
 struct unfold_variant_helper {
-    template <size_t N>
-    static bool unfoldValueImp(Serializer& sa, std::variant<Ts...>&& value) {
-        if (value.index() != N)
-            return false;
-        return sa(std::get<N>(std::forward<std::variant<Ts...>>(value)));
+    template <typename T, size_t N>
+    static bool unfoldValueImp1(Serializer& sa, std::variant<Ts...>& value) {
+        T v = {};
+        if (sa(v)) {
+            value = v;
+            return true;
+        }
+        return false;
     }
 
     template <size_t... Ns>
-    static bool unfoldValue(Serializer& sa, std::variant<Ts...>&& value, std::index_sequence<Ns...>) {
-        return (unfoldValueImp<std::variant_alternative_t<Ns, std::variant<Ts...>>, Ns>(
-                    sa, std::forward<std::variant<Ts...>>(value)) ||
-                ...);
+    static bool unfoldValue(Serializer& sa, std::variant<Ts...>& value, std::index_sequence<Ns...>) {
+        return (unfoldValueImp1<std::variant_alternative_t<Ns, std::variant<Ts...>>, Ns>(sa, value) || ...);
+    }
+    template <typename T, size_t N>
+    static bool unfoldValueImp2(Serializer& sa, const std::variant<Ts...>& value) {
+        if (value.index() != N)
+            return false;
+        return sa(std::get<N>(value));
+    }
+
+    template <size_t... Ns>
+    static bool unfoldValue(Serializer& sa, const std::variant<Ts...>& value, std::index_sequence<Ns...>) {
+        return (unfoldValueImp2<std::variant_alternative_t<Ns, std::variant<Ts...>>, Ns>(sa, value) || ...);
     }
 };
 
@@ -33,3 +47,4 @@ inline bool load(Serializer& sa, std::variant<Ts...>& value) {
 }
 
 NEKO_END_NAMESPACE
+#endif
