@@ -12,8 +12,8 @@ inline bool save(Serializer& sa, const std::map<K, V>& value) {
     bool ret = sa.startArray(value.size());
     for (const auto& v : value) {
         ret = sa.startObject() && ret;
-        ret = sa(NameValuePair("key", 4, v.first)) && ret;
-        ret = sa(NameValuePair("value", 6, v.second)) && ret;
+        ret = sa(makeNameValuePair("key", 4, v.first)) && ret;
+        ret = sa(makeNameValuePair("value", 6, v.second)) && ret;
         ret = sa.endObject() && ret;
     }
     return ret && sa.endArray();
@@ -22,9 +22,10 @@ inline bool save(Serializer& sa, const std::map<K, V>& value) {
 template <typename Serializer, typename V>
 inline bool save(Serializer& sa, const std::map<std::string, V>& value) {
     bool ret = true;
-    ret      = sa.startObject() && ret;
+    sa(makeSizeTag(value.size()));
+    ret = sa.startObject() && ret;
     for (const auto& v : value) {
-        ret = sa(NameValuePair(v.first.c_str(), v.first.size(), v.second)) && ret;
+        ret = sa(makeNameValuePair(v.first.c_str(), v.first.size(), v.second)) && ret;
     }
     ret = sa.endObject() && ret;
     return ret;
@@ -36,31 +37,33 @@ inline bool load(Serializer& sa, std::map<K, V>& value) {
     K k;
     V v;
     bool ret;
-    SizeTag s;
-    ret = sa(s);
+    std::size_t s;
+    ret = sa(makeSizeTag(s));
     while (ret) {
-        if (sa(NameValuePair("key", 4, k)) && sa(NameValuePair("value", 6, v))) {
-            value.insert(std::make_pair(k, v));
+        if (sa(makeNameValuePair("key", 4, k)) && sa(makeNameValuePair("value", 6, v))) {
+            value.emplace(std::move(k), std::move(v));
         } else {
             break;
         }
     }
-    return ret && (s.size == value.size());
+    return ret && (s == value.size());
 }
 
 template <typename Serializer, typename V>
 inline bool load(Serializer& sa, std::map<std::string, V>& value) {
-    bool ret;
+    bool ret = true;
     V v;
+    std::size_t s;
+    ret = sa(makeSizeTag(s));
     while (ret) {
         const auto& name = sa.name();
-
         if (name == "") {
             break;
         }
-        if (sa(NameValuePair(name.data(), name.size(), v))) {
-            value.insert(std::make_pair(name, v));
+        if (sa(v)) {
+            value.emplace(std::move(name), std::move(v));
         } else {
+            ret = false;
             break;
         }
     }

@@ -13,9 +13,9 @@
 
 #include <cstddef>
 #include <map>
+#include <memory>
 #include <string>
 #include <typeinfo>
-#include <memory>
 
 #include "global.hpp"
 
@@ -155,12 +155,22 @@ public:
     ~ReflectionSerializer() = default;
     operator bool() const { return true; }
 
-    template <typename T>
-    inline bool operator()(const NameValuePair<T> &field) {
-        return nullptr != mObject.bindField(NEKO_STRING_VIEW(field.name, field.nameLen), std::addressof(field.value));
+    template <typename... Ts>
+    inline bool operator()(const Ts&... fields) {
+        return process(fields...);
     }
 
     inline ReflectionObject* getObject() { return &mObject; }
+
+private:
+    template <typename T, typename... Ts>
+    inline bool process(const T& field, const Ts&... fields) {
+        return process(field) && process(fields...);
+    }
+    template <typename T>
+    inline bool process(const NameValuePair<T>& field) {
+        return nullptr != mObject.bindField(NEKO_STRING_VIEW(field.name, field.nameLen), std::addressof(field.value));
+    }
 
 private:
     ReflectionObject mObject;

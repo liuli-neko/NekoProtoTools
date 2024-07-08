@@ -68,15 +68,14 @@ namespace {
 template <size_t N, typename SerializerT, typename TupleT, std::size_t... Indices>
 inline bool unfold_function_imp1(SerializerT& serializer, const std::array<std::string_view, N>& names, TupleT&& value,
                                  std::index_sequence<Indices...>) NEKO_NOEXCEPT {
-    return ((serializer(NameValuePair(names[Indices], std::move(traits::dereference(std::get<Indices>(value))))) &&
-             true) +
+    return ((serializer(makeNameValuePair(names[Indices], traits::dereference(std::get<Indices>(value)))) && true) +
             ...) == N;
 }
 
 template <size_t N, typename SerializerT, typename TupleT, std::size_t... Indices>
 inline bool unfold_function_imp2(SerializerT& serializer, const std::array<std::string_view, N>& names,
                                  const TupleT& value, std::index_sequence<Indices...>) NEKO_NOEXCEPT {
-    return ((serializer(NameValuePair(names[Indices], std::move(std::get<Indices>(value)))) && true) + ...) == N;
+    return ((serializer(makeNameValuePair(names[Indices], std::get<Indices>(value))) && true) + ...) == N;
 }
 
 inline constexpr int _members_size(std::string_view names) NEKO_NOEXCEPT {
@@ -157,7 +156,7 @@ inline bool unfold_function_imp1(SerializerT& serializer, const char* names,
                                  const std::vector<std::pair<size_t, size_t>>& namesVec, int i,
                                  const T& value) NEKO_NOEXCEPT {
     NEKO_ASSERT(i < namesVec.size(), "unfoldFunctionImp: index out of range");
-    return serializer.insert(names + namesVec[i].first, namesVec[i].second, value);
+    return serializer(makeNameValuePair(names + namesVec[i].first, namesVec[i].second, value));
 }
 
 template <typename SerializerT, typename T, typename... Args>
@@ -166,7 +165,7 @@ inline bool unfold_function_imp1(SerializerT& serializer, const char* names,
                                  const Args&... args) NEKO_NOEXCEPT {
     bool ret = 0;
     NEKO_ASSERT(i < namesVec.size(), "unfoldFunctionImp: index out of range");
-    ret = serializer.insert(names + namesVec[i].first, namesVec[i].second, value);
+    ret = serializer(makeNameValuePair(names + namesVec[i].first, namesVec[i].second, value));
 
     return unfold_function_imp1<SerializerT>(serializer, names, namesVec, i + 1, args...) && ret;
 }
@@ -182,7 +181,7 @@ inline bool unfold_function_imp2(SerializerT& serializer, const char* names,
                                  const std::vector<std::pair<size_t, size_t>>& namesVec, int i,
                                  T& value) NEKO_NOEXCEPT {
     NEKO_ASSERT(i < namesVec.size(), "unfoldFunctionImp: index out of range");
-    return serializer.get(names + namesVec[i].first, namesVec[i].second, &value);
+    return serializer(makeNameValuePair(names + namesVec[i].first, namesVec[i].second, value));
 }
 
 template <typename SerializerT, typename T, typename... Args>
@@ -191,7 +190,7 @@ inline bool unfold_function_imp2(SerializerT& serializer, const char* names,
                                  Args&... args) NEKO_NOEXCEPT {
     bool ret = 0;
     NEKO_ASSERT(i < namesVec.size(), "unfoldFunctionImp: index out of range");
-    ret = serializer.get(names + namesVec[i].first, namesVec[i].second, &value);
+    ret = serializer(makeNameValuePair(names + namesVec[i].first, namesVec[i].second, value));
 
     return unfold_function_imp2<SerializerT>(serializer, names, namesVec, i + 1, args...) && ret;
 }

@@ -2,6 +2,9 @@
 #include "../global.hpp"
 
 #include <type_traits>
+#if NEKO_CPP_PLUS >= 17
+#include <optional>
+#endif
 
 NEKO_BEGIN_NAMESPACE
 namespace traits {
@@ -160,6 +163,15 @@ NEKO_MAKE_HAS_CONST_METHOD_TEST(save, const_save)
 
 #undef NEKO_MAKE_HAS_METHOD_TEST
 #undef NEKO_MAKE_HAS_CONST_METHOD_TEST
+
+#if NEKO_CPP_PLUS >= 17
+template <typename T, class enable = void>
+struct is_optional : std::false_type {};
+template <typename T>
+struct is_optional<std::optional<T>, void> : std::true_type {
+    using value_type = T;
+};
+#endif
 
 } // namespace traits
 NEKO_END_NAMESPACE

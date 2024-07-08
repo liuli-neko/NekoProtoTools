@@ -35,10 +35,32 @@ public:
     NameValuePair(std::string_view name, T&& value)
         : name(name.data()), nameLen(name.size()), value(std::forward<T>(value)) {}
 #endif
-    const char const* name;
+    const char* name;
     std::size_t nameLen;
     Type value;
 };
+
+template <class T>
+NameValuePair<T> makeNameValuePair(const char* name, T&& value) {
+    return {name, std::strlen(name), std::forward<T>(value)};
+}
+
+template <class T>
+NameValuePair<T> makeNameValuePair(const char* name, std::size_t len, T&& value) {
+    return {name, len, std::forward<T>(value)};
+}
+
+template <class T>
+NameValuePair<T> makeNameValuePair(const std::string& name, T&& value) {
+    return {name.c_str(), name.size(), std::forward<T>(value)};
+}
+
+#if NEKO_CPP_PLUS >= 17
+template <class T>
+NameValuePair<T> makeNameValuePair(const std::string_view& name, T&& value) {
+    return {name.data(), name.size(), std::forward<T>(value)};
+}
+#endif
 
 template <class T>
 class SizeTag : public traits::detail::SizeTagCore {
@@ -53,6 +75,11 @@ public:
     Type size;
 };
 
+template <class T>
+inline SizeTag<T> makeSizeTag(T&& sz) {
+    return {std::forward<T>(sz)};
+}
+
 template <class Archive, class T>
 inline void prologue(Archive& /* archive */, T const& /* data */) {}
 
@@ -61,7 +88,7 @@ inline void prologue(Archive& /* archive */, T const& /* data */) {}
 /*! @ingroup Internal */
 template <class Archive, class T>
 inline void epilogue(Archive& /* archive */, T const& /* data */) {}
-
+namespace detail {
 template <typename SelfT>
 class OutputSerializer {
 public:
@@ -91,34 +118,34 @@ private:
         ret      = process(std::forward<Other>(tail)...) && ret;
         return ret;
     }
-    template <class T, traits::enable_if_t<traits::has_method_const_serialize<T, typename SerializerType>::value,
-                                           !traits::has_function_save<T, typename SerializerType>::value,
-                                           !traits::has_method_const_save<T, typename SerializerType>::value> =
+    template <class T, traits::enable_if_t<traits::has_method_const_serialize<T, SerializerType>::value,
+                                           !traits::has_function_save<T, SerializerType>::value,
+                                           !traits::has_method_const_save<T, SerializerType>::value> =
                            traits::default_value_for_enable>
     inline bool processImpl(const T& value) {
         return traits::method_access::method_serialize(*mSelf, value);
     }
-    template <class T, traits::enable_if_t<traits::has_function_save<T, typename SerializerType>::value,
-                                           !traits::has_method_const_save<T, typename SerializerType>::value,
-                                           !traits::has_method_const_serialize<T, typename SerializerType>::value> =
+    template <class T, traits::enable_if_t<traits::has_function_save<T, SerializerType>::value,
+                                           !traits::has_method_const_save<T, SerializerType>::value,
+                                           !traits::has_method_const_serialize<T, SerializerType>::value> =
                            traits::default_value_for_enable>
     inline bool processImpl(const T& value) {
         return save(*mSelf, value);
     }
-    template <class T, traits::enable_if_t<traits::has_method_const_save<T, typename SerializerType>::value,
-                                           !traits::has_function_save<T, typename SerializerType>::value,
-                                           !traits::has_method_const_serialize<T, typename SerializerType>::value> =
+    template <class T, traits::enable_if_t<traits::has_method_const_save<T, SerializerType>::value,
+                                           !traits::has_function_save<T, SerializerType>::value,
+                                           !traits::has_method_const_serialize<T, SerializerType>::value> =
                            traits::default_value_for_enable>
     inline bool processImpl(const T& value) {
         return traits::method_access::method_save(*mSelf, value);
     }
-    template <class T, traits::enable_if_t<!traits::has_function_save<T, typename SerializerType>::value,
-                                           !traits::has_method_const_save<T, typename SerializerType>::value,
-                                           !traits::has_method_const_serialize<T, typename SerializerType>::value> =
+    template <class T, traits::enable_if_t<!traits::has_function_save<T, SerializerType>::value,
+                                           !traits::has_method_const_save<T, SerializerType>::value,
+                                           !traits::has_method_const_serialize<T, SerializerType>::value> =
                            traits::default_value_for_enable>
     inline bool processImpl(const T& value) {
-        static_assert(traits::has_method_const_serialize<T, typename SerializerType>::value != 0,
-                      "can not find any function to serialize this Type, must have a serialize method or save method "
+        static_assert(traits::has_method_const_serialize<T, SerializerType>::value != 0,
+                      "can not find any function to serialize this Type, must have a serialize method or save method"
                       "or save function.");
         return false;
     }
@@ -156,34 +183,34 @@ private:
         ret      = process(std::forward<Other>(tail)...) && ret;
         return ret;
     }
-    template <class T, traits::enable_if_t<traits::has_method_deserialize<T, typename SerializerType>::value,
-                                           !traits::has_method_load<T, typename SerializerType>::value,
-                                           !traits::has_function_load<T, typename SerializerType>::value> =
+    template <class T, traits::enable_if_t<traits::has_method_deserialize<T, SerializerType>::value,
+                                           !traits::has_method_load<T, SerializerType>::value,
+                                           !traits::has_function_load<T, SerializerType>::value> =
                            traits::default_value_for_enable>
     inline bool processImpl(T& value) {
         return traits::method_access::method_deserialize(*mSelf, value);
     }
-    template <class T, traits::enable_if_t<traits::has_function_load<T, typename SerializerType>::value,
-                                           !traits::has_method_load<T, typename SerializerType>::value,
-                                           !traits::has_method_deserialize<T, typename SerializerType>::value> =
+    template <class T, traits::enable_if_t<traits::has_function_load<T, SerializerType>::value,
+                                           !traits::has_method_load<T, SerializerType>::value,
+                                           !traits::has_method_deserialize<T, SerializerType>::value> =
                            traits::default_value_for_enable>
     inline bool processImpl(T& value) {
         return load(*mSelf, value);
     }
-    template <class T, traits::enable_if_t<traits::has_method_load<T, typename SerializerType>::value,
-                                           !traits::has_function_load<T, typename SerializerType>::value,
-                                           !traits::has_method_deserialize<T, typename SerializerType>::value> =
+    template <class T, traits::enable_if_t<traits::has_method_load<T, SerializerType>::value,
+                                           !traits::has_function_load<T, SerializerType>::value,
+                                           !traits::has_method_deserialize<T, SerializerType>::value> =
                            traits::default_value_for_enable>
     inline bool processImpl(T& value) {
         return traits::method_access::method_load(*mSelf, value);
     }
-    template <class T, traits::enable_if_t<!traits::has_function_load<T, typename SerializerType>::value,
-                                           !traits::has_method_load<T, typename SerializerType>::value,
-                                           !traits::has_method_deserialize<T, typename SerializerType>::value> =
+    template <class T, traits::enable_if_t<!traits::has_function_load<T, SerializerType>::value,
+                                           !traits::has_method_load<T, SerializerType>::value,
+                                           !traits::has_method_deserialize<T, SerializerType>::value> =
                            traits::default_value_for_enable>
     inline bool processImpl(T& value) {
-        static_assert(traits::has_method_const_serialize<T, typename SerializerType>::value != 0,
-                      "can not find any function to serialize this Type, must have a serialize method or save method "
+        static_assert(traits::has_method_deserialize<T, SerializerType>::value != 0,
+                      "can not find any function to serialize this Type, must have a serialize method or save method"
                       "or save function.");
         return false;
     }
@@ -191,21 +218,209 @@ private:
 protected:
     SelfT* mSelf;
 };
-
+} // namespace detail
 namespace traits {
 template <typename T, class enable = void>
 struct is_input_serializer : std::false_type {};
 
 template <typename T>
-struct is_input_serializer<T, typename std::enable_if<std::is_base_of<InputSerializer<T>, T>::value>::type>
+struct is_input_serializer<
+    T, typename std::enable_if<std::is_base_of<::NekoProto::detail::InputSerializer<T>, T>::value>::type>
     : std::true_type {};
 
 template <typename T, class enable = void>
 struct is_output_serializer : std::false_type {};
 
 template <typename T>
-struct is_output_serializer<T, typename std::enable_if<std::is_base_of<OutputSerializer<T>, T>::value>::type>
+struct is_output_serializer<
+    T, typename std::enable_if<std::is_base_of<::NekoProto::detail::OutputSerializer<T>, T>::value>::type>
     : std::true_type {};
 } // namespace traits
+namespace detail {
+class OutBufferWrapper {
+public:
+    using Ch = char;
+
+    OutBufferWrapper() NEKO_NOEXCEPT;
+    OutBufferWrapper(std::vector<Ch>* vec) NEKO_NOEXCEPT;
+    void setVector(std::vector<Ch>* vec) NEKO_NOEXCEPT;
+    void Put(Ch c) NEKO_NOEXCEPT;
+    void Flush() NEKO_NOEXCEPT;
+    const Ch* GetString() const NEKO_NOEXCEPT;
+    std::size_t GetSize() const NEKO_NOEXCEPT;
+    void Clear() NEKO_NOEXCEPT;
+
+private:
+    std::shared_ptr<std::vector<Ch>> mVec;
+};
+
+inline OutBufferWrapper::OutBufferWrapper() NEKO_NOEXCEPT : mVec(new std::vector<Ch>()) {}
+inline OutBufferWrapper::OutBufferWrapper(std::vector<Ch>* vec) NEKO_NOEXCEPT : mVec(vec, [](std::vector<Ch>* ptr) {}) {
+}
+inline void OutBufferWrapper::setVector(std::vector<Ch>* vec) NEKO_NOEXCEPT {
+    if (vec != nullptr) {
+        mVec.reset(vec, [](std::vector<Ch>* ptr) {});
+    } else {
+        mVec.reset(new std::vector<Ch>(), [](std::vector<Ch>* ptr) { delete ptr; });
+    }
+}
+inline void OutBufferWrapper::Put(Ch c) NEKO_NOEXCEPT { mVec->push_back(c); }
+inline void OutBufferWrapper::Flush() NEKO_NOEXCEPT {}
+inline const OutBufferWrapper::Ch* OutBufferWrapper::GetString() const NEKO_NOEXCEPT { return mVec->data(); }
+inline std::size_t OutBufferWrapper::GetSize() const NEKO_NOEXCEPT { return mVec->size(); }
+inline void OutBufferWrapper::Clear() NEKO_NOEXCEPT { mVec->clear(); }
+} // namespace detail
+
+template <typename SerializerT, typename T>
+inline bool save(SerializerT& serializer, const SizeTag<T>& value) {
+    return serializer.saveValue(value);
+}
+
+template <typename SerializerT, typename T>
+inline bool save(SerializerT& serializer, const NameValuePair<T>& value) {
+    return serializer.saveValue(value);
+}
+
+template <typename SerializerT>
+inline bool save(SerializerT& serializer, const int8_t value) {
+    return serializer.saveValue(value);
+}
+
+template <typename SerializerT>
+inline bool save(SerializerT& serializer, const uint8_t value) {
+    return serializer.saveValue(value);
+}
+
+template <typename SerializerT>
+inline bool save(SerializerT& serializer, const int16_t value) {
+    return serializer.saveValue(value);
+}
+
+template <typename SerializerT>
+inline bool save(SerializerT& serializer, const uint16_t value) {
+    return serializer.saveValue(value);
+}
+
+template <typename SerializerT>
+inline bool save(SerializerT& serializer, const int32_t value) {
+    return serializer.saveValue(value);
+}
+
+template <typename SerializerT>
+inline bool save(SerializerT& serializer, const uint32_t value) {
+    return serializer.saveValue(value);
+}
+
+template <typename SerializerT>
+inline bool save(SerializerT& serializer, const int64_t value) {
+    return serializer.saveValue(value);
+}
+
+template <typename SerializerT>
+inline bool save(SerializerT& serializer, const uint64_t value) {
+    return serializer.saveValue(value);
+}
+
+template <typename SerializerT>
+inline bool save(SerializerT& serializer, const float value) {
+    return serializer.saveValue(value);
+}
+
+template <typename SerializerT>
+inline bool save(SerializerT& serializer, const double value) {
+    return serializer.saveValue(value);
+}
+
+template <typename SerializerT>
+inline bool save(SerializerT& serializer, const bool value) {
+    return serializer.saveValue(value);
+}
+
+template <typename SerializerT>
+inline bool save(SerializerT& serializer, const std::string& value) {
+    return serializer.saveValue(value);
+}
+
+template <typename SerializerT>
+inline bool save(SerializerT& serializer, const char* value) {
+    return serializer.saveValue(value);
+}
+
+#if NEKO_CPP_PLUS >= 17
+template <typename SerializerT>
+inline bool save(SerializerT& serializer, const std::string_view value) {
+    return serializer.saveValue(value);
+}
+#endif
+
+template <typename SerializerT>
+inline bool load(SerializerT& serializer, std::string& value) {
+    return serializer.loadValue(value);
+}
+
+template <typename SerializerT>
+inline bool load(SerializerT& serializer, int8_t& value) {
+    return serializer.loadValue(value);
+}
+
+template <typename SerializerT>
+inline bool load(SerializerT& serializer, int16_t& value) {
+    return serializer.loadValue(value);
+}
+
+template <typename SerializerT>
+inline bool load(SerializerT& serializer, int32_t& value) {
+    return serializer.loadValue(value);
+}
+
+template <typename SerializerT>
+inline bool load(SerializerT& serializer, int64_t& value) {
+    return serializer.loadValue(value);
+}
+
+template <typename SerializerT>
+inline bool load(SerializerT& serializer, uint8_t& value) {
+    return serializer.loadValue(value);
+}
+
+template <typename SerializerT>
+inline bool load(SerializerT& serializer, uint16_t& value) {
+    return serializer.loadValue(value);
+}
+
+template <typename SerializerT>
+inline bool load(SerializerT& serializer, uint32_t& value) {
+    return serializer.loadValue(value);
+}
+
+template <typename SerializerT>
+inline bool load(SerializerT& serializer, uint64_t& value) {
+    return serializer.loadValue(value);
+}
+
+template <typename SerializerT>
+inline bool load(SerializerT& serializer, float& value) {
+    return serializer.loadValue(value);
+}
+
+template <typename SerializerT>
+inline bool load(SerializerT& serializer, double& value) {
+    return serializer.loadValue(value);
+}
+
+template <typename SerializerT>
+inline bool load(SerializerT& serializer, bool& value) {
+    return serializer.loadValue(value);
+}
+
+template <typename SerializerT, typename T>
+inline bool load(SerializerT& serializer, const SizeTag<T>& value) {
+    return serializer.loadValue(value);
+}
+
+template <typename SerializerT, typename T>
+inline bool load(SerializerT& serializer, const NameValuePair<T>& value) {
+    return serializer.loadValue(value);
+}
 
 NEKO_END_NAMESPACE

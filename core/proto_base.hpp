@@ -342,7 +342,7 @@ inline ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() N
 template <typename ProtoT, typename SerializerT>
 std::vector<char> ProtoBase<ProtoT, SerializerT>::Serialize(const ProtoT& proto) {
     std::vector<char> data;
-    typename SerializerT::template OutputSerializer<> serializer(data);
+    typename SerializerT::OutputSerializer serializer(data);
     auto ret = proto.serialize(serializer);
     if (!serializer.end()) {
         NEKO_LOG_ERROR("{} serialize error", kProtoName);
@@ -352,7 +352,7 @@ std::vector<char> ProtoBase<ProtoT, SerializerT>::Serialize(const ProtoT& proto)
 
 template <typename ProtoT, typename SerializerT>
 bool ProtoBase<ProtoT, SerializerT>::Deserialize(const std::vector<char>& data, ProtoT& proto) {
-    typename SerializerT::template InputSerializer<> serializer(data);
+    typename SerializerT::InputSerializer serializer(data);
     if (!serializer) {
         return false;
     }
