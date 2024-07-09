@@ -275,7 +275,7 @@ ByteStreamChannel::ByteStreamChannel(ChannelFactory* ctxt, ILIAS_NAMESPACE::Byte
 
 ILIAS_NAMESPACE::Task<void> ByteStreamChannel::send(std::unique_ptr<NEKO_NAMESPACE::IProto> message) {
     if (mState != ChannelBase::ChannelState::Connected) {
-        co_return ILIAS_NAMESPACE::Error(ILIAS_NAMESPACE::Error::Code::Unknown);
+        co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ILIAS_NAMESPACE::Error::Code::Unknown));
     }
     auto msg = message->toData();
     MessageHeader msgHeader(msg.size(), message->type(), mChannelFactory->getProtoFactory().version(),
@@ -300,7 +300,7 @@ ILIAS_NAMESPACE::Task<void> ByteStreamChannel::send(std::unique_ptr<NEKO_NAMESPA
 
 ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> ByteStreamChannel::recv() {
     if (mState != ChannelBase::ChannelState::Connected) {
-        co_return ILIAS_NAMESPACE::Error(ErrorCode::ChannelClosed);
+        co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::ChannelClosed));
     }
     std::vector<char> headerData;
     headerData.resize(MessageHeader::size(), 0);
@@ -317,7 +317,7 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> ByteStreamChannel
     }
     if (msgHeader.length == 0 && msgHeader.protoType == 0 && msgHeader.transType == 0) {
         close();
-        co_return ILIAS_NAMESPACE::Error(ErrorCode::ChannelBroken);
+        co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::ChannelBroken));
     }
     std::vector<char> data(msgHeader.length, 0);
     ret = co_await mClient.recvAll(data.data(), data.size());
@@ -333,16 +333,16 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> ByteStreamChannel
         }
         if (cmsg.messageType == ChannelHeader::MessageType::CloseMessage) {
             close();
-            co_return ILIAS_NAMESPACE::Error(ErrorCode::ChannelClosedByPeer);
+            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::ChannelClosedByPeer));
         } else {
-            co_return ILIAS_NAMESPACE::Error(ErrorCode::InvalidChannelHeader);
+            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::InvalidChannelHeader));
         }
     }
 
     std::unique_ptr<NEKO_NAMESPACE::IProto> message(mChannelFactory->getProtoFactory().create(msgHeader.protoType));
     if (message == nullptr) {
         NEKO_LOG_ERROR("unknown proto type: {}", msgHeader.protoType);
-        co_return ILIAS_NAMESPACE::Error(ErrorCode::InvalidProtoType);
+        co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::InvalidProtoType));
     }
     auto desRet = message->formData(std::move(data));
     if (!desRet) {

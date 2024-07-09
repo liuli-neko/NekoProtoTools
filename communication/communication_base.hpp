@@ -54,7 +54,14 @@ public:
     uint16_t transType = 0; // 2 : the type of this transaction
     uint32_t reserved  = 0; // 4 : the reserved field
 
-    NEKO_SERIALIZER(length, protoType, transType, reserved)
+    template <typename SerializerT>
+    bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {
+        return serializer(length, protoType, transType, reserved);
+    }
+    template <typename SerializerT>
+    bool deserialize(SerializerT& serializer) NEKO_NOEXCEPT {
+        return serializer(length, protoType, transType, reserved);
+    }
 };
 
 class NEKO_PROTO_API ChannelHeader {
@@ -73,7 +80,14 @@ public:
     uint16_t channelId      = 0; // 2
     inline static int size() { return 7; }
 
-    NEKO_SERIALIZER(factoryVersion, messageType, channelId)
+    template <typename SerializerT>
+    bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {
+        return serializer(factoryVersion, messageType, channelId);
+    }
+    template <typename SerializerT>
+    bool deserialize(SerializerT& serializer) NEKO_NOEXCEPT {
+        return serializer(factoryVersion, messageType, channelId);
+    }
 };
 
 #define NEKO_CHANNEL_ERROR(name, code, message, _) name = code,
@@ -165,6 +179,4 @@ inline ChannelBase::ChannelState ChannelBase::state() { return mState; }
 
 NEKO_END_NAMESPACE
 
-ILIAS_NS_BEGIN
 ILIAS_DECLARE_ERROR(NEKO_NAMESPACE::ErrorCode, NEKO_NAMESPACE::ErrorCategory);
-ILIAS_NS_END

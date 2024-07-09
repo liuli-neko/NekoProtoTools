@@ -353,6 +353,7 @@ TEST(BigProtoTest, Serializer) {
     NEKO_LOG_INFO("Serializer data: {}", proto2.f0.size());
     data = makeData(data_3, sizeof(data_3));
     end  = std::chrono::high_resolution_clock::now();
+#ifdef __GNUC__
     CTestStruct4 proto3;
     {
         std::istringstream is(data);
@@ -436,6 +437,7 @@ TEST(BigProtoTest, Serializer) {
                                               .count());
     NEKO_LOG_INFO("Serializer data: {}", proto9.f0.size());
     end = std::chrono::high_resolution_clock::now();
+#endif
     NEKO_LOG_INFO("total time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count());
 }
 

@@ -158,9 +158,9 @@ public:
     ProtoBase& operator=(ProtoT&& other) NEKO_NOEXCEPT;
 
     ProtoT& operator*() NEKO_NOEXCEPT { return *mData; }
-    ProtoT* operator->() NEKO_NOEXCEPT { return mData.get(); }
+    ProtoT* operator->() NEKO_NOEXCEPT { return mData; }
     const ProtoT& operator*() const NEKO_NOEXCEPT { return *mData; }
-    const ProtoT* operator->() const NEKO_NOEXCEPT { return mData.get(); }
+    const ProtoT* operator->() const NEKO_NOEXCEPT { return mData; }
     operator const ProtoT&() const NEKO_NOEXCEPT { return *mData; }
     operator ProtoT&() NEKO_NOEXCEPT { return *mData; }
 
@@ -179,9 +179,9 @@ protected:
     virtual void* data() NEKO_NOEXCEPT override;
 
 private:
-    std::shared_ptr<ReflectionSerializer> mReflectionSerializer = {};
-    std::shared_ptr<ProtoT> mData                               = {};
-
+    std::unique_ptr<ReflectionSerializer> mReflectionSerializer = {};
+    ProtoT* mData                                               = {};
+    static thread_local ProtoT kData;
     static NEKO_STRING_VIEW kProtoName;
 };
 
@@ -246,6 +246,8 @@ template <typename T>
 IProto* ProtoFactory::creater() NEKO_NOEXCEPT {
     return new T();
 }
+template <typename ProtoT, typename SerializerT>
+thread_local ProtoT ProtoBase<ProtoT, SerializerT>::kData = {};
 
 template <typename ProtoT, typename SerializerT>
 NEKO_STRING_VIEW ProtoBase<ProtoT, SerializerT>::kProtoName = []() NEKO_NOEXCEPT {
@@ -263,22 +265,24 @@ inline T* IProto::cast() NEKO_NOEXCEPT {
 }
 template <typename ProtoT, typename SerializerT>
 inline void* ProtoBase<ProtoT, SerializerT>::data() NEKO_NOEXCEPT {
-    return (void*)(mData.get());
+    return (void*)(mData);
 }
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::ProtoBase() : mData(new ProtoT(), [](const ProtoT* p) { delete p; }) {}
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase() : mData(&kData) {}
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::ProtoBase(const ProtoT& p)
-    : mData(new ProtoT(p), [](const ProtoT* p) { delete p; }) {}
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase(const ProtoT& p) : mData(&kData) {
+    *mData = p;
+}
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT&& p)
-    : mData(new ProtoT(std::move(p)), [](const ProtoT* p) { delete p; }) {}
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT&& p) : mData(&kData) {
+    *mData = std::move(p);
+}
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT* p) : mData(p, [](const ProtoT* p) {}) {}
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT* p) : mData(p) {}
 
 template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>::ProtoBase(ProtoBase<T, SerializerT>&& other) {
@@ -298,21 +302,13 @@ ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, Ser
 
 template <typename ProtoT, typename SerializerT>
 inline ProtoBase<ProtoT, SerializerT>& ProtoBase<ProtoT, SerializerT>::operator=(const ProtoT& other) NEKO_NOEXCEPT {
-    if (mData != nullptr) {
-        (*mData) = other;
-    } else {
-        mData.reset(new ProtoT(other));
-    }
+    (*mData) = other;
     return *this;
 }
 
 template <typename ProtoT, typename SerializerT>
 inline ProtoBase<ProtoT, SerializerT>& ProtoBase<ProtoT, SerializerT>::operator=(ProtoT&& other) NEKO_NOEXCEPT {
-    if (mData != nullptr) {
-        (*mData) = std::move(other);
-    } else {
-        mData.reset(new ProtoT(std::move(other)));
-    }
+    (*mData) = std::move(other);
     return *this;
 }
 

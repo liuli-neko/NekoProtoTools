@@ -143,7 +143,7 @@ Task<void> serverLoop(IoContext& ioContext, ChannelFactory& channelFactor) {
     NEKO_LOG_INFO("accept successed");
     auto ret1 = co_await HandleLoop(ret.value());
     if (!ret1 && ret1.error() != ErrorCode::ChannelClosedByPeer) {
-        co_return ret1.error();
+        co_return Unexpected(ret1.error());
     }
     co_return Result<>();
 }

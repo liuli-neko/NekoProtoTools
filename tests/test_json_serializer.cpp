@@ -33,39 +33,27 @@ struct StructA {
     TEnum h;
 };
 
-#if (defined(_MSC_VER) && _MSVC_LANG <= 201402L) || (defined(__GNUC__) && __cplusplus < 201703L)
+#if NEKO_CPP_PLUS < 17
 NEKO_BEGIN_NAMESPACE
-template <typename WriterT, typename ValueT>
-struct JsonConvert<WriterT, ValueT, StructA, void> {
-    static bool toJsonValue(WriterT& writer, const StructA& value) {
-        auto ret = writer.StartArray();
-        ret      = JsonConvert<WriterT, ValueT, int>::toJsonValue(writer, value.a) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::string>::toJsonValue(writer, value.b) && ret;
-        ret      = JsonConvert<WriterT, ValueT, bool>::toJsonValue(writer, value.c) && ret;
-        ret      = JsonConvert<WriterT, ValueT, double>::toJsonValue(writer, value.d) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::list<int>>::toJsonValue(writer, value.e) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::toJsonValue(writer, value.f) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::array<int, 5>>::toJsonValue(writer, value.g) && ret;
-        ret      = JsonConvert<WriterT, ValueT, TEnum>::toJsonValue(writer, value.h) && ret;
-        ret      = writer.EndArray() && ret;
-        return ret;
-    }
-    static bool fromJsonValue(StructA* result, const ValueT& value) {
-        if (result == nullptr || !value.IsArray()) {
-            return false;
-        }
-        auto ret = JsonConvert<WriterT, ValueT, int>::fromJsonValue(&result->a, value[0]);
-        ret      = JsonConvert<WriterT, ValueT, std::string>::fromJsonValue(&result->b, value[1]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, bool>::fromJsonValue(&result->c, value[2]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, double>::fromJsonValue(&result->d, value[3]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::list<int>>::fromJsonValue(&result->e, value[4]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::fromJsonValue(&result->f, value[5]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::array<int, 5>>::fromJsonValue(&result->g, value[6]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, TEnum>::fromJsonValue(&result->h, value[7]) && ret;
-        return ret;
-    }
-};
+template <typename Serializer>
+inline bool save(Serializer& sa, const StructA& value) {
+    auto ret = sa.startArray((uint32_t)8);
+    ret      = sa(value.a, value.b, value.c, value.d, value.e, value.f, value.g, value.h) && ret;
+    ret      = sa.endArray() && ret;
+    return ret;
+}
 
+template <typename Serializer>
+inline bool load(Serializer& sa, StructA& value) {
+    uint32_t size;
+    auto ret = sa(makeSizeTag(size));
+    if (size != 8) {
+        NEKO_LOG_ERROR("struct size mismatch: json obejct size {} != struct size 8", size);
+        return false;
+    }
+    ret = sa(value.a, value.b, value.c, value.d, value.e, value.f, value.g, value.h) && ret;
+    return ret;
+}
 NEKO_END_NAMESPACE
 #endif
 

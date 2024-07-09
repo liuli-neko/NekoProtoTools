@@ -44,9 +44,9 @@ target_end()
 target("tests")
     set_kind("phony")
     -- js
-    -- add_tests("js_cpp14", {group = "js", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_json_serializer.cpp", "src/proto_base.cpp"}, languages = "c++14", run_timeout = 1000})
-    -- add_tests("js_cpp17", {group = "js", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_json_serializer.cpp", "src/proto_base.cpp"}, languages = "c++17", run_timeout = 1000})
-    -- add_tests("js_cpp20", {group = "js", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_json_serializer.cpp", "src/proto_base.cpp"}, languages = "c++20", run_timeout = 1000})
+    add_tests("js_cpp14", {group = "js", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_json_serializer.cpp", "src/proto_base.cpp"}, languages = "c++14", run_timeout = 1000})
+    add_tests("js_cpp17", {group = "js", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_json_serializer.cpp", "src/proto_base.cpp"}, languages = "c++17", run_timeout = 1000})
+    add_tests("js_cpp20", {group = "js", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_json_serializer.cpp", "src/proto_base.cpp"}, languages = "c++20", run_timeout = 1000})
 
     -- proto
     -- add_tests("proto_cpp11", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_proto.cpp", "src/proto_base.cpp"}, languages = "c++11", run_timeout = 1000})
@@ -72,11 +72,9 @@ target("tests")
     add_tests("rproto_cpp17", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_proto.cpp", "src/proto_base.cpp"}, languages = "c++17", run_timeout = 1000})
     add_tests("rproto_cpp20", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_proto.cpp", "src/proto_base.cpp"}, languages = "c++20", run_timeout = 1000})
     
-        add_tests("bproto_cpp17", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_big_data.cpp", "src/proto_base.cpp"}, languages = "c++17", run_timeout = 3000})
-    if is_plat("linux") then 
-        add_tests("bproto_cpp14", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_big_data.cpp", "src/proto_base.cpp"}, languages = "c++14", run_timeout = 3000})
-        add_tests("bproto_cpp20", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_big_data.cpp", "src/proto_base.cpp"}, languages = "c++20", run_timeout = 3000})
-    end 
+    add_tests("bproto_cpp17", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_big_data.cpp", "src/proto_base.cpp"}, languages = "c++17", run_timeout = 3000})
+    add_tests("bproto_cpp14", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_big_data.cpp", "src/proto_base.cpp"}, languages = "c++14", run_timeout = 3000})
+    add_tests("bproto_cpp20", {group = "proto", kind = "binary", defines = "NEKO_PROTO_STATIC", packages = {"rapidjson", "spdlog", "gtest"}, files = {"tests/test_random_big_data.cpp", "src/proto_base.cpp"}, languages = "c++20", run_timeout = 3000})
 target_end()
 
 
@@ -108,7 +106,6 @@ target("test_communication")
     add_includedirs("./modules/Ilias/include")
     add_defines("NEKO_PROTO_STATIC")
     add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
-    add_cxxflags("-Wstrict-aliasing")
     add_packages("rapidjson", "gtest", "spdlog")
     add_tests("communication_cpp20")
     set_group("communication")
