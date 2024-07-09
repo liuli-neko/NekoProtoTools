@@ -1,14 +1,16 @@
 #include <gtest/gtest.h>
 
 #include "../core/binary_serializer.hpp"
-#include "../core/dump_to_string.hpp"
 #include "../core/json_serializer.hpp"
 #include "../core/proto_base.hpp"
 #include "../core/serializer_base.hpp"
+#include "../core/to_string.hpp"
 #include "../core/types/array.hpp"
+#include "../core/types/binary_data.hpp"
 #include "../core/types/enum.hpp"
 #include "../core/types/list.hpp"
 #include "../core/types/map.hpp"
+#include "../core/types/set.hpp"
 #include "../core/types/struct_unwrap.hpp"
 #include "../core/types/tuple.hpp"
 #include "../core/types/variant.hpp"
@@ -31,55 +33,25 @@ struct StructA {
 
 #if NEKO_CPP_PLUS < 17
 NEKO_BEGIN_NAMESPACE
-template <typename WriterT, typename ValueT>
-struct JsonConvert<WriterT, ValueT, StructA, void> {
-    static bool toJsonValue(WriterT& writer, const StructA& value) {
-        auto ret = writer.StartArray();
-        ret      = JsonConvert<WriterT, ValueT, int>::toJsonValue(writer, value.a) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::string>::toJsonValue(writer, value.b) && ret;
-        ret      = JsonConvert<WriterT, ValueT, bool>::toJsonValue(writer, value.c) && ret;
-        ret      = JsonConvert<WriterT, ValueT, double>::toJsonValue(writer, value.d) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::list<int>>::toJsonValue(writer, value.e) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::toJsonValue(writer, value.f) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::array<int, 5>>::toJsonValue(writer, value.g) && ret;
-        ret      = JsonConvert<WriterT, ValueT, TEnum>::toJsonValue(writer, value.h) && ret;
-        ret      = writer.EndArray() && ret;
-        return ret;
-    }
-    static bool fromJsonValue(StructA* result, const ValueT& value) {
-        if (result == nullptr || !value.IsArray() || value.Size() != 8) {
-            return false;
-        }
-        auto ret = JsonConvert<WriterT, ValueT, int>::fromJsonValue(&result->a, value[0]);
-        ret      = JsonConvert<WriterT, ValueT, std::string>::fromJsonValue(&result->b, value[1]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, bool>::fromJsonValue(&result->c, value[2]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, double>::fromJsonValue(&result->d, value[3]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::list<int>>::fromJsonValue(&result->e, value[4]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::fromJsonValue(&result->f, value[5]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::array<int, 5>>::fromJsonValue(&result->g, value[6]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, TEnum>::fromJsonValue(&result->h, value[7]) && ret;
-        return ret;
-    }
-};
+template <typename Serializer>
+inline bool save(Serializer& sa, const StructA& value) {
+    auto ret = sa.startArray((uint32_t)8);
+    ret      = sa(value.a, value.b, value.c, value.d, value.e, value.f, value.g, value.h) && ret;
+    ret      = sa.endArray() && ret;
+    return ret;
+}
 
-template <>
-struct FormatStringCovert<StructA, void> {
-    static std::string toString(const char* name, const size_t len, const StructA& p) {
-        std::string ret;
-        if (len > 0)
-            ret = std::string(name, len) + std::string(" = ");
-        ret += "StructA{";
-        ret += FormatStringCovert<int>::toString(nullptr, 0, p.a) + ", ";
-        ret += FormatStringCovert<std::string>::toString(nullptr, 0, p.b) + ", ";
-        ret += FormatStringCovert<bool>::toString(nullptr, 0, p.c) + ", ";
-        ret += FormatStringCovert<double>::toString(nullptr, 0, p.d) + ", ";
-        ret += FormatStringCovert<std::list<int>>::toString(nullptr, 0, p.e) + ", ";
-        ret += FormatStringCovert<std::map<std::string, int>>::toString(nullptr, 0, p.f) + ", ";
-        ret += FormatStringCovert<std::array<int, 5>>::toString(nullptr, 0, p.g) + ", ";
-        ret += FormatStringCovert<TEnum>::toString(nullptr, 0, p.h) + "}";
-        return ret;
+template <typename Serializer>
+inline bool load(Serializer& sa, StructA& value) {
+    uint32_t size;
+    auto ret = sa(makeSizeTag(size));
+    if (size != 8) {
+        NEKO_LOG_ERROR("struct size mismatch: json obejct size {} != struct size 8", size);
+        return false;
     }
-};
+    ret = sa(value.a, value.b, value.c, value.d, value.e, value.f, value.g, value.h) && ret;
+    return ret;
+}
 NEKO_END_NAMESPACE
 #endif
 
@@ -203,56 +175,56 @@ TEST_F(ProtoTest, StructDeserialize) {
 #endif
     TestP tp2;
     tp2.makeProto() = testp;
-    // EXPECT_STREQ(SerializableToString(testp).c_str(), SerializableToString(tp2).c_str());
-    // NEKO_LOG_INFO("{}", SerializableToString(testp));
+    EXPECT_STREQ(SerializableToString(testp).c_str(), SerializableToString(tp2).c_str());
+    NEKO_LOG_INFO("{}", SerializableToString(testp));
 }
 
-// TEST_F(ProtoTest, Base64Covert) {
-//     const char* str   = "this is a test string";
-//     auto base64string = Base64Covert::Encode(str);
-//     base64string.push_back('\0');
-//     EXPECT_STREQ(base64string.data(), "dGhpcyBpcyBhIHRlc3Qgc3RyaW5n");
-//     base64string.pop_back();
-//     auto str2 = Base64Covert::Decode(base64string);
-//     str2.push_back('\0');
-//     EXPECT_STREQ(str2.data(), str);
+TEST_F(ProtoTest, Base64Covert) {
+    const char* str   = "this is a test string";
+    auto base64string = Base64Covert::Encode(str);
+    base64string.push_back('\0');
+    EXPECT_STREQ(base64string.data(), "dGhpcyBpcyBhIHRlc3Qgc3RyaW5n");
+    base64string.pop_back();
+    auto str2 = Base64Covert::Decode(base64string);
+    str2.push_back('\0');
+    EXPECT_STREQ(str2.data(), str);
 
-//     const char* str3   = "this is a test string2";
-//     auto base64string2 = Base64Covert::Encode(str3);
-//     base64string2.push_back('\0');
-//     EXPECT_STREQ(base64string2.data(), "dGhpcyBpcyBhIHRlc3Qgc3RyaW5nMg==");
-//     base64string2.pop_back();
-//     auto str4 = Base64Covert::Decode(base64string2);
-//     str4.push_back('\0');
-//     EXPECT_STREQ(str4.data(), str3);
+    const char* str3   = "this is a test string2";
+    auto base64string2 = Base64Covert::Encode(str3);
+    base64string2.push_back('\0');
+    EXPECT_STREQ(base64string2.data(), "dGhpcyBpcyBhIHRlc3Qgc3RyaW5nMg==");
+    base64string2.pop_back();
+    auto str4 = Base64Covert::Decode(base64string2);
+    str4.push_back('\0');
+    EXPECT_STREQ(str4.data(), str3);
 
-//     const char* str5   = "this is a test string21";
-//     auto base64string3 = Base64Covert::Encode(str5);
-//     base64string3.push_back('\0');
-//     EXPECT_STREQ(base64string3.data(), "dGhpcyBpcyBhIHRlc3Qgc3RyaW5nMjE=");
-//     base64string3.pop_back();
-//     auto str6 = Base64Covert::Decode(base64string3);
-//     str6.push_back('\0');
-//     EXPECT_STREQ(str6.data(), str5);
+    const char* str5   = "this is a test string21";
+    auto base64string3 = Base64Covert::Encode(str5);
+    base64string3.push_back('\0');
+    EXPECT_STREQ(base64string3.data(), "dGhpcyBpcyBhIHRlc3Qgc3RyaW5nMjE=");
+    base64string3.pop_back();
+    auto str6 = Base64Covert::Decode(base64string3);
+    str6.push_back('\0');
+    EXPECT_STREQ(str6.data(), str5);
 
-//     const char* str7   = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-//     auto base64string4 = Base64Covert::Encode(str7);
-//     base64string4.push_back('\0');
-//     EXPECT_STREQ(base64string4.data(),
-//                  "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejAxMjM0NTY3ODkrLw==");
-//     base64string4.pop_back();
-//     auto str8 = Base64Covert::Decode(base64string4);
-//     str8.push_back('\0');
-//     EXPECT_STREQ(str8.data(), str7);
+    const char* str7   = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    auto base64string4 = Base64Covert::Encode(str7);
+    base64string4.push_back('\0');
+    EXPECT_STREQ(base64string4.data(),
+                 "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejAxMjM0NTY3ODkrLw==");
+    base64string4.pop_back();
+    auto str8 = Base64Covert::Decode(base64string4);
+    str8.push_back('\0');
+    EXPECT_STREQ(str8.data(), str7);
 
-//     auto str9 = Base64Covert::Decode(str7);
-//     str9.push_back('\0');
-//     EXPECT_STREQ(str9.data(), "");
+    auto str9 = Base64Covert::Decode(str7);
+    str9.push_back('\0');
+    EXPECT_STREQ(str9.data(), "");
 
-//     auto str10 = Base64Covert::Decode("");
-//     str10.push_back('\0');
-//     EXPECT_STREQ(str10.data(), "");
-// }
+    auto str10 = Base64Covert::Decode("");
+    str10.push_back('\0');
+    EXPECT_STREQ(str10.data(), "");
+}
 
 TEST_F(ProtoTest, JsonProtoRef) {
     std::string str = "{\"a\":3,\"b\":\"Struct "
@@ -341,17 +313,17 @@ TEST_F(ProtoTest, InvalidParams) {
     EXPECT_FALSE(TestP::ProtoType::Deserialize(std::vector<char>(str.data(), str.data() + str.length()), p));
 }
 
-// TEST_F(ProtoTest, BinaryProto) {
-//     BinaryProto proto;
-//     proto.a        = 24;
-//     proto.b        = "hello Neko Proto";
-//     proto.c        = 0x3f3f3f;
-//     auto data      = proto.makeProto().toData();
-//     auto base64str = Base64Covert::Encode(data);
-//     base64str.push_back('\0');
-//     EXPECT_STREQ(base64str.data(), "AAAAGAAAAAAAAAAQaGVsbG8gTmVrbyBQcm90bwA/Pz8=");
-//     NEKO_LOG_INFO("{}", SerializableToString(proto));
-// }
+TEST_F(ProtoTest, BinaryProto) {
+    BinaryProto proto;
+    proto.a        = 24;
+    proto.b        = "hello Neko Proto";
+    proto.c        = 0x3f3f3f;
+    auto data      = proto.makeProto().toData();
+    auto base64str = Base64Covert::Encode(data);
+    base64str.push_back('\0');
+    EXPECT_STREQ(base64str.data(), "UzoAAAABYQAAABhTOgAAAAFiUzoAAAAQaGVsbG8gTmVrbyBQcm90b1M6AAAAAWMAPz8/");
+    NEKO_LOG_INFO("{}", SerializableToString(proto));
+}
 
 int main(int argc, char** argv) {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;

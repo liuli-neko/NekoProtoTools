@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
 
 #include "../core/binary_serializer.hpp"
-#include "../core/dump_to_string.hpp"
 #include "../core/json_serializer.hpp"
 #include "../core/proto_base.hpp"
 #include "../core/serializer_base.hpp"
+#include "../core/to_string.hpp"
 #include "../core/types/array.hpp"
 #include "../core/types/enum.hpp"
 #include "../core/types/list.hpp"

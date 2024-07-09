@@ -11,7 +11,7 @@ template <typename Serializer, typename K, typename V,
 inline bool save(Serializer& sa, const std::map<K, V>& value) {
     bool ret = sa.startArray(value.size());
     for (const auto& v : value) {
-        ret = sa.startObject() && ret;
+        ret = sa.startObject(1) && ret;
         ret = sa(makeNameValuePair("key", 4, v.first)) && ret;
         ret = sa(makeNameValuePair("value", 6, v.second)) && ret;
         ret = sa.endObject() && ret;
@@ -22,8 +22,7 @@ inline bool save(Serializer& sa, const std::map<K, V>& value) {
 template <typename Serializer, typename V>
 inline bool save(Serializer& sa, const std::map<std::string, V>& value) {
     bool ret = true;
-    sa(makeSizeTag(value.size()));
-    ret = sa.startObject() && ret;
+    ret      = sa.startObject(value.size()) && ret;
     for (const auto& v : value) {
         ret = sa(makeNameValuePair(v.first.c_str(), v.first.size(), v.second)) && ret;
     }
@@ -39,6 +38,7 @@ inline bool load(Serializer& sa, std::map<K, V>& value) {
     bool ret;
     std::size_t s;
     ret = sa(makeSizeTag(s));
+    value.clear();
     while (ret) {
         if (sa(makeNameValuePair("key", 4, k)) && sa(makeNameValuePair("value", 6, v))) {
             value.emplace(std::move(k), std::move(v));
@@ -55,6 +55,7 @@ inline bool load(Serializer& sa, std::map<std::string, V>& value) {
     V v;
     std::size_t s;
     ret = sa(makeSizeTag(s));
+    value.clear();
     while (ret) {
         const auto& name = sa.name();
         if (name == "") {

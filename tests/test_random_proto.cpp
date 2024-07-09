@@ -1,14 +1,20 @@
 #include <gtest/gtest.h>
 
 #include "../core/binary_serializer.hpp"
-#include "../core/dump_to_string.hpp"
 #include "../core/json_serializer.hpp"
-#include "../core/json_serializer_binary.hpp"
-#include "../core/json_serializer_container.hpp"
-#include "../core/json_serializer_enum.hpp"
-#include "../core/json_serializer_struct.hpp"
 #include "../core/proto_base.hpp"
 #include "../core/serializer_base.hpp"
+#include "../core/to_string.hpp"
+#include "../core/types/array.hpp"
+#include "../core/types/binary_data.hpp"
+#include "../core/types/enum.hpp"
+#include "../core/types/list.hpp"
+#include "../core/types/map.hpp"
+#include "../core/types/set.hpp"
+#include "../core/types/struct_unwrap.hpp"
+#include "../core/types/tuple.hpp"
+#include "../core/types/variant.hpp"
+#include "../core/types/vector.hpp"
 
 NEKO_USE_NAMESPACE
 
@@ -791,31 +797,20 @@ enum TestEnumBG8AC {
 };
 
 TEST(RandomProtoTest, EnumTest) {
-    using WriterType = JsonSerializer::WriterType;
-    using ValueType  = JsonSerializer::ValueType;
-    TestEnumBG8AC a  = TestEnumBG8AC::TestEnumBG8AC0;
-    OutBufferWrapper buffer;
-    WriterType writer(buffer);
-    writer.StartObject();
-    writer.Key("a");
-    JsonConvert<WriterType, ValueType, TestEnumBG8AC>::toJsonValue(writer, a);
-    writer.Key("b");
-    JsonConvert<WriterType, ValueType, TestEnumBG8AC>::toJsonValue(writer, TestEnumBG8AC::TestEnumBG8AC10);
-    writer.Key("c");
-    JsonConvert<WriterType, ValueType, TestEnumBG8AC>::toJsonValue(writer, TestEnumBG8AC::TestEnumBG8AC20);
-    writer.Key("d");
-    JsonConvert<WriterType, ValueType, TestEnumBG8AC>::toJsonValue(writer, TestEnumBG8AC::TestEnumBG8AC30);
-    writer.Key("e");
-    JsonConvert<WriterType, ValueType, TestEnumBG8AC>::toJsonValue(writer, TestEnumBG8AC::TestEnumBG8AC40);
-    writer.Key("f");
-    JsonConvert<WriterType, ValueType, TestEnumBG8AC>::toJsonValue(writer, TestEnumBG8AC::TestEnumBG8AC50);
-    writer.Key("g");
-    JsonConvert<WriterType, ValueType, TestEnumBG8AC>::toJsonValue(writer, TestEnumBG8AC::TestEnumBG8AC60);
-    writer.Key("h");
-    JsonConvert<WriterType, ValueType, TestEnumBG8AC>::toJsonValue(writer, TestEnumBG8AC::TestEnumBG8AC61);
-    writer.EndObject();
-    buffer.Put('\0');
-    const char* str = buffer.GetString();
+    TestEnumBG8AC a = TestEnumBG8AC::TestEnumBG8AC0;
+    std::vector<char> buffer;
+    JsonSerializer::OutputSerializer out(buffer);
+    out(makeNameValuePair<const TestEnumBG8AC&>("a", a));
+    out(makeNameValuePair<const TestEnumBG8AC&>("b", TestEnumBG8AC::TestEnumBG8AC10));
+    out(makeNameValuePair<const TestEnumBG8AC&>("c", TestEnumBG8AC::TestEnumBG8AC20));
+    out(makeNameValuePair<const TestEnumBG8AC&>("d", TestEnumBG8AC::TestEnumBG8AC30));
+    out(makeNameValuePair<const TestEnumBG8AC&>("e", TestEnumBG8AC::TestEnumBG8AC40));
+    out(makeNameValuePair<const TestEnumBG8AC&>("f", TestEnumBG8AC::TestEnumBG8AC50));
+    out(makeNameValuePair<const TestEnumBG8AC&>("g", TestEnumBG8AC::TestEnumBG8AC60));
+    out(makeNameValuePair<const TestEnumBG8AC&>("h", TestEnumBG8AC::TestEnumBG8AC61));
+    out.end();
+    buffer.push_back('\0');
+    const char* str = buffer.data();
 #if __cplusplus >= 201703L || _MSVC_LANG > 201402L
     EXPECT_STREQ(str,
                  "{\"a\":\"TestEnumBG8AC0(0)\",\"b\":\"TestEnumBG8AC10(10)\",\"c\":\"TestEnumBG8AC20(20)\",\"d\":"

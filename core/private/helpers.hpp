@@ -39,6 +39,8 @@ public:
     std::size_t nameLen;
     Type value;
 };
+template <typename T>
+struct is_minimal_serializable<NameValuePair<T>, void> : std::true_type {};
 
 template <class T>
 NameValuePair<T> makeNameValuePair(const char* name, T&& value) {
@@ -75,19 +77,26 @@ public:
     Type size;
 };
 
+template <typename T>
+struct is_minimal_serializable<SizeTag<T>, void> : std::true_type {};
+
 template <class T>
 inline SizeTag<T> makeSizeTag(T&& sz) {
     return {std::forward<T>(sz)};
 }
 
 template <class Archive, class T>
-inline void prologue(Archive& /* archive */, T const& /* data */) {}
+inline bool prologue(Archive& /* archive */, T const& /* data */) {
+    return true;
+}
 
 //! Called after a type is serialized to tear down any special archive state
 //! for processing some type
 /*! @ingroup Internal */
 template <class Archive, class T>
-inline void epilogue(Archive& /* archive */, T const& /* data */) {}
+inline bool epilogue(Archive& /* archive */, T const& /* data */) {
+    return true;
+}
 namespace detail {
 template <typename SelfT>
 class OutputSerializer {
@@ -170,9 +179,9 @@ private:
     // process a single value
     template <class T>
     inline bool process(T&& head) {
-        prologue(*mSelf, head);
-        auto ret = mSelf->processImpl(head);
-        epilogue(*mSelf, head);
+        auto ret = prologue(*mSelf, head);
+        ret      = ret && mSelf->processImpl(head);
+        ret      = ret && epilogue(*mSelf, head);
         return ret;
     }
 
@@ -336,8 +345,8 @@ inline bool save(SerializerT& serializer, const bool value) {
     return serializer.saveValue(value);
 }
 
-template <typename SerializerT>
-inline bool save(SerializerT& serializer, const std::string& value) {
+template <typename SerializerT, typename CharT, typename Traits, typename Alloc>
+inline bool save(SerializerT& serializer, const std::basic_string<CharT, Traits, Alloc>& value) {
     return serializer.saveValue(value);
 }
 
@@ -347,14 +356,14 @@ inline bool save(SerializerT& serializer, const char* value) {
 }
 
 #if NEKO_CPP_PLUS >= 17
-template <typename SerializerT>
-inline bool save(SerializerT& serializer, const std::string_view value) {
+template <typename SerializerT, typename CharT, typename Traits>
+inline bool save(SerializerT& serializer, const std::basic_string_view<CharT, Traits>& value) {
     return serializer.saveValue(value);
 }
 #endif
 
-template <typename SerializerT>
-inline bool load(SerializerT& serializer, std::string& value) {
+template <typename SerializerT, typename CharT, typename Traits, typename Alloc>
+inline bool load(SerializerT& serializer, std::basic_string<CharT, Traits, Alloc>& value) {
     return serializer.loadValue(value);
 }
 

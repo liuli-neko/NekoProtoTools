@@ -4,6 +4,7 @@
 #include "../core/json_serializer.hpp"
 #include "../core/proto_base.hpp"
 #include "../core/serializer_base.hpp"
+#include "../core/to_string.hpp"
 #include "../core/types/map.hpp"
 #include "../core/types/vector.hpp"
 
@@ -270,6 +271,7 @@ TEST(BigProtoTest, Serializer) {
                                               .count());
     NEKO_LOG_INFO("Serializer data: {}", proto1.f0.size());
     end = std::chrono::high_resolution_clock::now();
+
     // TestStruct4 proto2;
     // proto2.makeProto().formData({data_2, data_2 + sizeof(data_2)});
     // NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(

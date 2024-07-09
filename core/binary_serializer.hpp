@@ -140,12 +140,9 @@ public:
         return saveValue(NEKO_STRING_VIEW{value.name, value.nameLen}) && this->operator()(value.value);
     }
     // as serializer(makeSizeTag(size));
-    bool startArray(const std::size_t size) {
-        saveValue(makeSizeTag(size));
-        return true;
-    }
+    bool startArray(const std::size_t size) { return saveValue(makeSizeTag(size)); }
     bool endArray() { return true; }
-    bool startObject() { return true; }
+    bool startObject(const std::size_t size) { return saveValue(makeSizeTag(size)); }
     bool endObject() { return true; }
     bool end() { return true; }
 

@@ -3,6 +3,7 @@
 
 #include "../communication/communication_base.hpp"
 #include "../core/json_serializer.hpp"
+#include "../core/types/vector.hpp"
 
 #include "ilias_networking.hpp"
 #ifdef _WIN32

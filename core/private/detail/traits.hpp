@@ -186,4 +186,18 @@ struct is_optional<const std::optional<T>, void> : std::true_type {
 #endif
 
 } // namespace traits
+
+template <typename T, class enable = void>
+struct is_minimal_serializable : std::false_type {};
+
+template <typename CharT, typename Traits, typename Alloc>
+struct is_minimal_serializable<std::basic_string<CharT, Traits, Alloc>, void> : std::true_type {};
+
+#if NEKO_CPP_PLUS >= 17
+template <typename T>
+struct is_minimal_serializable<std::optional<T>, void> : std::true_type {};
+
+template <typename CharT, typename Traits>
+struct is_minimal_serializable<std::basic_string_view<CharT, Traits>, void> : std::true_type {};
+#endif
 NEKO_END_NAMESPACE

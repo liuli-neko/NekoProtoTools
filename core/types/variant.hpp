@@ -46,5 +46,8 @@ inline bool load(Serializer& sa, std::variant<Ts...>& value) {
     return unfold_variant_helper<Serializer, Ts...>::unfoldValue(sa, value, std::make_index_sequence<sizeof...(Ts)>());
 }
 
+template <typename... Ts>
+struct is_minimal_serializable<std::variant<Ts...>, void> : std::true_type {};
+
 NEKO_END_NAMESPACE
 #endif

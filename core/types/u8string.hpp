@@ -1,4 +1,6 @@
 #pragma once
+#include "../private/global.hpp"
+
 #if NEKO_CPP_PLUS >= 20
 #include <string>
 

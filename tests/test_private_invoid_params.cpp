@@ -4,14 +4,20 @@
 // #define private   public // for test private member
 
 #include "../core/binary_serializer.hpp"
-#include "../core/dump_to_string.hpp"
 #include "../core/json_serializer.hpp"
-#include "../core/json_serializer_binary.hpp"
-#include "../core/json_serializer_container.hpp"
-#include "../core/json_serializer_enum.hpp"
-#include "../core/json_serializer_struct.hpp"
 #include "../core/proto_base.hpp"
 #include "../core/serializer_base.hpp"
+#include "../core/to_string.hpp"
+#include "../core/types/array.hpp"
+#include "../core/types/binary_data.hpp"
+#include "../core/types/enum.hpp"
+#include "../core/types/list.hpp"
+#include "../core/types/map.hpp"
+#include "../core/types/set.hpp"
+#include "../core/types/struct_unwrap.hpp"
+#include "../core/types/tuple.hpp"
+#include "../core/types/variant.hpp"
+#include "../core/types/vector.hpp"
 
 NEKO_USE_NAMESPACE
 
@@ -34,7 +40,6 @@ TEST(PrivateInvoidParams, RefTest) {
     p.setField("b", 5.0);
     p.setField("c", 6);
     ReflectionSerializer refs;
-    refs.start();
     bool ret       = ts.deserialize(refs);
     auto refObject = refs.getObject();
     const int a    = 1;

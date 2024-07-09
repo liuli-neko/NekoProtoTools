@@ -7,7 +7,7 @@ NEKO_BEGIN_NAMESPACE
 
 template <typename Serializer, typename T, std::size_t N>
 inline bool save(Serializer& sa, const std::array<T, N>& value) {
-    auto ret = sa.startArray(value.size());
+    auto ret = sa.startArray(N);
     for (const auto& v : value)
         ret = sa(v) && ret;
     ret = sa.endArray() && ret;

@@ -32,8 +32,8 @@ public:
     PrintSerializer(PrintSerializer&& other) NEKO_NOEXCEPT : OutputSerializer<PrintSerializer>(this),
                                                              mBuffer(other.mBuffer) {}
     template <typename T>
-    inline bool saveValue(SizeTag<T> const& size) {
-        mBuffer << "[size : " << size << "]";
+    inline bool saveValue(const SizeTag<T>& size) {
+        mBuffer << "[size : " << size.size << "]";
         return true;
     }
     inline bool saveValue(const int8_t value) {
@@ -93,14 +93,29 @@ public:
         mBuffer << value << ", ";
         return true;
     }
-#endif
     template <typename T>
     inline bool saveValue(const NameValuePair<T>& value) {
-        mBuffer << NEKO_STRING_VIEW{value.name, value.name_len} << " = ";
+        mBuffer << NEKO_STRING_VIEW{value.name, value.nameLen} << " = ";
+        if constexpr (traits::is_optional<T>::value) {
+            if (value.value.has_value()) {
+                return this->operator()(value.value.value());
+            } else {
+                mBuffer << "null";
+                return true;
+            }
+        } else {
+            return this->operator()(value.value);
+        }
+    }
+#else
+    template <typename T>
+    inline bool saveValue(const NameValuePair<T>& value) {
+        mBuffer << NEKO_STRING_VIEW{value.name, value.nameLen} << " = ";
         return this->operator()(value.value);
     }
+#endif
     // as serializer(makeSizeTag(size));
-    bool startArray(const std::size_t size) {
+    bool startArray(const std::size_t) {
         mBuffer << "[";
         return true;
     }
@@ -108,7 +123,7 @@ public:
         mBuffer << "], ";
         return true;
     }
-    bool startObject() {
+    bool startObject(const std::size_t) {
         mBuffer << "{";
         return true;
     }

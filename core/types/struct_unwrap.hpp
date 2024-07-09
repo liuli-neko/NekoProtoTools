@@ -185,9 +185,6 @@ struct is_std_array<std::array<T, N>> : std::true_type {};
 template <typename T>
 constexpr bool can_unwrap_v = std::is_aggregate_v<std::remove_cv_t<T>> && !is_std_array<T>::value;
 
-template <typename T>
-constexpr bool can_serialize_v = can_serialize<T>::value;
-
 /**
  * @brief Convert the struct reference to tuple
  *
@@ -226,8 +223,8 @@ inline bool load(SerializerT& sa, T& value) {
     uint32_t s;
     sa(makeSizeTag(s));
     if (s != std::tuple_size<decltype(detail::unwrap_struct(std::declval<T&>()))>::value) {
-        NEKO_LOG_ERROR("size mismatch: {} != {}", s,
-                       std::tuple_size<decltype(detail::unwrap_struct(std::declval<T>()))>::value);
+        NEKO_LOG_ERROR("struct size mismatch: json object size {} != struct size {}", s,
+                       std::tuple_size<decltype(detail::unwrap_struct(std::declval<T&>()))>::value);
         return false;
     }
     return detail::unfold_unwrap(sa, detail::unwrap_struct(value));
