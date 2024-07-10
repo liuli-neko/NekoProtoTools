@@ -329,7 +329,7 @@ inline detail::ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionOb
         return mReflectionSerializer->getObject();
     }
     mReflectionSerializer.reset(new detail::ReflectionSerializer());
-    bool ret = mData->deserialize(*mReflectionSerializer);
+    bool ret = mData->serialize(*mReflectionSerializer);
     NEKO_ASSERT(ret, "{} get reflection object error", kProtoName);
     NEKO_ASSERT(mReflectionSerializer->getObject() != nullptr, "mReflectionSerializer->getObject() is nullptr");
     return mReflectionSerializer->getObject();
@@ -352,7 +352,7 @@ bool ProtoBase<ProtoT, SerializerT>::Deserialize(const std::vector<char>& data, 
     if (!serializer) {
         return false;
     }
-    bool ret = proto.deserialize(serializer);
+    bool ret = proto.serialize(serializer);
     if (!ret) {
         NEKO_LOG_ERROR("{} deserialize error", kProtoName);
         return false;

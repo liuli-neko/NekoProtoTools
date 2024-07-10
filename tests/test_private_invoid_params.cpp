@@ -40,7 +40,7 @@ TEST(PrivateInvoidParams, RefTest) {
     p.setField("b", 5.0);
     p.setField("c", 6);
     detail::ReflectionSerializer refs;
-    bool ret       = ts.deserialize(refs);
+    bool ret       = ts.serialize(refs);
     auto refObject = refs.getObject();
     const int a    = 1;
     refObject->bindField("test_a", &a);

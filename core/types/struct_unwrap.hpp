@@ -204,10 +204,10 @@ static bool unfold_unwrap(SerializerT& sa, std::tuple<Args...>&& tp) {
 }
 } // namespace detail
 
-template <
-    typename SerializerT, typename T,
-    traits::enable_if_t<detail::can_unwrap_v<T>, !traits::has_method_const_save<T, SerializerT>::value,
-                        !traits::has_method_const_serialize<T, SerializerT>::value> = traits::default_value_for_enable>
+template <typename SerializerT, typename T,
+          traits::enable_if_t<detail::can_unwrap_v<T>, !traits::has_method_const_save<T, SerializerT>::value,
+                              !traits::has_method_const_serialize<T, SerializerT>::value,
+                              !traits::has_method_serialize<T, SerializerT>::value> = traits::default_value_for_enable>
 inline bool save(SerializerT& sa, const T& value) {
     sa.startArray(std::tuple_size<decltype(detail::unwrap_struct(std::declval<T&>()))>::value);
     auto ret = detail::unfold_unwrap(sa, detail::unwrap_struct(value));
@@ -215,10 +215,10 @@ inline bool save(SerializerT& sa, const T& value) {
     return ret;
 }
 
-template <
-    typename SerializerT, typename T,
-    traits::enable_if_t<detail::can_unwrap_v<T>, !traits::has_method_load<T, SerializerT>::value,
-                        !traits::has_method_deserialize<T, SerializerT>::value> = traits::default_value_for_enable>
+template <typename SerializerT, typename T,
+          traits::enable_if_t<detail::can_unwrap_v<T>, !traits::has_method_load<T, SerializerT>::value,
+                              !traits::has_method_deserialize<T, SerializerT>::value,
+                              !traits::has_method_serialize<T, SerializerT>::value> = traits::default_value_for_enable>
 inline bool load(SerializerT& sa, T& value) {
     uint32_t s;
     sa(makeSizeTag(s));

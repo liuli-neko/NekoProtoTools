@@ -47,15 +47,6 @@ T& dereference(T* ptr) NEKO_NOEXCEPT {
     return *ptr;
 }
 
-template <typename T, class enable = void>
-struct can_be_serializable : std::false_type {};
-template <typename T>
-struct can_be_serializable<
-    T, typename std::enable_if<std::is_same<
-           decltype(std::declval<T>().serialize(std::declval<detail::SerializableTraitTest&>())),
-           decltype(std::declval<T>().deserialize(std::declval<detail::SerializableTraitTest&>()))>::value>::type>
-    : std::true_type {};
-
 static const detail::default_type default_value_for_enable = {};
 template <bool... Conditions>
 using enable_if_t = typename detail::enable_if<Conditions...>::type;
@@ -194,6 +185,24 @@ struct is_optional<const std::optional<T>, void> : std::true_type {
     using value_type = T;
 };
 #endif
+
+template <typename T, typename SerializerT = detail::SerializableTraitTest, class enable = void>
+struct can_be_serializable : std::false_type {};
+
+template <typename T>
+struct can_be_serializable<
+    T, detail::SerializableTraitTest,
+    typename std::enable_if<std::is_same<
+        decltype(std::declval<T>().serialize(std::declval<detail::SerializableTraitTest&>())),
+        decltype(std::declval<T>().deserialize(std::declval<detail::SerializableTraitTest&>()))>::value>::type>
+    : std::true_type {};
+
+template <typename T, typename SerializerT>
+
+struct can_be_serializable<T, SerializerT,
+                           typename std::enable_if<has_method_const_serialize<T, SerializerT>::value &&
+                                                   has_method_serialize<T, SerializerT>::value>::type>
+    : std::true_type {};
 
 } // namespace traits
 
