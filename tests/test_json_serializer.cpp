@@ -200,7 +200,7 @@ TEST_F(JsonSerializerTest, Struct) {
 #if NEKO_CPP_PLUS >= 17
     std::get<1>(testp.l.a).c = TestA{1221, "this is a test for optional"};
 #endif
-    output(makeNameValuePair<const TestP&>("a", testp));
+    output(makeNameValuePair("a", testp));
     output.end();
 #if NEKO_CPP_PLUS >= 17
     const char* answer =

@@ -78,9 +78,9 @@ target("tests")
 target_end()
 
 
-target("proto_cpp17")
+target("proto_cpp14")
     set_kind("binary")
-    set_languages("c++17")
+    set_languages("c++14")
     add_defines("NEKO_PROTO_STATIC")
     add_packages("rapidjson", "spdlog", "gtest")
     add_tests("proto_cpp17")
