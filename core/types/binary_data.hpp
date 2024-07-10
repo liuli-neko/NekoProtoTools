@@ -1,5 +1,5 @@
 /**
- * @file json_serializer_binary.hpp
+ * @file binary_data.hpp
  * @author llhsdmd (llhsdmd@gmail.com)
  * @brief
  * @version 0.1
@@ -10,7 +10,7 @@
  */
 #pragma once
 
-#include "json_serializer.hpp"
+#include "../json_serializer.hpp"
 
 #include <string>
 #include <vector>
@@ -142,21 +142,46 @@ struct Base64Covert {
 const char Base64Covert::Table[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 #endif
 /// ===================end base 64=========================
-template <typename WriterT, typename ValueT, typename T>
-struct JsonConvert<WriterT, ValueT, T,
-                   typename std::enable_if<!std::is_same<typename T::SerializerType, JsonSerializer>::value>::type> {
-    static bool toJsonValue(WriterT& writer, const T& value) {
-        auto data = Base64Covert::Encode(value.toData());
-        return writer.String(data.data(), data.size(), true);
-    }
-    static bool fromJsonValue(T* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (!value.IsString()) {
-            return false;
-        }
-        dst->fromData(Base64Covert::Decode(value.GetString(), value.GetStringLength()));
-        return true;
-    }
+
+template <class T>
+struct BinaryData {
+private:
+    // Store a reference if passed an lvalue reference, otherwise
+    // make a copy of the data
+    using Type = typename std::conditional<std::is_lvalue_reference<T>::value, T, typename std::decay<T>::type>::type;
+
+public:
+    void* data;
+    Type size;
+
+    // for InputSerializer, please ensure that the remaining valid space of the data block is greater than or equal to
+    // the length of the obtained data, and the size value is not used in the obtained data.
+    // for OutputSerializer, while write data of size to JSON
+    BinaryData(void* data, Type size) : data(data), size(size) {}
+    BinaryData(void* data) : data(data), size(0) {}
 };
+
+template <typename Serializer, typename T>
+inline bool save(Serializer& sa, const BinaryData<T>& value) {
+    std::vector<uint8_t> buf;
+    Base64Covert::Encode(reinterpret_cast<const uint8_t*>(value.data), value.size, buf);
+    buf.push_back('\0');
+    return sa(reinterpret_cast<const char*>(buf.data()));
+}
+
+template <typename Serializer, typename T>
+inline bool load(Serializer& sa, BinaryData<T>& value) {
+    std::string sv;
+    if (!sa(sv)) {
+        return false;
+    }
+    std::vector<uint8_t> buf;
+    auto ret = Base64Covert::Decode(reinterpret_cast<const uint8_t*>(sv.data()), sv.size(), buf);
+    memcpy(value.data, buf.data(), buf.size());
+    return ret;
+}
+
+template <typename T>
+struct is_minimal_serializable<BinaryData<T>, void> : std::true_type {};
 
 NEKO_END_NAMESPACE

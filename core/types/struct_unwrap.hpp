@@ -1,26 +1,26 @@
 /**
- * @file json_serializer_struct.hpp
+ * @file struct_unwrap.hpp
  * @author llhsdmd (llhsdmd@gmail.com)
  * @brief
  * @version 0.1
  * @date 2024-06-18
  *
- * @copyright Copyright (c) 2024
+ * @copyright Copyright (c) 2024 llhsdmd BusyStudent
  *
  */
 #pragma once
-
 #include <cstring>
 
-#include "json_serializer.hpp"
-#include "private/global.hpp"
-#include "serializer_base.hpp"
+#include "../json_serializer.hpp"
+#include "../private/global.hpp"
+#include "../private/helpers.hpp"
+#include "../serializer_base.hpp"
 
+#if NEKO_CPP_PLUS >= 17
 NEKO_BEGIN_NAMESPACE
 
-#if __cplusplus >= 201703L || _MSVC_LANG > 201402L
 /// ====================== struct to array =====================
-namespace {
+namespace detail {
 template <size_t N>
 struct size {
     static constexpr auto value = N;
@@ -185,9 +185,6 @@ struct is_std_array<std::array<T, N>> : std::true_type {};
 template <typename T>
 constexpr bool can_unwrap_v = std::is_aggregate_v<std::remove_cv_t<T>> && !is_std_array<T>::value;
 
-template <typename T>
-constexpr bool can_serialize_v = can_serialize<T>::value;
-
 /**
  * @brief Convert the struct reference to tuple
  *
@@ -200,77 +197,39 @@ constexpr auto unwrap_struct(T& data) noexcept {
     static_assert(can_unwrap_v<T>, "The struct must be aggregate");
     return unwrap_struct_impl(data, size<tuple_size_v<T>>{});
 }
-} // namespace
 
-template <typename WriterT, typename ValueT, typename T>
-struct JsonConvert<WriterT, ValueT, T, std::enable_if_t<can_unwrap_v<T> && !can_serialize_v<T>>> {
-    template <typename U>
-    static void serializeTupleImpl(bool& ret, WriterT& writer, U& value) {
-        using Type = std::remove_reference_t<std::remove_cv_t<U>>;
-        ret        = JsonConvert<WriterT, ValueT, Type>::toJsonValue(writer, value) && ret;
-    }
-    template <typename... Args>
-    static bool serializeTupleTo(WriterT& writer, const std::tuple<Args...>& tp) {
-        bool ret = true;
-        std::apply([&](Args&&... args) { ((serializeTupleImpl(ret, writer, args)), ...); }, tp);
-        return ret;
-    }
-    static bool toJsonValue(WriterT& writer, const T& value) {
-        auto ret = writer.StartArray();
-        ret      = serializeTupleTo(writer, unwrap_struct(value)) && ret;
-        ret      = writer.EndArray() && ret;
-        return ret;
-    }
+template <typename SerializerT, typename... Args>
+static bool unfold_unwrap(SerializerT& sa, std::tuple<Args...>&& tp) {
+    return std::apply([&](Args&&... args) { return sa(args...); }, std::forward<std::tuple<Args...>>(tp));
+}
+} // namespace detail
 
-    template <typename U>
-    static void deserializeTupleImpl(const ValueT& value, U& tp) {
-        using Type = std::remove_reference_t<std::remove_cv_t<U>>;
-        JsonConvert<WriterT, ValueT, Type>::fromJsonValue(&tp, value);
+template <
+    typename SerializerT, typename T,
+    traits::enable_if_t<detail::can_unwrap_v<T>, !traits::has_method_const_save<T, SerializerT>::value,
+                        !traits::has_method_const_serialize<T, SerializerT>::value> = traits::default_value_for_enable>
+inline bool save(SerializerT& sa, const T& value) {
+    sa.startArray(std::tuple_size<decltype(detail::unwrap_struct(std::declval<T&>()))>::value);
+    auto ret = detail::unfold_unwrap(sa, detail::unwrap_struct(value));
+    sa.endArray();
+    return ret;
+}
+
+template <
+    typename SerializerT, typename T,
+    traits::enable_if_t<detail::can_unwrap_v<T>, !traits::has_method_load<T, SerializerT>::value,
+                        !traits::has_method_deserialize<T, SerializerT>::value> = traits::default_value_for_enable>
+inline bool load(SerializerT& sa, T& value) {
+    uint32_t s;
+    sa(makeSizeTag(s));
+    if (s != std::tuple_size<decltype(detail::unwrap_struct(std::declval<T&>()))>::value) {
+        NEKO_LOG_ERROR("struct size mismatch: json object size {} != struct size {}", s,
+                       std::tuple_size<decltype(detail::unwrap_struct(std::declval<T&>()))>::value);
+        return false;
     }
-    template <typename... Args>
-    static void deserializeTupleFrom(const ValueT& value, const std::tuple<Args...>& tp) {
-        int index = 0;
-        std::apply([&](Args&&... args) { ((deserializeTupleImpl(value[index++], args)), ...); }, tp);
-    }
-    static bool fromJsonValue(T* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (!value.IsArray()) {
-            return false;
-        }
-        if (value.Size() != tuple_size_v<T>) {
-            return false;
-        }
-        deserializeTupleFrom(value, unwrap_struct(*dst));
-        return true;
-    }
-};
-#if NEKO_SERIALIZABLE_TO_STRING_ENABLE == 1
-template <typename T>
-struct FormatStringCovert<T, std::enable_if_t<!can_serialize_v<T> && can_unwrap_v<T>>> {
-    template <typename U>
-    static void serializeTupleImpl(std::string& ret, U& value) {
-        using Type = std::remove_reference_t<std::remove_cv_t<U>>;
-        ret += FormatStringCovert<Type>::toString(nullptr, 0, value) + ", ";
-    }
-    template <typename... Args>
-    static std::string serializeTupleTo(const std::tuple<Args...>& tp) {
-        std::string ret;
-        std::apply([&](Args&&... args) { ((serializeTupleImpl(ret, args)), ...); }, tp);
-        return ret;
-    }
-    static std::string toString(const char* name, const size_t len, const T& value) {
-        std::string ret;
-        if (len > 0)
-            ret = std::string(name, len) + std::string(" = ") + std::string(_class_name<T>());
-        ret += std::string("{") + serializeTupleTo(unwrap_struct(value));
-        ret.pop_back();
-        ret.back() = '}';
-        return ret;
-    }
-};
-#endif
-/// ====================== end =================================
-#else
-#endif
+    return detail::unfold_unwrap(sa, detail::unwrap_struct(value));
+}
 
 NEKO_END_NAMESPACE
+/// ====================== end =================================
+#endif

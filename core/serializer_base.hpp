@@ -31,12 +31,11 @@
  *     obj.name = "Alice";
  *     obj.age = 18;
  *     obj.address = "Zh";
- *
- *     JsonSerializer serializer;
  *     std::vector<char> data;
- *     serializer.startSerialize(&data);
- *     obj.serialize(serializer);
- *     serializer.endSerialize();
+ *     {
+ *          JsonSerializer::OutputSerializer out(data);
+ *          out(obj);
+ *     }
  *     data.push_back(0);
  *     std::cout << data.data() << std::endl;
  *
@@ -60,22 +59,22 @@
 #include <vector>
 
 #include "private/global.hpp"
+#include "private/helpers.hpp"
 
 NEKO_BEGIN_NAMESPACE
-
 namespace {
 #if NEKO_CPP_PLUS >= 17
 template <size_t N, typename SerializerT, typename TupleT, std::size_t... Indices>
-inline bool unfold_function_imp1(SerializerT& serializer, const std::array<std::string_view, N>& names,
-                                 const TupleT& value, std::index_sequence<Indices...>) NEKO_NOEXCEPT {
-    return ((serializer.get(names[Indices].data(), names[Indices].size(), std::get<Indices>(value)) && true) + ...) ==
-           N;
+inline bool unfold_function_imp1(SerializerT& serializer, const std::array<std::string_view, N>& names, TupleT&& value,
+                                 std::index_sequence<Indices...>) NEKO_NOEXCEPT {
+    return ((serializer(makeNameValuePair(names[Indices], traits::dereference(std::get<Indices>(value)))) && true) +
+            ...) == N;
 }
+
 template <size_t N, typename SerializerT, typename TupleT, std::size_t... Indices>
 inline bool unfold_function_imp2(SerializerT& serializer, const std::array<std::string_view, N>& names,
                                  const TupleT& value, std::index_sequence<Indices...>) NEKO_NOEXCEPT {
-    return ((serializer.insert(names[Indices].data(), names[Indices].size(), std::get<Indices>(value)) && true) +
-            ...) == N;
+    return ((serializer(makeNameValuePair(names[Indices], std::get<Indices>(value))) && true) + ...) == N;
 }
 
 inline constexpr int _members_size(std::string_view names) NEKO_NOEXCEPT {
@@ -121,12 +120,14 @@ inline bool _unfold_function1(SerializerT& serializer, const std::array<std::str
     return unfold_function_imp1<N, SerializerT>(serializer, namesVec, std::make_tuple((&args)...),
                                                 std::index_sequence_for<Args...>());
 }
+
 template <int N, typename SerializerT, typename... Args>
 inline bool _unfold_function2(SerializerT& serializer, const std::array<std::string_view, N>& namesVec,
                               const Args&... args) NEKO_NOEXCEPT {
     return unfold_function_imp2<N, SerializerT>(serializer, namesVec, std::make_tuple(args...),
                                                 std::index_sequence_for<Args...>());
 }
+
 #else
 
 inline std::vector<std::pair<size_t, size_t>> _parse_names(const char* names) NEKO_NOEXCEPT {
@@ -154,7 +155,7 @@ inline bool unfold_function_imp1(SerializerT& serializer, const char* names,
                                  const std::vector<std::pair<size_t, size_t>>& namesVec, int i,
                                  const T& value) NEKO_NOEXCEPT {
     NEKO_ASSERT(i < namesVec.size(), "unfoldFunctionImp: index out of range");
-    return serializer.insert(names + namesVec[i].first, namesVec[i].second, value);
+    return serializer(makeNameValuePair(names + namesVec[i].first, namesVec[i].second, value));
 }
 
 template <typename SerializerT, typename T, typename... Args>
@@ -163,7 +164,7 @@ inline bool unfold_function_imp1(SerializerT& serializer, const char* names,
                                  const Args&... args) NEKO_NOEXCEPT {
     bool ret = 0;
     NEKO_ASSERT(i < namesVec.size(), "unfoldFunctionImp: index out of range");
-    ret = serializer.insert(names + namesVec[i].first, namesVec[i].second, value);
+    ret = serializer(makeNameValuePair(names + namesVec[i].first, namesVec[i].second, value));
 
     return unfold_function_imp1<SerializerT>(serializer, names, namesVec, i + 1, args...) && ret;
 }
@@ -179,7 +180,7 @@ inline bool unfold_function_imp2(SerializerT& serializer, const char* names,
                                  const std::vector<std::pair<size_t, size_t>>& namesVec, int i,
                                  T& value) NEKO_NOEXCEPT {
     NEKO_ASSERT(i < namesVec.size(), "unfoldFunctionImp: index out of range");
-    return serializer.get(names + namesVec[i].first, namesVec[i].second, &value);
+    return serializer(makeNameValuePair(names + namesVec[i].first, namesVec[i].second, value));
 }
 
 template <typename SerializerT, typename T, typename... Args>
@@ -188,7 +189,7 @@ inline bool unfold_function_imp2(SerializerT& serializer, const char* names,
                                  Args&... args) NEKO_NOEXCEPT {
     bool ret = 0;
     NEKO_ASSERT(i < namesVec.size(), "unfoldFunctionImp: index out of range");
-    ret = serializer.get(names + namesVec[i].first, namesVec[i].second, &value);
+    ret = serializer(makeNameValuePair(names + namesVec[i].first, namesVec[i].second, value));
 
     return unfold_function_imp2<SerializerT>(serializer, names, namesVec, i + 1, args...) && ret;
 }
@@ -199,32 +200,35 @@ inline bool _unfold_function2(SerializerT& serializer, const char* names,
     return unfold_function_imp2<SerializerT>(serializer, names, namesVec, i, args...);
 }
 #endif
-
-struct _SerializableCheckHelper {
-    template <typename T>
-    bool insert(const char* name, const size_t len, const T& value) NEKO_NOEXCEPT {
-        return true;
-    }
-    template <typename T>
-    bool get(const char* name, const size_t len, T* value) NEKO_NOEXCEPT {
-        return true;
-    }
-};
-template <typename T, class enable = void>
-struct can_serialize : std::false_type {};
-
-template <typename T>
-struct can_serialize<
-    T, typename std::enable_if<std::is_same<
-           decltype(std::declval<T>().serialize(std::declval<_SerializableCheckHelper&>())),
-           decltype(std::declval<T>().deserialize(std::declval<_SerializableCheckHelper&>()))>::value>::type>
-    : std::true_type {};
-
 } // namespace
 
 NEKO_END_NAMESPACE
 
 #if NEKO_CPP_PLUS < 17
+/**
+ * @brief generate serialize and deserialize functions for a class.
+ *
+ * Give all member variables that require serialization and deserialization support as parameters to the macro,
+ * this macro will generate the serialize and deserialize functions for the class to process all given members.
+ *
+ * @param ...Args
+ * member variables that require serialization and deserialization support.
+ *
+ * @note
+ * Don't use this macro duplicate times. because it will generate same functions for class.
+ * This function cannot directly serialize members and needs to be used in conjunction with supported serializers.
+ * Please refer to the default JSON serializer implementation for the implementation specifications of the serializer.
+ *
+ * @example
+ * class MyClass {
+ *  ...
+ *  NEKO_SERIALIZER(a, b, c)
+ * private:
+ *  int a;
+ *  std::string b;
+ *  std::vector<int> c;
+ * };
+ */
 #define NEKO_SERIALIZER(...)                                                                                           \
 public:                                                                                                                \
     template <typename SerializerT>                                                                                    \

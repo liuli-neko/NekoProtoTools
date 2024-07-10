@@ -1,15 +1,44 @@
+#include <cereal/archives/json.hpp>
+#include <cereal/types/map.hpp>
+#include <cereal/types/memory.hpp>
+#include <cereal/types/optional.hpp>
+#include <cereal/types/string.hpp>
+#include <cereal/types/tuple.hpp>
+#include <cereal/types/utility.hpp>
+#include <cereal/types/vector.hpp>
 #include <gtest/gtest.h>
-#include <string>
+#include <iostream>
 
-#include "../core/json_serializer.hpp"
-#include "../core/proto_base.hpp"
-#include "../core/serializer_base.hpp"
-#include "../core/to_string.hpp"
-#include "../core/types/map.hpp"
-#include "../core/types/vector.hpp"
+#include "../core/private/log.hpp"
+namespace cereal {
+//! Saving for std::map<std::string, std::string>
+template <class Archive, class C, class A>
+inline void save(Archive& ar, std::map<C, A> const& map) {
+    for (const auto& i : map)
+        ar(cereal::make_nvp(i.first, i.second));
+}
 
-NEKO_USE_NAMESPACE
-struct TestStruct1 {
+//! Loading for std::map<std::string, std::string>
+template <class Archive, class C, class A>
+inline void load(Archive& ar, std::map<C, A>& map) {
+    map.clear();
+
+    auto hint = map.begin();
+    while (true) {
+        const auto namePtr = ar.getNodeName();
+
+        if (!namePtr)
+            break;
+
+        C key = namePtr;
+        A value;
+        ar(value);
+        hint = map.emplace_hint(hint, std::move(key), std::move(value));
+    }
+}
+} // namespace cereal
+
+struct CTestStruct1 {
     std::map<std::string, int> f0  = {};
     std::string f1                 = {};
     int f2                         = {};
@@ -88,17 +117,29 @@ struct TestStruct1 {
     double f75                     = {};
     std::string f76                = {};
     std::string f77                = {};
-    NEKO_SERIALIZER(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21,
-                    f22, f23, f24, f25, f26, f27, f28, f29, f30, f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41,
-                    f42, f43, f44, f45, f46, f47, f48, f49, f50, f51, f52, f53, f54, f55, f56, f57, f58, f59, f60, f61,
-                    f62, f63, f64, f65, f66, f67, f68, f69, f70, f71, f72, f73, f74, f75, f76, f77)
-    NEKO_DECLARE_PROTOCOL(TestStruct1, JsonSerializer)
+
+    template <typename Archive>
+    void serialize(Archive& ar) {
+        ar(CEREAL_NVP(f0), CEREAL_NVP(f1), CEREAL_NVP(f2), CEREAL_NVP(f3), CEREAL_NVP(f4), CEREAL_NVP(f5),
+           CEREAL_NVP(f6), CEREAL_NVP(f7), CEREAL_NVP(f8), CEREAL_NVP(f9), CEREAL_NVP(f10), CEREAL_NVP(f11),
+           CEREAL_NVP(f12), CEREAL_NVP(f13), CEREAL_NVP(f14), CEREAL_NVP(f15), CEREAL_NVP(f16), CEREAL_NVP(f17),
+           CEREAL_NVP(f18), CEREAL_NVP(f19), CEREAL_NVP(f20), CEREAL_NVP(f21), CEREAL_NVP(f22), CEREAL_NVP(f23),
+           CEREAL_NVP(f24), CEREAL_NVP(f25), CEREAL_NVP(f26), CEREAL_NVP(f27), CEREAL_NVP(f28), CEREAL_NVP(f29),
+           CEREAL_NVP(f30), CEREAL_NVP(f31), CEREAL_NVP(f32), CEREAL_NVP(f33), CEREAL_NVP(f34), CEREAL_NVP(f35),
+           CEREAL_NVP(f36), CEREAL_NVP(f37), CEREAL_NVP(f38), CEREAL_NVP(f39), CEREAL_NVP(f40), CEREAL_NVP(f41),
+           CEREAL_NVP(f42), CEREAL_NVP(f43), CEREAL_NVP(f44), CEREAL_NVP(f45), CEREAL_NVP(f46), CEREAL_NVP(f47),
+           CEREAL_NVP(f48), CEREAL_NVP(f49), CEREAL_NVP(f50), CEREAL_NVP(f51), CEREAL_NVP(f52), CEREAL_NVP(f53),
+           CEREAL_NVP(f54), CEREAL_NVP(f55), CEREAL_NVP(f56), CEREAL_NVP(f57), CEREAL_NVP(f58), CEREAL_NVP(f59),
+           CEREAL_NVP(f60), CEREAL_NVP(f61), CEREAL_NVP(f62), CEREAL_NVP(f63), CEREAL_NVP(f64), CEREAL_NVP(f65),
+           CEREAL_NVP(f66), CEREAL_NVP(f67), CEREAL_NVP(f68), CEREAL_NVP(f69), CEREAL_NVP(f70), CEREAL_NVP(f71),
+           CEREAL_NVP(f72), CEREAL_NVP(f73), CEREAL_NVP(f74), CEREAL_NVP(f75), CEREAL_NVP(f76), CEREAL_NVP(f77));
+    }
 };
 
-struct TestStruct2 {
+struct CTestStruct2 {
     double f0                      = {};
     std::vector<int> f1            = {};
-    TestStruct1 f2                 = {};
+    CTestStruct1 f2                = {};
     double f3                      = {};
     bool f4                        = {};
     int f5                         = {};
@@ -106,18 +147,18 @@ struct TestStruct2 {
     std::vector<int> f7            = {};
     bool f8                        = {};
     std::string f9                 = {};
-    TestStruct1 f10                = {};
-    TestStruct1 f11                = {};
+    CTestStruct1 f10               = {};
+    CTestStruct1 f11               = {};
     bool f12                       = {};
     double f13                     = {};
     std::map<std::string, int> f14 = {};
     bool f15                       = {};
     bool f16                       = {};
     bool f17                       = {};
-    TestStruct1 f18                = {};
+    CTestStruct1 f18               = {};
     std::string f19                = {};
     bool f20                       = {};
-    TestStruct1 f21                = {};
+    CTestStruct1 f21               = {};
     std::map<std::string, int> f22 = {};
     bool f23                       = {};
     double f24                     = {};
@@ -130,23 +171,32 @@ struct TestStruct2 {
     std::map<std::string, int> f31 = {};
     std::map<std::string, int> f32 = {};
     int f33                        = {};
-    TestStruct1 f34                = {};
+    CTestStruct1 f34               = {};
     std::vector<int> f35           = {};
     double f36                     = {};
     double f37                     = {};
     std::string f38                = {};
-    NEKO_SERIALIZER(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21,
-                    f22, f23, f24, f25, f26, f27, f28, f29, f30, f31, f32, f33, f34, f35, f36, f37, f38)
-    NEKO_DECLARE_PROTOCOL(TestStruct2, JsonSerializer)
+
+    template <typename Archive>
+    void serialize(Archive& ar) {
+
+        ar(CEREAL_NVP(f0), CEREAL_NVP(f1), CEREAL_NVP(f2), CEREAL_NVP(f3), CEREAL_NVP(f4), CEREAL_NVP(f5),
+           CEREAL_NVP(f6), CEREAL_NVP(f7), CEREAL_NVP(f8), CEREAL_NVP(f9), CEREAL_NVP(f10), CEREAL_NVP(f11),
+           CEREAL_NVP(f12), CEREAL_NVP(f13), CEREAL_NVP(f14), CEREAL_NVP(f15), CEREAL_NVP(f16), CEREAL_NVP(f17),
+           CEREAL_NVP(f18), CEREAL_NVP(f19), CEREAL_NVP(f20), CEREAL_NVP(f21), CEREAL_NVP(f22), CEREAL_NVP(f23),
+           CEREAL_NVP(f24), CEREAL_NVP(f25), CEREAL_NVP(f26), CEREAL_NVP(f27), CEREAL_NVP(f28), CEREAL_NVP(f29),
+           CEREAL_NVP(f30), CEREAL_NVP(f31), CEREAL_NVP(f32), CEREAL_NVP(f33), CEREAL_NVP(f34), CEREAL_NVP(f35),
+           CEREAL_NVP(f36), CEREAL_NVP(f37), CEREAL_NVP(f38));
+    }
 };
 
-struct TestStruct3 {
+struct CTestStruct3 {
     bool f0                        = {};
     std::vector<int> f1            = {};
     int f2                         = {};
-    TestStruct2 f3                 = {};
-    TestStruct2 f4                 = {};
-    TestStruct1 f5                 = {};
+    CTestStruct2 f3                = {};
+    CTestStruct2 f4                = {};
+    CTestStruct1 f5                = {};
     std::map<std::string, int> f6  = {};
     std::map<std::string, int> f7  = {};
     int f8                         = {};
@@ -160,34 +210,40 @@ struct TestStruct3 {
     std::map<std::string, int> f16 = {};
     std::map<std::string, int> f17 = {};
     bool f18                       = {};
-    TestStruct1 f19                = {};
+    CTestStruct1 f19               = {};
     std::string f20                = {};
-    TestStruct1 f21                = {};
-    NEKO_SERIALIZER(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21)
-    NEKO_DECLARE_PROTOCOL(TestStruct3, JsonSerializer)
+    CTestStruct1 f21               = {};
+
+    template <typename Archive>
+    void serialize(Archive& ar) {
+        ar(CEREAL_NVP(f0), CEREAL_NVP(f1), CEREAL_NVP(f2), CEREAL_NVP(f3), CEREAL_NVP(f4), CEREAL_NVP(f5),
+           CEREAL_NVP(f6), CEREAL_NVP(f7), CEREAL_NVP(f8), CEREAL_NVP(f9), CEREAL_NVP(f10), CEREAL_NVP(f11),
+           CEREAL_NVP(f12), CEREAL_NVP(f13), CEREAL_NVP(f14), CEREAL_NVP(f15), CEREAL_NVP(f16), CEREAL_NVP(f17),
+           CEREAL_NVP(f18), CEREAL_NVP(f19), CEREAL_NVP(f20), CEREAL_NVP(f21));
+    }
 };
 
-struct TestStruct4 {
+struct CTestStruct4 {
     std::vector<int> f0            = {};
     double f1                      = {};
     int f2                         = {};
-    TestStruct1 f3                 = {};
+    CTestStruct1 f3                = {};
     std::string f4                 = {};
     double f5                      = {};
     std::string f6                 = {};
     std::map<std::string, int> f7  = {};
-    TestStruct3 f8                 = {};
+    CTestStruct3 f8                = {};
     double f9                      = {};
     int f10                        = {};
     double f11                     = {};
-    TestStruct3 f12                = {};
+    CTestStruct3 f12               = {};
     double f13                     = {};
-    TestStruct3 f14                = {};
-    TestStruct1 f15                = {};
-    TestStruct2 f16                = {};
-    TestStruct2 f17                = {};
-    TestStruct2 f18                = {};
-    TestStruct3 f19                = {};
+    CTestStruct3 f14               = {};
+    CTestStruct1 f15               = {};
+    CTestStruct2 f16               = {};
+    CTestStruct2 f17               = {};
+    CTestStruct2 f18               = {};
+    CTestStruct3 f19               = {};
     std::vector<int> f20           = {};
     std::map<std::string, int> f21 = {};
     bool f22                       = {};
@@ -200,8 +256,8 @@ struct TestStruct4 {
     std::string f29                = {};
     int f30                        = {};
     std::map<std::string, int> f31 = {};
-    TestStruct1 f32                = {};
-    TestStruct3 f33                = {};
+    CTestStruct1 f32               = {};
+    CTestStruct3 f33               = {};
     int f34                        = {};
     bool f35                       = {};
     std::vector<int> f36           = {};
@@ -209,33 +265,43 @@ struct TestStruct4 {
     double f38                     = {};
     bool f39                       = {};
     bool f40                       = {};
-    TestStruct3 f41                = {};
+    CTestStruct3 f41               = {};
     std::vector<int> f42           = {};
-    TestStruct3 f43                = {};
+    CTestStruct3 f43               = {};
     std::map<std::string, int> f44 = {};
     bool f45                       = {};
-    TestStruct3 f46                = {};
+    CTestStruct3 f46               = {};
     std::map<std::string, int> f47 = {};
     std::map<std::string, int> f48 = {};
     std::vector<int> f49           = {};
     std::vector<int> f50           = {};
     std::map<std::string, int> f51 = {};
     std::string f52                = {};
-    TestStruct2 f53                = {};
-    TestStruct3 f54                = {};
+    CTestStruct2 f53               = {};
+    CTestStruct3 f54               = {};
     int f55                        = {};
     double f56                     = {};
     bool f57                       = {};
-    TestStruct3 f58                = {};
+    CTestStruct3 f58               = {};
     double f59                     = {};
     std::map<std::string, int> f60 = {};
-    TestStruct3 f61                = {};
+    CTestStruct3 f61               = {};
     std::vector<int> f62           = {};
-    NEKO_SERIALIZER(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21,
-                    f22, f23, f24, f25, f26, f27, f28, f29, f30, f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41,
-                    f42, f43, f44, f45, f46, f47, f48, f49, f50, f51, f52, f53, f54, f55, f56, f57, f58, f59, f60, f61,
-                    f62)
-    NEKO_DECLARE_PROTOCOL(TestStruct4, JsonSerializer)
+
+    template <typename Archive>
+    void serialize(Archive& ar) {
+        ar(CEREAL_NVP(f0), CEREAL_NVP(f1), CEREAL_NVP(f2), CEREAL_NVP(f3), CEREAL_NVP(f4), CEREAL_NVP(f5),
+           CEREAL_NVP(f6), CEREAL_NVP(f7), CEREAL_NVP(f8), CEREAL_NVP(f9), CEREAL_NVP(f10), CEREAL_NVP(f11),
+           CEREAL_NVP(f12), CEREAL_NVP(f13), CEREAL_NVP(f14), CEREAL_NVP(f15), CEREAL_NVP(f16), CEREAL_NVP(f17),
+           CEREAL_NVP(f18), CEREAL_NVP(f19), CEREAL_NVP(f20), CEREAL_NVP(f21), CEREAL_NVP(f22), CEREAL_NVP(f23),
+           CEREAL_NVP(f24), CEREAL_NVP(f25), CEREAL_NVP(f26), CEREAL_NVP(f27), CEREAL_NVP(f28), CEREAL_NVP(f29),
+           CEREAL_NVP(f30), CEREAL_NVP(f31), CEREAL_NVP(f32), CEREAL_NVP(f33), CEREAL_NVP(f34), CEREAL_NVP(f35),
+           CEREAL_NVP(f36), CEREAL_NVP(f37), CEREAL_NVP(f38), CEREAL_NVP(f39), CEREAL_NVP(f40), CEREAL_NVP(f41),
+           CEREAL_NVP(f42), CEREAL_NVP(f43), CEREAL_NVP(f44), CEREAL_NVP(f45), CEREAL_NVP(f46), CEREAL_NVP(f47),
+           CEREAL_NVP(f48), CEREAL_NVP(f49), CEREAL_NVP(f50), CEREAL_NVP(f51), CEREAL_NVP(f52), CEREAL_NVP(f53),
+           CEREAL_NVP(f54), CEREAL_NVP(f55), CEREAL_NVP(f56), CEREAL_NVP(f57), CEREAL_NVP(f58), CEREAL_NVP(f59),
+           CEREAL_NVP(f60), CEREAL_NVP(f61), CEREAL_NVP(f62));
+    }
 };
 
 #include "big_data_test_data_1.cpp"
@@ -248,103 +314,134 @@ struct TestStruct4 {
 #include "big_data_test_data_8.cpp"
 #include "big_data_test_data_9.cpp"
 
-std::vector<char> makeData(const char* data) { return std::vector<char>(data, data + std::strlen(data)); }
+std::string makeData(const char* data, size_t size) { return std::string(data, size); }
 
 TEST(BigProtoTest, Serializer) {
-    NEKO_LOG_INFO("Proto1 size {}", sizeof(TestStruct1));
-    NEKO_LOG_INFO("Proto1 type size {}", sizeof(TestStruct1::ProtoType));
+    NEKO_LOG_INFO("Proto1 size {}", sizeof(CTestStruct1));
 
-    NEKO_LOG_INFO("Proto2 size {}", sizeof(TestStruct2));
-    NEKO_LOG_INFO("Proto2 type size {}", sizeof(TestStruct2::ProtoType));
+    NEKO_LOG_INFO("Proto2 size {}", sizeof(CTestStruct2));
 
-    NEKO_LOG_INFO("Proto3 size {}", sizeof(TestStruct3));
-    NEKO_LOG_INFO("Proto3 type size {}", sizeof(TestStruct3::ProtoType));
+    NEKO_LOG_INFO("Proto3 size {}", sizeof(CTestStruct3));
 
-    NEKO_LOG_INFO("Proto4 size {}", sizeof(TestStruct4));
-    NEKO_LOG_INFO("Proto4 type size {}", sizeof(TestStruct4::ProtoType));
+    NEKO_LOG_INFO("Proto4 size {}", sizeof(CTestStruct4));
 
     // 统计解析时长
-    auto data  = makeData(data_1);
+    auto data  = makeData(data_1, sizeof(data_1));
     auto start = std::chrono::high_resolution_clock::now();
     auto end   = start;
-    TestStruct4 proto1;
-    proto1.makeProto().formData(data);
+    CTestStruct4 proto1;
+    {
+        std::istringstream is(data);
+        cereal::JSONInputArchive ia(is);
+        proto1.serialize(ia);
+    }
     NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
                                               std::chrono::high_resolution_clock::now() - end)
                                               .count());
-    NEKO_LOG_INFO("Serializer f0 size: {}", proto1.f0.size());
+    NEKO_LOG_INFO("Serializer data: {}", proto1.f0.size());
+    data = makeData(data_2, sizeof(data_2));
     end  = std::chrono::high_resolution_clock::now();
-    data = makeData(data_2);
-    TestStruct4 proto2;
-    proto2.makeProto().formData(data);
+    CTestStruct4 proto2;
+    {
+        std::istringstream is(data);
+        cereal::JSONInputArchive ia(is);
+        proto2.serialize(ia);
+    }
     NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
                                               std::chrono::high_resolution_clock::now() - end)
                                               .count());
-    NEKO_LOG_INFO("Serializer f0 size: {}", proto2.f0.size());
-    end = std::chrono::high_resolution_clock::now();
+    NEKO_LOG_INFO("Serializer data: {}", proto2.f0.size());
+    data = makeData(data_3, sizeof(data_3));
+    end  = std::chrono::high_resolution_clock::now();
 #ifdef __GNUC__
-    data = makeData(data_3);
-    TestStruct4 proto3;
-    proto3.makeProto().formData(data);
+    CTestStruct4 proto3;
+    {
+        std::istringstream is(data);
+        cereal::JSONInputArchive ia(is);
+        proto3.serialize(ia);
+    }
     NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
                                               std::chrono::high_resolution_clock::now() - end)
                                               .count());
-    NEKO_LOG_INFO("Serializer f0 size: {}", proto3.f0.size());
+    NEKO_LOG_INFO("Serializer data: {}", proto3.f0.size());
+    data = makeData(data_4, sizeof(data_4));
     end  = std::chrono::high_resolution_clock::now();
-    data = makeData(data_4);
-    TestStruct4 proto4;
-    proto4.makeProto().formData(data);
+    CTestStruct4 proto4;
+    {
+        std::istringstream is(data);
+        cereal::JSONInputArchive ia(is);
+        proto4.serialize(ia);
+    }
     NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
                                               std::chrono::high_resolution_clock::now() - end)
                                               .count());
-    NEKO_LOG_INFO("Serializer f0 size: {}", proto4.f0.size());
+    NEKO_LOG_INFO("Serializer data: {}", proto4.f0.size());
+    data = makeData(data_5, sizeof(data_5));
     end  = std::chrono::high_resolution_clock::now();
-    data = makeData(data_5);
-    TestStruct4 proto5;
-    proto5.makeProto().formData(data);
+    CTestStruct4 proto5;
+    {
+        std::istringstream is(std::string(data_5, sizeof(data_5)));
+        cereal::JSONInputArchive ia(is);
+        proto5.serialize(ia);
+    }
     NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
                                               std::chrono::high_resolution_clock::now() - end)
                                               .count());
-    NEKO_LOG_INFO("Serializer f0 size: {}", proto5.f0.size());
+    NEKO_LOG_INFO("Serializer data: {}", proto5.f0.size());
+    data = makeData(data_6, sizeof(data_6));
     end  = std::chrono::high_resolution_clock::now();
-    data = makeData(data_6);
-    TestStruct4 proto6;
-    proto6.makeProto().formData(data);
+    CTestStruct4 proto6;
+    {
+        std::istringstream is(data);
+        cereal::JSONInputArchive ia(is);
+        proto6.serialize(ia);
+    }
     NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
                                               std::chrono::high_resolution_clock::now() - end)
                                               .count());
-    NEKO_LOG_INFO("Serializer f0 size: {}", proto6.f0.size());
+    NEKO_LOG_INFO("Serializer data: {}", proto6.f0.size());
+    data = makeData(data_7, sizeof(data_7));
     end  = std::chrono::high_resolution_clock::now();
-    data = makeData(data_7);
-    TestStruct4 proto7;
-    proto7.makeProto().formData(data);
+    CTestStruct4 proto7;
+    {
+        std::istringstream is(data);
+        cereal::JSONInputArchive ia(is);
+        proto7.serialize(ia);
+    }
     NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
                                               std::chrono::high_resolution_clock::now() - end)
                                               .count());
-    NEKO_LOG_INFO("Serializer f0 size: {}", proto7.f0.size());
+    NEKO_LOG_INFO("Serializer data: {}", proto7.f0.size());
+    data = makeData(data_8, sizeof(data_8));
     end  = std::chrono::high_resolution_clock::now();
-    data = makeData(data_8);
-    TestStruct4 proto8;
-    proto8.makeProto().formData(data);
+    CTestStruct4 proto8;
+    {
+        std::istringstream is(data);
+        cereal::JSONInputArchive ia(is);
+        proto8.serialize(ia);
+    }
     NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
                                               std::chrono::high_resolution_clock::now() - end)
                                               .count());
-    NEKO_LOG_INFO("Serializer f0 size: {}", proto8.f0.size());
+    NEKO_LOG_INFO("Serializer data: {}", proto8.f0.size());
+    data = makeData(data_9, sizeof(data_9));
     end  = std::chrono::high_resolution_clock::now();
-    data = makeData(data_9);
-    TestStruct4 proto9;
-    proto9.makeProto().formData(data);
+    CTestStruct4 proto9;
+    {
+        std::istringstream is(data);
+        cereal::JSONInputArchive ia(is);
+        proto9.serialize(ia);
+    }
     NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
                                               std::chrono::high_resolution_clock::now() - end)
                                               .count());
-    NEKO_LOG_INFO("Serializer f0 size: {}", proto9.f0.size());
+    NEKO_LOG_INFO("Serializer data: {}", proto9.f0.size());
     end = std::chrono::high_resolution_clock::now();
 #endif
     NEKO_LOG_INFO("total time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count());
 }
 
 int main(int argc, char** argv) {
-    std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
     testing::InitGoogleTest(&argc, argv);
     spdlog::set_level(spdlog::level::debug);
     return RUN_ALL_TESTS();
