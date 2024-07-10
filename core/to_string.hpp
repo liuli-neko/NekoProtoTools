@@ -1,3 +1,13 @@
+/**
+ * @file to_string.hpp
+ * @author llhsdmd (llhsdmd@gmail.com)
+ * @brief
+ * @version 0.1
+ * @date 2024-07-10
+ *
+ * @copyright Copyright (c) 2024
+ *
+ */
 #pragma once
 
 #include "private/helpers.hpp"
@@ -21,118 +31,122 @@ NEKO_BEGIN_NAMESPACE
 
 class PrintSerializer : public detail::OutputSerializer<PrintSerializer> {
 public:
-    using BufferType = std::ostream;
+    using BufferType = std::string;
 
 public:
     PrintSerializer(BufferType& out) NEKO_NOEXCEPT : OutputSerializer<PrintSerializer>(this), mBuffer(out) {
-        mBuffer << "{";
+        mBuffer.push_back('{');
     }
     PrintSerializer(const PrintSerializer& other) NEKO_NOEXCEPT : OutputSerializer<PrintSerializer>(this),
                                                                   mBuffer(other.mBuffer) {}
     PrintSerializer(PrintSerializer&& other) NEKO_NOEXCEPT : OutputSerializer<PrintSerializer>(this),
                                                              mBuffer(other.mBuffer) {}
     template <typename T>
-    inline bool saveValue(const SizeTag<T>& size) {
-        mBuffer << "[size : " << size.size << "]";
+    inline bool saveValue(const SizeTag<T>& size) NEKO_NOEXCEPT {
+        mBuffer += "[size : " + std::to_string(size.size) + "]";
         return true;
     }
-    inline bool saveValue(const int8_t value) {
-        mBuffer << static_cast<int>(value) << ", ";
+    template <typename T, traits::enable_if_t<std::is_signed<T>::value, sizeof(T) <= sizeof(int64_t),
+                                              !std::is_enum<T>::value> = traits::default_value_for_enable>
+    inline bool saveValue(const T value) NEKO_NOEXCEPT {
+        mBuffer += std::to_string(static_cast<int64_t>(value)) + ", ";
         return true;
     }
-    inline bool saveValue(const uint8_t value) {
-        mBuffer << static_cast<int>(value) << ", ";
+    template <typename T, traits::enable_if_t<std::is_unsigned<T>::value, sizeof(T) <= sizeof(int64_t),
+                                              !std::is_enum<T>::value> = traits::default_value_for_enable>
+    inline bool saveValue(const T value) NEKO_NOEXCEPT {
+        mBuffer += std::to_string(static_cast<uint64_t>(value)) + ", ";
         return true;
     }
-    inline bool saveValue(const int16_t value) {
-        mBuffer << value << ", ";
+    inline bool saveValue(const float value) NEKO_NOEXCEPT {
+        std::ostringstream buffer;
+        buffer << value << ", ";
+        mBuffer += buffer.str();
         return true;
     }
-    inline bool saveValue(const uint16_t value) {
-        mBuffer << value << ", ";
+    inline bool saveValue(const double value) NEKO_NOEXCEPT {
+        std::ostringstream buffer;
+        buffer << value << ", ";
+        mBuffer += buffer.str();
         return true;
     }
-    inline bool saveValue(const int32_t value) {
-        mBuffer << value << ", ";
+    inline bool saveValue(const bool value) NEKO_NOEXCEPT {
+        mBuffer += std::string(value ? "true" : "false") + ", ";
         return true;
     }
-    inline bool saveValue(const uint32_t value) {
-        mBuffer << value << ", ";
+    inline bool saveValue(const std::string& value) NEKO_NOEXCEPT {
+        mBuffer += value + ", ";
         return true;
     }
-    inline bool saveValue(const int64_t value) {
-        mBuffer << value << ", ";
-        return true;
-    }
-    inline bool saveValue(const uint64_t value) {
-        mBuffer << value << ", ";
-        return true;
-    }
-    inline bool saveValue(const float value) {
-        mBuffer << value << ", ";
-        return true;
-    }
-    inline bool saveValue(const double value) {
-        mBuffer << value << ", ";
-        return true;
-    }
-    inline bool saveValue(const bool value) {
-        mBuffer << (value ? "true" : "false") << ", ";
-        return true;
-    }
-    inline bool saveValue(const std::string& value) {
-        mBuffer << value << ", ";
-        return true;
-    }
-    inline bool saveValue(const char* value) {
-        mBuffer << value << ", ";
+    inline bool saveValue(const char* value) NEKO_NOEXCEPT {
+        mBuffer += std::string(value) + ", ";
         return true;
     }
 #if NEKO_CPP_PLUS >= 17
-    inline bool saveValue(const std::string_view value) {
-        mBuffer << value << ", ";
+    inline bool saveValue(const std::string_view value) NEKO_NOEXCEPT {
+        mBuffer += std::string(value) + ", ";
         return true;
     }
     template <typename T>
-    inline bool saveValue(const NameValuePair<T>& value) {
-        mBuffer << NEKO_STRING_VIEW{value.name, value.nameLen} << " = ";
+    inline bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
+        mBuffer += std::string{value.name, value.nameLen} + " = ";
         if constexpr (traits::is_optional<T>::value) {
             if (value.value.has_value()) {
-                return this->operator()(value.value.value());
+                return (*this)(value.value.value());
             } else {
-                mBuffer << "null";
+                mBuffer += "null, ";
                 return true;
             }
         } else {
-            return this->operator()(value.value);
+            return (*this)(value.value);
         }
     }
 #else
     template <typename T>
-    inline bool saveValue(const NameValuePair<T>& value) {
-        mBuffer << NEKO_STRING_VIEW{value.name, value.nameLen} << " = ";
-        return this->operator()(value.value);
+    inline bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
+        mBuffer += std::string{value.name, value.nameLen} + " = ";
+        return (*this)(value.value);
     }
 #endif
     // as serializer(makeSizeTag(size));
-    bool startArray(const std::size_t) {
-        mBuffer << "[";
+    bool startArray(const std::size_t) NEKO_NOEXCEPT {
+        // if (mBuffer.size() > 0 && mBuffer.back() == ' ' && *(mBuffer.rbegin() + 1) != '=') {
+        //     mBuffer.pop_back();
+        //     mBuffer.pop_back();
+        // }
+        mBuffer += "[";
         return true;
     }
-    bool endArray() {
-        mBuffer << "], ";
+    bool endArray() NEKO_NOEXCEPT {
+        if (mBuffer.size() > 0 && mBuffer.back() == ' ' && *(mBuffer.rbegin() + 1) != '=') {
+            mBuffer.pop_back();
+            mBuffer.pop_back();
+        }
+        mBuffer += "], ";
         return true;
     }
-    bool startObject(const std::size_t) {
-        mBuffer << "{";
+    bool startObject(const std::size_t) NEKO_NOEXCEPT {
+        // if (mBuffer.size() > 0 && mBuffer.back() == ' ' && *(mBuffer.rbegin() + 1) != '=') {
+        //     mBuffer.pop_back();
+        //     mBuffer.pop_back();
+        // }
+        mBuffer += "{";
         return true;
     }
-    bool endObject() {
-        mBuffer << "}, ";
+    bool endObject() NEKO_NOEXCEPT {
+        if (mBuffer.size() > 0 && mBuffer.back() == ' ' && *(mBuffer.rbegin() + 1) != '=') {
+            mBuffer.pop_back();
+            mBuffer.pop_back();
+        }
+        mBuffer += "}, ";
         return true;
     }
-    bool end() {
-        mBuffer << "}";
+    bool end() NEKO_NOEXCEPT {
+        if (mBuffer.size() > 0 && mBuffer.back() == ' ' && *(mBuffer.rbegin() + 1) != '=') {
+            mBuffer.pop_back();
+            mBuffer.pop_back();
+        }
+        mBuffer += "}";
         return true;
     }
 
@@ -145,12 +159,12 @@ private:
 };
 
 template <typename T>
-inline std::string SerializableToString(T&& value) {
-    std::ostringstream buffer;
+inline std::string SerializableToString(T&& value) NEKO_NOEXCEPT {
+    std::string buffer;
     PrintSerializer print(buffer);
     print(value);
     print.end();
-    return buffer.str();
+    return buffer;
 };
 
 NEKO_END_NAMESPACE

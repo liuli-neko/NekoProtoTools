@@ -14,6 +14,11 @@
 
 #include "ilias_async.hpp"
 
+#ifdef NEKO_COMMUNICATION_DEBUG
+#include "../core/to_string.hpp"
+#include "../core/types/binary_data.hpp"
+#endif
+
 using namespace ILIAS_NAMESPACE;
 
 NEKO_BEGIN_NAMESPACE
@@ -288,6 +293,13 @@ ILIAS_NAMESPACE::Task<void> ByteStreamChannel::send(std::unique_ptr<NEKO_NAMESPA
     }
     sendMsg.resize(sendMsg.size() + msg.size());
     memcpy(sendMsg.data() + MessageHeader::size(), msg.data(), msg.size());
+#ifdef NEKO_COMMUNICATION_DEBUG
+    NEKO_LOG_INFO("\n========================== send ==========================\nnsend {} bytes, channel id {}, proto "
+                  "type {}, trans type {}",
+                  msgHeader.length, mChannelId, msgHeader.protoType, msgHeader.transType);
+    NEKO_LOG_INFO("send message:\n{}\n ========================== end ==========================",
+                  SerializableToString(BinaryData<uint32_t>(msg.data(), msg.size())));
+#endif
     msg.clear();
     auto ret = co_await mClient.send(sendMsg.data(), sendMsg.size());
     sendMsg.clear();
@@ -344,10 +356,17 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> ByteStreamChannel
         NEKO_LOG_ERROR("unknown proto type: {}", msgHeader.protoType);
         co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::InvalidProtoType));
     }
-    auto desRet = message->formData(std::move(data));
+    auto desRet = message->formData(data);
     if (!desRet) {
         NEKO_LOG_ERROR("deserialize message deserialize failed.");
     }
+#ifdef NEKO_COMMUNICATION_DEBUG
+    NEKO_LOG_INFO("\n========================== recv ==========================\nrecv {} bytes, channel id {}, proto "
+                  "type {}, trans type {}",
+                  msgHeader.length, mChannelId, msgHeader.protoType, msgHeader.transType);
+    NEKO_LOG_INFO("recv message:\n{}\n ========================== end ==========================",
+                  SerializableToString(BinaryData<uint32_t>(data.data(), data.size())));
+#endif
     co_return std::move(message);
 }
 
@@ -372,7 +391,7 @@ void ByteStreamChannel::close() {
     std::vector<char> buf;
     BinarySerializer serializer;
     {
-        BinarySerializer::InputSerializer serializer(buf);
+        BinarySerializer::OutputSerializer serializer(buf);
         serializer(msgHeader);
         serializer(cmsg);
     }

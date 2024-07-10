@@ -15,7 +15,6 @@
 #include "../core/types/vector.hpp"
 
 NEKO_USE_NAMESPACE
-
 struct TestStruct {
     int a;
     std::string b;

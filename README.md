@@ -31,11 +31,10 @@ int main() {
     SerializerAble sa;
     sa.a = 1;
     sa.b = "hello";
-    JsonSerializer serializer; // you can implement your own serializer, of course this repository provides a json serializer in header json_serializer.hpp and more details while introducing later.
     std::vector<char> data;
-    serializer.startSerialize(&data)
-    sa.serialize(serializer);
-    serializer.endSerialize();
+    JsonSerializer::OutputSerializer out(data); // you can implement your own serializer, of course this repository provides a json serializer in header json_serializer.hpp and more details while introducing later.
+    out(sa);
+    out.end(); // or make out destory by RAII
     std::string str(data.begin(), data.size());
     std::cout << str << std::endl;
     return 0;
@@ -94,16 +93,18 @@ This repository provides a default json serializer. support most of commonly typ
 | float | yes | FLOAT | json_serializer.hpp |
 | double | yes | FLOAT | json_serializer.hpp |
 | std::string | yes | STRING | json_serializer.hpp |
-| std::u8string | yes | STRING | json_serializer.hpp |
-| std::vector\<T\> | yes | ARRAY | json_serializer.hpp |
-| class public PorotoBase<T, JsonSerializer> | yes | OBJECT | json_serializer.hpp |
-| std::array\<T, N\> | yes | ARRAY | json_serializer_contrain.hpp |
-| std::set\<T\> | yes | ARRAY | json_serializer_contrain.hpp |
-| std::list\<T\> | yes | ARRAY | json_serializer_contrain.hpp |
-| std::map\<std::string, T\> | yes | OBJECT | json_serializer_contrain.hpp |
-| std::tuple\<T...\> | yes | ARRAY | json_serializer_contrain.hpp |
-| custom struct type | yes | ARRAY | json_serializer_struct.hpp |
-| enum | yes | STRING [ INT ] | json_serializer_enum.hpp |
+| std::u8string | yes | STRING | types/u8string.hpp |
+| std::vector\<T\> | yes | ARRAY | types/vector.hpp |
+| class public PorotoBase<T, JsonSerializer> | yes | OBJECT | types/binary_data.hpp |
+| std::array\<T, N\> | yes | ARRAY | types/array.hpp |
+| std::set\<T\> | yes | ARRAY | types/set.hpp |
+| std::list\<T\> | yes | ARRAY | types/list.hpp |
+| std::map\<std::string, T\> std::map\<T, T\> | yes | OBJECT | types/map.hpp |
+| std::tuple\<T...\> | yes | ARRAY | types/tuple.hpp |
+| custom struct type | yes | ARRAY | types/struct_unwrap.hpp |
+| enum | yes | STRING [ INT ] | types/enum.hpp |
+| std::optional\<T\> | yes | OBJECT | json_serializer.hpp |
+| std::variant\<T...\> | yes | OBJECT | types/variant.hpp |
 
 [^1]: https://en.cppreference.com/w/cpp/language/types
 
@@ -122,76 +123,85 @@ This repository provides a default binary serializer.
 | uint8_t | yes | 1 | binary_serializer.hpp |
 | uint32_t | yes | 4 | binary_serializer.hpp |
 | uint64_t | yes | 8 | binary_serializer.hpp |
-| float | no | - | - |
-| double | no | - | - |
+| float | yes | 4 | binary_serializer.hpp |
+| double | yes | 8 | binary_serializer.hpp |
 | std::string | yes | 4 + len | binary_serializer.hpp |
-| std::u8string | yes | 4 + len | binary_serializer.hpp |
+
+** Note: **
+other types are supported like json, more info can see in json support which in folder "types".
 
 ##### 3.1.3. custom serializer
 
-If you want to use your own serializer, cant pulic `ProtoBase<T, CustomSerializer>` class. you need implement interface as:
+If you want to use your own serializer. you need implement interface as:
 
 ```C++
-class CustomSerializer {
+class CustomOutputSerializer : public detail::OutputSerializer<CustomOutputSerializer> {
 public:
-    /**
-     * @brief start serialize
-     *  while calling this function before traversing all fields, 
-     * can clear the buffer in this function or initialize the buffer and serializor.
-     */
-    void startSerialize();
-    /**
-     * @brief end serialize
-     *  while calling this function after traversing all fields.
-     *  if success serialize all fields, return true, otherwise return false.
-     * 
-     * @param[out] data the buf to output
-     * @return true 
-     * @return false 
-     */
-    bool endSerialize(std::vector<char>* data);
-    /**
-     * @brief insert value
-     * for all fields, this function will be called by original class.
-     * if success serialize this field, return true, otherwise return false.
-     * @tparam T the type of value
-     * @param[in] name the field name
-     * @param[in] value the field value
-     * @return true 
-     * @return false 
-     */
+    using BufferType =;
+public:
+    CustomOutputSerializer(BufferType& out);
     template <typename T>
-    bool insert(const char* name, const size_t len, const T& value);
-    /**
-     * @brief start deserialize
-     *  while calling this function before traversing all fields, 
-     * can clear the last time deserialize states in this function and initialize the deserializor.
-     * @param[in] data the buf to input
-     * @return true 
-     * @return false 
-     */
-    bool startDeserialize(const std::vector<char>& data);
-    /**
-     * @brief end deserialize
-     *  while calling this function after traversing all fields.
-     *  if success deserialize all fields, return true, otherwise return false.
-     * @return true 
-     * @return false
-     */
-    inline bool endDeserialize();
-    /**
-     * @brief get value
-     * for all fields, this function will be called by original class.
-     * if success deserialize this field, return true, otherwise return false.
-     * @tparam T the type of value
-     * @param[in] name the field name
-     * @param[out] value the field value
-     * @return true 
-     * @return false 
-     */
+    inline bool saveValue(SizeTag<T> const& size);
+    inline bool saveValue(const int8_t value);
+    inline bool saveValue(const uint8_t value);
+    inline bool saveValue(const int16_t value);
+    inline bool saveValue(const uint16_t value);
+    inline bool saveValue(const int32_t value);
+    inline bool saveValue(const uint32_t value);
+    inline bool saveValue(const int64_t value);
+    inline bool saveValue(const uint64_t value);
+    inline bool saveValue(const float value);
+    inline bool saveValue(const double value);
+    inline bool saveValue(const bool value);
+    inline bool saveValue(const std::string& value);
+    inline bool saveValue(const char* value);
+#if NEKO_CPP_PLUS >= 17
+    inline bool saveValue(const std::string_view value);
+    inline bool saveValue(const NameValuePair<T>& value); // T while is std::option and has no value, if you want to support ,you maust resolve it in here
+#else
     template <typename T>
-    bool get(const char* name, const size_t len, T* value);
+    inline bool saveValue(const NameValuePair<T>& value);
+#endif
+    inline bool startArray(const std::size_t size); // it is for json, maybe you need more block, or less, you can do it by other states, or make your self class to tag it.
+    inline bool endArray();
+    inline bool startObject(const std::size_t size); // size whill not always corrent, maybe -1.
+    inline bool endObject();
+    inline bool end(); // construction start, destructuring stop, it is a good ideal, but some times I want end() by self. because a block {} in function is not beautiful.
+
+private:
+    CustomOutputSerializer& operator=(const CustomOutputSerializer&) = delete;
+    CustomOutputSerializer& operator=(CustomOutputSerializer&&)      = delete;
 };
+
+class CustomInputSerializer : public detail::InputSerializer<CustomInputSerializer> {
+public:
+    using BufferType;
+
+public:
+    inline CustomInputSerializer(const BufferType& buf);
+    inline operator bool() const;
+    inline bool loadValue(std::string& value);
+    inline bool loadValue(int8_t& value);
+    inline bool loadValue(int16_t& value);
+    inline bool loadValue(int32_t& value);
+    inline bool loadValue(int64_t& value);
+    inline bool loadValue(uint8_t& value);
+    inline bool loadValue(uint16_t& value);
+    inline bool loadValue(uint32_t& value);
+    inline bool loadValue(uint64_t& value);
+    inline bool loadValue(float& value);
+    inline bool loadValue(double& value);
+    inline bool loadValue(bool& value);
+    template <typename T>
+    inline bool loadValue(const SizeTag<T>& value);
+    template <typename T>
+    inline bool loadValue(const NameValuePair<T>& value);
+
+private:
+    CustomInputSerializer& operator=(const CustomInputSerializer&) = delete;
+    CustomInputSerializer& operator=(CustomInputSerializer&&)      = delete;
+};
+
 ```
 make sure this class can structure by default.
 
@@ -255,8 +265,26 @@ why I want to do this?
 I think I should not spend too much time designing and maintaining protocol libraries, especially for a large number of protocols, we need to try our best to avoid increasing maintenance costs caused by duplication of code.
 At the same time, the simpler this thing is done, the better.
 
-### 5. the future
+
+### 5. todo list:
 
 - [x] support visit fields by name
 - [ ] support udp protocol in communication channel
 - [ ] support more protocol in communication channel
+
+
+### 6. the future
+#### v2.1.0
+- Modify serializer interface
+    - Make serialize function to operator()
+    - Make JsonConvert struct to load function and save function
+    - Split standard library types into more granular support
+- Initial optimizations have been made to performance
+- ProtoBase need less space, but all proto class while created static object for every thread
+
+#### v2.0.0
+
+- Make protoBase as a helper class, not a base class
+- Add support for reflection fields
+- Add support for optional, variant
+

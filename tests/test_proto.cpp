@@ -287,7 +287,7 @@ TEST_F(ProtoTest, JsonProtoRef) {
     EXPECT_EQ(rawp->i.h, TEnum_A);
     EXPECT_EQ(std::get<0>(rawp->j), 1);
     EXPECT_STREQ(std::get<1>(rawp->j).c_str(), "hello");
-    // NEKO_LOG_INFO("{}", SerializableToString(*rawp));
+    NEKO_LOG_INFO("{}", SerializableToString(*rawp));
 }
 
 TEST_F(ProtoTest, InvalidParams) {

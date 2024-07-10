@@ -65,8 +65,8 @@
 #include <map>
 #include <vector>
 
+#include "private/detail/reflection_serializer.hpp"
 #include "private/global.hpp"
-#include "private/reflection_serializer.hpp"
 
 NEKO_BEGIN_NAMESPACE
 class ProtoFactory;
@@ -134,7 +134,7 @@ public:
     T* cast() NEKO_NOEXCEPT;
 
 private:
-    virtual ReflectionObject* getReflectionObject() NEKO_NOEXCEPT = 0;
+    virtual detail::ReflectionObject* getReflectionObject() NEKO_NOEXCEPT = 0;
 
 protected:
     virtual void* data() NEKO_NOEXCEPT = 0;
@@ -173,14 +173,14 @@ public:
     static bool Deserialize(const std::vector<char>& data, ProtoT& proto);
 
 protected:
-    inline ReflectionObject* getReflectionObject() NEKO_NOEXCEPT override;
+    inline detail::ReflectionObject* getReflectionObject() NEKO_NOEXCEPT override;
     ProtoBase(const ProtoBase& other)            = delete;
     ProtoBase& operator=(const ProtoBase& other) = delete;
     virtual void* data() NEKO_NOEXCEPT override;
 
 private:
-    std::unique_ptr<ReflectionSerializer> mReflectionSerializer = {};
-    ProtoT* mData                                               = {};
+    std::unique_ptr<detail::ReflectionSerializer> mReflectionSerializer = {};
+    ProtoT* mData                                                       = {};
     static thread_local ProtoT kData;
     static NEKO_STRING_VIEW kProtoName;
 };
@@ -323,12 +323,12 @@ NEKO_STRING_VIEW ProtoBase<T, SerializerT>::name() NEKO_NOEXCEPT {
 }
 
 template <typename ProtoT, typename SerializerT>
-inline ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() NEKO_NOEXCEPT {
+inline detail::ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() NEKO_NOEXCEPT {
     NEKO_ASSERT(mData != nullptr, "mData is nullptr");
     if (mReflectionSerializer != nullptr) {
         return mReflectionSerializer->getObject();
     }
-    mReflectionSerializer.reset(new ReflectionSerializer());
+    mReflectionSerializer.reset(new detail::ReflectionSerializer());
     bool ret = mData->deserialize(*mReflectionSerializer);
     NEKO_ASSERT(ret, "{} get reflection object error", kProtoName);
     NEKO_ASSERT(mReflectionSerializer->getObject() != nullptr, "mReflectionSerializer->getObject() is nullptr");

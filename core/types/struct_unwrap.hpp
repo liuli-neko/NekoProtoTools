@@ -1,11 +1,11 @@
 /**
- * @file json_serializer_struct.hpp
+ * @file struct_unwrap.hpp
  * @author llhsdmd (llhsdmd@gmail.com)
  * @brief
  * @version 0.1
  * @date 2024-06-18
  *
- * @copyright Copyright (c) 2024
+ * @copyright Copyright (c) 2024 llhsdmd BusyStudent
  *
  */
 #pragma once

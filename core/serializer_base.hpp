@@ -31,12 +31,11 @@
  *     obj.name = "Alice";
  *     obj.age = 18;
  *     obj.address = "Zh";
- *
- *     JsonSerializer serializer;
  *     std::vector<char> data;
- *     serializer.startSerialize(&data);
- *     obj.serialize(serializer);
- *     serializer.endSerialize();
+ *     {
+ *          JsonSerializer::OutputSerializer out(data);
+ *          out(obj);
+ *     }
  *     data.push_back(0);
  *     std::cout << data.data() << std::endl;
  *
@@ -206,6 +205,30 @@ inline bool _unfold_function2(SerializerT& serializer, const char* names,
 NEKO_END_NAMESPACE
 
 #if NEKO_CPP_PLUS < 17
+/**
+ * @brief generate serialize and deserialize functions for a class.
+ *
+ * Give all member variables that require serialization and deserialization support as parameters to the macro,
+ * this macro will generate the serialize and deserialize functions for the class to process all given members.
+ *
+ * @param ...Args
+ * member variables that require serialization and deserialization support.
+ *
+ * @note
+ * Don't use this macro duplicate times. because it will generate same functions for class.
+ * This function cannot directly serialize members and needs to be used in conjunction with supported serializers.
+ * Please refer to the default JSON serializer implementation for the implementation specifications of the serializer.
+ *
+ * @example
+ * class MyClass {
+ *  ...
+ *  NEKO_SERIALIZER(a, b, c)
+ * private:
+ *  int a;
+ *  std::string b;
+ *  std::vector<int> c;
+ * };
+ */
 #define NEKO_SERIALIZER(...)                                                                                           \
 public:                                                                                                                \
     template <typename SerializerT>                                                                                    \

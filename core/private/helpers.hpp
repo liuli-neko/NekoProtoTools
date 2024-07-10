@@ -29,11 +29,14 @@ public:
                 only pass right-values in cases where this makes sense, such as the result of some
                 size() call.
         @internal */
-    NameValuePair(const char* name, const std::size_t nameLen, T&& value)
-        : name(name), nameLen(nameLen), value(std::forward<T>(value)) {}
+    inline NameValuePair(const char* name, const std::size_t nameLen, T&& value) NEKO_NOEXCEPT
+        : name(name),
+          nameLen(nameLen),
+          value(std::forward<T>(value)) {}
 #if NEKO_CPP_PLUS >= 17
-    NameValuePair(std::string_view name, T&& value)
-        : name(name.data()), nameLen(name.size()), value(std::forward<T>(value)) {}
+    inline NameValuePair(std::string_view name, T&& value) NEKO_NOEXCEPT : name(name.data()),
+                                                                           nameLen(name.size()),
+                                                                           value(std::forward<T>(value)) {}
 #endif
     const char* name;
     std::size_t nameLen;
@@ -43,24 +46,24 @@ template <typename T>
 struct is_minimal_serializable<NameValuePair<T>, void> : std::true_type {};
 
 template <class T>
-NameValuePair<T> makeNameValuePair(const char* name, T&& value) {
+inline NameValuePair<T> makeNameValuePair(const char* name, T&& value) NEKO_NOEXCEPT {
     return {name, std::strlen(name), std::forward<T>(value)};
 }
 
 template <class T>
-NameValuePair<T> makeNameValuePair(const char* name, std::size_t len, T&& value) {
+inline NameValuePair<T> makeNameValuePair(const char* name, std::size_t len, T&& value) NEKO_NOEXCEPT {
     return {name, len, std::forward<T>(value)};
 }
 
 template <class T>
-NameValuePair<T> makeNameValuePair(const std::string& name, T&& value) {
+inline NameValuePair<T> makeNameValuePair(const std::string& name, T&& value) NEKO_NOEXCEPT {
     return {name.c_str(), name.size(), std::forward<T>(value)};
 }
 
 #if NEKO_CPP_PLUS >= 17
 template <class T>
-NameValuePair<T> makeNameValuePair(const std::string_view& name, T&& value) {
-    return {name.data(), name.size(), std::forward<T>(value)};
+inline NameValuePair<T> makeNameValuePair(const std::string_view& name, T&& value) NEKO_NOEXCEPT {
+    return {name, std::forward<T>(value)};
 }
 #endif
 
@@ -73,7 +76,7 @@ private:
     SizeTag& operator=(SizeTag const&) = delete;
 
 public:
-    SizeTag(T&& sz) : size(std::forward<T>(sz)) {}
+    inline SizeTag(T&& sz) NEKO_NOEXCEPT : size(std::forward<T>(sz)) {}
     Type size;
 };
 
@@ -81,12 +84,12 @@ template <typename T>
 struct is_minimal_serializable<SizeTag<T>, void> : std::true_type {};
 
 template <class T>
-inline SizeTag<T> makeSizeTag(T&& sz) {
+inline SizeTag<T> makeSizeTag(T&& sz) NEKO_NOEXCEPT {
     return {std::forward<T>(sz)};
 }
 
 template <class Archive, class T>
-inline bool prologue(Archive& /* archive */, T const& /* data */) {
+inline bool prologue(Archive& /* archive */, T const& /* data */) NEKO_NOEXCEPT {
     return true;
 }
 
@@ -94,7 +97,7 @@ inline bool prologue(Archive& /* archive */, T const& /* data */) {
 //! for processing some type
 /*! @ingroup Internal */
 template <class Archive, class T>
-inline bool epilogue(Archive& /* archive */, T const& /* data */) {
+inline bool epilogue(Archive& /* archive */, T const& /* data */) NEKO_NOEXCEPT {
     return true;
 }
 namespace detail {
@@ -104,16 +107,16 @@ public:
     using SerializerType = SelfT;
 
 public:
-    OutputSerializer(SelfT* self) : mSelf(self) {}
+    OutputSerializer(SelfT* self) NEKO_NOEXCEPT : mSelf(self) {}
     template <class... Types>
-    inline bool operator()(Types&&... args) {
+    inline bool operator()(Types&&... args) NEKO_NOEXCEPT {
         return process(std::forward<Types>(args)...);
     }
 
 private:
     // process a single value
     template <class T>
-    inline bool process(T&& head) {
+    inline bool process(T&& head) NEKO_NOEXCEPT {
         prologue(*mSelf, head);
         auto ret = mSelf->processImpl(head);
         epilogue(*mSelf, head);
@@ -122,7 +125,7 @@ private:
 
     //! Unwinds to process all data
     template <class T, class... Other>
-    inline bool process(T&& head, Other&&... tail) {
+    inline bool process(T&& head, Other&&... tail) NEKO_NOEXCEPT {
         auto ret = process(std::forward<T>(head));
         ret      = process(std::forward<Other>(tail)...) && ret;
         return ret;
@@ -131,28 +134,28 @@ private:
                                            !traits::has_function_save<T, SerializerType>::value,
                                            !traits::has_method_const_save<T, SerializerType>::value> =
                            traits::default_value_for_enable>
-    inline bool processImpl(const T& value) {
+    inline bool processImpl(const T& value) NEKO_NOEXCEPT {
         return traits::method_access::method_serialize(*mSelf, value);
     }
     template <class T, traits::enable_if_t<traits::has_function_save<T, SerializerType>::value,
                                            !traits::has_method_const_save<T, SerializerType>::value,
                                            !traits::has_method_const_serialize<T, SerializerType>::value> =
                            traits::default_value_for_enable>
-    inline bool processImpl(const T& value) {
+    inline bool processImpl(const T& value) NEKO_NOEXCEPT {
         return save(*mSelf, value);
     }
     template <class T, traits::enable_if_t<traits::has_method_const_save<T, SerializerType>::value,
                                            !traits::has_function_save<T, SerializerType>::value,
                                            !traits::has_method_const_serialize<T, SerializerType>::value> =
                            traits::default_value_for_enable>
-    inline bool processImpl(const T& value) {
+    inline bool processImpl(const T& value) NEKO_NOEXCEPT {
         return traits::method_access::method_save(*mSelf, value);
     }
     template <class T, traits::enable_if_t<!traits::has_function_save<T, SerializerType>::value,
                                            !traits::has_method_const_save<T, SerializerType>::value,
                                            !traits::has_method_const_serialize<T, SerializerType>::value> =
                            traits::default_value_for_enable>
-    inline bool processImpl(const T& value) {
+    inline bool processImpl(const T& value) NEKO_NOEXCEPT {
         static_assert(traits::has_method_const_serialize<T, SerializerType>::value != 0,
                       "can not find any function to serialize this Type, must have a serialize method or save method"
                       "or save function.");
@@ -169,16 +172,16 @@ public:
     using SerializerType = SelfT;
 
 public:
-    InputSerializer(SelfT* self) : mSelf(self) {}
+    InputSerializer(SelfT* self) NEKO_NOEXCEPT : mSelf(self) {}
     template <class... Types>
-    inline bool operator()(Types&&... args) {
+    inline bool operator()(Types&&... args) NEKO_NOEXCEPT {
         return process(std::forward<Types>(args)...);
     }
 
 private:
     // process a single value
     template <class T>
-    inline bool process(T&& head) {
+    inline bool process(T&& head) NEKO_NOEXCEPT {
         auto ret = prologue(*mSelf, head);
         ret      = ret && mSelf->processImpl(head);
         ret      = ret && epilogue(*mSelf, head);
@@ -187,7 +190,7 @@ private:
 
     //! Unwinds to process all data
     template <class T, class... Other>
-    inline bool process(T&& head, Other&&... tail) {
+    inline bool process(T&& head, Other&&... tail) NEKO_NOEXCEPT {
         auto ret = process(std::forward<T>(head));
         ret      = process(std::forward<Other>(tail)...) && ret;
         return ret;
@@ -196,28 +199,28 @@ private:
                                            !traits::has_method_load<T, SerializerType>::value,
                                            !traits::has_function_load<T, SerializerType>::value> =
                            traits::default_value_for_enable>
-    inline bool processImpl(T& value) {
+    inline bool processImpl(T& value) NEKO_NOEXCEPT {
         return traits::method_access::method_deserialize(*mSelf, value);
     }
     template <class T, traits::enable_if_t<traits::has_function_load<T, SerializerType>::value,
                                            !traits::has_method_load<T, SerializerType>::value,
                                            !traits::has_method_deserialize<T, SerializerType>::value> =
                            traits::default_value_for_enable>
-    inline bool processImpl(T& value) {
+    inline bool processImpl(T& value) NEKO_NOEXCEPT {
         return load(*mSelf, value);
     }
     template <class T, traits::enable_if_t<traits::has_method_load<T, SerializerType>::value,
                                            !traits::has_function_load<T, SerializerType>::value,
                                            !traits::has_method_deserialize<T, SerializerType>::value> =
                            traits::default_value_for_enable>
-    inline bool processImpl(T& value) {
+    inline bool processImpl(T& value) NEKO_NOEXCEPT {
         return traits::method_access::method_load(*mSelf, value);
     }
     template <class T, traits::enable_if_t<!traits::has_function_load<T, SerializerType>::value,
                                            !traits::has_method_load<T, SerializerType>::value,
                                            !traits::has_method_deserialize<T, SerializerType>::value> =
                            traits::default_value_for_enable>
-    inline bool processImpl(T& value) {
+    inline bool processImpl(T& value) NEKO_NOEXCEPT {
         static_assert(traits::has_method_deserialize<T, SerializerType>::value != 0,
                       "can not find any function to serialize this Type, must have a serialize method or save method"
                       "or save function.");
@@ -281,154 +284,154 @@ inline void OutBufferWrapper::Clear() NEKO_NOEXCEPT { mVec->clear(); }
 } // namespace detail
 
 template <typename SerializerT, typename T>
-inline bool save(SerializerT& serializer, const SizeTag<T>& value) {
+inline bool save(SerializerT& serializer, const SizeTag<T>& value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
 template <typename SerializerT, typename T>
-inline bool save(SerializerT& serializer, const NameValuePair<T>& value) {
+inline bool save(SerializerT& serializer, const NameValuePair<T>& value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
 template <typename SerializerT>
-inline bool save(SerializerT& serializer, const int8_t value) {
+inline bool save(SerializerT& serializer, const int8_t value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
 template <typename SerializerT>
-inline bool save(SerializerT& serializer, const uint8_t value) {
+inline bool save(SerializerT& serializer, const uint8_t value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
 template <typename SerializerT>
-inline bool save(SerializerT& serializer, const int16_t value) {
+inline bool save(SerializerT& serializer, const int16_t value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
 template <typename SerializerT>
-inline bool save(SerializerT& serializer, const uint16_t value) {
+inline bool save(SerializerT& serializer, const uint16_t value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
 template <typename SerializerT>
-inline bool save(SerializerT& serializer, const int32_t value) {
+inline bool save(SerializerT& serializer, const int32_t value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
 template <typename SerializerT>
-inline bool save(SerializerT& serializer, const uint32_t value) {
+inline bool save(SerializerT& serializer, const uint32_t value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
 template <typename SerializerT>
-inline bool save(SerializerT& serializer, const int64_t value) {
+inline bool save(SerializerT& serializer, const int64_t value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
 template <typename SerializerT>
-inline bool save(SerializerT& serializer, const uint64_t value) {
+inline bool save(SerializerT& serializer, const uint64_t value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
 template <typename SerializerT>
-inline bool save(SerializerT& serializer, const float value) {
+inline bool save(SerializerT& serializer, const float value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
 template <typename SerializerT>
-inline bool save(SerializerT& serializer, const double value) {
+inline bool save(SerializerT& serializer, const double value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
 template <typename SerializerT>
-inline bool save(SerializerT& serializer, const bool value) {
+inline bool save(SerializerT& serializer, const bool value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
 template <typename SerializerT, typename CharT, typename Traits, typename Alloc>
-inline bool save(SerializerT& serializer, const std::basic_string<CharT, Traits, Alloc>& value) {
+inline bool save(SerializerT& serializer, const std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
 template <typename SerializerT>
-inline bool save(SerializerT& serializer, const char* value) {
+inline bool save(SerializerT& serializer, const char* value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
 #if NEKO_CPP_PLUS >= 17
 template <typename SerializerT, typename CharT, typename Traits>
-inline bool save(SerializerT& serializer, const std::basic_string_view<CharT, Traits>& value) {
+inline bool save(SerializerT& serializer, const std::basic_string_view<CharT, Traits>& value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 #endif
 
 template <typename SerializerT, typename CharT, typename Traits, typename Alloc>
-inline bool load(SerializerT& serializer, std::basic_string<CharT, Traits, Alloc>& value) {
+inline bool load(SerializerT& serializer, std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
     return serializer.loadValue(value);
 }
 
 template <typename SerializerT>
-inline bool load(SerializerT& serializer, int8_t& value) {
+inline bool load(SerializerT& serializer, int8_t& value) NEKO_NOEXCEPT {
     return serializer.loadValue(value);
 }
 
 template <typename SerializerT>
-inline bool load(SerializerT& serializer, int16_t& value) {
+inline bool load(SerializerT& serializer, int16_t& value) NEKO_NOEXCEPT {
     return serializer.loadValue(value);
 }
 
 template <typename SerializerT>
-inline bool load(SerializerT& serializer, int32_t& value) {
+inline bool load(SerializerT& serializer, int32_t& value) NEKO_NOEXCEPT {
     return serializer.loadValue(value);
 }
 
 template <typename SerializerT>
-inline bool load(SerializerT& serializer, int64_t& value) {
+inline bool load(SerializerT& serializer, int64_t& value) NEKO_NOEXCEPT {
     return serializer.loadValue(value);
 }
 
 template <typename SerializerT>
-inline bool load(SerializerT& serializer, uint8_t& value) {
+inline bool load(SerializerT& serializer, uint8_t& value) NEKO_NOEXCEPT {
     return serializer.loadValue(value);
 }
 
 template <typename SerializerT>
-inline bool load(SerializerT& serializer, uint16_t& value) {
+inline bool load(SerializerT& serializer, uint16_t& value) NEKO_NOEXCEPT {
     return serializer.loadValue(value);
 }
 
 template <typename SerializerT>
-inline bool load(SerializerT& serializer, uint32_t& value) {
+inline bool load(SerializerT& serializer, uint32_t& value) NEKO_NOEXCEPT {
     return serializer.loadValue(value);
 }
 
 template <typename SerializerT>
-inline bool load(SerializerT& serializer, uint64_t& value) {
+inline bool load(SerializerT& serializer, uint64_t& value) NEKO_NOEXCEPT {
     return serializer.loadValue(value);
 }
 
 template <typename SerializerT>
-inline bool load(SerializerT& serializer, float& value) {
+inline bool load(SerializerT& serializer, float& value) NEKO_NOEXCEPT {
     return serializer.loadValue(value);
 }
 
 template <typename SerializerT>
-inline bool load(SerializerT& serializer, double& value) {
+inline bool load(SerializerT& serializer, double& value) NEKO_NOEXCEPT {
     return serializer.loadValue(value);
 }
 
 template <typename SerializerT>
-inline bool load(SerializerT& serializer, bool& value) {
+inline bool load(SerializerT& serializer, bool& value) NEKO_NOEXCEPT {
     return serializer.loadValue(value);
 }
 
 template <typename SerializerT, typename T>
-inline bool load(SerializerT& serializer, const SizeTag<T>& value) {
+inline bool load(SerializerT& serializer, const SizeTag<T>& value) NEKO_NOEXCEPT {
     return serializer.loadValue(value);
 }
 
 template <typename SerializerT, typename T>
-inline bool load(SerializerT& serializer, const NameValuePair<T>& value) {
+inline bool load(SerializerT& serializer, const NameValuePair<T>& value) NEKO_NOEXCEPT {
     return serializer.loadValue(value);
 }
 

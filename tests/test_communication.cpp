@@ -62,7 +62,7 @@ Task<void> ClientLoop(IoContext& ioContext, ChannelFactory& channelFactor) {
             }
             auto retMsg = std::shared_ptr<IProto>(ret.value().release());
             std::cout << "a message from channel : " << cl->channelId() << std::endl;
-            auto msg = std::dynamic_pointer_cast<Message>(retMsg);
+            auto msg = retMsg->cast<Message>();
             if (msg) {
                 std::cout << "timestamp: " << msg->timestamp << std::endl;
                 std::cout << "msg: " << msg->msg << std::endl;
@@ -96,7 +96,7 @@ Task<void> HandleLoop(std::weak_ptr<NEKO_NAMESPACE::ChannelBase> channel) {
                 co_return Unexpected(ret.error());
             }
             auto retMsg = std::shared_ptr<IProto>(ret.value().release());
-            auto msg    = std::dynamic_pointer_cast<Message>(retMsg);
+            auto msg    = retMsg->cast<Message>();
             std::cout << "a message from channel : " << cl->channelId() << std::endl;
             if (msg) {
                 std::cout << "timestamp: " << msg->timestamp << std::endl;
@@ -168,6 +168,5 @@ int main(int argc, char** argv) {
     channelFactor.close();
     // cc_rpc_base::rpc_server server;
     // server.start();
-
     return 0;
 }

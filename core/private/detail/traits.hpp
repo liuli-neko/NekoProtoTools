@@ -1,3 +1,13 @@
+/**
+ * @file traits.hpp
+ * @author llhsdmd (llhsdmd@gmail.com)
+ * @brief
+ * @version 0.1
+ * @date 2024-07-10
+ *
+ * @copyright Copyright (c) 2024
+ *
+ */
 #pragma once
 #include "../global.hpp"
 
@@ -13,7 +23,7 @@ struct NameValuePairCore {}; // help to trait the type
 struct SizeTagCore {};       // help to trait the type
 struct SerializableTraitTest {
     template <typename T>
-    bool operator()(T&&) const {
+    inline bool operator()(T&&) const {
         return true;
     }
 };
@@ -33,7 +43,7 @@ struct disable_if : std::enable_if<!conditions_or<Conditions...>::value, default
 } // namespace detail
 
 template <typename T>
-T& dereference(T* ptr) {
+T& dereference(T* ptr) NEKO_NOEXCEPT {
     return *ptr;
 }
 
@@ -55,32 +65,32 @@ using disable_if_t = typename detail::disable_if<Conditions...>::type;
 class method_access {
 public:
     template <typename SerializerT, typename T>
-    static auto method_serialize(SerializerT& s, T& t) -> decltype(t.serialize(s)) {
+    static auto method_serialize(SerializerT& s, T& t) NEKO_NOEXCEPT->decltype(t.serialize(s)) {
         return t.serialize(s);
     }
 
     template <typename SerializerT, typename T>
-    static auto method_deserialize(SerializerT& s, T& t) -> decltype(t.deserialize(s)) {
+    static auto method_deserialize(SerializerT& s, T& t) NEKO_NOEXCEPT->decltype(t.deserialize(s)) {
         return t.deserialize(s);
     }
 
     template <typename SerializerT, typename T>
-    static auto method_const_serialize(SerializerT& s, const T& t) -> decltype(t.serialize(s)) {
+    static auto method_const_serialize(SerializerT& s, const T& t) NEKO_NOEXCEPT->decltype(t.serialize(s)) {
         return t.serialize(s);
     }
 
     template <typename SerializerT, typename T>
-    static auto method_load(SerializerT& s, T& t) -> decltype(t.load(s)) {
+    static auto method_load(SerializerT& s, T& t) NEKO_NOEXCEPT->decltype(t.load(s)) {
         return t.load(s);
     }
 
     template <typename SerializerT, typename T>
-    static auto method_const_save(SerializerT& s, const T& t) -> decltype(t.save(s)) {
+    static auto method_const_save(SerializerT& s, const T& t) NEKO_NOEXCEPT->decltype(t.save(s)) {
         return t.save(s);
     }
 
     template <typename SerializerT, typename T>
-    static auto method_save(SerializerT& s, T& t) -> decltype(t.save(s)) {
+    static auto method_save(SerializerT& s, T& t) NEKO_NOEXCEPT->decltype(t.save(s)) {
         return t.save(s);
     }
 };

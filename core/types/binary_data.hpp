@@ -1,5 +1,5 @@
 /**
- * @file json_serializer_binary.hpp
+ * @file binary_data.hpp
  * @author llhsdmd (llhsdmd@gmail.com)
  * @brief
  * @version 0.1
