@@ -54,10 +54,10 @@ public:
     uint16_t transType = 0; // 2 : the type of this transaction
     uint32_t reserved  = 0; // 4 : the reserved field
 
-    // template <typename SerializerT>
-    // bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {
-    //     return serializer(length, protoType, transType, reserved);
-    // }
+    template <typename SerializerT>
+    bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {
+        return serializer(length, protoType, transType, reserved);
+    }
     template <typename SerializerT>
     bool serialize(SerializerT& serializer) NEKO_NOEXCEPT {
         return serializer(length, protoType, transType, reserved);

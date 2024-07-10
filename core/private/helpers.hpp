@@ -162,6 +162,14 @@ private:
         auto tmp_value = value;
         return traits::method_access::method_serialize(*mSelf, tmp_value);
     }
+    template <class T, traits::enable_if_t<traits::has_method_serialize<T, SerializerType>::value,
+                                           !traits::has_method_const_save<T, SerializerType>::value,
+                                           !traits::has_function_save<T, SerializerType>::value,
+                                           !traits::has_method_const_serialize<T, SerializerType>::value> =
+                           traits::default_value_for_enable>
+    inline bool processImpl(T& value) NEKO_NOEXCEPT {
+        return traits::method_access::method_serialize(*mSelf, value);
+    }
     template <class T, traits::enable_if_t<!traits::has_function_save<T, SerializerType>::value,
                                            !traits::has_method_const_save<T, SerializerType>::value,
                                            !traits::has_method_const_serialize<T, SerializerType>::value,
