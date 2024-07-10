@@ -1,16 +1,17 @@
 /**
- * @file json_serializer_enum.hpp
+ * @file enum.hpp
  * @author llhsdmd (llhsdmd@gmail.com)
  * @brief
  * @version 0.1
  * @date 2024-06-18
  *
- * @copyright Copyright (c) 2024
+ * @copyright Copyright (c) 2024 llhsdmd BusyStudent
  *
  */
 #pragma once
 
 #include <cstring>
+#include <string>
 #ifdef __GNUC__
 #include <cxxabi.h>
 #include <list>
@@ -18,9 +19,10 @@
 #include <vector>
 #endif
 
-#include "json_serializer.hpp"
-#include "private/global.hpp"
-#include "serializer_base.hpp"
+#include "../json_serializer.hpp"
+#include "../private/global.hpp"
+#include "../private/helpers.hpp"
+#include "../serializer_base.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
@@ -139,93 +141,44 @@ constexpr auto _Neko_GetValidEnumNames(std::index_sequence<N...> seq) noexcept {
     return arr;
 }
 } // namespace
-
-template <typename WriterT, typename ValueT, typename T>
-struct JsonConvert<WriterT, ValueT, T, typename std::enable_if<std::is_enum<T>::value>::type> {
-    constexpr static auto kEnumArr = _Neko_GetValidEnumNames<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
-    static bool toJsonValue(WriterT& writer, const T& value) {
-        std::string ret;
-        for (int i = 0; i < kEnumArr.size(); ++i) {
-            if (kEnumArr[i].first == value) {
-                ret = std::string(kEnumArr[i].second);
-            }
-        }
-        ret += "(" + std::to_string(static_cast<int32_t>(value)) + ")";
-        return writer.String(ret.c_str(), ret.size(), true);
-    }
-    static bool fromJsonValue(T* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (value.IsString()) {
-            std::string str(value.GetString(), value.GetStringLength());
-            size_t left  = str.find_last_of(')');
-            size_t right = str.find_last_of('(');
-            int32_t v    = std::stoi(str.substr(right + 1, left - right - 1));
-            *dst         = static_cast<T>(v);
-            return true;
-        }
-        if (value.IsInt()) {
-            *dst = static_cast<T>(value.GetInt());
-            return true;
-        }
-        return false;
-    }
-};
-#if NEKO_SERIALIZABLE_TO_STRING_ENABLE == 1
-template <typename T>
-struct FormatStringCovert<T, typename std::enable_if<std::is_enum<T>::value>::type> {
-    constexpr static auto kEnumArr = _Neko_GetValidEnumNames<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
-    static std::string toString(const char* name, const size_t len, const T& value) {
-        std::string ret;
-        if (len > 0)
-            ret = std::string(name, len) + std::string(" = ");
-        bool isFind = false;
-        for (int i = 0; i < kEnumArr.size(); ++i) {
-            if (kEnumArr[i].first == value) {
-                isFind = true;
-                ret += std::string(kEnumArr[i].second);
-            }
-        }
-        if (!isFind)
-            ret += std::string(_class_name<T>()) + "(" + std::to_string(static_cast<int32_t>(value)) + ")";
-        return ret;
-    }
-};
-#endif
 /// ====================== end enum string =====================
+
+template <typename SerializerT, typename T,
+          traits::enable_if_t<std::is_enum<T>::value> = traits::default_value_for_enable>
+inline bool save(SerializerT& sa, const T& value) {
+    constexpr static auto kEnumArr = _Neko_GetValidEnumNames<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
+    std::string ret;
+    for (int i = 0; i < kEnumArr.size(); ++i) {
+        if (kEnumArr[i].first == value) {
+            ret = std::string(kEnumArr[i].second);
+        }
+    }
+    ret += "(" + std::to_string(static_cast<int32_t>(value)) + ")";
+    return sa(ret);
+}
 #else
-template <typename WriterT, typename ValueT, typename T>
-struct JsonConvert<WriterT, ValueT, T, typename std::enable_if<std::is_enum<T>::value>::type> {
-    static bool toJsonValue(WriterT& writer, const T& value) { return writer.Int(static_cast<int32_t>(value)); }
-    static bool fromJsonValue(T* dst, const ValueT& value) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (value.IsString()) {
-            std::string str(value.GetString(), value.GetStringLength());
-            size_t left = str.find_last_of(')');
-            ;
-            size_t right = str.find_last_of('(');
-            int32_t v    = std::stoi(str.substr(right + 1, left - right - 1));
-            *dst         = static_cast<T>(v);
-            return true;
-        }
-        if (value.IsInt()) {
-            *dst = static_cast<T>(value.GetInt());
-            return true;
-        }
+template <typename SerializerT, typename T,
+          traits::enable_if_t<std::is_enum<T>::value> = traits::default_value_for_enable>
+inline bool save(SerializerT& sa, const T& value) {
+    return sa(static_cast<int>(value));
+}
+#endif
+template <typename SerializerT, typename T,
+          traits::enable_if_t<std::is_enum<T>::value> = traits::default_value_for_enable>
+inline bool load(SerializerT& sa, T& value) {
+    std::string enum_str;
+    int enum_int = 0;
+    if (sa(enum_str)) {
+        size_t left  = enum_str.find_last_of(')');
+        size_t right = enum_str.find_last_of('(');
+        int32_t v    = std::stoi(enum_str.substr(right + 1, left - right - 1));
+        value        = static_cast<T>(v);
+    } else if (sa(enum_int)) {
+        value = static_cast<T>(enum_int);
+    } else {
         return false;
     }
-};
-#if NEKO_SERIALIZABLE_TO_STRING_ENABLE == 1
-template <typename T>
-struct FormatStringCovert<T, typename std::enable_if<std::is_enum<T>::value>::type> {
-    static std::string toString(const char* name, const size_t len, const T& value) {
-        std::string ret;
-        if (len > 0)
-            ret = std::string(name, len) + std::string(" = ");
-        ret += std::string(_class_name<T>()) + "(" + std::to_string(static_cast<int32_t>(value)) + ")";
-        return ret;
-    }
-};
-#endif
-#endif
+    return true;
+}
 
 NEKO_END_NAMESPACE

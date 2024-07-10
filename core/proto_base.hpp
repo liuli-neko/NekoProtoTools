@@ -65,8 +65,8 @@
 #include <map>
 #include <vector>
 
+#include "private/detail/reflection_serializer.hpp"
 #include "private/global.hpp"
-#include "private/reflection_serializer.hpp"
 
 NEKO_BEGIN_NAMESPACE
 class ProtoFactory;
@@ -134,7 +134,7 @@ public:
     T* cast() NEKO_NOEXCEPT;
 
 private:
-    virtual ReflectionObject* getReflectionObject() NEKO_NOEXCEPT = 0;
+    virtual detail::ReflectionObject* getReflectionObject() NEKO_NOEXCEPT = 0;
 
 protected:
     virtual void* data() NEKO_NOEXCEPT = 0;
@@ -158,9 +158,9 @@ public:
     ProtoBase& operator=(ProtoT&& other) NEKO_NOEXCEPT;
 
     ProtoT& operator*() NEKO_NOEXCEPT { return *mData; }
-    ProtoT* operator->() NEKO_NOEXCEPT { return mData.get(); }
+    ProtoT* operator->() NEKO_NOEXCEPT { return mData; }
     const ProtoT& operator*() const NEKO_NOEXCEPT { return *mData; }
-    const ProtoT* operator->() const NEKO_NOEXCEPT { return mData.get(); }
+    const ProtoT* operator->() const NEKO_NOEXCEPT { return mData; }
     operator const ProtoT&() const NEKO_NOEXCEPT { return *mData; }
     operator ProtoT&() NEKO_NOEXCEPT { return *mData; }
 
@@ -173,16 +173,15 @@ public:
     static bool Deserialize(const std::vector<char>& data, ProtoT& proto);
 
 protected:
-    inline ReflectionObject* getReflectionObject() NEKO_NOEXCEPT override;
+    inline detail::ReflectionObject* getReflectionObject() NEKO_NOEXCEPT override;
     ProtoBase(const ProtoBase& other)            = delete;
     ProtoBase& operator=(const ProtoBase& other) = delete;
     virtual void* data() NEKO_NOEXCEPT override;
 
 private:
-    mutable SerializerT mSerializer                             = {};
-    std::shared_ptr<ReflectionSerializer> mReflectionSerializer = {};
-    std::shared_ptr<ProtoT> mData                               = {};
-
+    std::unique_ptr<detail::ReflectionSerializer> mReflectionSerializer = {};
+    ProtoT* mData                                                       = {};
+    static thread_local ProtoT kData;
     static NEKO_STRING_VIEW kProtoName;
 };
 
@@ -247,6 +246,8 @@ template <typename T>
 IProto* ProtoFactory::creater() NEKO_NOEXCEPT {
     return new T();
 }
+template <typename ProtoT, typename SerializerT>
+thread_local ProtoT ProtoBase<ProtoT, SerializerT>::kData = {};
 
 template <typename ProtoT, typename SerializerT>
 NEKO_STRING_VIEW ProtoBase<ProtoT, SerializerT>::kProtoName = []() NEKO_NOEXCEPT {
@@ -264,26 +265,27 @@ inline T* IProto::cast() NEKO_NOEXCEPT {
 }
 template <typename ProtoT, typename SerializerT>
 inline void* ProtoBase<ProtoT, SerializerT>::data() NEKO_NOEXCEPT {
-    return (void*)(mData.get());
+    return (void*)(mData);
 }
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::ProtoBase() : mData(new ProtoT(), [](const ProtoT* p) { delete p; }) {}
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase() : mData(&kData) {}
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::ProtoBase(const ProtoT& p)
-    : mData(new ProtoT(p), [](const ProtoT* p) { delete p; }) {}
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase(const ProtoT& p) : mData(&kData) {
+    *mData = p;
+}
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT&& p)
-    : mData(new ProtoT(std::move(p)), [](const ProtoT* p) { delete p; }) {}
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT&& p) : mData(&kData) {
+    *mData = std::move(p);
+}
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT* p) : mData(p, [](const ProtoT* p) {}) {}
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT* p) : mData(p) {}
 
 template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>::ProtoBase(ProtoBase<T, SerializerT>&& other) {
-    mSerializer           = std::move(other.mSerializer);
     mReflectionSerializer = std::move(other.mReflectionSerializer);
     mData                 = std::move(other.mData);
 }
@@ -293,7 +295,6 @@ inline ProtoBase<ProtoT, SerializerT>::~ProtoBase() {}
 
 template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, SerializerT>&& other) NEKO_NOEXCEPT {
-    mSerializer           = std::move(other.mSerializer);
     mReflectionSerializer = std::move(other.mReflectionSerializer);
     mData                 = std::move(other.mData);
     return *this;
@@ -301,21 +302,13 @@ ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, Ser
 
 template <typename ProtoT, typename SerializerT>
 inline ProtoBase<ProtoT, SerializerT>& ProtoBase<ProtoT, SerializerT>::operator=(const ProtoT& other) NEKO_NOEXCEPT {
-    if (mData != nullptr) {
-        (*mData) = other;
-    } else {
-        mData.reset(new ProtoT(other));
-    }
+    (*mData) = other;
     return *this;
 }
 
 template <typename ProtoT, typename SerializerT>
 inline ProtoBase<ProtoT, SerializerT>& ProtoBase<ProtoT, SerializerT>::operator=(ProtoT&& other) NEKO_NOEXCEPT {
-    if (mData != nullptr) {
-        (*mData) = std::move(other);
-    } else {
-        mData.reset(new ProtoT(std::move(other)));
-    }
+    (*mData) = std::move(other);
     return *this;
 }
 
@@ -330,13 +323,12 @@ NEKO_STRING_VIEW ProtoBase<T, SerializerT>::name() NEKO_NOEXCEPT {
 }
 
 template <typename ProtoT, typename SerializerT>
-inline ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() NEKO_NOEXCEPT {
+inline detail::ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() NEKO_NOEXCEPT {
     NEKO_ASSERT(mData != nullptr, "mData is nullptr");
     if (mReflectionSerializer != nullptr) {
         return mReflectionSerializer->getObject();
     }
-    mReflectionSerializer.reset(new ReflectionSerializer());
-    mReflectionSerializer->start();
+    mReflectionSerializer.reset(new detail::ReflectionSerializer());
     bool ret = mData->deserialize(*mReflectionSerializer);
     NEKO_ASSERT(ret, "{} get reflection object error", kProtoName);
     NEKO_ASSERT(mReflectionSerializer->getObject() != nullptr, "mReflectionSerializer->getObject() is nullptr");
@@ -346,23 +338,22 @@ inline ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() N
 template <typename ProtoT, typename SerializerT>
 std::vector<char> ProtoBase<ProtoT, SerializerT>::Serialize(const ProtoT& proto) {
     std::vector<char> data;
-    SerializerT serializer;
-    serializer.startSerialize(&data);
-    bool ret = proto.serialize(serializer);
-    if (!serializer.endSerialize() || !ret) {
+    typename SerializerT::OutputSerializer serializer(data);
+    auto ret = proto.serialize(serializer);
+    if (!serializer.end()) {
         NEKO_LOG_ERROR("{} serialize error", kProtoName);
     }
-    return std::move(data);
+    return data;
 }
 
 template <typename ProtoT, typename SerializerT>
 bool ProtoBase<ProtoT, SerializerT>::Deserialize(const std::vector<char>& data, ProtoT& proto) {
-    SerializerT serializer;
-    if (!serializer.startDeserialize(data)) {
+    typename SerializerT::InputSerializer serializer(data);
+    if (!serializer) {
         return false;
     }
     bool ret = proto.deserialize(serializer);
-    if (!serializer.endDeserialize() || !ret) {
+    if (!ret) {
         NEKO_LOG_ERROR("{} deserialize error", kProtoName);
         return false;
     }
@@ -371,14 +362,8 @@ bool ProtoBase<ProtoT, SerializerT>::Deserialize(const std::vector<char>& data, 
 
 template <typename T, typename SerializerT>
 std::vector<char> ProtoBase<T, SerializerT>::toData() const NEKO_NOEXCEPT {
-    std::vector<char> data;
     NEKO_ASSERT(mData != nullptr, "mData is nullptr");
-    mSerializer.startSerialize(&data);
-    auto ret = mData->serialize(mSerializer);
-    if (!mSerializer.endSerialize()) {
-        NEKO_LOG_ERROR("{} serialize error", kProtoName);
-    }
-    return data;
+    return Serialize(*mData);
 }
 
 template <typename T, typename SerializerT>
@@ -389,15 +374,7 @@ int ProtoBase<T, SerializerT>::type() const NEKO_NOEXCEPT {
 template <typename T, typename SerializerT>
 bool ProtoBase<T, SerializerT>::formData(const std::vector<char>& data) NEKO_NOEXCEPT {
     NEKO_ASSERT(mData != nullptr, "mData is nullptr");
-    if (!mSerializer.startDeserialize(data)) {
-        return false;
-    }
-    bool ret = mData->deserialize(mSerializer);
-    if (!mSerializer.endDeserialize() || !ret) {
-        NEKO_LOG_ERROR("{} deserialize error", kProtoName);
-        return false;
-    }
-    return true;
+    return Deserialize(data, *mData);
 }
 
 #define NEKO_DECLARE_PROTOCOL(className, Serializer)                                                                   \

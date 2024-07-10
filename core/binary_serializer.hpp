@@ -1,5 +1,5 @@
 /**
- * @file proto_binary_serializer.hpp
+ * @file binary_serializer.hpp
  * @author llhsdmd (llhsdmd@gmail.com)
  * @brief
  * @version 0.1
@@ -18,296 +18,325 @@
 #endif
 
 #include "private/global.hpp"
+#include "private/helpers.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
 #ifdef _WIN32
-inline int16_t htobe16(const int16_t value) { return _byteswap_ushort(value); }
-inline int16_t be16toh(const int16_t value) { return _byteswap_ushort(value); }
-inline uint16_t htobe16(const uint16_t value) { return _byteswap_ushort(value); }
-inline uint16_t be16toh(const uint16_t value) { return _byteswap_ushort(value); }
-inline int32_t htobe32(const int32_t value) { return _byteswap_ulong(value); }
-inline int32_t be32toh(const int32_t value) { return _byteswap_ulong(value); }
-inline uint32_t htobe32(const uint32_t value) { return _byteswap_ulong(value); }
-inline uint32_t be32toh(const uint32_t value) { return _byteswap_ulong(value); }
-inline int64_t htobe64(const int64_t value) { return _byteswap_uint64(value); }
-inline int64_t be64toh(const int64_t value) { return _byteswap_uint64(value); }
-inline uint64_t htobe64(const uint64_t value) { return _byteswap_uint64(value); }
-inline uint64_t be64toh(const uint64_t value) { return _byteswap_uint64(value); }
+inline int16_t htobe16(const int16_t value) NEKO_NOEXCEPT { return _byteswap_ushort(value); }
+inline int16_t be16toh(const int16_t value) NEKO_NOEXCEPT { return _byteswap_ushort(value); }
+inline uint16_t htobe16(const uint16_t value) NEKO_NOEXCEPT { return _byteswap_ushort(value); }
+inline uint16_t be16toh(const uint16_t value) NEKO_NOEXCEPT { return _byteswap_ushort(value); }
+inline int32_t htobe32(const int32_t value) NEKO_NOEXCEPT { return _byteswap_ulong(value); }
+inline int32_t be32toh(const int32_t value) NEKO_NOEXCEPT { return _byteswap_ulong(value); }
+inline uint32_t htobe32(const uint32_t value) NEKO_NOEXCEPT { return _byteswap_ulong(value); }
+inline uint32_t be32toh(const uint32_t value) NEKO_NOEXCEPT { return _byteswap_ulong(value); }
+inline int64_t htobe64(const int64_t value) NEKO_NOEXCEPT { return _byteswap_uint64(value); }
+inline int64_t be64toh(const int64_t value) NEKO_NOEXCEPT { return _byteswap_uint64(value); }
+inline uint64_t htobe64(const uint64_t value) NEKO_NOEXCEPT { return _byteswap_uint64(value); }
+inline uint64_t be64toh(const uint64_t value) NEKO_NOEXCEPT { return _byteswap_uint64(value); }
 #endif
 
-template <typename WriterT, typename ValueT, typename T, class enable = void>
-struct BinaryConvert;
-
-class BinarySerializer {
+class BinaryOutputSerializer : public detail::OutputSerializer<BinaryOutputSerializer> {
 public:
-    using WriterType = std::vector<char>;
-    using ValueType  = std::vector<char>;
+    using BufferType = std::vector<char>;
 
 public:
-    ~BinarySerializer();
-    void startSerialize(std::vector<char>* data) NEKO_NOEXCEPT;
-    inline bool endSerialize() NEKO_NOEXCEPT;
+    BinaryOutputSerializer(BufferType& out) NEKO_NOEXCEPT : OutputSerializer<BinaryOutputSerializer>(this),
+                                                            mBuffer(out) {}
+    BinaryOutputSerializer(const BinaryOutputSerializer& other) NEKO_NOEXCEPT
+        : OutputSerializer<BinaryOutputSerializer>(this),
+          mBuffer(other.mBuffer) {}
+    BinaryOutputSerializer(BinaryOutputSerializer&& other) NEKO_NOEXCEPT
+        : OutputSerializer<BinaryOutputSerializer>(this),
+          mBuffer(other.mBuffer) {}
     template <typename T>
-    bool insert(const char* name, const size_t len, const T& value) NEKO_NOEXCEPT;
-    bool startDeserialize(const std::vector<char>& data) NEKO_NOEXCEPT;
-    bool endDeserialize() NEKO_NOEXCEPT;
+    inline bool saveValue(SizeTag<T> const& size) NEKO_NOEXCEPT {
+        mBuffer.push_back('S');
+        mBuffer.push_back(':');
+        saveValue(size.size);
+        return true;
+    }
+    inline bool saveValue(const int8_t value) NEKO_NOEXCEPT {
+        mBuffer.push_back(value);
+        return true;
+    }
+    inline bool saveValue(const uint8_t value) NEKO_NOEXCEPT {
+        mBuffer.push_back(value);
+        return true;
+    }
+    inline bool saveValue(const int16_t value) NEKO_NOEXCEPT {
+        auto nv = htobe16(value);
+        mBuffer.resize(mBuffer.size() + sizeof(int16_t), 0);
+        memcpy(mBuffer.data() + mBuffer.size() - sizeof(int16_t), &nv, sizeof(int16_t));
+        return true;
+    }
+    inline bool saveValue(const uint16_t value) NEKO_NOEXCEPT {
+        auto nv = htobe16(value);
+        mBuffer.resize(mBuffer.size() + sizeof(uint16_t), 0);
+        memcpy(mBuffer.data() + mBuffer.size() - sizeof(uint16_t), &nv, sizeof(uint16_t));
+        return true;
+    }
+    inline bool saveValue(const int32_t value) NEKO_NOEXCEPT {
+        auto nv = htobe32(value);
+        mBuffer.resize(mBuffer.size() + sizeof(int32_t), 0);
+        memcpy(mBuffer.data() + mBuffer.size() - sizeof(int32_t), &nv, sizeof(int32_t));
+        return true;
+    }
+    inline bool saveValue(const uint32_t value) NEKO_NOEXCEPT {
+        auto nv = htobe32(value);
+        mBuffer.resize(mBuffer.size() + sizeof(uint32_t), 0);
+        memcpy(mBuffer.data() + mBuffer.size() - sizeof(uint32_t), &nv, sizeof(uint32_t));
+        return true;
+    }
+    inline bool saveValue(const int64_t value) NEKO_NOEXCEPT {
+        auto nv = htobe64(value);
+        mBuffer.resize(mBuffer.size() + sizeof(int64_t), 0);
+        memcpy(mBuffer.data() + mBuffer.size() - sizeof(int64_t), &nv, sizeof(int64_t));
+        return true;
+    }
+    inline bool saveValue(const uint64_t value) NEKO_NOEXCEPT {
+        auto nv = htobe64(value);
+        mBuffer.resize(mBuffer.size() + sizeof(uint64_t), 0);
+        memcpy(mBuffer.data() + mBuffer.size() - sizeof(uint64_t), &nv, sizeof(uint64_t));
+        return true;
+    }
+    inline bool saveValue(const float value) NEKO_NOEXCEPT {
+        mBuffer.resize(mBuffer.size() + sizeof(float), 0);
+        memcpy(mBuffer.data() + mBuffer.size() - sizeof(float), &value, sizeof(float));
+        return true;
+    }
+    inline bool saveValue(const double value) NEKO_NOEXCEPT {
+        mBuffer.resize(mBuffer.size() + sizeof(double), 0);
+        memcpy(mBuffer.data() + mBuffer.size() - sizeof(double), &value, sizeof(double));
+        return true;
+    }
+    inline bool saveValue(const bool value) NEKO_NOEXCEPT {
+        mBuffer.push_back(value ? 1 : 0);
+        return true;
+    }
+    inline bool saveValue(const std::string& value) NEKO_NOEXCEPT {
+        uint32_t size = value.size();
+        saveValue(makeSizeTag(size));
+        mBuffer.insert(mBuffer.end(), value.begin(), value.end());
+        return true;
+    }
+    inline bool saveValue(const char* value) NEKO_NOEXCEPT {
+        uint32_t size = strlen(value);
+        saveValue(makeSizeTag(size));
+        mBuffer.insert(mBuffer.end(), value, value + size);
+        return true;
+    }
+#if NEKO_CPP_PLUS >= 17
+    inline bool saveValue(const std::string_view value) NEKO_NOEXCEPT {
+        uint32_t size = value.size();
+        saveValue(makeSizeTag(size));
+        mBuffer.insert(mBuffer.end(), value.begin(), value.end());
+        return true;
+    }
+#endif
     template <typename T>
-    bool get(const char* name, const size_t len, T* value) NEKO_NOEXCEPT;
+    inline bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
+        return saveValue(NEKO_STRING_VIEW{value.name, value.nameLen}) && this->operator()(value.value);
+    }
+    // as serializer(makeSizeTag(size));
+    inline bool startArray(const std::size_t size) NEKO_NOEXCEPT { return saveValue(makeSizeTag(size)); }
+    inline bool endArray() { return true; }
+    inline bool startObject(const std::size_t size) NEKO_NOEXCEPT { return saveValue(makeSizeTag(size)); }
+    inline bool endObject() NEKO_NOEXCEPT { return true; }
+    inline bool end() NEKO_NOEXCEPT { return true; }
 
 private:
-    union {
-        std::vector<char>* data = nullptr;
-        const std::vector<char>* constData;
-    } mData;
+    BinaryOutputSerializer& operator=(const BinaryOutputSerializer&) = delete;
+    BinaryOutputSerializer& operator=(BinaryOutputSerializer&&)      = delete;
 
-    int mOffset = 0;
+private:
+    BufferType& mBuffer;
 };
 
-inline BinarySerializer::~BinarySerializer() {}
+class BinaryInputSerializer : public detail::InputSerializer<BinaryInputSerializer> {
+public:
+    using BufferType = std::vector<char>;
 
-inline void BinarySerializer::startSerialize(std::vector<char>* data) NEKO_NOEXCEPT { mData.data = data; }
-
-inline bool BinarySerializer::endSerialize() NEKO_NOEXCEPT {
-    mData.data = nullptr;
-    return true;
-}
-
-template <typename T>
-bool BinarySerializer::insert(const char* name, const size_t len, const T& value) NEKO_NOEXCEPT {
-    return BinaryConvert<WriterType, ValueType, T>::toBinaryArray(*(mData.data), value);
-}
-
-inline bool BinarySerializer::startDeserialize(const std::vector<char>& data) NEKO_NOEXCEPT {
-    mData.constData = &data;
-    mOffset         = 0;
-    return true;
-}
-
-inline bool BinarySerializer::endDeserialize() NEKO_NOEXCEPT {
-    if (mOffset != mData.constData->size() && mData.constData->size() > 0 && mData.constData->back() != '\0') {
-        NEKO_LOG_WARN("binary data deserialize warning, read size{} != buf szie{}.", mOffset, mData.constData->size());
+public:
+    inline BinaryInputSerializer(const std::vector<char>& buf) NEKO_NOEXCEPT
+        : InputSerializer<BinaryInputSerializer>(this),
+          mBuffer(buf),
+          mOffset(0) {}
+    inline BinaryInputSerializer(const char* buf, std::size_t size) NEKO_NOEXCEPT
+        : InputSerializer<BinaryInputSerializer>(this),
+          mBuffer{buf, buf + size},
+          mOffset(0) {}
+    inline operator bool() const NEKO_NOEXCEPT { return true; }
+    inline std::string name() NEKO_NOEXCEPT {
+        std::string ret;
+        if (loadValue(ret)) {
+            return ret;
+        }
+        return {};
     }
-    mData.constData = nullptr;
-    return true;
-}
 
-template <typename T>
-bool BinarySerializer::get(const char* name, const size_t len, T* value) NEKO_NOEXCEPT {
-    NEKO_ASSERT(value != nullptr, "{} value is nullptr in get function", std::string(name, len));
-    return BinaryConvert<WriterType, ValueType, T>::fromBinaryArray(value, *(mData.constData), mOffset);
-}
-
-template <typename WriterT, typename ValueT>
-struct BinaryConvert<WriterT, ValueT, uint8_t, void> {
-    static bool toBinaryArray(WriterT& buf, const uint8_t value) {
-        buf.push_back(value);
+    inline bool loadValue(std::string& value) NEKO_NOEXCEPT {
+        uint32_t size = value.size();
+        if (!loadValue(makeSizeTag(size))) {
+            return false;
+        }
+        if (size > mBuffer.size() - mOffset) {
+            return false;
+        }
+        value.resize(size);
+        std::copy(mBuffer.begin() + mOffset, mBuffer.begin() + mOffset + size, value.begin());
+        mOffset += size;
         return true;
     }
-    static bool fromBinaryArray(uint8_t* dst, const ValueT& buf, int& offset_byte) {
-        *dst = buf[offset_byte];
-        offset_byte += 1;
+
+    inline bool loadValue(int8_t& value) NEKO_NOEXCEPT {
+        if (mOffset + sizeof(int8_t) > mBuffer.size()) {
+            return false;
+        }
+        value = mBuffer[mOffset];
+        mOffset += sizeof(int8_t);
         return true;
     }
+
+    inline bool loadValue(int16_t& value) NEKO_NOEXCEPT {
+        if (mOffset + sizeof(int16_t) > mBuffer.size()) {
+            return false;
+        }
+        int16_t tmp;
+        memcpy(&tmp, mBuffer.data() + mOffset, sizeof(int16_t));
+        mOffset += sizeof(int16_t);
+        value = be16toh(tmp);
+        return true;
+    }
+
+    inline bool loadValue(int32_t& value) NEKO_NOEXCEPT {
+        if (mOffset + sizeof(int32_t) > mBuffer.size()) {
+            return false;
+        }
+        int32_t tmp;
+        memcpy(&tmp, mBuffer.data() + mOffset, sizeof(int32_t));
+        mOffset += sizeof(int32_t);
+        value = be32toh(tmp);
+        return true;
+    }
+
+    inline bool loadValue(int64_t& value) NEKO_NOEXCEPT {
+        if (mOffset + sizeof(int64_t) > mBuffer.size()) {
+            return false;
+        }
+        int64_t tmp;
+        memcpy(&tmp, mBuffer.data() + mOffset, sizeof(int64_t));
+        mOffset += sizeof(int64_t);
+        value = be64toh(tmp);
+        return true;
+    }
+
+    inline bool loadValue(uint8_t& value) NEKO_NOEXCEPT {
+        if (mOffset + sizeof(uint8_t) > mBuffer.size()) {
+            return false;
+        }
+        value = mBuffer[mOffset];
+        mOffset += sizeof(uint8_t);
+        return true;
+    }
+
+    inline bool loadValue(uint16_t& value) NEKO_NOEXCEPT {
+        if (mOffset + sizeof(uint16_t) > mBuffer.size()) {
+            return false;
+        }
+        uint16_t tmp;
+        memcpy(&tmp, mBuffer.data() + mOffset, sizeof(uint16_t));
+        mOffset += sizeof(uint16_t);
+        value = be16toh(tmp);
+        return true;
+    }
+
+    inline bool loadValue(uint32_t& value) NEKO_NOEXCEPT {
+        if (mOffset + sizeof(uint32_t) > mBuffer.size()) {
+            return false;
+        }
+        uint32_t tmp;
+        memcpy(&tmp, mBuffer.data() + mOffset, sizeof(uint32_t));
+        mOffset += sizeof(uint32_t);
+        value = be32toh(tmp);
+        return true;
+    }
+
+    inline bool loadValue(uint64_t& value) NEKO_NOEXCEPT {
+        if (mOffset + sizeof(uint64_t) > mBuffer.size()) {
+            return false;
+        }
+        uint64_t tmp;
+        memcpy(&tmp, mBuffer.data() + mOffset, sizeof(uint64_t));
+        mOffset += sizeof(uint64_t);
+        value = be64toh(tmp);
+        return true;
+    }
+
+    inline bool loadValue(float& value) NEKO_NOEXCEPT {
+        if (mOffset + sizeof(float) > mBuffer.size()) {
+            return false;
+        }
+        memcpy(&value, mBuffer.data() + mOffset, sizeof(float));
+        mOffset += sizeof(float);
+        return true;
+    }
+
+    inline bool loadValue(double& value) NEKO_NOEXCEPT {
+        if (mOffset + sizeof(double) > mBuffer.size()) {
+            return false;
+        }
+        memcpy(&value, mBuffer.data() + mOffset, sizeof(double));
+        mOffset += sizeof(double);
+        return true;
+    }
+
+    inline bool loadValue(bool& value) NEKO_NOEXCEPT {
+        if (mOffset + sizeof(bool) > mBuffer.size()) {
+            return false;
+        }
+        memcpy(&value, mBuffer.data() + mOffset, sizeof(bool));
+        mOffset += sizeof(bool);
+        return true;
+    }
+
+    template <typename T>
+    inline bool loadValue(const SizeTag<T>& value) NEKO_NOEXCEPT {
+        if (mOffset + 2 > mBuffer.size()) {
+            return false;
+        }
+        if (mBuffer[mOffset] != 'S' || mBuffer[mOffset + 1] != ':') {
+            return false;
+        }
+        mOffset += 2;
+        return loadValue(value.size);
+    }
+
+    template <typename T>
+    inline bool loadValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
+        std::string name;
+        if (!loadValue(name)) {
+            return false;
+        }
+        if (name.size() != value.nameLen || memcmp(name.data(), value.name, value.nameLen) != 0) {
+            return false;
+        }
+        return operator()(value.value);
+    }
+
+private:
+    BinaryInputSerializer& operator=(const BinaryInputSerializer&) = delete;
+    BinaryInputSerializer& operator=(BinaryInputSerializer&&)      = delete;
+
+private:
+    const BufferType& mBuffer;
+    std::size_t mOffset = 0;
 };
 
-template <typename WriterT, typename ValueT>
-struct BinaryConvert<WriterT, ValueT, int8_t, void> {
-    static bool toBinaryArray(WriterT& buf, const int8_t value) {
-        buf.push_back(value);
-        return true;
-    }
-    static bool fromBinaryArray(int8_t* dst, const ValueT& buf, int& offset_byte) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (buf.size() < offset_byte + 1) {
-            return false;
-        }
-        *dst = buf[offset_byte];
-        offset_byte += 1;
-        return true;
-    }
+struct BinarySerializer {
+    using OutputSerializer = BinaryOutputSerializer;
+    using InputSerializer  = BinaryInputSerializer;
 };
-
-template <typename WriterT, typename ValueT>
-struct BinaryConvert<WriterT, ValueT, uint16_t, void> {
-    static bool toBinaryArray(WriterT& buf, const uint16_t value) {
-        auto nv = htobe16(value);
-        buf.push_back(nv & 0xFF);
-        buf.push_back((nv >> 8) & 0xFF);
-        return true;
-    }
-    static bool fromBinaryArray(uint16_t* dst, const ValueT& buf, int& offset_byte) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (buf.size() < offset_byte + 2) {
-            return false;
-        }
-        uint16_t value = 0;
-        value |= buf[offset_byte] & 0xFF;
-        value |= (buf[offset_byte + 1] & 0xFF) << 8;
-        *dst = be16toh(value);
-        offset_byte += 2;
-        return true;
-    }
-};
-
-template <typename WriterT, typename ValueT>
-struct BinaryConvert<WriterT, ValueT, int16_t, void> {
-    static bool toBinaryArray(WriterT& buf, const int16_t value) {
-        auto nv = htobe16(value);
-        buf.push_back(nv & 0xFF);
-        buf.push_back((nv >> 8) & 0xFF);
-        return true;
-    }
-    static bool fromBinaryArray(int16_t* dst, const ValueT& buf, int& offset_byte) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (buf.size() < offset_byte + 2) {
-            return false;
-        }
-        int16_t value = 0;
-        value |= buf[offset_byte] & 0xFF;
-        value |= (buf[offset_byte + 1] & 0xFF) << 8;
-        *dst = be16toh(value);
-        offset_byte += 2;
-        return true;
-    }
-};
-
-template <typename WriterT, typename ValueT>
-struct BinaryConvert<WriterT, ValueT, uint32_t, void> {
-    static bool toBinaryArray(WriterT& buf, const uint32_t value) {
-        auto nv = htobe32(value);
-        buf.resize(buf.size() + 4, 0);
-        memcpy(buf.data() + buf.size() - 4, &nv, 4);
-        return true;
-    }
-    static bool fromBinaryArray(uint32_t* dst, const ValueT& buf, int& offset_byte) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (buf.size() < offset_byte + 4) {
-            return false;
-        }
-        uint32_t value = 0;
-        memcpy(&value, buf.data() + offset_byte, 4);
-        *dst = be32toh(value);
-        offset_byte += 4;
-        return true;
-    }
-};
-
-template <typename WriterT, typename ValueT>
-struct BinaryConvert<WriterT, ValueT, int32_t, void> {
-    static bool toBinaryArray(WriterT& buf, const int32_t value) {
-        auto nv = htobe32(value);
-        buf.resize(buf.size() + 4, 0);
-        memcpy(buf.data() + buf.size() - 4, &nv, 4);
-        return true;
-    }
-    static bool fromBinaryArray(int32_t* dst, const ValueT& buf, int& offset_byte) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (buf.size() < offset_byte + 4) {
-            return false;
-        }
-        int32_t value = 0;
-        memcpy(&value, buf.data() + offset_byte, 4);
-        *dst = be32toh(value);
-        offset_byte += 4;
-        return true;
-    }
-};
-
-template <typename WriterT, typename ValueT>
-struct BinaryConvert<WriterT, ValueT, uint64_t, void> {
-    static bool toBinaryArray(WriterT& buf, const uint64_t value) {
-        auto nv = htobe64(value);
-        buf.resize(buf.size() + 8, 0);
-        memcpy(buf.data() + buf.size() - 8, &nv, 8);
-        return true;
-    }
-    static bool fromBinaryArray(uint64_t* dst, const ValueT& buf, int& offset_byte) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (buf.size() < offset_byte + 8) {
-            return false;
-        }
-        uint64_t value = 0;
-        memcpy(&value, buf.data() + offset_byte, 8);
-        *dst = be64toh(value);
-        offset_byte += 8;
-        return true;
-    }
-};
-
-template <typename WriterT, typename ValueT>
-struct BinaryConvert<WriterT, ValueT, int64_t, void> {
-    static bool toBinaryArray(WriterT& buf, const int64_t value) {
-        auto nv = htobe64(value);
-        buf.resize(buf.size() + 8, 0);
-        memcpy(buf.data() + buf.size() - 8, &nv, 8);
-        return true;
-    }
-    static bool fromBinaryArray(int64_t* dst, const ValueT& buf, int& offset_byte) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (buf.size() < offset_byte + 8) {
-            return false;
-        }
-        int64_t value = 0;
-        memcpy(&value, buf.data() + offset_byte, 8);
-        *dst = be64toh(value);
-        offset_byte += 8;
-        return true;
-    }
-};
-
-template <typename WriterT, typename ValueT>
-struct BinaryConvert<WriterT, ValueT, std::string, void> {
-    static bool toBinaryArray(WriterT& buf, const std::string& value) {
-        buf.resize(buf.size() + value.size() + 8, 0);
-        uint64_t len = htobe64((uint64_t)value.size());
-        memcpy(buf.data() + buf.size() - 8 - value.size(), &len, 8);
-        memcpy(buf.data() + buf.size() - value.size(), value.data(), value.size());
-        return true;
-    }
-    static bool fromBinaryArray(std::string* dst, const ValueT& buf, int& offset_byte) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (buf.size() < offset_byte + 8) {
-            return false;
-        }
-        uint64_t len = 0;
-        memcpy(&len, buf.data() + offset_byte, 8);
-        len = be64toh(len);
-        if (buf.size() < offset_byte + len + 8) {
-            return false;
-        }
-        *dst = std::string(buf.data() + offset_byte + 8, len);
-        offset_byte += len + 8;
-        return true;
-    }
-};
-
-#if NEKO_CPP_PLUS >= 20
-template <typename WriterT, typename ValueT>
-struct BinaryConvert<WriterT, ValueT, std::u8string, void> {
-    static bool toBinaryArray(WriterT& buf, const std::u8string& value) {
-        buf.resize(buf.size() + value.size() + 8, 0);
-        uint64_t len = htobe64((uint64_t)value.size());
-        memcpy(buf.data() + buf.size() - 8 - value.size(), &len, 8);
-        memcpy(buf.data() + buf.size() - value.size(), value.data(), value.size());
-        return true;
-    }
-    static bool fromBinaryArray(std::u8string* dst, const ValueT& buf, int& offset_byte) {
-        NEKO_ASSERT(dst != nullptr, "dst is nullptr");
-        if (buf.size() < offset_byte + 8) {
-            return false;
-        }
-        uint64_t len = 0;
-        memcpy(&len, buf.data() + offset_byte, 8);
-        len = be64toh(len);
-        if (buf.size() < offset_byte + len + 8) {
-            return false;
-        }
-        *dst = std::u8string(reinterpret_cast<const char8_t*>(buf.data()) + offset_byte + 4, len);
-        offset_byte += len + 8;
-        return true;
-    }
-};
-#endif
 
 NEKO_END_NAMESPACE

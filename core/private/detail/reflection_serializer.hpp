@@ -13,17 +13,22 @@
 
 #include <cstddef>
 #include <map>
+#include <memory>
 #include <string>
 #include <typeinfo>
 
-#include "global.hpp"
+#include "../global.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
+template <typename T>
+struct NameValuePair;
+
+namespace detail {
 class ReflectionFieldBase {
 public:
-    ReflectionFieldBase()                                        = default;
-    virtual ~ReflectionFieldBase()                               = default;
+    ReflectionFieldBase() NEKO_NOEXCEPT                          = default;
+    virtual ~ReflectionFieldBase() NEKO_NOEXCEPT                 = default;
     virtual const NEKO_STRING_VIEW& name() const NEKO_NOEXCEPT   = 0;
     virtual const std::type_info& typeInfo() const NEKO_NOEXCEPT = 0;
 };
@@ -31,15 +36,15 @@ public:
 template <typename T>
 class ReflectionField : public ReflectionFieldBase {
 public:
-    explicit ReflectionField(const NEKO_STRING_VIEW& name, T* value) : mValue(value), mName(name) {
+    inline explicit ReflectionField(const NEKO_STRING_VIEW& name, T* value) : mValue(value), mName(name) {
         if (value == nullptr) {
             throw std::invalid_argument("can not make reflection object " + std::string(name) + " for nullptr");
         }
     }
-    const T& getField() const NEKO_NOEXCEPT { return *mValue; }
-    void setField(const T& value) NEKO_NOEXCEPT { (*mValue) = value; }
-    const NEKO_STRING_VIEW& name() const NEKO_NOEXCEPT override { return mName; }
-    const std::type_info& typeInfo() const NEKO_NOEXCEPT override { return typeid(T); }
+    inline const T& getField() const NEKO_NOEXCEPT { return *mValue; }
+    inline void setField(const T& value) NEKO_NOEXCEPT { (*mValue) = value; }
+    inline const NEKO_STRING_VIEW& name() const NEKO_NOEXCEPT override { return mName; }
+    inline const std::type_info& typeInfo() const NEKO_NOEXCEPT override { return typeid(T); }
 
 private:
     T* const mValue;
@@ -59,7 +64,7 @@ public:
     }
 
     template <typename T>
-    T getField(const NEKO_STRING_VIEW& name, const T& defaultValue) const NEKO_NOEXCEPT {
+    inline T getField(const NEKO_STRING_VIEW& name, const T& defaultValue) const NEKO_NOEXCEPT {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             NEKO_LOG_ERROR("[ReflectionObject] field {} not found.", name);
@@ -83,7 +88,7 @@ public:
     }
 
     template <typename T>
-    bool getField(const NEKO_STRING_VIEW& name, T* result) const NEKO_NOEXCEPT {
+    inline bool getField(const NEKO_STRING_VIEW& name, T* result) const NEKO_NOEXCEPT {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             NEKO_LOG_ERROR("[ReflectionObject] field {} not found.", name);
@@ -107,7 +112,7 @@ public:
         return true;
     }
     template <typename T>
-    bool setField(const NEKO_STRING_VIEW& name, const T& value) NEKO_NOEXCEPT {
+    inline bool setField(const NEKO_STRING_VIEW& name, const T& value) NEKO_NOEXCEPT {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             NEKO_LOG_ERROR("[ReflectionObject] field {} not found.", name);
@@ -129,7 +134,7 @@ public:
     }
 
     template <typename T>
-    ReflectionField<T>* bindField(const NEKO_STRING_VIEW& name, T* value) {
+    inline ReflectionField<T>* bindField(const NEKO_STRING_VIEW& name, T* value) {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             mFields.insert(std::make_pair(name, new ReflectionField<T>(name, value)));
@@ -146,20 +151,32 @@ private:
 };
 
 class ReflectionSerializer {
-
 public:
-    ReflectionSerializer()  = default;
-    ~ReflectionSerializer() = default;
+    inline ReflectionSerializer() { mObject.clear(); }
+    inline ~ReflectionSerializer() = default;
+    inline operator bool() const { return true; }
 
-    inline void start() NEKO_NOEXCEPT { mObject.clear(); }
-    template <typename T>
-    bool get(const char* name, const size_t len, T* value) {
-        return mObject.bindField(NEKO_STRING_VIEW(name, len), value) != nullptr;
+    template <typename... Ts>
+    inline bool operator()(const Ts&... fields) {
+        return process(fields...);
     }
+
     inline ReflectionObject* getObject() { return &mObject; }
+
+private:
+    template <typename T, typename... Ts>
+    inline bool process(const T& field, const Ts&... fields) {
+        return process(field) && process(fields...);
+    }
+    template <typename T>
+    inline bool process(const NameValuePair<T>& field) {
+        return nullptr != mObject.bindField(NEKO_STRING_VIEW(field.name, field.nameLen), std::addressof(field.value));
+    }
 
 private:
     ReflectionObject mObject;
 };
+
+} // namespace detail
 
 NEKO_END_NAMESPACE

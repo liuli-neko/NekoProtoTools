@@ -2,14 +2,21 @@
 
 #include <gtest/gtest.h>
 
-#include "../core/dump_to_string.hpp"
+#include "../core/binary_serializer.hpp"
 #include "../core/json_serializer.hpp"
-#include "../core/json_serializer_binary.hpp"
-#include "../core/json_serializer_container.hpp"
-#include "../core/json_serializer_enum.hpp"
-#include "../core/json_serializer_struct.hpp"
 #include "../core/proto_base.hpp"
 #include "../core/serializer_base.hpp"
+#include "../core/to_string.hpp"
+#include "../core/types/array.hpp"
+#include "../core/types/binary_data.hpp"
+#include "../core/types/enum.hpp"
+#include "../core/types/list.hpp"
+#include "../core/types/map.hpp"
+#include "../core/types/set.hpp"
+#include "../core/types/struct_unwrap.hpp"
+#include "../core/types/tuple.hpp"
+#include "../core/types/variant.hpp"
+#include "../core/types/vector.hpp"
 
 NEKO_USE_NAMESPACE
 
@@ -26,39 +33,27 @@ struct StructA {
     TEnum h;
 };
 
-#if (defined(_MSC_VER) && _MSVC_LANG <= 201402L) || (defined(__GNUC__) && __cplusplus < 201703L)
+#if NEKO_CPP_PLUS < 17
 NEKO_BEGIN_NAMESPACE
-template <typename WriterT, typename ValueT>
-struct JsonConvert<WriterT, ValueT, StructA, void> {
-    static bool toJsonValue(WriterT& writer, const StructA& value) {
-        auto ret = writer.StartArray();
-        ret      = JsonConvert<WriterT, ValueT, int>::toJsonValue(writer, value.a) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::string>::toJsonValue(writer, value.b) && ret;
-        ret      = JsonConvert<WriterT, ValueT, bool>::toJsonValue(writer, value.c) && ret;
-        ret      = JsonConvert<WriterT, ValueT, double>::toJsonValue(writer, value.d) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::list<int>>::toJsonValue(writer, value.e) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::toJsonValue(writer, value.f) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::array<int, 5>>::toJsonValue(writer, value.g) && ret;
-        ret      = JsonConvert<WriterT, ValueT, TEnum>::toJsonValue(writer, value.h) && ret;
-        ret      = writer.EndArray() && ret;
-        return ret;
-    }
-    static bool fromJsonValue(StructA* result, const ValueT& value) {
-        if (result == nullptr || !value.IsArray()) {
-            return false;
-        }
-        auto ret = JsonConvert<WriterT, ValueT, int>::fromJsonValue(&result->a, value[0]);
-        ret      = JsonConvert<WriterT, ValueT, std::string>::fromJsonValue(&result->b, value[1]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, bool>::fromJsonValue(&result->c, value[2]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, double>::fromJsonValue(&result->d, value[3]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::list<int>>::fromJsonValue(&result->e, value[4]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::fromJsonValue(&result->f, value[5]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::array<int, 5>>::fromJsonValue(&result->g, value[6]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, TEnum>::fromJsonValue(&result->h, value[7]) && ret;
-        return ret;
-    }
-};
+template <typename Serializer>
+inline bool save(Serializer& sa, const StructA& value) {
+    auto ret = sa.startArray((uint32_t)8);
+    ret      = sa(value.a, value.b, value.c, value.d, value.e, value.f, value.g, value.h) && ret;
+    ret      = sa.endArray() && ret;
+    return ret;
+}
 
+template <typename Serializer>
+inline bool load(Serializer& sa, StructA& value) {
+    uint32_t size;
+    auto ret = sa(makeSizeTag(size));
+    if (size != 8) {
+        NEKO_LOG_ERROR("struct size mismatch: json obejct size {} != struct size 8", size);
+        return false;
+    }
+    ret = sa(value.a, value.b, value.c, value.d, value.e, value.f, value.g, value.h) && ret;
+    return ret;
+}
 NEKO_END_NAMESPACE
 #endif
 
@@ -118,84 +113,73 @@ class JsonSerializerTest : public testing::Test {
 public:
     using WriterType = JsonWriter<>;
     using ValueType  = JsonValue;
+    JsonSerializerTest() : buffer(), output(buffer) {}
 
 protected:
-    virtual void SetUp() {
-        writer = std::make_shared<WriterType>(buffer);
-        writer->StartObject();
-    }
-    virtual void TearDown() { writer.reset(); }
-    std::shared_ptr<WriterType> writer;
-    OutBufferWrapper buffer;
+    virtual void SetUp() {}
+    virtual void TearDown() {}
+    std::vector<char> buffer;
+    JsonSerializer::OutputSerializer output;
 };
 
 TEST_F(JsonSerializerTest, Int) {
     int a = 1;
-    writer->Key("a");
-    JsonConvert<WriterType, ValueType, int>::toJsonValue(*writer, a);
-    writer->EndObject();
-    buffer.Put('\0');
-    const char* str = buffer.GetString();
-    EXPECT_STREQ(str, "{\"a\":1}");
+    output(makeNameValuePair("a", a));
+    output.end();
+    buffer.push_back('\0');
+    EXPECT_STREQ(buffer.data(), "{\"a\":1}");
 }
 
 TEST_F(JsonSerializerTest, String) {
     std::string a = "hello";
-    writer->Key("a");
-    JsonConvert<WriterType, ValueType, std::string>::toJsonValue(*writer, a);
-    writer->EndObject();
-    buffer.Put('\0');
-    const char* str = buffer.GetString();
-    EXPECT_STREQ(str, "{\"a\":\"hello\"}");
+    output(makeNameValuePair("a", a));
+    output.end();
+    buffer.push_back('\0');
+    EXPECT_STREQ(buffer.data(), "{\"a\":\"hello\"}");
 }
 
 TEST_F(JsonSerializerTest, Bool) {
     bool a = true;
-    writer->Key("a");
-    JsonConvert<WriterType, ValueType, bool>::toJsonValue(*writer, a);
-    writer->EndObject();
-    buffer.Put('\0');
-    const char* str = buffer.GetString();
+    output(makeNameValuePair("a", a));
+    output.end();
+    buffer.push_back('\0');
+    const char* str = buffer.data();
     EXPECT_STREQ(str, "{\"a\":true}");
 }
 
 TEST_F(JsonSerializerTest, Double) {
     double a = 3.14;
-    writer->Key("a");
-    JsonConvert<WriterType, ValueType, double>::toJsonValue(*writer, a);
-    writer->EndObject();
-    buffer.Put('\0');
-    const char* str = buffer.GetString();
+    output(makeNameValuePair("a", a));
+    output.end();
+    buffer.push_back('\0');
+    const char* str = buffer.data();
     EXPECT_STREQ(str, "{\"a\":3.14}");
 }
 
 TEST_F(JsonSerializerTest, List) {
     std::list<int> a = {1, 2, 3, 4, 5};
-    writer->Key("a");
-    JsonConvert<WriterType, ValueType, std::list<int>>::toJsonValue(*writer, a);
-    writer->EndObject();
-    buffer.Put('\0');
-    const char* str = buffer.GetString();
+    output(makeNameValuePair("a", a));
+    output.end();
+    buffer.push_back('\0');
+    const char* str = buffer.data();
     EXPECT_STREQ(str, "{\"a\":[1,2,3,4,5]}");
 }
 
 TEST_F(JsonSerializerTest, Map) {
     std::map<std::string, int> a = {{"a", 1}, {"b", 2}, {"c", 3}};
-    writer->Key("a");
-    JsonConvert<WriterType, ValueType, std::map<std::string, int>>::toJsonValue(*writer, a);
-    writer->EndObject();
-    buffer.Put('\0');
-    const char* str = buffer.GetString();
+    output(makeNameValuePair("a", a));
+    output.end();
+    buffer.push_back('\0');
+    const char* str = buffer.data();
     EXPECT_STREQ(str, "{\"a\":{\"a\":1,\"b\":2,\"c\":3}}");
 }
 
 TEST_F(JsonSerializerTest, Array) {
     std::array<int, 5> a = {1, 2, 3, 4, 5};
-    writer->Key("a");
-    JsonConvert<WriterType, ValueType, std::array<int, 5>>::toJsonValue(*writer, a);
-    writer->EndObject();
-    buffer.Put('\0');
-    const char* str = buffer.GetString();
+    output(makeNameValuePair("a", a));
+    output.end();
+    buffer.push_back('\0');
+    const char* str = buffer.data();
     EXPECT_STREQ(str, "{\"a\":[1,2,3,4,5]}");
 }
 
@@ -216,11 +200,8 @@ TEST_F(JsonSerializerTest, Struct) {
 #if NEKO_CPP_PLUS >= 17
     std::get<1>(testp.l.a).c = TestA{1221, "this is a test for optional"};
 #endif
-    writer->Key("a");
-    JsonConvert<WriterType, ValueType, TestP>::toJsonValue(*writer, testp);
-    writer->EndObject();
-    buffer.Put(0);
-    const char* str = buffer.GetString();
+    output(makeNameValuePair<const TestP&>("a", testp));
+    output.end();
 #if NEKO_CPP_PLUS >= 17
     const char* answer =
         "{\"a\":{\"a\":3,\"b\":\"Struct "
@@ -238,13 +219,15 @@ TEST_F(JsonSerializerTest, Struct) {
         "\"l\":{\"a\":[{\"a\":1,\"b\":\"dsadfsd\"},{\"a\":12.9,\"b\":[1.0,2.0,3.0,4.0,5.0]},{\"a\":[{\"a\":12.9,\"b\":["
         "1.0,2.0,3.0,4.0,5.0]},{\"a\":12.9,\"b\":[1.0,2.0,3.0,4.0,5.0]},{\"a\":12.9,\"b\":[1.0,2.0,3.0,4.0,5.0]}]}]}}}";
 #endif
+    buffer.push_back('\0');
+    const char* str = buffer.data();
     EXPECT_STREQ(str, answer);
 
     TestP testp2;
-    JsonSerializer serializer;
-    serializer.startDeserialize(std::vector<char>{str, str + strlen(str)});
-    serializer.get("a", 1, &testp2);
-    serializer.endDeserialize();
+    {
+        JsonSerializer::InputSerializer input(buffer);
+        input(makeNameValuePair("a", testp2));
+    }
     EXPECT_EQ(testp.a, testp2.a);
     EXPECT_STREQ(testp.b.c_str(), testp2.b.c_str());
     EXPECT_EQ(testp.c, testp2.c);

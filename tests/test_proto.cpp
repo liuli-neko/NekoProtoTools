@@ -1,14 +1,20 @@
 #include <gtest/gtest.h>
 
 #include "../core/binary_serializer.hpp"
-#include "../core/dump_to_string.hpp"
 #include "../core/json_serializer.hpp"
-#include "../core/json_serializer_binary.hpp"
-#include "../core/json_serializer_container.hpp"
-#include "../core/json_serializer_enum.hpp"
-#include "../core/json_serializer_struct.hpp"
 #include "../core/proto_base.hpp"
 #include "../core/serializer_base.hpp"
+#include "../core/to_string.hpp"
+#include "../core/types/array.hpp"
+#include "../core/types/binary_data.hpp"
+#include "../core/types/enum.hpp"
+#include "../core/types/list.hpp"
+#include "../core/types/map.hpp"
+#include "../core/types/set.hpp"
+#include "../core/types/struct_unwrap.hpp"
+#include "../core/types/tuple.hpp"
+#include "../core/types/variant.hpp"
+#include "../core/types/vector.hpp"
 
 NEKO_USE_NAMESPACE
 
@@ -27,55 +33,25 @@ struct StructA {
 
 #if NEKO_CPP_PLUS < 17
 NEKO_BEGIN_NAMESPACE
-template <typename WriterT, typename ValueT>
-struct JsonConvert<WriterT, ValueT, StructA, void> {
-    static bool toJsonValue(WriterT& writer, const StructA& value) {
-        auto ret = writer.StartArray();
-        ret      = JsonConvert<WriterT, ValueT, int>::toJsonValue(writer, value.a) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::string>::toJsonValue(writer, value.b) && ret;
-        ret      = JsonConvert<WriterT, ValueT, bool>::toJsonValue(writer, value.c) && ret;
-        ret      = JsonConvert<WriterT, ValueT, double>::toJsonValue(writer, value.d) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::list<int>>::toJsonValue(writer, value.e) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::toJsonValue(writer, value.f) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::array<int, 5>>::toJsonValue(writer, value.g) && ret;
-        ret      = JsonConvert<WriterT, ValueT, TEnum>::toJsonValue(writer, value.h) && ret;
-        ret      = writer.EndArray() && ret;
-        return ret;
-    }
-    static bool fromJsonValue(StructA* result, const ValueT& value) {
-        if (result == nullptr || !value.IsArray() || value.Size() != 8) {
-            return false;
-        }
-        auto ret = JsonConvert<WriterT, ValueT, int>::fromJsonValue(&result->a, value[0]);
-        ret      = JsonConvert<WriterT, ValueT, std::string>::fromJsonValue(&result->b, value[1]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, bool>::fromJsonValue(&result->c, value[2]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, double>::fromJsonValue(&result->d, value[3]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::list<int>>::fromJsonValue(&result->e, value[4]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::map<std::string, int>>::fromJsonValue(&result->f, value[5]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, std::array<int, 5>>::fromJsonValue(&result->g, value[6]) && ret;
-        ret      = JsonConvert<WriterT, ValueT, TEnum>::fromJsonValue(&result->h, value[7]) && ret;
-        return ret;
-    }
-};
+template <typename Serializer>
+inline bool save(Serializer& sa, const StructA& value) {
+    auto ret = sa.startArray((uint32_t)8);
+    ret      = sa(value.a, value.b, value.c, value.d, value.e, value.f, value.g, value.h) && ret;
+    ret      = sa.endArray() && ret;
+    return ret;
+}
 
-template <>
-struct FormatStringCovert<StructA, void> {
-    static std::string toString(const char* name, const size_t len, const StructA& p) {
-        std::string ret;
-        if (len > 0)
-            ret = std::string(name, len) + std::string(" = ");
-        ret += "StructA{";
-        ret += FormatStringCovert<int>::toString(nullptr, 0, p.a) + ", ";
-        ret += FormatStringCovert<std::string>::toString(nullptr, 0, p.b) + ", ";
-        ret += FormatStringCovert<bool>::toString(nullptr, 0, p.c) + ", ";
-        ret += FormatStringCovert<double>::toString(nullptr, 0, p.d) + ", ";
-        ret += FormatStringCovert<std::list<int>>::toString(nullptr, 0, p.e) + ", ";
-        ret += FormatStringCovert<std::map<std::string, int>>::toString(nullptr, 0, p.f) + ", ";
-        ret += FormatStringCovert<std::array<int, 5>>::toString(nullptr, 0, p.g) + ", ";
-        ret += FormatStringCovert<TEnum>::toString(nullptr, 0, p.h) + "}";
-        return ret;
+template <typename Serializer>
+inline bool load(Serializer& sa, StructA& value) {
+    uint32_t size;
+    auto ret = sa(makeSizeTag(size));
+    if (size != 8) {
+        NEKO_LOG_ERROR("struct size mismatch: json obejct size {} != struct size 8", size);
+        return false;
     }
-};
+    ret = sa(value.a, value.b, value.c, value.d, value.e, value.f, value.g, value.h) && ret;
+    return ret;
+}
 NEKO_END_NAMESPACE
 #endif
 
@@ -345,7 +321,7 @@ TEST_F(ProtoTest, BinaryProto) {
     auto data      = proto.makeProto().toData();
     auto base64str = Base64Covert::Encode(data);
     base64str.push_back('\0');
-    EXPECT_STREQ(base64str.data(), "AAAAGAAAAAAAAAAQaGVsbG8gTmVrbyBQcm90bwA/Pz8=");
+    EXPECT_STREQ(base64str.data(), "UzoAAAABYQAAABhTOgAAAAFiUzoAAAAQaGVsbG8gTmVrbyBQcm90b1M6AAAAAWMAPz8/");
     NEKO_LOG_INFO("{}", SerializableToString(proto));
 }
 
