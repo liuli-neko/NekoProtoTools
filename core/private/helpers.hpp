@@ -282,8 +282,8 @@ class OutBufferWrapper {
 public:
     using Ch = char;
 
-    OutBufferWrapper() NEKO_NOEXCEPT;
-    OutBufferWrapper(std::vector<Ch>* vec) NEKO_NOEXCEPT;
+    explicit OutBufferWrapper() NEKO_NOEXCEPT;
+    explicit OutBufferWrapper(std::vector<Ch>& vec) NEKO_NOEXCEPT;
     void setVector(std::vector<Ch>* vec) NEKO_NOEXCEPT;
     void Put(Ch c) NEKO_NOEXCEPT;
     void Flush() NEKO_NOEXCEPT;
@@ -292,17 +292,18 @@ public:
     void Clear() NEKO_NOEXCEPT;
 
 private:
-    std::shared_ptr<std::vector<Ch>> mVec;
+    std::vector<Ch>* mVec;
+    std::vector<Ch> mVecUnique; // maybe make it a static.
 };
 
-inline OutBufferWrapper::OutBufferWrapper() NEKO_NOEXCEPT : mVec(new std::vector<Ch>()) {}
-inline OutBufferWrapper::OutBufferWrapper(std::vector<Ch>* vec) NEKO_NOEXCEPT : mVec(vec, [](std::vector<Ch>* ptr) {}) {
-}
+inline OutBufferWrapper::OutBufferWrapper() NEKO_NOEXCEPT : mVec(&mVecUnique) {}
+inline OutBufferWrapper::OutBufferWrapper(std::vector<Ch>& vec) NEKO_NOEXCEPT : mVec(&vec) {}
 inline void OutBufferWrapper::setVector(std::vector<Ch>* vec) NEKO_NOEXCEPT {
     if (vec != nullptr) {
-        mVec.reset(vec, [](std::vector<Ch>* ptr) {});
+        mVec = vec;
     } else {
-        mVec.reset(new std::vector<Ch>(), [](std::vector<Ch>* ptr) { delete ptr; });
+        mVec = &mVecUnique;
+        mVec->clear();
     }
 }
 inline void OutBufferWrapper::Put(Ch c) NEKO_NOEXCEPT { mVec->push_back(c); }

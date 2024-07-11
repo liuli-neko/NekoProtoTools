@@ -111,8 +111,8 @@ struct TestP {
 
 class JsonSerializerTest : public testing::Test {
 public:
-    using WriterType = JsonWriter<>;
-    using ValueType  = JsonValue;
+    using WriterType = detail::JsonWriter<>;
+    using ValueType  = detail::JsonValue;
     JsonSerializerTest() : buffer(), output(buffer) {}
 
 protected:
@@ -238,6 +238,17 @@ TEST_F(JsonSerializerTest, Struct) {
     EXPECT_EQ(testp.h, testp2.h);
     EXPECT_EQ(testp.k, testp2.k);
     NEKO_LOG_INFO("{}", SerializableToString(testp));
+
+    {
+        std::vector<char> buffer;
+        JsonOutputSerializer<detail::PrettyJsonWriter<>> output(
+            buffer, makePrettyJsonWriter(JsonOutputFormatOptions::Compact()));
+        output(makeNameValuePair("a", testp));
+        output.end();
+        buffer.push_back('\0');
+        const char* str = buffer.data();
+        NEKO_LOG_INFO("{}", str);
+    }
 }
 
 int main(int argc, char** argv) {
