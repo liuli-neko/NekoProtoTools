@@ -34,9 +34,7 @@ public:
     using BufferType = std::string;
 
 public:
-    PrintSerializer(BufferType& out) NEKO_NOEXCEPT : OutputSerializer<PrintSerializer>(this), mBuffer(out) {
-        mBuffer.push_back('{');
-    }
+    PrintSerializer(BufferType& out) NEKO_NOEXCEPT : OutputSerializer<PrintSerializer>(this), mBuffer(out) {}
     PrintSerializer(const PrintSerializer& other) NEKO_NOEXCEPT : OutputSerializer<PrintSerializer>(this),
                                                                   mBuffer(other.mBuffer) {}
     PrintSerializer(PrintSerializer&& other) NEKO_NOEXCEPT : OutputSerializer<PrintSerializer>(this),
@@ -75,16 +73,16 @@ public:
         return true;
     }
     inline bool saveValue(const std::string& value) NEKO_NOEXCEPT {
-        mBuffer += value + ", ";
+        mBuffer += "\"" + value + "\", ";
         return true;
     }
     inline bool saveValue(const char* value) NEKO_NOEXCEPT {
-        mBuffer += std::string(value) + ", ";
+        mBuffer += "\"" + std::string(value) + "\", ";
         return true;
     }
 #if NEKO_CPP_PLUS >= 17
     inline bool saveValue(const std::string_view value) NEKO_NOEXCEPT {
-        mBuffer += std::string(value) + ", ";
+        mBuffer += "\"" + std::string(value) + "\", ";
         return true;
     }
     template <typename T>
@@ -108,12 +106,7 @@ public:
         return (*this)(value.value);
     }
 #endif
-    // as serializer(makeSizeTag(size));
     bool startArray(const std::size_t) NEKO_NOEXCEPT {
-        // if (mBuffer.size() > 0 && mBuffer.back() == ' ' && *(mBuffer.rbegin() + 1) != '=') {
-        //     mBuffer.pop_back();
-        //     mBuffer.pop_back();
-        // }
         mBuffer += "[";
         return true;
     }
@@ -126,10 +119,6 @@ public:
         return true;
     }
     bool startObject(const std::size_t) NEKO_NOEXCEPT {
-        // if (mBuffer.size() > 0 && mBuffer.back() == ' ' && *(mBuffer.rbegin() + 1) != '=') {
-        //     mBuffer.pop_back();
-        //     mBuffer.pop_back();
-        // }
         mBuffer += "{";
         return true;
     }
@@ -142,11 +131,8 @@ public:
         return true;
     }
     bool end() NEKO_NOEXCEPT {
-        if (mBuffer.size() > 0 && mBuffer.back() == ' ' && *(mBuffer.rbegin() + 1) != '=') {
-            mBuffer.pop_back();
-            mBuffer.pop_back();
-        }
-        mBuffer += "}";
+        mBuffer.pop_back();
+        mBuffer.pop_back();
         return true;
     }
 
@@ -166,5 +152,33 @@ inline std::string SerializableToString(T&& value) NEKO_NOEXCEPT {
     print.end();
     return buffer;
 };
+
+template <typename T, traits::enable_if_t<traits::has_method_const_serialize<T, PrintSerializer>::value ||
+                                          traits::has_method_serialize<T, PrintSerializer>::value> =
+                          traits::default_value_for_enable>
+inline bool prologue(PrintSerializer& sa, const T& value) NEKO_NOEXCEPT {
+    sa.startObject(-1);
+    return true;
+}
+template <typename T, traits::enable_if_t<traits::has_method_const_serialize<T, PrintSerializer>::value ||
+                                          traits::has_method_serialize<T, PrintSerializer>::value> =
+                          traits::default_value_for_enable>
+inline bool epilogue(PrintSerializer& sa, const T& value) NEKO_NOEXCEPT {
+    sa.endObject();
+    return true;
+}
+
+template <typename T, traits::enable_if_t<!traits::has_method_const_serialize<T, PrintSerializer>::value,
+                                          !traits::has_method_serialize<T, PrintSerializer>::value> =
+                          traits::default_value_for_enable>
+inline bool prologue(PrintSerializer& sa, const T& value) NEKO_NOEXCEPT {
+    return true;
+}
+template <typename T, traits::enable_if_t<!traits::has_method_const_serialize<T, PrintSerializer>::value,
+                                          !traits::has_method_serialize<T, PrintSerializer>::value> =
+                          traits::default_value_for_enable>
+inline bool epilogue(PrintSerializer& sa, const T& value) NEKO_NOEXCEPT {
+    return true;
+}
 
 NEKO_END_NAMESPACE
