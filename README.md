@@ -127,7 +127,7 @@ This repository provides a default binary serializer.
 | double | yes | 8 | binary_serializer.hpp |
 | std::string | yes | 4 + len | binary_serializer.hpp |
 
-** Note: **
+**Note:**
 other types are supported like json, more info can see in json support which in folder "types".
 
 ##### 3.1.3. custom serializer
@@ -268,13 +268,17 @@ At the same time, the simpler this thing is done, the better.
 
 ### 5. todo list:
 
+**serializer**
 - [x] support visit fields by name
+- [ ] using simdjson for json serialization
+- [ ] support more cpp stl types
+
+**communication**
 - [ ] support udp protocol in communication channel
 - [ ] support more protocol in communication channel
 
-
 ### 6. the future
-#### v2.1.0
+#### v1.0.0 - alpha
 - Modify serializer interface
     - Make serialize function to operator()
     - Make JsonConvert struct to load function and save function
@@ -282,8 +286,7 @@ At the same time, the simpler this thing is done, the better.
 - Initial optimizations have been made to performance
 - ProtoBase need less space, but all proto class while created static object for every thread
 
-#### v2.0.0
-
+#### v0.1.0
 - Make protoBase as a helper class, not a base class
 - Add support for reflection fields
 - Add support for optional, variant
