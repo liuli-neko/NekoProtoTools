@@ -84,6 +84,93 @@ struct json_output_buffer_type<rapidjson::BasicOStreamWrapper<T>, void> {
     using output_buffer_type = T;
     using char_type          = typename T::Ch;
 };
+class ConstJsonIterator {
+public:
+    using MemberIterator = JsonValue::ConstMemberIterator;
+    using ValueIterator  = JsonValue::ConstValueIterator;
+
+public:
+    inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null_) {};
+    inline ConstJsonIterator(MemberIterator begin, MemberIterator end) NEKO_NOEXCEPT : mMemberItBegin(begin),
+                                                                                       mMemberItEnd(end),
+                                                                                       mIndex(0),
+                                                                                       mMemberIt(begin),
+                                                                                       mSize(0),
+                                                                                       mType(Member) {
+        for (auto member = mMemberItBegin; member != mMemberItEnd; ++member) {
+            mMemberMap.emplace(NEKO_STRING_VIEW{member->name.GetString(), member->name.GetStringLength()}, member);
+            ++mSize;
+        }
+        if (mSize == 0) {
+            mType = Null_;
+            return;
+        }
+    }
+
+    inline ConstJsonIterator(ValueIterator begin, ValueIterator end) NEKO_NOEXCEPT : mValueItBegin(begin),
+                                                                                     mIndex(0),
+                                                                                     mMemberIt(),
+                                                                                     mSize(std::distance(begin, end)),
+                                                                                     mType(Value) {
+        if (mSize == 0) {
+            mType = Null_;
+        }
+    }
+
+    inline ~ConstJsonIterator() = default;
+
+    inline ConstJsonIterator& operator++() NEKO_NOEXCEPT {
+        if (mType == Member) {
+            ++mMemberIt;
+        } else {
+            ++mIndex;
+        }
+        return *this;
+    }
+    inline bool eof() const NEKO_NOEXCEPT {
+        if (mType == Null_ || (mType == Value && mIndex >= mSize) || (mType == Member && mMemberIt == mMemberItEnd)) {
+            return true;
+        }
+        return false;
+    }
+    inline std::size_t size() const NEKO_NOEXCEPT { return mSize; }
+    inline const JsonValue& value() NEKO_NOEXCEPT {
+        static JsonValue null;
+        if (eof()) {
+            return null;
+        }
+        switch (mType) {
+        case Value:
+            return mValueItBegin[mIndex];
+        case Member:
+            return mMemberIt->value;
+        }
+        return null; // should never reach here, but needed to avoid compiler warning
+    }
+    inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
+        if (mType == Member && mMemberIt != mMemberItEnd) {
+            return {mMemberIt->name.GetString(), mMemberIt->name.GetStringLength()};
+        } else {
+            return {};
+        }
+    };
+    inline const JsonValue* move_to_member(const NEKO_STRING_VIEW& name) NEKO_NOEXCEPT {
+        auto it = mMemberMap.find(name);
+        if (it != mMemberMap.end()) {
+            mMemberIt = it->second;
+            return &(mMemberIt)->value;
+        } else {
+            return nullptr;
+        }
+    };
+
+private:
+    MemberIterator mMemberItBegin, mMemberItEnd, mMemberIt;
+    ValueIterator mValueItBegin;
+    std::size_t mIndex, mSize;
+    std::unordered_map<NEKO_STRING_VIEW, MemberIterator> mMemberMap;
+    enum Type { Value, Member, Null_ } mType;
+};
 } // namespace detail
 
 struct JsonOutputFormatOptions {
@@ -111,7 +198,7 @@ public:
 };
 
 inline auto makePrettyJsonWriter(const JsonOutputFormatOptions& options = JsonOutputFormatOptions::Default())
-    NEKO_NOEXCEPT->detail::PrettyJsonWriter<detail::OutBufferWrapper> {
+    NEKO_NOEXCEPT -> detail::PrettyJsonWriter<detail::OutBufferWrapper> {
     auto writer = detail::PrettyJsonWriter<detail::OutBufferWrapper>(0, options.levelDepth);
     writer.SetIndent(options.indentChar, options.indentLength);
     writer.SetMaxDecimalPlaces(options.precision);
@@ -130,9 +217,7 @@ public:
             typename detail::json_output_wrapper_type<WriterType>::output_stream_type>::output_buffer_type& buffer)
         NEKO_NOEXCEPT : detail::OutputSerializer<JsonOutputSerializer>(this),
                         mStream(buffer),
-                        mWriter(mStream) {
-        mWriter.StartObject();
-    }
+                        mWriter(mStream) {}
 
     explicit inline JsonOutputSerializer(
         typename detail::json_output_buffer_type<
@@ -141,7 +226,6 @@ public:
                                           mStream(buffer),
                                           mWriter(std::move(writer)) {
         mWriter.Reset(mStream);
-        mWriter.StartObject();
     }
 
     inline JsonOutputSerializer(const JsonOutputSerializer& other) NEKO_NOEXCEPT
@@ -204,7 +288,7 @@ public:
 #endif
     inline bool startArray(const std::size_t) NEKO_NOEXCEPT { return mWriter.StartArray(); }
     inline bool endArray() NEKO_NOEXCEPT { return mWriter.EndArray(); }
-    inline bool startObject(const std::size_t) NEKO_NOEXCEPT { return mWriter.StartObject(); }
+    inline bool startObject(const std::size_t = -1) NEKO_NOEXCEPT { return mWriter.StartObject(); }
     inline bool endObject() NEKO_NOEXCEPT { return mWriter.EndObject(); }
     inline bool end() NEKO_NOEXCEPT {
         if (!mWriter.IsComplete()) {
@@ -223,94 +307,6 @@ private:
     WriterType mWriter;
     typename detail::json_output_wrapper_type<WriterType>::output_stream_type mStream;
 };
-
-namespace detail {
-class ConstJsonIterator {
-public:
-    using MemberIterator = JsonValue::ConstMemberIterator;
-    using ValueIterator  = JsonValue::ConstValueIterator;
-
-public:
-    inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null_){};
-    inline ConstJsonIterator(MemberIterator begin, MemberIterator end) NEKO_NOEXCEPT : mMemberItBegin(begin),
-                                                                                       mMemberItEnd(end),
-                                                                                       mIndex(0),
-                                                                                       mMemberIt(begin),
-                                                                                       mSize(0),
-                                                                                       mType(Member) {
-        for (auto member = mMemberItBegin; member != mMemberItEnd; ++member) {
-            mMemberMap.emplace(NEKO_STRING_VIEW{member->name.GetString(), member->name.GetStringLength()}, member);
-            ++mSize;
-        }
-        if (mSize == 0) {
-            mType = Null_;
-            return;
-        }
-    }
-
-    inline ConstJsonIterator(ValueIterator begin, ValueIterator end) NEKO_NOEXCEPT : mValueItBegin(begin),
-                                                                                     mIndex(0),
-                                                                                     mMemberIt(),
-                                                                                     mSize(std::distance(begin, end)),
-                                                                                     mType(Value) {
-        if (mSize == 0) {
-            mType = Null_;
-        }
-    }
-
-    inline ~ConstJsonIterator() = default;
-
-    inline ConstJsonIterator& operator++() NEKO_NOEXCEPT {
-        if (mType == Member) {
-            ++mMemberIt;
-        } else {
-            ++mIndex;
-        }
-        return *this;
-    }
-    inline bool eof() const NEKO_NOEXCEPT {
-        if (mType == Null_ || (mType == Value && mIndex >= mSize) || (mType == Member && mMemberIt == mMemberItEnd)) {
-            return true;
-        }
-        return false;
-    }
-    inline std::size_t size() const NEKO_NOEXCEPT { return mSize; }
-    inline const JsonValue& value() NEKO_NOEXCEPT {
-        NEKO_ASSERT(!eof(), "JsonInputSerializer get next value called on end of this json object");
-        switch (mType) {
-        case Value:
-            return mValueItBegin[mIndex];
-        case Member:
-            return mMemberIt->value;
-        }
-        return mValueItBegin[mIndex]; // should never reach here, but needed to avoid compiler warning
-    }
-    inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
-        if (mType == Member && mMemberIt != mMemberItEnd) {
-            return {mMemberIt->name.GetString(), mMemberIt->name.GetStringLength()};
-        } else {
-            return {};
-        }
-    };
-    inline const JsonValue* move_to_member(const NEKO_STRING_VIEW& name) NEKO_NOEXCEPT {
-        auto it = mMemberMap.find(name);
-        if (it != mMemberMap.end()) {
-            mMemberIt = it->second;
-            return &(mMemberIt)->value;
-        } else {
-            return nullptr;
-        }
-    };
-
-private:
-    MemberIterator mMemberItBegin, mMemberItEnd, mMemberIt;
-    ValueIterator mValueItBegin;
-    std::size_t mIndex, mSize;
-    std::unordered_map<NEKO_STRING_VIEW, MemberIterator> mMemberMap;
-    enum Type { Value, Member, Null_ } mType;
-};
-
-} // namespace detail
 
 /**
  * @brief json input serializer
@@ -340,24 +336,12 @@ public:
           mDocument(),
           mItemStack() {
         mDocument.Parse(buf.data(), buf.size());
-        if (mDocument.IsArray()) {
-            mItemStack.emplace_back(mDocument.Begin(), mDocument.End());
-        } else if (mDocument.IsObject()) {
-            mItemStack.emplace_back(mDocument.MemberBegin(), mDocument.MemberEnd());
-        }
-        mCurrentItem = &mItemStack.back();
     }
     inline JsonInputSerializer(const char* buf, std::size_t size) NEKO_NOEXCEPT
         : detail::InputSerializer<JsonInputSerializer>(this),
           mDocument(),
           mItemStack() {
         mDocument.Parse(buf, size);
-        if (mDocument.IsArray()) {
-            mItemStack.emplace_back(mDocument.Begin(), mDocument.End());
-        } else if (mDocument.IsObject()) {
-            mItemStack.emplace_back(mDocument.MemberBegin(), mDocument.MemberEnd());
-        }
-        mCurrentItem = &mItemStack.back();
     }
     inline JsonInputSerializer(rapidjson::IStreamWrapper& stream) NEKO_NOEXCEPT
         : detail::InputSerializer<JsonInputSerializer>(this),
@@ -374,6 +358,7 @@ public:
     inline operator bool() const NEKO_NOEXCEPT { return mDocument.GetParseError() == rapidjson::kParseErrorNone; }
 
     inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
+        NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
         if ((*mCurrentItem).eof())
             return {};
         return (*mCurrentItem).name();
@@ -382,6 +367,7 @@ public:
     template <typename T, traits::enable_if_t<std::is_signed<T>::value, sizeof(T) < sizeof(int64_t),
                                               !std::is_enum<T>::value> = traits::default_value_for_enable>
     inline bool loadValue(T& value) NEKO_NOEXCEPT {
+        NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
         if (!(*mCurrentItem).value().IsInt()) {
             return false;
         }
@@ -393,6 +379,7 @@ public:
     template <typename T, traits::enable_if_t<std::is_unsigned<T>::value, sizeof(T) < sizeof(uint64_t),
                                               !std::is_enum<T>::value> = traits::default_value_for_enable>
     inline bool loadValue(T& value) NEKO_NOEXCEPT {
+        NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
         if (!(*mCurrentItem).value().IsUint()) {
             return false;
         }
@@ -402,6 +389,7 @@ public:
 
     template <typename CharT, typename Traits, typename Alloc>
     inline bool loadValue(std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
+        NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
         if (!(*mCurrentItem).value().IsString()) {
             return false;
         }
@@ -412,6 +400,7 @@ public:
     }
 
     inline bool loadValue(int64_t& value) NEKO_NOEXCEPT {
+        NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
         if (!(*mCurrentItem).value().IsInt64())
             return false;
         value = (*mCurrentItem).value().GetInt64();
@@ -420,6 +409,7 @@ public:
     }
 
     inline bool loadValue(uint64_t& value) NEKO_NOEXCEPT {
+        NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
         if (!(*mCurrentItem).value().IsUint64())
             return false;
         value = (*mCurrentItem).value().GetUint64();
@@ -428,6 +418,7 @@ public:
     }
 
     inline bool loadValue(float& value) NEKO_NOEXCEPT {
+        NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
         if (!(*mCurrentItem).value().IsNumber())
             return false;
         value = (*mCurrentItem).value().GetDouble();
@@ -436,6 +427,7 @@ public:
     }
 
     inline bool loadValue(double& value) NEKO_NOEXCEPT {
+        NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
         if (!(*mCurrentItem).value().IsNumber())
             return false;
         value = (*mCurrentItem).value().GetDouble();
@@ -444,6 +436,7 @@ public:
     }
 
     inline bool loadValue(bool& value) NEKO_NOEXCEPT {
+        NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
         if (!(*mCurrentItem).value().IsBool())
             return false;
         value = (*mCurrentItem).value().GetBool();
@@ -452,6 +445,7 @@ public:
     }
 
     inline bool loadValue(std::nullptr_t&) NEKO_NOEXCEPT {
+        NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
         if (!(*mCurrentItem).value().IsNull())
             return false;
         ++(*mCurrentItem);
@@ -460,6 +454,7 @@ public:
 
     template <typename T>
     inline bool loadValue(const SizeTag<T>& value) NEKO_NOEXCEPT {
+        NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
         value.size = (*mCurrentItem).size();
         return true;
     }
@@ -467,6 +462,7 @@ public:
 #if NEKO_CPP_PLUS >= 17
     template <typename T>
     inline bool loadValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
+        NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
         const auto& v = (*mCurrentItem).move_to_member({value.name, value.nameLen});
         bool ret      = true;
         if constexpr (traits::is_optional<T>::value) {
@@ -519,6 +515,7 @@ public:
 #else
     template <typename T>
     inline bool loadValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
+        NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
         const auto& v = (*mCurrentItem).move_to_member({value.name, value.nameLen});
         if (nullptr == v) {
 #if defined(NEKO_VERBOSE_LOGS)
@@ -540,24 +537,38 @@ public:
     }
 #endif
     inline bool startNode() NEKO_NOEXCEPT {
-        if ((*mCurrentItem).value().IsArray()) {
-            mItemStack.emplace_back((*mCurrentItem).value().Begin(), (*mCurrentItem).value().End());
-        } else if ((*mCurrentItem).value().IsObject()) {
-            mItemStack.emplace_back((*mCurrentItem).value().MemberBegin(), (*mCurrentItem).value().MemberEnd());
+        if (!mItemStack.empty()) {
+            if ((*mCurrentItem).value().IsArray()) {
+                mItemStack.emplace_back((*mCurrentItem).value().Begin(), (*mCurrentItem).value().End());
+            } else if ((*mCurrentItem).value().IsObject()) {
+                mItemStack.emplace_back((*mCurrentItem).value().MemberBegin(), (*mCurrentItem).value().MemberEnd());
+            } else {
+                return false;
+            }
         } else {
-            return false;
+            if (mDocument.IsArray()) {
+                mItemStack.emplace_back(mDocument.Begin(), mDocument.End());
+            } else if (mDocument.IsObject()) {
+                mItemStack.emplace_back(mDocument.MemberBegin(), mDocument.MemberEnd());
+            } else {
+                return false;
+            }
         }
         mCurrentItem = &mItemStack.back();
         return true;
     }
 
     inline bool finishNode() NEKO_NOEXCEPT {
-        if (mItemStack.size() < 2) {
+        if (mItemStack.size() >= 2) {
+            mItemStack.pop_back();
+            mCurrentItem = &mItemStack.back();
+            ++(*mCurrentItem);
+        } else if (mItemStack.size() == 1) {
+            mItemStack.pop_back();
+            mCurrentItem = nullptr;
+        } else {
             return false;
         }
-        mItemStack.pop_back();
-        mCurrentItem = &mItemStack.back();
-        ++(*mCurrentItem);
         return true;
     }
 
@@ -595,8 +606,8 @@ inline bool epilogue(JsonOutputSerializer<WriterT>& sa, const NameValuePair<T>&)
     return true;
 }
 
-//#########################################################
-// size tag
+// #########################################################
+//  size tag
 template <typename T>
 inline bool prologue(JsonInputSerializer& sa, const SizeTag<T>& value) NEKO_NOEXCEPT {
     return true;
@@ -646,13 +657,15 @@ inline bool epilogue(JsonOutputSerializer<WriterT>& sa, const T&) NEKO_NOEXCEPT 
 }
 
 template <typename T, typename WriterT,
-          traits::enable_if_t<traits::has_method_const_serialize<T, JsonOutputSerializer<WriterT>>::value> =
+          traits::enable_if_t<traits::has_method_const_serialize<T, JsonOutputSerializer<WriterT>>::value ||
+                              traits::has_method_serialize<T, JsonOutputSerializer<WriterT>>::value> =
               traits::default_value_for_enable>
 inline bool prologue(JsonOutputSerializer<WriterT>& sa, const T&) NEKO_NOEXCEPT {
     return sa.startObject(-1);
 }
 template <typename T, typename WriterT,
-          traits::enable_if_t<traits::has_method_const_serialize<T, JsonOutputSerializer<WriterT>>::value> =
+          traits::enable_if_t<traits::has_method_const_serialize<T, JsonOutputSerializer<WriterT>>::value ||
+                              traits::has_method_serialize<T, JsonOutputSerializer<WriterT>>::value> =
               traits::default_value_for_enable>
 inline bool epilogue(JsonOutputSerializer<WriterT>& sa, const T&) NEKO_NOEXCEPT {
     return sa.endObject();

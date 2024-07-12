@@ -137,7 +137,8 @@ TEST_F(ProtoTest, StructDeserialize) {
                       "\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"k\":1,\"l\":1.114514}";
     std::vector<char> data(str.begin(), str.end());
     TestP testp;
-    EXPECT_TRUE(testp.makeProto().formData(data));
+    JsonSerializer::InputSerializer input(data);
+    EXPECT_TRUE(input(testp));
     EXPECT_EQ(testp.a, 3);
     EXPECT_STREQ(testp.b.c_str(), "Struct test");
     EXPECT_TRUE(testp.c);

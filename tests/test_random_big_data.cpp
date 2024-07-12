@@ -1,12 +1,11 @@
-#include <gtest/gtest.h>
-#include <string>
-
 #include "../core/json_serializer.hpp"
 #include "../core/proto_base.hpp"
 #include "../core/serializer_base.hpp"
 #include "../core/to_string.hpp"
 #include "../core/types/map.hpp"
 #include "../core/types/vector.hpp"
+#include <gtest/gtest.h>
+#include <string>
 
 NEKO_USE_NAMESPACE
 struct TestStruct1 {
@@ -240,6 +239,7 @@ struct TestStruct4 {
 
 #include "big_data_test_data_1.cpp"
 #include "big_data_test_data_2.cpp"
+#ifdef __GNUC__
 #include "big_data_test_data_3.cpp"
 #include "big_data_test_data_4.cpp"
 #include "big_data_test_data_5.cpp"
@@ -247,6 +247,7 @@ struct TestStruct4 {
 #include "big_data_test_data_7.cpp"
 #include "big_data_test_data_8.cpp"
 #include "big_data_test_data_9.cpp"
+#endif
 
 std::vector<char> makeData(const char* data) { return std::vector<char>(data, data + std::strlen(data)); }
 

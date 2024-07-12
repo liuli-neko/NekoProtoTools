@@ -800,6 +800,7 @@ TEST(RandomProtoTest, EnumTest) {
     TestEnumBG8AC a = TestEnumBG8AC::TestEnumBG8AC0;
     std::vector<char> buffer;
     JsonSerializer::OutputSerializer out(buffer);
+    out.startObject(-1);
     out(makeNameValuePair<const TestEnumBG8AC&>("a", a));
     out(makeNameValuePair<const TestEnumBG8AC&>("b", TestEnumBG8AC::TestEnumBG8AC10));
     out(makeNameValuePair<const TestEnumBG8AC&>("c", TestEnumBG8AC::TestEnumBG8AC20));

@@ -1,18 +1,7 @@
 #include <gtest/gtest.h>
 
-#include "../core/binary_serializer.hpp"
-#include "../core/json_serializer.hpp"
-#include "../core/proto_base.hpp"
-#include "../core/serializer_base.hpp"
-#include "../core/to_string.hpp"
-#include "../core/types/array.hpp"
-#include "../core/types/enum.hpp"
-#include "../core/types/list.hpp"
-#include "../core/types/map.hpp"
+#include "../core/simd_json_serializer.hpp"
 #include "../core/types/struct_unwrap.hpp"
-#include "../core/types/tuple.hpp"
-#include "../core/types/variant.hpp"
-#include "../core/types/vector.hpp"
 
 NEKO_USE_NAMESPACE
 struct TestStruct {
@@ -27,6 +16,18 @@ TEST(TraitsTest, test) {
     EXPECT_TRUE(traits::is_optional<const std::optional<int>&>::value);
     EXPECT_TRUE(traits::is_optional<const std::optional<int>>::value);
     EXPECT_TRUE(detail::can_unwrap_v<TestStruct>);
+}
+
+TEST(TraitsTest, simdjson) {
+    std::vector<char> buffer;
+    SimdJsonOutputSerializer serializer(buffer);
+    simdjson::padded_string json_str = "{\"a\": 1, \"b\": \"hello\"}"_padded;
+    simdjson::dom::parser parser;
+    simdjson::dom::element el;
+    simdjson::dom::object obj;
+    std::cout << "1111111111" << std::endl;
+    std::cout << (el == simdjson::dom::element()) << std::endl;
+    std::cout << "22222222" << std::endl;
 }
 
 int main(int argc, char** argv) {

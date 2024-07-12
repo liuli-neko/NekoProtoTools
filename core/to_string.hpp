@@ -131,8 +131,10 @@ public:
         return true;
     }
     bool end() NEKO_NOEXCEPT {
-        mBuffer.pop_back();
-        mBuffer.pop_back();
+        if (mBuffer.size() > 0 && mBuffer.back() == ' ') {
+            mBuffer.pop_back();
+            mBuffer.pop_back();
+        }
         return true;
     }
 

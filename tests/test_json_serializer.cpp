@@ -124,6 +124,7 @@ protected:
 
 TEST_F(JsonSerializerTest, Int) {
     int a = 1;
+    output.startObject(1);
     output(makeNameValuePair("a", a));
     output.end();
     buffer.push_back('\0');
@@ -132,6 +133,7 @@ TEST_F(JsonSerializerTest, Int) {
 
 TEST_F(JsonSerializerTest, String) {
     std::string a = "hello";
+    output.startObject(1);
     output(makeNameValuePair("a", a));
     output.end();
     buffer.push_back('\0');
@@ -140,6 +142,7 @@ TEST_F(JsonSerializerTest, String) {
 
 TEST_F(JsonSerializerTest, Bool) {
     bool a = true;
+    output.startObject(1);
     output(makeNameValuePair("a", a));
     output.end();
     buffer.push_back('\0');
@@ -149,6 +152,7 @@ TEST_F(JsonSerializerTest, Bool) {
 
 TEST_F(JsonSerializerTest, Double) {
     double a = 3.14;
+    output.startObject(1);
     output(makeNameValuePair("a", a));
     output.end();
     buffer.push_back('\0');
@@ -158,6 +162,7 @@ TEST_F(JsonSerializerTest, Double) {
 
 TEST_F(JsonSerializerTest, List) {
     std::list<int> a = {1, 2, 3, 4, 5};
+    output.startObject(1);
     output(makeNameValuePair("a", a));
     output.end();
     buffer.push_back('\0');
@@ -167,6 +172,7 @@ TEST_F(JsonSerializerTest, List) {
 
 TEST_F(JsonSerializerTest, Map) {
     std::map<std::string, int> a = {{"a", 1}, {"b", 2}, {"c", 3}};
+    output.startObject(1);
     output(makeNameValuePair("a", a));
     output.end();
     buffer.push_back('\0');
@@ -176,6 +182,7 @@ TEST_F(JsonSerializerTest, Map) {
 
 TEST_F(JsonSerializerTest, Array) {
     std::array<int, 5> a = {1, 2, 3, 4, 5};
+    output.startObject(1);
     output(makeNameValuePair("a", a));
     output.end();
     buffer.push_back('\0');
@@ -200,6 +207,7 @@ TEST_F(JsonSerializerTest, Struct) {
 #if NEKO_CPP_PLUS >= 17
     std::get<1>(testp.l.a).c = TestA{1221, "this is a test for optional"};
 #endif
+    output.startObject(1);
     output(makeNameValuePair("a", testp));
     output.end();
 #if NEKO_CPP_PLUS >= 17
@@ -226,6 +234,7 @@ TEST_F(JsonSerializerTest, Struct) {
     TestP testp2;
     {
         JsonSerializer::InputSerializer input(buffer);
+        input.startNode();
         input(makeNameValuePair("a", testp2));
     }
     EXPECT_EQ(testp.a, testp2.a);
@@ -242,7 +251,8 @@ TEST_F(JsonSerializerTest, Struct) {
     {
         std::vector<char> buffer;
         JsonOutputSerializer<detail::PrettyJsonWriter<>> output(
-            buffer, makePrettyJsonWriter(JsonOutputFormatOptions::Compact()));
+            buffer, makePrettyJsonWriter(JsonOutputFormatOptions::Default()));
+        output.startObject(1);
         output(makeNameValuePair("a", testp));
         output.end();
         buffer.push_back('\0');
