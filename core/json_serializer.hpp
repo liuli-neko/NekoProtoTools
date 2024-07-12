@@ -345,6 +345,7 @@ public:
         } else if (mDocument.IsObject()) {
             mItemStack.emplace_back(mDocument.MemberBegin(), mDocument.MemberEnd());
         }
+        mCurrentItem = &mItemStack.back();
     }
     inline JsonInputSerializer(const char* buf, std::size_t size) NEKO_NOEXCEPT
         : detail::InputSerializer<JsonInputSerializer>(this),
@@ -356,6 +357,7 @@ public:
         } else if (mDocument.IsObject()) {
             mItemStack.emplace_back(mDocument.MemberBegin(), mDocument.MemberEnd());
         }
+        mCurrentItem = &mItemStack.back();
     }
     inline JsonInputSerializer(rapidjson::IStreamWrapper& stream) NEKO_NOEXCEPT
         : detail::InputSerializer<JsonInputSerializer>(this),
@@ -367,104 +369,105 @@ public:
         } else if (mDocument.IsObject()) {
             mItemStack.emplace_back(mDocument.MemberBegin(), mDocument.MemberEnd());
         }
+        mCurrentItem = &mItemStack.back();
     }
     inline operator bool() const NEKO_NOEXCEPT { return mDocument.GetParseError() == rapidjson::kParseErrorNone; }
 
     inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
-        if (mItemStack.empty() || mItemStack.back().eof())
+        if ((*mCurrentItem).eof())
             return {};
-        return mItemStack.back().name();
+        return (*mCurrentItem).name();
     }
 
     template <typename T, traits::enable_if_t<std::is_signed<T>::value, sizeof(T) < sizeof(int64_t),
                                               !std::is_enum<T>::value> = traits::default_value_for_enable>
     inline bool loadValue(T& value) NEKO_NOEXCEPT {
-        if (mItemStack.empty() || !mItemStack.back().value().IsInt()) {
+        if (!(*mCurrentItem).value().IsInt()) {
             return false;
         }
-        value = static_cast<T>(mItemStack.back().value().GetInt());
-        ++mItemStack.back();
+        value = static_cast<T>((*mCurrentItem).value().GetInt());
+        ++(*mCurrentItem);
         return true;
     }
 
     template <typename T, traits::enable_if_t<std::is_unsigned<T>::value, sizeof(T) < sizeof(uint64_t),
                                               !std::is_enum<T>::value> = traits::default_value_for_enable>
     inline bool loadValue(T& value) NEKO_NOEXCEPT {
-        if (mItemStack.empty() || !mItemStack.back().value().IsUint()) {
+        if (!(*mCurrentItem).value().IsUint()) {
             return false;
         }
-        value = static_cast<T>(mItemStack.back().value().GetUint());
-        ++mItemStack.back();
+        value = static_cast<T>((*mCurrentItem).value().GetUint());
+        ++(*mCurrentItem);
     }
 
     template <typename CharT, typename Traits, typename Alloc>
     inline bool loadValue(std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
-        if (mItemStack.empty() || !mItemStack.back().value().IsString()) {
+        if (!(*mCurrentItem).value().IsString()) {
             return false;
         }
-        const auto& v = mItemStack.back().value();
+        const auto& v = (*mCurrentItem).value();
         value         = std::basic_string<CharT, Traits, Alloc>{v.GetString(), v.GetStringLength()};
-        ++mItemStack.back();
+        ++(*mCurrentItem);
         return true;
     }
 
     inline bool loadValue(int64_t& value) NEKO_NOEXCEPT {
-        if (mItemStack.empty() || !mItemStack.back().value().IsInt64())
+        if (!(*mCurrentItem).value().IsInt64())
             return false;
-        value = mItemStack.back().value().GetInt64();
-        ++mItemStack.back();
+        value = (*mCurrentItem).value().GetInt64();
+        ++(*mCurrentItem);
         return true;
     }
 
     inline bool loadValue(uint64_t& value) NEKO_NOEXCEPT {
-        if (mItemStack.empty() || !mItemStack.back().value().IsUint64())
+        if (!(*mCurrentItem).value().IsUint64())
             return false;
-        value = mItemStack.back().value().GetUint64();
-        ++mItemStack.back();
+        value = (*mCurrentItem).value().GetUint64();
+        ++(*mCurrentItem);
         return true;
     }
 
     inline bool loadValue(float& value) NEKO_NOEXCEPT {
-        if (mItemStack.empty() || !mItemStack.back().value().IsNumber())
+        if (!(*mCurrentItem).value().IsNumber())
             return false;
-        value = mItemStack.back().value().GetDouble();
-        ++mItemStack.back();
+        value = (*mCurrentItem).value().GetDouble();
+        ++(*mCurrentItem);
         return true;
     }
 
     inline bool loadValue(double& value) NEKO_NOEXCEPT {
-        if (mItemStack.empty() || !mItemStack.back().value().IsNumber())
+        if (!(*mCurrentItem).value().IsNumber())
             return false;
-        value = mItemStack.back().value().GetDouble();
-        ++mItemStack.back();
+        value = (*mCurrentItem).value().GetDouble();
+        ++(*mCurrentItem);
         return true;
     }
 
     inline bool loadValue(bool& value) NEKO_NOEXCEPT {
-        if (mItemStack.empty() || !mItemStack.back().value().IsBool())
+        if (!(*mCurrentItem).value().IsBool())
             return false;
-        value = mItemStack.back().value().GetBool();
-        ++mItemStack.back();
+        value = (*mCurrentItem).value().GetBool();
+        ++(*mCurrentItem);
         return true;
     }
 
     inline bool loadValue(std::nullptr_t&) NEKO_NOEXCEPT {
-        if (mItemStack.empty() || !mItemStack.back().value().IsNull())
+        if (!(*mCurrentItem).value().IsNull())
             return false;
-        ++mItemStack.back();
+        ++(*mCurrentItem);
         return true;
     }
 
     template <typename T>
     inline bool loadValue(const SizeTag<T>& value) NEKO_NOEXCEPT {
-        value.size = mItemStack.back().size();
+        value.size = (*mCurrentItem).size();
         return true;
     }
 
 #if NEKO_CPP_PLUS >= 17
     template <typename T>
     inline bool loadValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
-        const auto& v = mItemStack.back().move_to_member({value.name, value.nameLen});
+        const auto& v = (*mCurrentItem).move_to_member({value.name, value.nameLen});
         bool ret      = true;
         if constexpr (traits::is_optional<T>::value) {
             if (nullptr == v || v->IsNull()) {
@@ -516,7 +519,7 @@ public:
 #else
     template <typename T>
     inline bool loadValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
-        const auto& v = mItemStack.back().move_to_member({value.name, value.nameLen});
+        const auto& v = (*mCurrentItem).move_to_member({value.name, value.nameLen});
         if (nullptr == v) {
 #if defined(NEKO_VERBOSE_LOGS)
             NEKO_LOG_ERROR("field {} is not find.", std::string(value.name, value.nameLen));
@@ -537,13 +540,14 @@ public:
     }
 #endif
     inline bool startNode() NEKO_NOEXCEPT {
-        if (mItemStack.back().value().IsArray()) {
-            mItemStack.emplace_back(mItemStack.back().value().Begin(), mItemStack.back().value().End());
-        } else if (mItemStack.back().value().IsObject()) {
-            mItemStack.emplace_back(mItemStack.back().value().MemberBegin(), mItemStack.back().value().MemberEnd());
+        if ((*mCurrentItem).value().IsArray()) {
+            mItemStack.emplace_back((*mCurrentItem).value().Begin(), (*mCurrentItem).value().End());
+        } else if ((*mCurrentItem).value().IsObject()) {
+            mItemStack.emplace_back((*mCurrentItem).value().MemberBegin(), (*mCurrentItem).value().MemberEnd());
         } else {
             return false;
         }
+        mCurrentItem = &mItemStack.back();
         return true;
     }
 
@@ -552,7 +556,8 @@ public:
             return false;
         }
         mItemStack.pop_back();
-        ++mItemStack.back();
+        mCurrentItem = &mItemStack.back();
+        ++(*mCurrentItem);
         return true;
     }
 
@@ -563,6 +568,7 @@ private:
 private:
     detail::JsonDocument mDocument;
     std::vector<detail::ConstJsonIterator> mItemStack;
+    detail::ConstJsonIterator* mCurrentItem;
 };
 
 // #######################################################
