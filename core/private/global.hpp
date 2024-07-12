@@ -115,6 +115,7 @@
 
 NEKO_BEGIN_NAMESPACE
 #if defined(__GNUC__) || defined(__MINGW__)
+#define NEKO_PRETTY_FUNCTION_NAME __PRETTY_FUNCTION__
 namespace {
 template <class T>
 NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() NEKO_NOEXCEPT {
@@ -143,6 +144,7 @@ NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() NEKO_NOEXCEPT {
 }
 } // namespace
 #elif defined(_WIN32)
+#define NEKO_PRETTY_FUNCTION_NAME __FUNCSIG__
 namespace {
 template <class T>
 NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() NEKO_NOEXCEPT {

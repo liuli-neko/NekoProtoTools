@@ -339,7 +339,7 @@ template <typename ProtoT, typename SerializerT>
 std::vector<char> ProtoBase<ProtoT, SerializerT>::Serialize(const ProtoT& proto) {
     std::vector<char> data;
     typename SerializerT::OutputSerializer serializer(data);
-    auto ret = proto.serialize(serializer);
+    auto ret = serializer(proto);
     if (!serializer.end()) {
         NEKO_LOG_ERROR("{} serialize error", kProtoName);
     }
@@ -350,9 +350,12 @@ template <typename ProtoT, typename SerializerT>
 bool ProtoBase<ProtoT, SerializerT>::Deserialize(const std::vector<char>& data, ProtoT& proto) {
     typename SerializerT::InputSerializer serializer(data);
     if (!serializer) {
+#if defined(NEKO_VERBOSE_LOGS)
+        NEKO_LOG_INFO("{} data parser failed.", kProtoName);
+#endif
         return false;
     }
-    bool ret = proto.serialize(serializer);
+    bool ret = serializer(proto);
     if (!ret) {
         NEKO_LOG_ERROR("{} deserialize error", kProtoName);
         return false;
