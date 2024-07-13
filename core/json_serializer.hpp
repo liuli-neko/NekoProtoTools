@@ -348,12 +348,6 @@ public:
           mDocument(),
           mItemStack() {
         mDocument.ParseStream(stream);
-        if (mDocument.IsArray()) {
-            mItemStack.emplace_back(mDocument.Begin(), mDocument.End());
-        } else if (mDocument.IsObject()) {
-            mItemStack.emplace_back(mDocument.MemberBegin(), mDocument.MemberEnd());
-        }
-        mCurrentItem = &mItemStack.back();
     }
     inline operator bool() const NEKO_NOEXCEPT { return mDocument.GetParseError() == rapidjson::kParseErrorNone; }
 
