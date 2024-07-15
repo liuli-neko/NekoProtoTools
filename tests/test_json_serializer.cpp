@@ -233,7 +233,7 @@ TEST_F(JsonSerializerTest, Struct) {
 
     TestP testp2;
     {
-        JsonSerializer::InputSerializer input(buffer);
+        JsonSerializer::InputSerializer input(buffer.data(), buffer.size());
         input.startNode();
         input(makeNameValuePair("a", testp2));
     }

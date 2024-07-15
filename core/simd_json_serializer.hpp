@@ -9,13 +9,13 @@
  *
  */
 #pragma once
+#include <simdjson.h>
+#include <vector>
 
 #include "private/global.hpp"
 #include "private/helpers.hpp"
 #include "private/log.hpp"
 
-#include <simdjson.h>
-#include <vector>
 #ifdef GetObject
 #undef GetObject
 #endif
@@ -54,15 +54,16 @@ public:
     using ValueIterator  = simdjson::dom::array::iterator;
 
 public:
-    inline ConstJsonIterator() NEKO_NOEXCEPT : mType(Null_) {};
-    inline ConstJsonIterator(const JsonObject& object) NEKO_NOEXCEPT : mMemberIt(object.begin()),
-                                                                       mObject(object),
-                                                                       mSize(object.size()),
-                                                                       mType(Member) {
+    inline ConstJsonIterator() NEKO_NOEXCEPT : mType(Null_){};
+    inline ConstJsonIterator(const JsonObject& object) NEKO_NOEXCEPT : mSize(object.size()), mType(Member) {
         if (mSize == 0) {
             mType = Null_;
             return;
         }
+        for (auto iter = object.begin(); iter != object.end(); ++iter) {
+            mMembers.emplace(iter.key(), iter);
+        }
+        mMemberIt = mMembers.begin();
     }
 
     inline ConstJsonIterator(const JsonArray& array) NEKO_NOEXCEPT : mValueItBegin(array.begin()),
@@ -87,7 +88,7 @@ public:
     }
     inline bool eof() const NEKO_NOEXCEPT {
         if (mType == Null_ || (mType == Value && mValueIt == mValueItEnd) ||
-            (mType == Member && mMemberIt == mObject.end())) {
+            (mType == Member && mMemberIt == mMembers.end())) {
             return true;
         }
         return false;
@@ -99,15 +100,15 @@ public:
         case Value:
             return *mValueIt;
         case Member:
-            return mMemberIt.value();
+            return (mMemberIt->second).value();
         default:
             return JsonValue(
                 simdjson::error_code::NO_SUCH_FIELD); // should never reach here, but needed to avoid compiler warning
         }
     }
     inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
-        if (mType == Member && mMemberIt != mObject.end()) {
-            return mMemberIt.key();
+        if (mType == Member && mMemberIt != mMembers.end()) {
+            return mMemberIt->first;
         } else {
             return {};
         }
@@ -116,18 +117,17 @@ public:
         if (mType != Member) {
             return JsonValue(simdjson::error_code::NO_SUCH_FIELD);
         }
-        for (auto it = mObject.begin(); it != mObject.end(); ++it) {
-            if (it.key() == name) {
-                mMemberIt = it;
-                return mMemberIt.value();
-            }
+        auto it = mMembers.find(name);
+        if (it != mMembers.end()) {
+            mMemberIt = it;
+            return (mMemberIt->second).value();
         }
         return JsonValue(simdjson::error_code::NO_SUCH_FIELD);
     }
 
 private:
-    JsonObject mObject;
-    MemberIterator mMemberIt;
+    std::unordered_map<NEKO_STRING_VIEW, MemberIterator>::iterator mMemberIt;
+    std::unordered_map<NEKO_STRING_VIEW, MemberIterator> mMembers;
     ValueIterator mValueItBegin, mValueItEnd, mValueIt;
     std::size_t mSize;
     enum Type { Value, Member, Null_ } mType;
@@ -217,23 +217,7 @@ private:
 class SimdJsonInputSerializer : public detail::InputSerializer<SimdJsonInputSerializer> {
 
 public:
-    inline SimdJsonInputSerializer(const std::vector<char>& buf) NEKO_NOEXCEPT
-        : detail::InputSerializer<SimdJsonInputSerializer>(this),
-          mItemStack() {
-        auto error = mParser.parse(buf.data(), buf.size()).get(mRoot);
-        if (error) {
-            NEKO_LOG_INFO("simdjson parser error: {}", simdjson::error_message(error));
-            mParserError = true;
-            return;
-        }
-        if (mRoot.is_array()) {
-            mItemStack.emplace_back(mRoot.get_array());
-        } else if (mRoot.is_object()) {
-            mItemStack.emplace_back(mRoot.get_object());
-        }
-        mCurrentItem = &mItemStack.back();
-    }
-    inline SimdJsonInputSerializer(const char* buf, std::size_t size) NEKO_NOEXCEPT
+    inline explicit SimdJsonInputSerializer(const char* buf, std::size_t size) NEKO_NOEXCEPT
         : detail::InputSerializer<SimdJsonInputSerializer>(this),
           mItemStack() {
         auto error = mParser.parse(buf, size).get(mRoot);
@@ -242,12 +226,6 @@ public:
             mParserError = true;
             return;
         }
-        if (mRoot.is_array()) {
-            mItemStack.emplace_back(mRoot.get_array());
-        } else if (mRoot.is_object()) {
-            mItemStack.emplace_back(mRoot.get_object());
-        }
-        mCurrentItem = &mItemStack.back();
     }
     inline operator bool() const NEKO_NOEXCEPT { return !mParserError; }
 
@@ -368,8 +346,8 @@ public:
         } else {
             if (v.error() != simdjson::error_code::SUCCESS) {
 #if defined(NEKO_VERBOSE_LOGS)
-                NEKO_LOG_ERROR("{} field {} is not find.", NEKO_PRETTY_FUNCTION_NAME,
-                               std::string(value.name, value.nameLen));
+                NEKO_LOG_ERROR("{} field {} is not find. error {}", NEKO_PRETTY_FUNCTION_NAME,
+                               std::string(value.name, value.nameLen), simdjson::error_message(v.error()));
 #endif
                 return false;
             }
@@ -386,25 +364,39 @@ public:
         return ret;
     }
     inline bool startNode() NEKO_NOEXCEPT {
-        if ((*mCurrentItem).value().is_array()) {
-            mItemStack.emplace_back((*mCurrentItem).value().get_array());
-        } else if ((*mCurrentItem).value().is_object()) {
-            mItemStack.emplace_back((*mCurrentItem).value().get_object());
+        if (mItemStack.empty()) {
+            if (mRoot.is_array()) {
+                mItemStack.emplace_back(mRoot.get_array());
+            } else if (mRoot.is_object()) {
+                mItemStack.emplace_back(mRoot.get_object());
+            } else {
+                return false;
+            }
         } else {
-            return false;
+            if ((*mCurrentItem).value().is_array()) {
+                mItemStack.emplace_back((*mCurrentItem).value().get_array());
+            } else if ((*mCurrentItem).value().is_object()) {
+                mItemStack.emplace_back((*mCurrentItem).value().get_object());
+            } else {
+                return false;
+            }
         }
         mCurrentItem = &mItemStack.back();
         return true;
     }
 
     inline bool finishNode() NEKO_NOEXCEPT {
-        if (mItemStack.size() < 2) {
-            return false;
+        if (mItemStack.size() >= 2) {
+            mItemStack.pop_back();
+            mCurrentItem = &mItemStack.back();
+            ++(*mCurrentItem);
+            return true;
+        } else if (mItemStack.size() == 1) {
+            mItemStack.pop_back();
+            mCurrentItem = nullptr;
+            return true;
         }
-        mItemStack.pop_back();
-        mCurrentItem = &mItemStack.back();
-        ++(*mCurrentItem);
-        return true;
+        return false;
     }
 
 private:

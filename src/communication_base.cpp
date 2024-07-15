@@ -113,7 +113,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
     // NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     MessageHeader hmsg;
     {
-        BinarySerializer::InputSerializer serializer(buf);
+        BinarySerializer::InputSerializer serializer(buf.data(), buf.size());
         serializer(hmsg);
     }
     buf.clear();
@@ -130,7 +130,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
     }
     // NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     {
-        BinarySerializer::InputSerializer serializer(buf);
+        BinarySerializer::InputSerializer serializer(buf.data(), buf.size());
         serializer(cmsg);
     }
     buf.clear();
@@ -215,7 +215,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::makeChannel(IStreamClient&& cli
     }
     // NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     {
-        BinarySerializer::InputSerializer serializer(buf);
+        BinarySerializer::InputSerializer serializer(buf.data(), buf.size());
         serializer(hmsg);
     }
     buf.clear();
@@ -227,7 +227,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::makeChannel(IStreamClient&& cli
     }
     // NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     {
-        BinarySerializer::InputSerializer serializer(buf);
+        BinarySerializer::InputSerializer serializer(buf.data(), buf.size());
         serializer(cmsg);
     }
     if (hmsg.transType != static_cast<uint16_t>(TransType::Channel) || hmsg.protoType != 0) {
@@ -324,7 +324,7 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> ByteStreamChannel
     MessageHeader msgHeader;
     BinarySerializer serializer;
     {
-        BinarySerializer::InputSerializer serializer(headerData);
+        BinarySerializer::InputSerializer serializer(headerData.data(), headerData.size());
         serializer(msgHeader);
     }
     if (msgHeader.length == 0 && msgHeader.protoType == 0 && msgHeader.transType == 0) {
@@ -340,7 +340,7 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> ByteStreamChannel
     if (msgHeader.protoType == 0) {
         ChannelHeader cmsg;
         {
-            BinarySerializer::InputSerializer serializer(data);
+            BinarySerializer::InputSerializer serializer(data.data(), data.size());
             serializer(cmsg);
         }
         if (cmsg.messageType == ChannelHeader::MessageType::CloseMessage) {

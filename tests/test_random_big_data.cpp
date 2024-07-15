@@ -1,6 +1,9 @@
 #include "../core/json_serializer.hpp"
 #include "../core/proto_base.hpp"
 #include "../core/serializer_base.hpp"
+#if NEKO_CPP_PLUS >= 17
+#include "../core/simd_json_serializer.hpp"
+#endif
 #include "../core/to_string.hpp"
 #include "../core/types/map.hpp"
 #include "../core/types/vector.hpp"
@@ -343,7 +346,49 @@ TEST(BigProtoTest, Serializer) {
 #endif
     NEKO_LOG_INFO("total time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count());
 }
+#if NEKO_CPP_PLUS >= 17
+TEST(BigProtoTest, SimdJsonSerializer) {
+    NEKO_LOG_INFO("Proto1 size {}", sizeof(TestStruct1));
+    NEKO_LOG_INFO("Proto1 type size {}", sizeof(TestStruct1::ProtoType));
 
+    NEKO_LOG_INFO("Proto2 size {}", sizeof(TestStruct2));
+    NEKO_LOG_INFO("Proto2 type size {}", sizeof(TestStruct2::ProtoType));
+
+    NEKO_LOG_INFO("Proto3 size {}", sizeof(TestStruct3));
+    NEKO_LOG_INFO("Proto3 type size {}", sizeof(TestStruct3::ProtoType));
+
+    NEKO_LOG_INFO("Proto4 size {}", sizeof(TestStruct4));
+    NEKO_LOG_INFO("Proto4 type size {}", sizeof(TestStruct4::ProtoType));
+
+    // 统计解析时长
+    auto data  = makeData(data_1);
+    auto start = std::chrono::high_resolution_clock::now();
+    auto end   = start;
+    TestStruct4 proto1;
+    {
+        SimdJsonInputSerializer serializer(data.data(), data.size());
+        serializer(proto1);
+    }
+    NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
+                                              std::chrono::high_resolution_clock::now() - end)
+                                              .count());
+    NEKO_LOG_INFO("Serializer f0 size: {}", proto1.f0.size());
+    end = std::chrono::high_resolution_clock::now();
+    TestStruct4 proto2;
+    proto2.makeProto().formData(data);
+    NEKO_LOG_INFO("Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
+                                              std::chrono::high_resolution_clock::now() - end)
+                                              .count());
+    NEKO_LOG_INFO("Serializer f0 size: {}", proto2.f0.size());
+    end = std::chrono::high_resolution_clock::now();
+    NEKO_LOG_INFO("total time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count());
+    EXPECT_EQ(proto1.f0, proto2.f0);
+    EXPECT_EQ(proto1.f1, proto2.f1);
+    EXPECT_EQ(proto1.f2, proto2.f2);
+    EXPECT_EQ(proto1.f3.f14, proto2.f3.f14);
+    EXPECT_EQ(proto1.f3.f15, proto2.f3.f15);
+}
+#endif
 int main(int argc, char** argv) {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
     testing::InitGoogleTest(&argc, argv);
