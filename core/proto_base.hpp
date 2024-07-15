@@ -348,7 +348,7 @@ std::vector<char> ProtoBase<ProtoT, SerializerT>::Serialize(const ProtoT& proto)
 
 template <typename ProtoT, typename SerializerT>
 bool ProtoBase<ProtoT, SerializerT>::Deserialize(const std::vector<char>& data, ProtoT& proto) {
-    typename SerializerT::InputSerializer serializer(data);
+    typename SerializerT::InputSerializer serializer(data.data(), data.size());
     if (!serializer) {
 #if defined(NEKO_VERBOSE_LOGS)
         NEKO_LOG_INFO("{} data parser failed.", kProtoName);

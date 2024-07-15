@@ -32,7 +32,7 @@
 #include <optional>
 #endif
 
-#include "serializer_base.hpp"
+#include "private/helpers.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
@@ -90,7 +90,7 @@ public:
     using ValueIterator  = JsonValue::ConstValueIterator;
 
 public:
-    inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null_) {};
+    inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null_){};
     inline ConstJsonIterator(MemberIterator begin, MemberIterator end) NEKO_NOEXCEPT : mMemberItBegin(begin),
                                                                                        mMemberItEnd(end),
                                                                                        mIndex(0),
@@ -198,7 +198,7 @@ public:
 };
 
 inline auto makePrettyJsonWriter(const JsonOutputFormatOptions& options = JsonOutputFormatOptions::Default())
-    NEKO_NOEXCEPT -> detail::PrettyJsonWriter<detail::OutBufferWrapper> {
+    NEKO_NOEXCEPT->detail::PrettyJsonWriter<detail::OutBufferWrapper> {
     auto writer = detail::PrettyJsonWriter<detail::OutBufferWrapper>(0, options.levelDepth);
     writer.SetIndent(options.indentChar, options.indentLength);
     writer.SetMaxDecimalPlaces(options.precision);
@@ -331,19 +331,13 @@ private:
 class JsonInputSerializer : public detail::InputSerializer<JsonInputSerializer> {
 
 public:
-    inline JsonInputSerializer(const std::vector<char>& buf) NEKO_NOEXCEPT
-        : detail::InputSerializer<JsonInputSerializer>(this),
-          mDocument(),
-          mItemStack() {
-        mDocument.Parse(buf.data(), buf.size());
-    }
-    inline JsonInputSerializer(const char* buf, std::size_t size) NEKO_NOEXCEPT
+    inline explicit JsonInputSerializer(const char* buf, std::size_t size) NEKO_NOEXCEPT
         : detail::InputSerializer<JsonInputSerializer>(this),
           mDocument(),
           mItemStack() {
         mDocument.Parse(buf, size);
     }
-    inline JsonInputSerializer(rapidjson::IStreamWrapper& stream) NEKO_NOEXCEPT
+    inline explicit JsonInputSerializer(rapidjson::IStreamWrapper& stream) NEKO_NOEXCEPT
         : detail::InputSerializer<JsonInputSerializer>(this),
           mDocument(),
           mItemStack() {

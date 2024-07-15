@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
                       "\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"k\":1,\"l\":1.114514}";
     std::vector<char> data(str.begin(), str.end());
     TestP testp;
-    SimdJsonSerializer::InputSerializer input(data);
+    SimdJsonSerializer::InputSerializer input(data.data(), data.size());
     auto ret = input(testp);
     EXPECT_TRUE(ret);
     EXPECT_EQ(testp.a, 3);

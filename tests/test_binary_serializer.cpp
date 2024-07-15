@@ -40,8 +40,8 @@ TEST(BinarySerializer, Serialize) {
 
     EXPECT_EQ(buf.size(), 110);
     TestP p2;
-    BinarySerializer::InputSerializer is(buf);
-    is(p2);
+    BinarySerializer::InputSerializer input(buf.data(), buf.size());
+    input(p2);
     EXPECT_EQ(int(p2.a), -12);
     EXPECT_EQ(p2.b, 332);
     EXPECT_EQ(p2.c, 333);

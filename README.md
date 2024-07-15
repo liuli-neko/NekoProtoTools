@@ -270,7 +270,10 @@ At the same time, the simpler this thing is done, the better.
 
 **serializer**
 - [x] support visit fields by name
-- [ ] using simdjson for json serialization
+- [x] using simdjson for json serialization
+    - [x] support simdjson input serializer in simdjson::dom (this is old API?)
+    - [ ] support serializer interface in simdjson::ondemand (What are the differences between the DNS APIs in the dom and ondemand namespaces?)
+    - [ ] output serializer (simdjson has API to make a json tree?)
 - [ ] support more cpp stl types
 
 **communication**
@@ -278,6 +281,11 @@ At the same time, the simpler this thing is done, the better.
 - [ ] support more protocol in communication channel
 
 ### 6. the future
+#### Latest
+- Make almost all call is serializer(variable)
+    - NameValuePair, SizeTag, etc while are special struct unable to auto enter the object. because they are not a real object. Other class whitout minimal_serializable trait will be auto enter 1 level before process it.
+    - support simdjson backend (now noly under simdjson::dom namespace), it only support input serializer, Slightly faster than rapidjson backend.
+
 #### v1.0.0 - alpha
 - Modify serializer interface
     - Make serialize function to operator()
