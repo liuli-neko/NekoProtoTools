@@ -185,21 +185,19 @@ public:
     static JsonOutputFormatOptions Compact() { return JsonOutputFormatOptions(Indent::kSpace, 0); }
     explicit JsonOutputFormatOptions(Indent indentChar = Indent::kSpace, uint32_t indentLength = 4,
                                      FormatOptions formatOptions = FormatOptions::kFormatSingleLineArray,
-                                     int precision               = detail::JsonWriter<>::kDefaultMaxDecimalPlaces,
-                                     int levelDepth              = detail::JsonWriter<>::kDefaultLevelDepth)
+                                     int precision               = detail::JsonWriter<>::kDefaultMaxDecimalPlaces)
         : indentChar(static_cast<char>(indentChar)), indentLength(indentLength), formatOptions(formatOptions),
-          precision(precision), levelDepth(levelDepth) {}
+          precision(precision) {}
 
     char indentChar             = static_cast<char>(Indent::kSpace);
     int indentLength            = 4;
     FormatOptions formatOptions = FormatOptions::kFormatDefault;
     int precision               = detail::PrettyJsonWriter<>::kDefaultMaxDecimalPlaces;
-    int levelDepth              = detail::PrettyJsonWriter<>::kDefaultLevelDepth;
 };
 
 inline auto makePrettyJsonWriter(const JsonOutputFormatOptions& options = JsonOutputFormatOptions::Default())
     NEKO_NOEXCEPT->detail::PrettyJsonWriter<detail::OutBufferWrapper> {
-    auto writer = detail::PrettyJsonWriter<detail::OutBufferWrapper>(0, options.levelDepth);
+    auto writer = detail::PrettyJsonWriter<detail::OutBufferWrapper>(0);
     writer.SetIndent(options.indentChar, options.indentLength);
     writer.SetMaxDecimalPlaces(options.precision);
     writer.SetFormatOptions(options.formatOptions);
@@ -432,7 +430,7 @@ public:
         return true;
     }
 
-    inline bool loadValue(std::nullptr_t&) NEKO_NOEXCEPT {
+    inline bool loadValue(std::nullptr_t) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
         if (!(*mCurrentItem).value().IsNull())
             return false;

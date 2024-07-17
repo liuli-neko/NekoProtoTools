@@ -1,17 +1,17 @@
-# A PROTO FOR CPP 
+# 一个c++的协议库
 
-### language
-
-[中文](./README_zh.md) 
+### 语言
 
 [English](./README.md)
 
-### 1. Introduction
+[中文](./README_zh.md)
 
-This repository is a pure C++ proto auxiliary library. The library provides abstract template class with common functions of proto Message. It also provides very convenient and easy-to-extend serialization and deserialization support by macros, which are used to generate large and repetitive proto. code.
-Through the macros provided by this library, you only need to add a small number of macros to the original data class. A base class can register it as the message type of proto, implement serialization and deserialization, and automatically use the protocol factory. generate.
+### 1. 简介
+这是一个纯C++的proto辅助库。该库提供抽象模板类，通过模板为proto Message通过了必要的函数，尽可能的简化了proto Message的定义和实现。
+通过使用该库提供的模板，你只需要定义好消息的字段，并声明需要序列化/反序列化的字段以及需要使用的序列化器即可将任意的自定义c++类型作为消息使用，
+本库为消息提供了序列化，反序列化，以及简单的反射功能。
 
-#### 1.2 CI status
+#### 1.2 CI 状态
 
 |name|status|
 |:---:|:---:|
@@ -19,11 +19,11 @@ Through the macros provided by this library, you only need to add a small number
 |Windows|[![Build Status](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-windows.yml/badge.svg?branch=main)](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-windows.yml)|
 |Codecov|[![codecov](https://codecov.io/gh/liuli-neko/NekoProtoTools/graph/badge.svg?token=F5OR647TV7)](https://codecov.io/gh/liuli-neko/NekoProtoTools)|
 
-### 2. Usage
-> for serializer, it depends the Popular libraries, Since it is not necessarily required, it is not included directly in this library. you can select by yourself. 
-> for json serializer can use simdjson or rapidjson.
+### 2. 使用
+> 对于序列化是依赖当下流行的，快速的库来实现的，这部分依赖本库并没有直接包含，因为可能并不需要，为了尽可能减少体积。
+> 对于 json 序列化提供了两个选择，rapidjson和simdjson，
 
-If you only need to use the serialization and deserialization support of the library, you will only need headers :
+如果你只需要序列化与反序列化的支持，需要如下头文件:
 ```C++
 #include "core/serializer_base.hpp"
 ```
@@ -49,7 +49,7 @@ int main() {
 }
 ```
 
-If you want to use the protocol factory to generate the message type of proto, you will need to add the following headers :
+如果你需要提供反射和多态的协议，需要如下头文件 :
 ```C++
 #include "core/proto_base.hpp"
 #include "core/serializer_base.hpp" // it is needed to use the protocol factory
@@ -81,15 +81,15 @@ int main() {
 ```
 
 
-### 3. support
+### 3. 类型支持
 
-#### 3.1. serializer
+#### 3.1. 序列化
 
-##### 3.1.1. json serializer
+##### 3.1.1. json 序列化器
 
-This repository provides a default json serializer. support most of commonly type in standard c++[^1].
+本库提供了大部分c++标准库类型[^1]的序列化支持。
 
-| type | support | json type| header |
+| c++ 类型 | 支持 | json 类型 | 所在头文件 |
 | ---- | -------- | ---- | ---- |
 | bool | yes | BOOL | json_serializer.hpp |
 | int8_t | yes | INT | json_serializer.hpp |
@@ -107,7 +107,7 @@ This repository provides a default json serializer. support most of commonly typ
 | std::array\<T, N\> | yes | ARRAY | types/array.hpp |
 | std::set\<T\> | yes | ARRAY | types/set.hpp |
 | std::list\<T\> | yes | ARRAY | types/list.hpp |
-| std::map\<std::string, T\> std::map\<T, T\> | yes | OBJECT | types/map.hpp |
+| std::map\<std::string, T\> std::map\<T, T\> | yes | OBJECT / ARRAY | types/map.hpp |
 | std::tuple\<T...\> | yes | ARRAY | types/tuple.hpp |
 | custom struct type | yes | ARRAY | types/struct_unwrap.hpp |
 | enum | yes | STRING [ INT ] | types/enum.hpp |
@@ -118,28 +118,24 @@ This repository provides a default json serializer. support most of commonly typ
 | std::bitset\<N\> | no | - | - |
 | std::shared_ptr\<T\> | no | - | - |
 | std::unique_ptr\<T\> | no | - | - |
-| std::weak_ptr\<T\> | no | - | - |
 | std::atomic\<T\> | no | - | - |
 | std::unordered_set\<T\>| no | - | - |
 | std::unordered_map\<std::string, T\> std::unordered_map\<T, T\> | no | - | - |
 | std::multiset\<T\> | no | - | - |
-| std::multimap\<std::string, T\> std::multimap\<T, T\> | no | - | - |
+| std::multimap\<T, T\> | no | - | - |
 | std::unordered_multiset\<T\>| no | - | - |
-| std::unordered_multimap\<std::string, T\> std::unordered_multimap\<T, T\> | no | - | - |
-| std::stack\<T\> | no | - | - |
-| std::queue\<T\> | no | - | - |
-| std::priority_queue\<T\> | no | - | - |
+| std::unordered_multimap\<T, T\> | no | - | - |
 | std::deque\<T\> | no | - | - |
+
+
 
 [^1]: https://en.cppreference.com/w/cpp/language/types
 
-[*T]: T refers to all supported types
+[*T]: T表示任意已支持类型
 
-##### 3.1.2. binary serializer
+##### 3.1.2. 二进制序列化器
 
-This repository provides a default binary serializer.
-
-| type | support | binary len | header |
+| c++ 类型 | 支持 | 占用长度 | 头文件 |
 | ---- | -------- | ---- | ---- |
 | bool | yes | 1 | binary_serializer.hpp |
 | int8_t | yes | 1 | binary_serializer.hpp |
@@ -154,18 +150,16 @@ This repository provides a default binary serializer.
 | NamePairValue\<std::string, T\> | yes | name len + value len | binary_serializer.hpp |
 
 **Note:**
-other types are supported like json, more info can see in json support which in folder "types", the binary len is 4 + value len * container size.
+其他c++容器库支持同json序列化器，占用长度为 4 + value len * container size.
 
-##### 3.1.3. custom serializer
+##### 3.1.3. 自定义序列化器
 
-If you want to use your own serializer. you need implement interface as:
+如果你需要使用自己的序列化器，你需要实现接口如下：
 
 ```C++
 class CustomOutputSerializer : public detail::OutputSerializer<CustomOutputSerializer> {
 public:
-    using BufferType =;
-public:
-    CustomOutputSerializer(BufferType& out);
+    CustomOutputSerializer(std::vector<char>& out);
     template <typename T>
     inline bool saveValue(SizeTag<T> const& size);
     inline bool saveValue(const int8_t value);
@@ -196,10 +190,7 @@ private:
 
 class CustomInputSerializer : public detail::InputSerializer<CustomInputSerializer> {
 public:
-    using BufferType;
-
-public:
-    inline CustomInputSerializer(const BufferType& buf);
+    inline CustomInputSerializer(const std::vector<char>& buf);
     inline operator bool() const;
     inline bool loadValue(std::string& value);
     inline bool loadValue(int8_t& value);
@@ -224,11 +215,10 @@ private:
 };
 
 ```
-make sure this class can structure by default.
 
-#### 3.2. protocol message manager
+#### 3.2. 协议消息管理
 
-protoFactory support create & version. is a manager of proto message. the interface is:
+protoFactory 提供了协议的协议的创建和版本管理。
 
 ```C++
 class NEKO_PROTO_API ProtoFactory {
@@ -255,7 +245,7 @@ public:
 };
 ```
 
-you can define a proto message by inheritance from ProtoBase, it while atuo register to protoFactory when you create protoFactory instance.
+定义一个message你只需要简单的定义好你想要的对象，然后通过NEKO_SERIALIZE声明需要序列化/反序列化的字段，通过NEKO_DECLARE_PROTOCOL注册类型并说明你希望使用的序列化器
 
 ```C++
 struct ProtoMessage {
@@ -279,44 +269,44 @@ int main() {
 }
 ```
 
-### 4. the end
+### 4. 最后
 
-why I want to do this?
+为什么要做这个库？
 
-I think I should not spend too much time designing and maintaining protocol libraries, especially for a large number of protocols, we need to try our best to avoid increasing maintenance costs caused by duplication of code.
+我认为作为程序开发人员，我们需要将更多的尽力放在程序本身，而非协议的构造和维护上，协议更多的是枯燥且重复的数据处理，这种重复如果管理不善总是容易滋生bug,而一个可测试的稳定的协议库可以很好的降低这种复杂度。
 
 ### 5. todo list:
 
 **serializer**
-- [x] support visit fields by name
-- [x] using simdjson for json serialization
-    - [x] support simdjson input serializer in simdjson::dom (this is old API?)
-    - [ ] support serializer interface in simdjson::ondemand (What are the differences between the DNS APIs in the dom and ondemand namespaces?)
-    - [ ] output serializer (simdjson has API to make a json tree?)
-- [ ] support more cpp stl types
-- [ ] support protoFactory dynamic layer interface
+- [x] 支持通过字符串名称访问协议字段
+- [x] 使用simdjson的json序列化器
+    - [x] 支持了 simdjson::dom 下的输入序列化器
+    - [ ] 支持 simdjson::ondemand 命名空间下的接口 (simdjson::ondemand 和 simdjson::dom 命名空间下的序列化接口区别是什么?)
+    - [ ] 输出序列化器
+- [ ] 支持更多的c++stl容器
+- [ ] 提供协议工厂的动态加载层接口
 
 **communication**
-- [ ] support udp protocol in communication channel
-- [ ] support more protocol in communication channel
+- [ ] 支持udp的通信通道
+- [ ] 支持更多协议的通信通道
 
 ### 6. the future
 #### Latest
-- Make almost all call is serializer(variable)
-    - NameValuePair, SizeTag, etc while are special struct unable to auto enter the object. because they are not a real object. Other class whitout minimal_serializable trait will be auto enter 1 level before process it.
-    - support simdjson backend (now noly under simdjson::dom namespace), it only support input serializer, Slightly faster than rapidjson backend.
+- 统一大部分序列化调用为括号表达式serializer(variable)
+    - NameValuePair, SizeTag, 等特殊的结构体不会触发节点的展开（类似json对象的嵌套对象，展开意味着从父对象的遍历深入到了子对象），其他没有minimal_serializable属性的对象将会触发一次节点的展开.
+    - 支持simdjson作为json序列化后端(目前仅支持了simdjson::dom命名空间下的), 它只支持从json数据输入，目前效率比rapidjson略高.
 
 #### v1.0.0 - alpha
-- Modify serializer interface
-    - Make serialize function to operator()
-    - Make JsonConvert struct to load function and save function
-    - Split standard library types into more granular support
-- Initial optimizations have been made to performance
-- ProtoBase need less space, but all proto class while created static object for every thread
-- support tcp protocol in communication channel
+- 修改序列化器的接口
+    - 将序列化函数统一替换为重载的括号表达式
+    - 将辅助的Convert类替换为save，load函数
+    - 对支持的类型进行了更细致的拆分
+- 初步优化反序列化性能
+- 减少协议基类的空间开销，将原型作为线程独立的静态成员。
+- 支持tcp通信通道
 
 #### v0.1.0
-- Make protoBase as a helper class, not a base class
-- Add support for reflection fields
-- Add support for optional, variant
+- 改协议基类为组合
+- 增加字段反射的支持
+- 增加 optional, variant 的支持
 
