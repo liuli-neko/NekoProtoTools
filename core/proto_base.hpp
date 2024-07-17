@@ -181,7 +181,7 @@ protected:
 private:
     std::unique_ptr<detail::ReflectionSerializer> mReflectionSerializer = {};
     ProtoT* mData                                                       = {};
-    static thread_local ProtoT kData;
+    bool mIsNew                                                         = false;
     static NEKO_STRING_VIEW kProtoName;
 };
 
@@ -246,8 +246,6 @@ template <typename T>
 IProto* ProtoFactory::creater() NEKO_NOEXCEPT {
     return new T();
 }
-template <typename ProtoT, typename SerializerT>
-thread_local ProtoT ProtoBase<ProtoT, SerializerT>::kData = {};
 
 template <typename ProtoT, typename SerializerT>
 NEKO_STRING_VIEW ProtoBase<ProtoT, SerializerT>::kProtoName = []() NEKO_NOEXCEPT {
@@ -269,34 +267,40 @@ inline void* ProtoBase<ProtoT, SerializerT>::data() NEKO_NOEXCEPT {
 }
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::ProtoBase() : mData(&kData) {}
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase() : mData(new ProtoT()), mIsNew(true) {}
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::ProtoBase(const ProtoT& p) : mData(&kData) {
-    *mData = p;
-}
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase(const ProtoT& p) : mData(new ProtoT(p)), mIsNew(true) {}
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT&& p) : mData(&kData) {
-    *mData = std::move(p);
-}
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT&& p) : mData(new ProtoT(std::move(p))), mIsNew(true) {}
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT* p) : mData(p) {}
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT* p) : mData(p), mIsNew(false) {}
 
 template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>::ProtoBase(ProtoBase<T, SerializerT>&& other) {
     mReflectionSerializer = std::move(other.mReflectionSerializer);
     mData                 = std::move(other.mData);
+    mIsNew                = other.mIsNew;
+    other.mIsNew          = false;
+    other.mData           = nullptr;
 }
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::~ProtoBase() {}
+inline ProtoBase<ProtoT, SerializerT>::~ProtoBase() {
+    if (mIsNew) {
+        delete mData;
+    }
+}
 
 template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, SerializerT>&& other) NEKO_NOEXCEPT {
     mReflectionSerializer = std::move(other.mReflectionSerializer);
     mData                 = std::move(other.mData);
+    mIsNew                = other.mIsNew;
+    other.mIsNew          = false;
+    other.mData           = nullptr;
     return *this;
 }
 
@@ -383,7 +387,14 @@ bool ProtoBase<T, SerializerT>::formData(const std::vector<char>& data) NEKO_NOE
 #define NEKO_DECLARE_PROTOCOL(className, Serializer)                                                                   \
 public:                                                                                                                \
     using ProtoType = typename NEKO_NAMESPACE::ProtoBase<className, Serializer>;                                       \
+    /** @brief make proto from self pointer */                                                                         \
     inline ProtoType makeProto() NEKO_NOEXCEPT { return ProtoType(this); }                                             \
+    /** @brief make proto with structure */                                                                            \
+    template <typename... Args>                                                                                        \
+    inline static ProtoType emplaceProto(Args&&... args) NEKO_NOEXCEPT {                                               \
+        return ProtoType(className{std::forward<Args>(args)...});                                                      \
+    }                                                                                                                  \
+    /** @brief make proto by copying other */                                                                          \
     inline static ProtoType makeProto(const className& other) NEKO_NOEXCEPT { return ProtoType(other); }
 
 NEKO_END_NAMESPACE

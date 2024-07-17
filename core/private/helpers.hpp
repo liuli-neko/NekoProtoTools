@@ -388,6 +388,11 @@ inline bool save(SerializerT& serializer, const char* value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
 
+template <typename SerializerT>
+inline bool save(SerializerT& serializer, nullptr_t value) NEKO_NOEXCEPT {
+    return serializer.saveValue(value);
+}
+
 #if NEKO_CPP_PLUS >= 17
 template <typename SerializerT, typename CharT, typename Traits>
 inline bool save(SerializerT& serializer, const std::basic_string_view<CharT, Traits>& value) NEKO_NOEXCEPT {
@@ -452,6 +457,11 @@ inline bool load(SerializerT& serializer, double& value) NEKO_NOEXCEPT {
 
 template <typename SerializerT>
 inline bool load(SerializerT& serializer, bool& value) NEKO_NOEXCEPT {
+    return serializer.loadValue(value);
+}
+
+template <typename SerializerT>
+inline bool load(SerializerT& serializer, nullptr_t value) NEKO_NOEXCEPT {
     return serializer.loadValue(value);
 }
 

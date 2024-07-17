@@ -6,13 +6,25 @@
 #include "../core/serializer_base.hpp"
 #include "../core/to_string.hpp"
 #include "../core/types/array.hpp"
+#include "../core/types/atomic.hpp"
 #include "../core/types/binary_data.hpp"
+#include "../core/types/bitset.hpp"
+#include "../core/types/deque.hpp"
 #include "../core/types/enum.hpp"
 #include "../core/types/list.hpp"
 #include "../core/types/map.hpp"
+#include "../core/types/multimap.hpp"
+#include "../core/types/multiset.hpp"
+#include "../core/types/pair.hpp"
 #include "../core/types/set.hpp"
+#include "../core/types/shared_ptr.hpp"
 #include "../core/types/struct_unwrap.hpp"
 #include "../core/types/tuple.hpp"
+#include "../core/types/unique_ptr.hpp"
+#include "../core/types/unordered_map.hpp"
+#include "../core/types/unordered_multimap.hpp"
+#include "../core/types/unordered_multiset.hpp"
+#include "../core/types/unordered_set.hpp"
 #include "../core/types/variant.hpp"
 #include "../core/types/vector.hpp"
 
@@ -324,6 +336,97 @@ TEST_F(ProtoTest, BinaryProto) {
     base64str.push_back('\0');
     EXPECT_STREQ(base64str.data(), "UzoAAAABYQAAABhTOgAAAAFiUzoAAAAQaGVsbG8gTmVrbyBQcm90b1M6AAAAAWMAPz8/");
     NEKO_LOG_INFO("{}", SerializableToString(proto));
+}
+
+struct zTypeTest {
+    int a                   = 1;
+    std::string b           = "field set test";
+    bool c                  = false;
+    double d                = 3.141592654;
+    std::vector<int> e      = {1, 2, 3};
+    std::map<int, int> f    = {{1, 1}, {2, 2}};
+    std::list<double> g     = {1.1, 2.2, 3.3, 4.4, 5.5};
+    std::set<std::string> h = {"a", "b", "c"};
+    std::deque<float> i     = {1.1f, 2.2f, 3.3f, 4.4f, 5.5f, 6.6f, 7.7f};
+    std::array<int, 7> j    = {1, 2, 3, 4, 5, 6, 7};
+    std::tuple<int, std::string, bool, double, std::vector<int>, std::map<int, int>, TEnum> k = {
+        1, "hello", true, 3.141592654, {1, 2, 3}, {{1, 1}, {2, 2}}, TEnum_A};
+    std::shared_ptr<std::string> l              = std::make_shared<std::string>("hello shared ptr");
+    std::unordered_map<int, std::string> n      = {{1, "hello"}, {2, "world"}};
+    std::unordered_set<std::string> o           = {"a", "b", "c"};
+    std::multimap<int, std::string> p           = {{1, "hello"}, {2, "world"}, {1, "world"}};
+    std::multiset<std::string> q                = {"a", "b", "c", "a", "b"};
+    std::unordered_multimap<int, std::string> r = {{1, "hello"}, {2, "world"}, {1, "world"}};
+    std::unordered_multiset<std::string> s      = {"a", "b", "c", "a", "b"};
+    std::vector<std::vector<int>> t             = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    std::bitset<16> v                           = {0x3f3f3f};
+    std::pair<std::string, std::string> w       = {"hello", "world"};
+#if NEKO_CPP_PLUS >= 17
+    std::optional<int> x             = 1;
+    std::variant<int, std::string> y = "hello";
+    NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k, l, n, o, p, q, r, s, t, v, w, x, y);
+#else
+    NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k, l, n, o, p, q, r, s, t, v, w);
+#endif
+    NEKO_DECLARE_PROTOCOL(zTypeTest, JsonSerializer)
+};
+
+#if NEKO_CPP_PLUS >= 17
+static const char* zTypeTestStr =
+    "{\"a\":1,\"b\":\"field set "
+    "test\",\"c\":false,\"d\":3.141592654,\"e\":[1,2,3],\"f\":[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"g\":["
+    "1.1,2.2,3.3,4.4,5.5],\"h\":[\"a\",\"b\",\"c\"],\"i\":[1.100000023841858,2.200000047683716,3.299999952316284,4."
+    "400000095367432,5.5,6.599999904632568,7.699999809265137],\"j\":[1,2,3,4,5,6,7],\"k\":[1,\"hello\",true,3."
+    "141592654,[1,2,3],[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"TEnum_A(1)\"],\"l\":\"hello shared "
+    "ptr\",\"n\":[{\"key\":2,\"value\":\"world\"},{\"key\":1,\"value\":\"hello\"}],\"o\":[\"c\",\"b\",\"a\"],\"p\":[{"
+    "\"key\":1,\"value\":\"hello\"},{\"key\":1,\"value\":\"world\"},{\"key\":2,\"value\":\"world\"}],\"q\":[\"a\","
+    "\"a\",\"b\",\"b\",\"c\"],\"r\":[{\"key\":2,\"value\":\"world\"},{\"key\":1,\"value\":\"world\"},{\"key\":1,"
+    "\"value\":\"hello\"}],\"s\":[\"b\",\"b\",\"c\",\"a\",\"a\"],\"t\":[[1,2,3],[4,5,6],[7,8,9]],\"v\":"
+    "\"0011111100111111\",\"w\":{\"first\":\"hello\",\"second\":\"world\"},\"x\":1,\"y\":\"hello\"}";
+#else
+static const char* zTypeTestStr =
+    "{\"a\":1,\"b\":\"field set "
+    "test\",\"c\":false,\"d\":3.141592654,\"e\":[1,2,3],\"f\":[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"g\":["
+    "1.1,2.2,3.3,4.4,5.5],\"h\":[\"a\",\"b\",\"c\"],\"i\":[1.100000023841858,2.200000047683716,3.299999952316284,4."
+    "400000095367432,5.5,6.599999904632568,7.699999809265137],\"j\":[1,2,3,4,5,6,7],\"k\":[1,\"hello\",true,3."
+    "141592654,[1,2,3],[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],1],\"l\":\"hello shared "
+    "ptr\",\"n\":[{\"key\":2,\"value\":\"world\"},{\"key\":1,\"value\":\"hello\"}],\"o\":[\"c\",\"b\",\"a\"],\"p\":[{"
+    "\"key\":1,\"value\":\"hello\"},{\"key\":1,\"value\":\"world\"},{\"key\":2,\"value\":\"world\"}],\"q\":[\"a\","
+    "\"a\",\"b\",\"b\",\"c\"],\"r\":[{\"key\":2,\"value\":\"world\"},{\"key\":1,\"value\":\"world\"},{\"key\":1,"
+    "\"value\":\"hello\"}],\"s\":[\"b\",\"b\",\"c\",\"a\",\"a\"],\"t\":[[1,2,3],[4,5,6],[7,8,9]],\"v\":"
+    "\"0011111100111111\",\"w\":{\"first\":\"hello\",\"second\":\"world\"}}";
+#endif
+TEST_F(ProtoTest, AllType) {
+    zTypeTest t = {};
+    t.a         = 1;
+    t.b         = "field set test";
+    t.c         = false;
+    t.d         = 3.141592654;
+    t.e         = {1, 2, 3};
+    t.f         = {{1, 1}, {2, 2}};
+    t.g         = {1.1, 2.2, 3.3, 4.4, 5.5};
+    t.h         = {"a", "b", "c"};
+    t.i         = {1.1f, 2.2f, 3.3f, 4.4f, 5.5f, 6.6f, 7.7f};
+    t.j         = {1, 2, 3, 4, 5, 6, 7};
+    t.k         = {1, "hello", true, 3.141592654, {1, 2, 3}, {{1, 1}, {2, 2}}, TEnum_A};
+    t.l         = std::make_shared<std::string>("hello shared ptr");
+    t.n         = {{1, "hello"}, {2, "world"}};
+    t.o         = {"a", "b", "c"};
+    t.p         = {{1, "hello"}, {2, "world"}, {1, "world"}};
+    t.q         = {"a", "b", "c", "a", "b"};
+    t.r         = {{1, "hello"}, {2, "world"}, {1, "world"}};
+    t.s         = {"a", "b", "c", "a", "b"};
+    t.t         = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    t.v         = {0x3f3f3f};
+    t.w         = {"hello", "world"};
+#if NEKO_CPP_PLUS >= 17
+    t.x = 1;
+    t.y = "hello";
+#endif
+
+    auto data = t.makeProto().toData();
+    data.push_back('\0');
+    EXPECT_STREQ(zTypeTestStr, data.data());
 }
 
 int main(int argc, char** argv) {
