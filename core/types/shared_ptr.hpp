@@ -35,4 +35,7 @@ inline bool load(Serializer& sa, std::shared_ptr<T>& value) {
     return sa(*value);
 }
 
+template <typename T>
+struct is_minimal_serializable<std::shared_ptr<T>, void> : std::true_type {};
+
 NEKO_END_NAMESPACE

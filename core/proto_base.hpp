@@ -392,9 +392,13 @@ public:                                                                         
     /** @brief make proto with structure */                                                                            \
     template <typename... Args>                                                                                        \
     inline static ProtoType emplaceProto(Args&&... args) NEKO_NOEXCEPT {                                               \
+        static_assert(std::is_move_constructible<className>::value, "className must be copable");                      \
         return ProtoType(className{std::forward<Args>(args)...});                                                      \
     }                                                                                                                  \
     /** @brief make proto by copying other */                                                                          \
-    inline static ProtoType makeProto(const className& other) NEKO_NOEXCEPT { return ProtoType(other); }
+    inline static ProtoType makeProto(const className& other) NEKO_NOEXCEPT {                                          \
+        static_assert(std::is_copy_constructible<className>::value, "className must be copable");                      \
+        return ProtoType(other);                                                                                       \
+    }
 
 NEKO_END_NAMESPACE
