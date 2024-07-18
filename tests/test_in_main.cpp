@@ -6,16 +6,7 @@
 #include "../core/serializer_base.hpp"
 #include "../core/simd_json_serializer.hpp"
 #include "../core/to_string.hpp"
-#include "../core/types/array.hpp"
-#include "../core/types/binary_data.hpp"
-#include "../core/types/enum.hpp"
-#include "../core/types/list.hpp"
-#include "../core/types/map.hpp"
-#include "../core/types/set.hpp"
-#include "../core/types/struct_unwrap.hpp"
-#include "../core/types/tuple.hpp"
-#include "../core/types/variant.hpp"
-#include "../core/types/vector.hpp"
+#include "../core/types/types.hpp"
 
 NEKO_USE_NAMESPACE
 
@@ -92,6 +83,18 @@ struct BinaryProto {
     NEKO_DECLARE_PROTOCOL(BinaryProto, BinarySerializer)
 };
 
+struct zTypeTest1 {
+    std::unordered_map<int, int> a;
+    std::unordered_map<int, std::string> b;
+    std::unordered_set<int> c;
+    std::unordered_multimap<double, int> d;
+    std::unordered_multiset<double> e;
+    std::unordered_map<std::string, std::shared_ptr<std::string>> f;
+    std::unique_ptr<std::string> g;
+
+    NEKO_SERIALIZER(a, b, c, d, e, f, g)
+};
+
 int main(int argc, char** argv) {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
     testing::InitGoogleTest(&argc, argv);
@@ -144,5 +147,31 @@ int main(int argc, char** argv) {
     tp2.makeProto() = testp;
     EXPECT_STREQ(SerializableToString(testp).c_str(), SerializableToString(tp2).c_str());
     NEKO_LOG_INFO("{}", SerializableToString(testp));
+
+    zTypeTest1 zt;
+    zt.a = {{1, 1}, {2, 2}};
+    zt.b = {{1, "world"}};
+    zt.c = {1, 2, 3};
+    zt.d = {{1.1, 1}, {1.1, 1.2}, {2.2, 2}};
+    zt.e = {1.1, 2.2, 3.3, 3.3};
+    zt.f = {{"hello", std::make_shared<std::string>("world")}, {"nullptr", nullptr}};
+    zt.g = std::make_unique<std::string>("hello");
+    std::vector<char> data_t1;
+    JsonSerializer::OutputSerializer output(data_t1);
+    output(zt);
+    output.end();
+    data_t1.push_back('\0');
+
+    zTypeTest1 zt1;
+    JsonSerializer::InputSerializer input_zt1(data_t1.data(), data_t1.size());
+    input_zt1(zt1);
+    EXPECT_EQ(zt.a, zt1.a);
+    EXPECT_EQ(zt.b, zt1.b);
+    EXPECT_EQ(zt.c, zt1.c);
+    EXPECT_EQ(zt.d, zt1.d);
+    EXPECT_EQ(zt.e, zt1.e);
+    EXPECT_EQ(*zt.g, *zt1.g);
+    EXPECT_EQ(*zt.f["hello"], *zt1.f["hello"]);
+    EXPECT_EQ(zt.f["nullptr"], zt1.f["nullptr"]);
     return 0;
 }

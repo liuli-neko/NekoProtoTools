@@ -49,14 +49,16 @@ inline bool load(Serializer& sa, std::unordered_map<K, V>& value) {
     std::size_t s;
     ret = sa(makeSizeTag(s));
     value.clear();
-    while (ret) {
+    while (ret && s--) {
+        ret = sa.startNode() && ret;
         if (sa(makeNameValuePair("key", 3, k)) && sa(makeNameValuePair("value", 5, v))) {
             value.emplace(std::move(k), std::move(v));
         } else {
             break;
         }
+        ret = sa.finishNode() && ret;
     }
-    return ret && (s == value.size());
+    return ret;
 }
 
 template <typename Serializer, typename V>

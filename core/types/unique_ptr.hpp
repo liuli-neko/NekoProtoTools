@@ -36,4 +36,7 @@ inline bool load(Serializer& sa, std::unique_ptr<T>& value) {
     return sa(*value);
 }
 
+template <typename T>
+struct is_minimal_serializable<std::unique_ptr<T>, void> : std::true_type {};
+
 NEKO_END_NAMESPACE

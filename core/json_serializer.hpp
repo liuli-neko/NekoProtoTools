@@ -24,8 +24,12 @@
 #include <optional>
 #include <variant>
 #endif
+
+#ifdef _WIN32
+#pragma push_macro("GetObject")
 #ifdef GetObject
 #undef GetObject
+#endif
 #endif
 
 #if NEKO_CPP_PLUS >= 17
@@ -90,7 +94,7 @@ public:
     using ValueIterator  = JsonValue::ConstValueIterator;
 
 public:
-    inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null_){};
+    inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null_) {};
     inline ConstJsonIterator(MemberIterator begin, MemberIterator end) NEKO_NOEXCEPT : mMemberItBegin(begin),
                                                                                        mMemberItEnd(end),
                                                                                        mIndex(0),
@@ -196,7 +200,7 @@ public:
 };
 
 inline auto makePrettyJsonWriter(const JsonOutputFormatOptions& options = JsonOutputFormatOptions::Default())
-    NEKO_NOEXCEPT->detail::PrettyJsonWriter<detail::OutBufferWrapper> {
+    NEKO_NOEXCEPT -> detail::PrettyJsonWriter<detail::OutBufferWrapper> {
     auto writer = detail::PrettyJsonWriter<detail::OutBufferWrapper>(0);
     writer.SetIndent(options.indentChar, options.indentLength);
     writer.SetMaxDecimalPlaces(options.precision);
@@ -753,3 +757,7 @@ struct JsonSerializer {
 };
 
 NEKO_END_NAMESPACE
+
+#ifdef _WIN32
+#pragma pop_macro("GetObject")
+#endif

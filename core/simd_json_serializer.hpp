@@ -16,8 +16,11 @@
 #include "private/helpers.hpp"
 #include "private/log.hpp"
 
+#ifdef _WIN32
+#pragma push_macro("GetObject")
 #ifdef GetObject
 #undef GetObject
+#endif
 #endif
 
 NEKO_BEGIN_NAMESPACE
@@ -54,7 +57,7 @@ public:
     using ValueIterator  = simdjson::dom::array::iterator;
 
 public:
-    inline ConstJsonIterator() NEKO_NOEXCEPT : mType(Null_){};
+    inline ConstJsonIterator() NEKO_NOEXCEPT : mType(Null_) {};
     inline ConstJsonIterator(const JsonObject& object) NEKO_NOEXCEPT : mSize(object.size()), mType(Member) {
         if (mSize == 0) {
             mType = Null_;
@@ -580,3 +583,7 @@ struct SimdJsonSerializer {
 };
 
 NEKO_END_NAMESPACE
+
+#ifdef _WIN32
+#pragma pop_macro("GetObject")
+#endif
