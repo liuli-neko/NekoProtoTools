@@ -148,17 +148,17 @@ struct BinaryData {
 private:
     // Store a reference if passed an lvalue reference, otherwise
     // make a copy of the data
-    using Type = typename std::conditional<std::is_lvalue_reference<T>::value, T, typename std::decay<T>::type>::type;
+    using Type = T;
 
 public:
-    void* data;
-    Type size;
+    Type* data;
+    std::size_t size;
 
     // for InputSerializer, please ensure that the remaining valid space of the data block is greater than or equal to
     // the length of the obtained data, and the size value is not used in the obtained data.
     // for OutputSerializer, while write data of size to JSON
-    BinaryData(void* data, Type size) : data(data), size(size) {}
-    BinaryData(void* data) : data(data), size(0) {}
+    BinaryData(Type* data, std::size_t size) : data(data), size(size) {}
+    BinaryData(Type* data) : data(data), size(0) {}
 };
 
 template <typename Serializer, typename T>

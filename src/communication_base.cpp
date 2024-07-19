@@ -298,7 +298,7 @@ ILIAS_NAMESPACE::Task<void> ByteStreamChannel::send(std::unique_ptr<NEKO_NAMESPA
                   "type {}, trans type {}",
                   msgHeader.length, mChannelId, msgHeader.protoType, msgHeader.transType);
     NEKO_LOG_INFO("send message:\n{}\n ========================== end ==========================",
-                  SerializableToString(BinaryData<uint32_t>(msg.data(), msg.size())));
+                  SerializableToString(BinaryData<char>(msg.data(), msg.size())));
 #endif
     msg.clear();
     auto ret = co_await mClient.send(sendMsg.data(), sendMsg.size());
@@ -365,7 +365,7 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> ByteStreamChannel
                   "type {}, trans type {}",
                   msgHeader.length, mChannelId, msgHeader.protoType, msgHeader.transType);
     NEKO_LOG_INFO("recv message:\n{}\n ========================== end ==========================",
-                  SerializableToString(BinaryData<uint32_t>(data.data(), data.size())));
+                  SerializableToString(BinaryData<char>(data.data(), data.size())));
 #endif
     co_return std::move(message);
 }

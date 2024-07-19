@@ -113,23 +113,19 @@ This repository provides a default json serializer. support most of commonly typ
 | enum | yes | STRING [ INT ] | types/enum.hpp |
 | std::optional\<T\> | yes | OBJECT | json_serializer.hpp |
 | std::variant\<T...\> | yes | OBJECT | types/variant.hpp |
+| std::pair\<T, T\> | yes | OBJECT | types/pair.hpp |
+| std::bitset\<N\> | yes | STRING | types/bitset.hpp |
+| std::shared_ptr\<T\> | yes | Depends on T | types/shared_ptr.hpp |
+| std::unique_ptr\<T\> | yes | Depends on T | types/unique_ptr.hpp |
+| std::atomic\<T\> | yes | Depends on T | types/atomic.hpp |
+| std::unordered_set\<T\>| yes | OBJECT | types/unordered_set.hpp |
+| std::unordered_map\<std::string, T\> std::unordered_map\<T, T\> | yes | OBJECT ARRAY | types/unordered_map.hpp |
+| std::multiset\<T\> | yse | ARRAY | types/multiset.hpp |
+| std::multimap\<T, T\> | yse | ARRAY | types/multimap.hpp |
+| std::unordered_multiset\<T\>| yse | ARRAY | types/unordered_multiset.hpp |
+| std::unordered_multimap\<T, T\> | yse | ARRAY | types/unordered_multimap.hpp |
+| std::deque\<T\> | yse | ARRAY | types/deque.hpp |
 | std::any | no | - | - |
-| std::pair\<T, T\> | no | - | - |
-| std::bitset\<N\> | no | - | - |
-| std::shared_ptr\<T\> | no | - | - |
-| std::unique_ptr\<T\> | no | - | - |
-| std::weak_ptr\<T\> | no | - | - |
-| std::atomic\<T\> | no | - | - |
-| std::unordered_set\<T\>| no | - | - |
-| std::unordered_map\<std::string, T\> std::unordered_map\<T, T\> | no | - | - |
-| std::multiset\<T\> | no | - | - |
-| std::multimap\<std::string, T\> std::multimap\<T, T\> | no | - | - |
-| std::unordered_multiset\<T\>| no | - | - |
-| std::unordered_multimap\<std::string, T\> std::unordered_multimap\<T, T\> | no | - | - |
-| std::stack\<T\> | no | - | - |
-| std::queue\<T\> | no | - | - |
-| std::priority_queue\<T\> | no | - | - |
-| std::deque\<T\> | no | - | - |
 
 [^1]: https://en.cppreference.com/w/cpp/language/types
 
@@ -293,7 +289,7 @@ I think I should not spend too much time designing and maintaining protocol libr
     - [x] support simdjson input serializer in simdjson::dom (this is old API?)
     - [ ] support serializer interface in simdjson::ondemand (What are the differences between the DNS APIs in the dom and ondemand namespaces?)
     - [ ] output serializer (simdjson has API to make a json tree?)
-- [ ] support more cpp stl types
+- [x] support more cpp stl types
 - [ ] support protoFactory dynamic layer interface
 
 **communication**
@@ -305,6 +301,7 @@ I think I should not spend too much time designing and maintaining protocol libr
 - Make almost all call is serializer(variable)
     - NameValuePair, SizeTag, etc while are special struct unable to auto enter the object. because they are not a real object. Other class whitout minimal_serializable trait will be auto enter 1 level before process it.
     - support simdjson backend (now noly under simdjson::dom namespace), it only support input serializer, Slightly faster than rapidjson backend.
+- support almost all stl types
 
 #### v1.0.0 - alpha
 - Modify serializer interface

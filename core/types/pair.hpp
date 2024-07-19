@@ -20,7 +20,7 @@ NEKO_BEGIN_NAMESPACE
 template <typename Serializer, typename K, typename V>
 inline bool save(Serializer& sa, const std::pair<K, V>& value) {
     bool ret = true;
-    ret      = sa.startObject(1) && ret;
+    ret      = sa.startObject(2) && ret;
     ret      = sa(makeNameValuePair("first", 5, value.first)) && ret;
     ret      = sa(makeNameValuePair("second", 6, value.second)) && ret;
     ret      = sa.endObject() && ret;
@@ -39,7 +39,7 @@ inline bool load(Serializer& sa, std::pair<K, V>& value) {
             value = std::make_pair(std::move(k), std::move(v));
         }
     }
-    return ret && (s == 1);
+    return ret && (s == 2);
 }
 
 NEKO_END_NAMESPACE
