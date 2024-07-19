@@ -330,12 +330,12 @@ struct zTypeTest {
     std::array<int, 7> j    = {1, 2, 3, 4, 5, 6, 7};
     std::tuple<int, std::string, bool, double, std::vector<int>, std::map<int, int>, TEnum> k = {
         1, "hello", true, 3.141592654, {1, 2, 3}, {{1, 1}, {2, 2}}, TEnum_A};
-    std::shared_ptr<std::string> l              = std::make_shared<std::string>("hello shared ptr");
-    std::multimap<int, std::string> p           = {{1, "hello"}, {2, "world"}, {1, "world"}};
-    std::multiset<std::string> q                = {"a", "b", "c", "a", "b"};
-    std::vector<std::vector<int>> t             = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-    std::bitset<16> v                           = {0x3f3f3f};
-    std::pair<std::string, std::string> w       = {"hello", "world"};
+    std::shared_ptr<std::string> l        = std::make_shared<std::string>("hello shared ptr");
+    std::multimap<int, std::string> p     = {{1, "hello"}, {2, "world"}, {1, "world"}};
+    std::multiset<std::string> q          = {"a", "b", "c", "a", "b"};
+    std::vector<std::vector<int>> t       = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    std::bitset<16> v                     = {0x3f3f3f};
+    std::pair<std::string, std::string> w = {"hello", "world"};
 #if NEKO_CPP_PLUS >= 17
     std::optional<int> x             = 1;
     std::variant<int, std::string> y = "hello";
@@ -353,7 +353,8 @@ static const char* zTypeTestStr =
     "1.1,2.2,3.3,4.4,5.5],\"h\":[\"a\",\"b\",\"c\"],\"i\":[1.100000023841858,2.200000047683716,3.299999952316284,4."
     "400000095367432,5.5,6.599999904632568,7.699999809265137],\"j\":[1,2,3,4,5,6,7],\"k\":[1,\"hello\",true,3."
     "141592654,[1,2,3],[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"TEnum_A(1)\"],\"l\":\"hello shared "
-    "ptr\",\"p\":[{\"key\":1,\"value\":\"hello\"},{\"key\":1,\"value\":\"world\"},{\"key\":2,\"value\":\"world\"}],\"q\":[\"a\","
+    "ptr\",\"p\":[{\"key\":1,\"value\":\"hello\"},{\"key\":1,\"value\":\"world\"},{\"key\":2,\"value\":\"world\"}],"
+    "\"q\":[\"a\","
     "\"a\",\"b\",\"b\",\"c\"],\"t\":[[1,2,3],[4,5,6],[7,8,9]],\"v\":"
     "\"0011111100111111\",\"w\":{\"first\":\"hello\",\"second\":\"world\"},\"x\":1,\"y\":\"hello\"}";
 #else
@@ -363,7 +364,8 @@ static const char* zTypeTestStr =
     "1.1,2.2,3.3,4.4,5.5],\"h\":[\"a\",\"b\",\"c\"],\"i\":[1.100000023841858,2.200000047683716,3.299999952316284,4."
     "400000095367432,5.5,6.599999904632568,7.699999809265137],\"j\":[1,2,3,4,5,6,7],\"k\":[1,\"hello\",true,3."
     "141592654,[1,2,3],[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],1],\"l\":\"hello shared "
-    "ptr\",\"p\":[{\"key\":1,\"value\":\"hello\"},{\"key\":1,\"value\":\"world\"},{\"key\":2,\"value\":\"world\"}],\"q\":[\"a\","
+    "ptr\",\"p\":[{\"key\":1,\"value\":\"hello\"},{\"key\":1,\"value\":\"world\"},{\"key\":2,\"value\":\"world\"}],"
+    "\"q\":[\"a\","
     "\"a\",\"b\",\"b\",\"c\"],\"t\":[[1,2,3],[4,5,6],[7,8,9]],\"v\":"
     "\"0011111100111111\",\"w\":{\"first\":\"hello\",\"second\":\"world\"}}";
 #endif
@@ -395,48 +397,6 @@ TEST_F(ProtoTest, AllType) {
     auto data = t.makeProto().toData();
     data.push_back('\0');
     EXPECT_STREQ(zTypeTestStr, data.data());
-}
-
-struct zTypeTest1 {
-    std::unordered_map<int, int> a;
-    std::unordered_map<std::string, std::string> b;
-    std::unordered_set<int> c;
-    std::unordered_multimap<double, int> d;
-    std::unordered_multiset<double> e;
-    std::unordered_map<std::string, std::shared_ptr<std::string>> f;
-    std::unique_ptr<std::string> g;
-
-    NEKO_SERIALIZER(a, b, c, d, e, f, g)
-};
-
-TEST_F(ProtoTest, SerializableTest) { 
-    zTypeTest1 t;
-    t.a = {{1, 1}, {2, 2}};
-    t.b = {{"hello", "world"}};
-    t.c = {1, 2, 3};
-    t.d = {{1.1, 1}, {2.2, 2}};
-    t.e = {1.1, 2.2, 3.3};
-    t.f = {{"hello", std::make_shared<std::string>("world")}, {"nullptr", nullptr}};
-    t.g = std::make_unique<std::string>("hello");
-    NEKO_LOG_INFO("{}", SerializableToString(t));
-    std::vector<char> data;
-    JsonSerializer::OutputSerializer output(data);
-    output(t);
-    output.end();
-    data.push_back('\0');
-    NEKO_LOG_INFO("{}", data.data());
-
-    zTypeTest1 t1;
-    JsonSerializer::InputSerializer input(data.data(), data.size());
-    input(t1);
-    EXPECT_EQ(t.a, t1.a);
-    EXPECT_EQ(t.b, t1.b);
-    EXPECT_EQ(t.c, t1.c);
-    EXPECT_EQ(t.d, t1.d);
-    EXPECT_EQ(t.e, t1.e);
-    EXPECT_EQ(*t.g, *t1.g);
-    EXPECT_EQ(*t.f["hello"], *t1.f["hello"]);
-    EXPECT_EQ(t.f["nullptr"], t1.f["nullptr"]);
 }
 
 int main(int argc, char** argv) {

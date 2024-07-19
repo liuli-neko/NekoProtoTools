@@ -94,7 +94,7 @@ public:
     using ValueIterator  = JsonValue::ConstValueIterator;
 
 public:
-    inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null_) {};
+    inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null_){};
     inline ConstJsonIterator(MemberIterator begin, MemberIterator end) NEKO_NOEXCEPT : mMemberItBegin(begin),
                                                                                        mMemberItEnd(end),
                                                                                        mIndex(0),
@@ -200,7 +200,7 @@ public:
 };
 
 inline auto makePrettyJsonWriter(const JsonOutputFormatOptions& options = JsonOutputFormatOptions::Default())
-    NEKO_NOEXCEPT -> detail::PrettyJsonWriter<detail::OutBufferWrapper> {
+    NEKO_NOEXCEPT->detail::PrettyJsonWriter<detail::OutBufferWrapper> {
     auto writer = detail::PrettyJsonWriter<detail::OutBufferWrapper>(0);
     writer.SetIndent(options.indentChar, options.indentLength);
     writer.SetMaxDecimalPlaces(options.precision);
@@ -288,15 +288,28 @@ public:
         return mWriter.Key(value.name, value.nameLen) && (*this)(value.value);
     }
 #endif
-    inline bool startArray(const std::size_t) NEKO_NOEXCEPT { return mWriter.StartArray(); }
-    inline bool endArray() NEKO_NOEXCEPT { return mWriter.EndArray(); }
-    inline bool startObject(const std::size_t = -1) NEKO_NOEXCEPT { return mWriter.StartObject(); }
-    inline bool endObject() NEKO_NOEXCEPT { return mWriter.EndObject(); }
+    inline bool startArray(const std::size_t) NEKO_NOEXCEPT {
+        ++mCurrentLevel;
+        return mWriter.StartArray();
+    }
+    inline bool endArray() NEKO_NOEXCEPT {
+        --mCurrentLevel;
+        return mWriter.EndArray();
+    }
+    inline bool startObject(const std::size_t = -1) NEKO_NOEXCEPT {
+        ++mCurrentLevel;
+        return mWriter.StartObject();
+    }
+    inline bool endObject() NEKO_NOEXCEPT {
+        --mCurrentLevel;
+        return mWriter.EndObject();
+    }
     inline bool end() NEKO_NOEXCEPT {
-        if (!mWriter.IsComplete()) {
+        if (!mWriter.IsComplete() && mCurrentLevel > 0) {
+            --mCurrentLevel;
             auto ret = mWriter.EndObject();
             mWriter.Flush();
-            return ret;
+            return ret && mCurrentLevel == 0;
         }
         return true;
     }
@@ -307,6 +320,7 @@ private:
 
 private:
     WriterType mWriter;
+    int mCurrentLevel = 0;
     typename detail::json_output_wrapper_type<WriterType>::output_stream_type mStream;
 };
 
@@ -349,8 +363,7 @@ public:
 
     inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
-        if ((*mCurrentItem).eof())
-            return {};
+        if ((*mCurrentItem).eof()) return {};
         return (*mCurrentItem).name();
     }
 
@@ -391,8 +404,7 @@ public:
 
     inline bool loadValue(int64_t& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsInt64())
-            return false;
+        if (!(*mCurrentItem).value().IsInt64()) return false;
         value = (*mCurrentItem).value().GetInt64();
         ++(*mCurrentItem);
         return true;
@@ -400,8 +412,7 @@ public:
 
     inline bool loadValue(uint64_t& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsUint64())
-            return false;
+        if (!(*mCurrentItem).value().IsUint64()) return false;
         value = (*mCurrentItem).value().GetUint64();
         ++(*mCurrentItem);
         return true;
@@ -409,8 +420,7 @@ public:
 
     inline bool loadValue(float& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsNumber())
-            return false;
+        if (!(*mCurrentItem).value().IsNumber()) return false;
         value = (*mCurrentItem).value().GetDouble();
         ++(*mCurrentItem);
         return true;
@@ -418,8 +428,7 @@ public:
 
     inline bool loadValue(double& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsNumber())
-            return false;
+        if (!(*mCurrentItem).value().IsNumber()) return false;
         value = (*mCurrentItem).value().GetDouble();
         ++(*mCurrentItem);
         return true;
@@ -427,8 +436,7 @@ public:
 
     inline bool loadValue(bool& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsBool())
-            return false;
+        if (!(*mCurrentItem).value().IsBool()) return false;
         value = (*mCurrentItem).value().GetBool();
         ++(*mCurrentItem);
         return true;
@@ -436,8 +444,7 @@ public:
 
     inline bool loadValue(std::nullptr_t) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsNull())
-            return false;
+        if (!(*mCurrentItem).value().IsNull()) return false;
         ++(*mCurrentItem);
         return true;
     }

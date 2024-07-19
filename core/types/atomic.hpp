@@ -32,4 +32,7 @@ inline bool load(Serializer& sa, std::atomic<T>& value) {
     return false;
 }
 
+template <typename T>
+struct is_minimal_serializable<std::atomic<T>, void> : std::true_type {};
+
 NEKO_END_NAMESPACE

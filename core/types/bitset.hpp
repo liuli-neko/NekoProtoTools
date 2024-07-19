@@ -25,10 +25,12 @@ inline bool save(Serializer& sa, const std::bitset<N>& value) {
 template <typename Serializer, std::size_t N>
 inline bool load(Serializer& sa, std::bitset<N>& value) {
     std::string s;
-    if (!sa(s))
-        return false;
+    if (!sa(s)) return false;
     value = std::bitset<N>(s);
     return true;
 }
+
+template <std::size_t N>
+struct is_minimal_serializable<std::bitset<N>, void> : std::true_type {};
 
 NEKO_END_NAMESPACE

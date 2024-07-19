@@ -113,19 +113,19 @@ int main() {
 | enum | yes | STRING [ INT ] | types/enum.hpp |
 | std::optional\<T\> | yes | OBJECT | json_serializer.hpp |
 | std::variant\<T...\> | yes | OBJECT | types/variant.hpp |
+| std::pair\<T, T\> | yes | OBJECT | types/pair.hpp |
+| std::bitset\<N\> | yes | STRING | types/bitset.hpp |
+| std::shared_ptr\<T\> | yes | Depends on T | types/shared_ptr.hpp |
+| std::unique_ptr\<T\> | yes | Depends on T | types/unique_ptr.hpp |
+| std::atomic\<T\> | yes | Depends on T | types/atomic.hpp |
+| std::unordered_set\<T\>| yes | OBJECT | types/unordered_set.hpp |
+| std::unordered_map\<std::string, T\> std::unordered_map\<T, T\> | yes | OBJECT ARRAY | types/unordered_map.hpp |
+| std::multiset\<T\> | yse | ARRAY | types/multiset.hpp |
+| std::multimap\<T, T\> | yse | ARRAY | types/multimap.hpp |
+| std::unordered_multiset\<T\>| yse | ARRAY | types/unordered_multiset.hpp |
+| std::unordered_multimap\<T, T\> | yse | ARRAY | types/unordered_multimap.hpp |
+| std::deque\<T\> | yse | ARRAY | types/deque.hpp |
 | std::any | no | - | - |
-| std::pair\<T, T\> | no | - | - |
-| std::bitset\<N\> | no | - | - |
-| std::shared_ptr\<T\> | no | - | - |
-| std::unique_ptr\<T\> | no | - | - |
-| std::atomic\<T\> | no | - | - |
-| std::unordered_set\<T\>| no | - | - |
-| std::unordered_map\<std::string, T\> std::unordered_map\<T, T\> | no | - | - |
-| std::multiset\<T\> | no | - | - |
-| std::multimap\<T, T\> | no | - | - |
-| std::unordered_multiset\<T\>| no | - | - |
-| std::unordered_multimap\<T, T\> | no | - | - |
-| std::deque\<T\> | no | - | - |
 
 
 
@@ -283,7 +283,7 @@ int main() {
     - [x] 支持了 simdjson::dom 下的输入序列化器
     - [ ] 支持 simdjson::ondemand 命名空间下的接口 (simdjson::ondemand 和 simdjson::dom 命名空间下的序列化接口区别是什么?)
     - [ ] 输出序列化器
-- [ ] 支持更多的c++stl容器
+- [x] 支持更多的c++stl容器
 - [ ] 提供协议工厂的动态加载层接口
 
 **communication**
@@ -295,6 +295,7 @@ int main() {
 - 统一大部分序列化调用为括号表达式serializer(variable)
     - NameValuePair, SizeTag, 等特殊的结构体不会触发节点的展开（类似json对象的嵌套对象，展开意味着从父对象的遍历深入到了子对象），其他没有minimal_serializable属性的对象将会触发一次节点的展开.
     - 支持simdjson作为json序列化后端(目前仅支持了simdjson::dom命名空间下的), 它只支持从json数据输入，目前效率比rapidjson略高.
+- 几乎支持所有stl容器
 
 #### v1.0.0 - alpha
 - 修改序列化器的接口

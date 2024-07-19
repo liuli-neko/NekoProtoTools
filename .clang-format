@@ -11,3 +11,4 @@ AlignOperands: true
 AlignTrailingComments: true
 AlignConsecutiveMacros: true
 AlignConsecutiveAssignments: true
+AllowShortIfStatementsOnASingleLine: true
