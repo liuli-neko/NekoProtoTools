@@ -148,8 +148,9 @@ public:
             return mValueItBegin[mIndex];
         case Member:
             return mMemberIt->value;
+        default:
+            return null; // should never reach here, but needed to avoid compiler warning
         }
-        return null; // should never reach here, but needed to avoid compiler warning
     }
     inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
         if (mType == Member && mMemberIt != mMemberItEnd) {
