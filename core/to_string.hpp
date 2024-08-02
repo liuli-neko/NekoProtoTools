@@ -80,7 +80,7 @@ public:
         mBuffer += "\"" + std::string(value) + "\", ";
         return true;
     }
-    inline bool saveValue(nullptr_t) NEKO_NOEXCEPT {
+    inline bool saveValue(std::nullptr_t) NEKO_NOEXCEPT {
         mBuffer += "\"nullptr\", ";
         return true;
     }

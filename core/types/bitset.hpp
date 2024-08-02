@@ -26,6 +26,10 @@ template <typename Serializer, std::size_t N>
 inline bool load(Serializer& sa, std::bitset<N>& value) {
     std::string s;
     if (!sa(s)) return false;
+    if (s.size() != N) return false;
+    for (auto c : s) {
+        if (c != '0' && c != '1') return false;
+    }
     value = std::bitset<N>(s);
     return true;
 }

@@ -389,7 +389,7 @@ inline bool save(SerializerT& serializer, const char* value) NEKO_NOEXCEPT {
 }
 
 template <typename SerializerT>
-inline bool save(SerializerT& serializer, nullptr_t) NEKO_NOEXCEPT {
+inline bool save(SerializerT& serializer, std::nullptr_t) NEKO_NOEXCEPT {
     return serializer.saveValue(nullptr);
 }
 
@@ -461,7 +461,7 @@ inline bool load(SerializerT& serializer, bool& value) NEKO_NOEXCEPT {
 }
 
 template <typename SerializerT>
-inline bool load(SerializerT& serializer, nullptr_t) NEKO_NOEXCEPT {
+inline bool load(SerializerT& serializer, std::nullptr_t) NEKO_NOEXCEPT {
     return serializer.loadValue(nullptr);
 }
 
