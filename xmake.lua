@@ -4,7 +4,7 @@ set_version("1.0.0")
 
 add_rules("plugin.compile_commands.autoupdate", {outputdir = ".vscode"})
 
-add_requires("rapidjson", "spdlog", "gtest", "simdjson")
+add_requires("rapidjson", "spdlog", "gtest", "simdjson v3.9.3")
 
 if is_mode("debug") then
     add_defines("NEKO_PROTO_LOG_CONTEXT")
@@ -13,6 +13,12 @@ end
 if is_plat("linux") then
     add_cxxflags("-fcoroutines")
 end
+
+option("fuzzer")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable fuzzer test, should install libfuzzer")
+option_end()
 
 target("test_co")
     set_languages("c++20")
@@ -43,6 +49,7 @@ target_end()
 
 target("tests")
     set_kind("phony")
+    set_encodings("utf-8")
     add_defines("SIMDJSON_EXCEPTIONS=1")
     -- add_defines("NEKO_VERBOSE_LOGS")
     -- js
@@ -90,19 +97,21 @@ target("proto_cpp17")
     add_files("tests/test_in_main.cpp")
 target_end()
 
-target("fuzz_test")
-    set_kind("binary")
-    set_languages("c++17")
-    add_defines("NEKO_PROTO_STATIC")
-    add_packages("rapidjson", "spdlog", "gtest")
-    set_policy("build.sanitizer.address", true)
-    set_toolchains("clang-14")
-    add_cxxflags("clang::-fsanitize=fuzzer")
-    add_linkdirs("/usr/lib/llvm-14/lib")
-    add_links("Fuzzer")
-    add_files("src/proto_base.cpp")
-    add_files("tests/fuzz_test.cpp")
-target_end()
+if has_config("fuzzer") then
+    target("fuzz_test")
+        set_kind("binary")
+        set_languages("c++17")
+        add_defines("NEKO_PROTO_STATIC")
+        add_packages("rapidjson", "spdlog", "gtest")
+        set_policy("build.sanitizer.address", true)
+        set_toolchains("clang-14")
+        add_cxxflags("clang::-fsanitize=fuzzer")
+        add_linkdirs("/usr/lib/llvm-14/lib")
+        add_links("Fuzzer")
+        add_files("src/proto_base.cpp")
+        add_files("tests/fuzz_test.cpp")
+    target_end()
+end 
 
 target("test_traits")
     set_kind("binary")
