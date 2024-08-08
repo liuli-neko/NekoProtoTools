@@ -1,0 +1,27 @@
+Checks:                       '-*,readability-identifier-naming'
+FormatStyle:                   'file'
+CheckOptions:
+  - key: readability-identifier-naming.Style
+    value: Google
+  - key: readability-identifier-naming.MinUpperLength
+    value: 3
+  - key: readability-identifier-naming.ArgPrefix
+    value: my_
+  - key: readability-identifier-naming.Prefix
+    value: g_
+  - key: readability-identifier-naming.Suffix
+    value: _
+  - key: readability-identifier-naming.IgnoreFailedSplit
+    value: true
+  - key: readability-identifier-naming.PrivateMemberPrefix
+    value: m
+  - key: readability-identifier-naming.PrivateMemberCase
+    value: CamelCase
+  - key: readability-identifier-naming.ProtectedMemberPrefix
+    value: m
+  - key: readability-identifier-naming.ProtectedMemberCase
+    value: CamelCase
+  - key: readability-identifier-naming.PublicMemberPrefix
+    value: ''
+  - key: readability-identifier-naming.PublicMemberCase
+    value: cameBack
