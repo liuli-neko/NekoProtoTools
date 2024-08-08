@@ -1,5 +1,5 @@
 #include <iostream>
-
+#include <locale>
 #include <gtest/gtest.h>
 
 #include "../core/binary_serializer.hpp"
@@ -985,6 +985,7 @@ TEST_F(JsonSerializerTest, SerializableTest) {
 
 int main(int argc, char** argv) {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
+    std::setlocale(LC_ALL, "en_US.UTF-8");
     testing::InitGoogleTest(&argc, argv);
     ProtoFactory factor(1, 0, 0);
     return RUN_ALL_TESTS();
