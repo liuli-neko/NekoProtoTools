@@ -303,7 +303,7 @@ I think I should not spend too much time designing and maintaining protocol libr
     - support simdjson backend (now noly under simdjson::dom namespace), it only support input serializer, Slightly faster than rapidjson backend.
 - support almost all stl types
 
-#### v1.0.0 - alpha
+#### v0.2.0 - alpha
 - Modify serializer interface
     - Make serialize function to operator()
     - Make JsonConvert struct to load function and save function

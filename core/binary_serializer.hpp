@@ -17,25 +17,96 @@
 #include <arpa/inet.h>
 #endif
 
+#include "private/detail/integer.hpp"
 #include "private/global.hpp"
 #include "private/helpers.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
+inline int16_t htobe(const int16_t value) NEKO_NOEXCEPT {
 #ifdef _WIN32
-inline int16_t htobe16(const int16_t value) NEKO_NOEXCEPT { return _byteswap_ushort(value); }
-inline int16_t be16toh(const int16_t value) NEKO_NOEXCEPT { return _byteswap_ushort(value); }
-inline uint16_t htobe16(const uint16_t value) NEKO_NOEXCEPT { return _byteswap_ushort(value); }
-inline uint16_t be16toh(const uint16_t value) NEKO_NOEXCEPT { return _byteswap_ushort(value); }
-inline int32_t htobe32(const int32_t value) NEKO_NOEXCEPT { return _byteswap_ulong(value); }
-inline int32_t be32toh(const int32_t value) NEKO_NOEXCEPT { return _byteswap_ulong(value); }
-inline uint32_t htobe32(const uint32_t value) NEKO_NOEXCEPT { return _byteswap_ulong(value); }
-inline uint32_t be32toh(const uint32_t value) NEKO_NOEXCEPT { return _byteswap_ulong(value); }
-inline int64_t htobe64(const int64_t value) NEKO_NOEXCEPT { return _byteswap_uint64(value); }
-inline int64_t be64toh(const int64_t value) NEKO_NOEXCEPT { return _byteswap_uint64(value); }
-inline uint64_t htobe64(const uint64_t value) NEKO_NOEXCEPT { return _byteswap_uint64(value); }
-inline uint64_t be64toh(const uint64_t value) NEKO_NOEXCEPT { return _byteswap_uint64(value); }
+    return _byteswap_ushort(value);
+#else
+    return htobe16(value);
 #endif
+}
+inline int16_t betoh(const int16_t value) NEKO_NOEXCEPT {
+#ifdef _WIN32
+    return _byteswap_ushort(value);
+#else
+    return be16toh(value);
+#endif
+}
+inline uint16_t htobe(const uint16_t value) NEKO_NOEXCEPT {
+#ifdef _WIN32
+    return _byteswap_ushort(value);
+#else
+    return htobe16(value);
+#endif
+}
+inline uint16_t betoh(const uint16_t value) NEKO_NOEXCEPT {
+#ifdef _WIN32
+    return _byteswap_ushort(value);
+#else
+    return be16toh(value);
+#endif
+}
+inline int32_t htobe(const int32_t value) NEKO_NOEXCEPT {
+#ifdef _WIN32
+    return _byteswap_ulong(value);
+#else
+    return htobe32(value);
+#endif
+}
+inline int32_t betoh(const int32_t value) NEKO_NOEXCEPT {
+#ifdef _WIN32
+    return _byteswap_ulong(value);
+#else
+    return be32toh(value);
+#endif
+}
+inline uint32_t htobe(const uint32_t value) NEKO_NOEXCEPT {
+#ifdef _WIN32
+    return _byteswap_ulong(value);
+#else
+    return htobe32(value);
+#endif
+}
+inline uint32_t betoh(const uint32_t value) NEKO_NOEXCEPT {
+#ifdef _WIN32
+    return _byteswap_ulong(value);
+#else
+    return be32toh(value);
+#endif
+}
+inline int64_t htobe(const int64_t value) NEKO_NOEXCEPT {
+#ifdef _WIN32
+    return _byteswap_uint64(value);
+#else
+    return htobe64(value);
+#endif
+}
+inline int64_t betoh(const int64_t value) NEKO_NOEXCEPT {
+#ifdef _WIN32
+    return _byteswap_uint64(value);
+#else
+    return be64toh(value);
+#endif
+}
+inline uint64_t htobe(const uint64_t value) NEKO_NOEXCEPT {
+#ifdef _WIN32
+    return _byteswap_uint64(value);
+#else
+    return htobe64(value);
+#endif
+}
+inline uint64_t betoh(const uint64_t value) NEKO_NOEXCEPT {
+#ifdef _WIN32
+    return _byteswap_uint64(value);
+#else
+    return be64toh(value);
+#endif
+}
 
 class BinaryOutputSerializer : public detail::OutputSerializer<BinaryOutputSerializer> {
 public:
@@ -52,54 +123,17 @@ public:
           mBuffer(other.mBuffer) {}
     template <typename T>
     inline bool saveValue(SizeTag<T> const& size) NEKO_NOEXCEPT {
-        mBuffer.push_back('S');
-        mBuffer.push_back(':');
-        saveValue(size.size);
-        return true;
+        return saveValue(size.size);
     }
-    inline bool saveValue(const int8_t value) NEKO_NOEXCEPT {
-        mBuffer.push_back(value);
-        return true;
-    }
-    inline bool saveValue(const uint8_t value) NEKO_NOEXCEPT {
-        mBuffer.push_back(value);
-        return true;
-    }
-    inline bool saveValue(const int16_t value) NEKO_NOEXCEPT {
-        auto nv = htobe16(value);
-        mBuffer.resize(mBuffer.size() + sizeof(int16_t), 0);
-        memcpy(mBuffer.data() + mBuffer.size() - sizeof(int16_t), &nv, sizeof(int16_t));
-        return true;
-    }
-    inline bool saveValue(const uint16_t value) NEKO_NOEXCEPT {
-        auto nv = htobe16(value);
-        mBuffer.resize(mBuffer.size() + sizeof(uint16_t), 0);
-        memcpy(mBuffer.data() + mBuffer.size() - sizeof(uint16_t), &nv, sizeof(uint16_t));
-        return true;
-    }
-    inline bool saveValue(const int32_t value) NEKO_NOEXCEPT {
-        auto nv = htobe32(value);
-        mBuffer.resize(mBuffer.size() + sizeof(int32_t), 0);
-        memcpy(mBuffer.data() + mBuffer.size() - sizeof(int32_t), &nv, sizeof(int32_t));
-        return true;
-    }
-    inline bool saveValue(const uint32_t value) NEKO_NOEXCEPT {
-        auto nv = htobe32(value);
-        mBuffer.resize(mBuffer.size() + sizeof(uint32_t), 0);
-        memcpy(mBuffer.data() + mBuffer.size() - sizeof(uint32_t), &nv, sizeof(uint32_t));
-        return true;
-    }
-    inline bool saveValue(const int64_t value) NEKO_NOEXCEPT {
-        auto nv = htobe64(value);
-        mBuffer.resize(mBuffer.size() + sizeof(int64_t), 0);
-        memcpy(mBuffer.data() + mBuffer.size() - sizeof(int64_t), &nv, sizeof(int64_t));
-        return true;
-    }
-    inline bool saveValue(const uint64_t value) NEKO_NOEXCEPT {
-        auto nv = htobe64(value);
-        mBuffer.resize(mBuffer.size() + sizeof(uint64_t), 0);
-        memcpy(mBuffer.data() + mBuffer.size() - sizeof(uint64_t), &nv, sizeof(uint64_t));
-        return true;
+    template <typename T, traits::enable_if_t<std::is_integral<T>::value, sizeof(T) <= sizeof(int64_t),
+                                              !std::is_enum<T>::value> = traits::default_value_for_enable>
+    inline bool saveValue(const T value) NEKO_NOEXCEPT {
+        if (value < 0) {
+            mBuffer.push_back(0x80);
+            return detail::IntegerEncoder::encode(-value, mBuffer, 1) == 0;
+        }
+        mBuffer.push_back(0x00);
+        return detail::IntegerEncoder::encode(value, mBuffer, 1) == 0;
     }
     inline bool saveValue(const float value) NEKO_NOEXCEPT {
         mBuffer.resize(mBuffer.size() + sizeof(float), 0);
@@ -145,6 +179,11 @@ public:
     inline bool startObject(const std::size_t size) NEKO_NOEXCEPT { return saveValue(makeSizeTag(size)); }
     inline bool endObject() NEKO_NOEXCEPT { return true; }
     inline bool end() NEKO_NOEXCEPT { return true; }
+    inline bool push(char value) NEKO_NOEXCEPT {
+        mBuffer.push_back(value);
+        return true;
+    }
+    inline std::size_t size() const { return mBuffer.size(); }
 
 private:
     BinaryOutputSerializer& operator=(const BinaryOutputSerializer&) = delete;
@@ -184,87 +223,19 @@ public:
         return true;
     }
 
-    inline bool loadValue(int8_t& value) NEKO_NOEXCEPT {
-        if (mOffset + sizeof(int8_t) > mSize) {
+    template <typename T, traits::enable_if_t<std::is_integral<T>::value, sizeof(T) <= sizeof(int64_t),
+                                              !std::is_enum<T>::value> = traits::default_value_for_enable>
+    inline bool loadValue(T& value) NEKO_NOEXCEPT {
+        auto flags = mBuffer[mOffset] & 0x80;
+        int ret = detail::IntegerDecoder::decode(reinterpret_cast<const uint8_t*>(mBuffer + mOffset), mSize - mOffset,
+                                                 value, 1);
+        if (ret <= 0) {
             return false;
         }
-        value = mBuffer[mOffset];
-        mOffset += sizeof(int8_t);
-        return true;
-    }
-
-    inline bool loadValue(int16_t& value) NEKO_NOEXCEPT {
-        if (mOffset + sizeof(int16_t) > mSize) {
-            return false;
+        mOffset += ret;
+        if (flags) {
+            value = -value;
         }
-        int16_t tmp;
-        memcpy(&tmp, mBuffer + mOffset, sizeof(int16_t));
-        mOffset += sizeof(int16_t);
-        value = be16toh(tmp);
-        return true;
-    }
-
-    inline bool loadValue(int32_t& value) NEKO_NOEXCEPT {
-        if (mOffset + sizeof(int32_t) > mSize) {
-            return false;
-        }
-        int32_t tmp;
-        memcpy(&tmp, mBuffer + mOffset, sizeof(int32_t));
-        mOffset += sizeof(int32_t);
-        value = be32toh(tmp);
-        return true;
-    }
-
-    inline bool loadValue(int64_t& value) NEKO_NOEXCEPT {
-        if (mOffset + sizeof(int64_t) > mSize) {
-            return false;
-        }
-        int64_t tmp;
-        memcpy(&tmp, mBuffer + mOffset, sizeof(int64_t));
-        mOffset += sizeof(int64_t);
-        value = be64toh(tmp);
-        return true;
-    }
-
-    inline bool loadValue(uint8_t& value) NEKO_NOEXCEPT {
-        if (mOffset + sizeof(uint8_t) > mSize) {
-            return false;
-        }
-        value = mBuffer[mOffset];
-        mOffset += sizeof(uint8_t);
-        return true;
-    }
-
-    inline bool loadValue(uint16_t& value) NEKO_NOEXCEPT {
-        if (mOffset + sizeof(uint16_t) > mSize) {
-            return false;
-        }
-        uint16_t tmp;
-        memcpy(&tmp, mBuffer + mOffset, sizeof(uint16_t));
-        mOffset += sizeof(uint16_t);
-        value = be16toh(tmp);
-        return true;
-    }
-
-    inline bool loadValue(uint32_t& value) NEKO_NOEXCEPT {
-        if (mOffset + sizeof(uint32_t) > mSize) {
-            return false;
-        }
-        uint32_t tmp;
-        memcpy(&tmp, mBuffer + mOffset, sizeof(uint32_t));
-        mOffset += sizeof(uint32_t);
-        value = be32toh(tmp);
-        return true;
-    }
-
-    inline bool loadValue(uint64_t& value) NEKO_NOEXCEPT {
-        if (mOffset + sizeof(uint64_t) > mSize) {
-            return false;
-        }
-        uint64_t tmp;
-        memcpy(&tmp, mBuffer + mOffset, sizeof(uint64_t));
-        mOffset += sizeof(uint64_t);
-        value = be64toh(tmp);
         return true;
     }
 
@@ -297,13 +268,6 @@ public:
 
     template <typename T>
     inline bool loadValue(const SizeTag<T>& value) NEKO_NOEXCEPT {
-        if (mOffset + 2 > mSize) {
-            return false;
-        }
-        if (mBuffer[mOffset] != 'S' || mBuffer[mOffset + 1] != ':') {
-            return false;
-        }
-        mOffset += 2;
         return loadValue(value.size);
     }
 
@@ -318,6 +282,15 @@ public:
         }
         return operator()(value.value);
     }
+    inline bool pop(char& value) NEKO_NOEXCEPT {
+        if (mOffset + 1 > mSize) {
+            return false;
+        }
+        value = mBuffer[mOffset];
+        mOffset += 1;
+        return true;
+    }
+    inline std::size_t offset() const { return mOffset; }
 
 private:
     BinaryInputSerializer& operator=(const BinaryInputSerializer&) = delete;
@@ -329,9 +302,73 @@ private:
     std::size_t mOffset = 0;
 };
 
+template <typename T, size_t Size = sizeof(T)>
+struct FixedLengthField {
+private:
+    using Type = typename std::conditional<std::is_lvalue_reference<T>::value, T, typename std::decay<T>::type>::type;
+
+public:
+    FixedLengthField(T&& value) : value(std::forward<T>(value)) {}
+    template <typename Serializer>
+    bool save(Serializer& serializer) const;
+    template <typename Serializer>
+    bool load(Serializer& serializer);
+    Type value;
+};
+
+template <class T, std::size_t Size = sizeof(T)>
+inline FixedLengthField<T> makeFixedLengthField(T&& value) NEKO_NOEXCEPT {
+    return FixedLengthField<T, Size>{std::forward<T>(value)};
+}
+
 struct BinarySerializer {
     using OutputSerializer = BinaryOutputSerializer;
     using InputSerializer  = BinaryInputSerializer;
 };
+
+template <typename T, size_t Size>
+template <typename Serializer>
+inline bool FixedLengthField<T, Size>::save(Serializer& serializer) const {
+    if (Size != sizeof(T)) {
+        auto size = serializer.size();
+        auto ret  = serializer.saveValue(value);
+        while (ret && serializer.size() - size < Size) {
+            ret = serializer.push(0);
+        }
+        return ret;
+    } else {
+        char buffer[Size];
+        memcpy(buffer, &value, Size);
+        for (auto& c : buffer) {
+            if (!serializer.push(c)) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+
+template <typename T, size_t Size>
+template <typename Serializer>
+inline bool FixedLengthField<T, Size>::load(Serializer& serializer) {
+    if (Size != sizeof(T)) {
+        auto size = serializer.offset();
+        auto ret  = serializer.loadValue(value);
+        char tmp;
+        while (ret && serializer.offset() - size < Size) {
+            ret = serializer.pop(tmp);
+        }
+        return ret;
+    } else {
+        char buffer[Size];
+        for (auto& c : buffer) {
+            if (!serializer.pop(c)) {
+                return false;
+            }
+        }
+        memcpy(&value, buffer, Size);
+        return true;
+    }
+}
 
 NEKO_END_NAMESPACE

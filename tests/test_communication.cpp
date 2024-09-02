@@ -5,10 +5,8 @@
 #include "../core/json_serializer.hpp"
 #include "../core/types/vector.hpp"
 
-#include "ilias_networking.hpp"
-#ifdef _WIN32
-#include "ilias_iocp.cpp"
-#endif
+#include "ilias/net.hpp"
+#include "ilias/networking.hpp"
 NEKO_USE_NAMESPACE
 using namespace ILIAS_NAMESPACE;
 
@@ -31,8 +29,10 @@ std::string to_hex(const std::vector<char>& data) {
 }
 
 Task<void> ClientLoop(IoContext& ioContext, ChannelFactory& channelFactor) {
+    NEKO_LOG_INFO("Client loop started");
     auto ret = co_await channelFactor.connect("tcp://127.0.0.1:1234", 0);
     if (!ret) {
+        std::cout << "connect failed " << ret.error().message() << std::endl;
         co_return Unexpected(ret.error());
     }
     std::cout << "connect successed " << std::endl;
@@ -142,7 +142,7 @@ Task<void> serverLoop(IoContext& ioContext, ChannelFactory& channelFactor) {
     }
     NEKO_LOG_INFO("accept successed");
     auto ret1 = co_await HandleLoop(ret.value());
-    if (!ret1 && ret1.error() != ErrorCode::ChannelClosedByPeer) {
+    if (!ret1 && ret1.error().value() != (int64_t)ErrorCode::ChannelClosedByPeer) {
         co_return Unexpected(ret1.error());
     }
     co_return Result<>();

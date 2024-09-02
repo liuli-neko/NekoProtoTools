@@ -2,7 +2,6 @@ set_project("cc-proto")
 add_rules("mode.debug", "mode.release", "mode.valgrind", "mode.coverage")
 set_version("1.0.0")
 
-add_rules("plugin.compile_commands.autoupdate", {outputdir = ".vscode"})
 
 add_requires("rapidjson", "spdlog", "gtest", "simdjson v3.9.3")
 

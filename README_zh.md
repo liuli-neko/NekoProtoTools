@@ -297,7 +297,7 @@ int main() {
     - 支持simdjson作为json序列化后端(目前仅支持了simdjson::dom命名空间下的), 它只支持从json数据输入，目前效率比rapidjson略高.
 - 几乎支持所有stl容器
 
-#### v1.0.0 - alpha
+#### v0.2.0 - alpha
 - 修改序列化器的接口
     - 将序列化函数统一替换为重载的括号表达式
     - 将辅助的Convert类替换为save，load函数

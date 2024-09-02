@@ -38,7 +38,7 @@ TEST(BinarySerializer, Serialize) {
     BinarySerializer::OutputSerializer os(buf);
     os(p);
 
-    EXPECT_EQ(buf.size(), 110);
+    EXPECT_EQ(buf.size(), 50);
     TestP p2;
     BinarySerializer::InputSerializer input(buf.data(), buf.size());
     input(p2);

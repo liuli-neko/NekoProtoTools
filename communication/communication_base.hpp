@@ -18,12 +18,10 @@
 #include "../core/binary_serializer.hpp"
 #include "../core/proto_base.hpp"
 #include "../core/serializer_base.hpp"
-#include "ilias.hpp"
-#include "ilias_async.hpp"
-#include "ilias_await.hpp"
-#include "ilias_co.hpp"
-#include "ilias_expected.hpp"
-#include "ilias_task.hpp"
+#include "ilias/coro.hpp"
+#include "ilias/ilias.hpp"
+#include "ilias/inet.hpp"
+#include "ilias/net.hpp"
 
 NEKO_BEGIN_NAMESPACE
 class ChannelFactory;
@@ -56,11 +54,13 @@ public:
 
     template <typename SerializerT>
     bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {
-        return serializer(length, protoType, transType, reserved);
+        return serializer(makeFixedLengthField(length), makeFixedLengthField(protoType),
+                          makeFixedLengthField(transType), makeFixedLengthField(reserved));
     }
     template <typename SerializerT>
     bool serialize(SerializerT& serializer) NEKO_NOEXCEPT {
-        return serializer(length, protoType, transType, reserved);
+        return serializer(makeFixedLengthField(length), makeFixedLengthField(protoType),
+                          makeFixedLengthField(transType), makeFixedLengthField(reserved));
     }
 };
 
@@ -82,11 +82,13 @@ public:
 
     template <typename SerializerT>
     bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {
-        return serializer(factoryVersion, messageType, channelId);
+        return serializer(makeFixedLengthField(factoryVersion), makeFixedLengthField(messageType),
+                          makeFixedLengthField(channelId));
     }
     template <typename SerializerT>
     bool serialize(SerializerT& serializer) NEKO_NOEXCEPT {
-        return serializer(factoryVersion, messageType, channelId);
+        return serializer(makeFixedLengthField(factoryVersion), makeFixedLengthField(messageType),
+                          makeFixedLengthField(channelId));
     }
 };
 
@@ -97,10 +99,11 @@ enum class ErrorCode { NEKO_CHANNEL_ERROR_CODE_TABLE };
 class NEKO_PROTO_API ErrorCategory : public ILIAS_NAMESPACE::ErrorCategory {
 public:
     static auto instance() -> const ErrorCategory&;
-    auto message(uint32_t value) const -> std::string override;
+    auto message(int64_t value) const -> std::string override;
     auto name() const -> std::string_view override;
-    auto equivalent(uint32_t self, const ILIAS_NAMESPACE::Error& other) const -> bool override;
+    auto equivalent(int64_t self, const ILIAS_NAMESPACE::Error& other) const -> bool override;
 };
+ILIAS_DECLARE_ERROR(ErrorCode, ErrorCategory);
 
 class NEKO_PROTO_API ChannelBase {
 public:
@@ -159,7 +162,7 @@ protected:
 
 class NEKO_PROTO_API ByteStreamChannel : public ChannelBase {
 public:
-    ByteStreamChannel(ChannelFactory* ctxt, ILIAS_NAMESPACE::ByteStream<>&& client, uint16_t channelId);
+    ByteStreamChannel(ChannelFactory* ctxt, ILIAS_NAMESPACE::IStreamClient&& client, uint16_t channelId);
     ~ByteStreamChannel() noexcept = default;
     ILIAS_NAMESPACE::Task<void> send(std::unique_ptr<NEKO_NAMESPACE::IProto> message) override;
     ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> recv() override;
@@ -167,7 +170,7 @@ public:
     void destroy() override;
 
 private:
-    ILIAS_NAMESPACE::ByteStream<> mClient;
+    ILIAS_NAMESPACE::IStreamClient mClient;
 };
 
 inline ChannelBase::ChannelBase(ChannelFactory* ctxt, uint16_t channelId)
@@ -178,5 +181,3 @@ inline uint16_t ChannelBase::channelId() { return mChannelId; }
 inline ChannelBase::ChannelState ChannelBase::state() { return mState; }
 
 NEKO_END_NAMESPACE
-
-ILIAS_DECLARE_ERROR(NEKO_NAMESPACE::ErrorCode, NEKO_NAMESPACE::ErrorCategory);

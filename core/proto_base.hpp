@@ -220,7 +220,7 @@ private:
     template <typename T>
     static IProto* creater() NEKO_NOEXCEPT;
     void setVersion(int major, int minor, int patch) NEKO_NOEXCEPT;
-    static int proto_type(const NEKO_STRING_VIEW& name, const bool isGeneric = false) NEKO_NOEXCEPT;
+    static int proto_type(const NEKO_STRING_VIEW& name, const bool isDeclared = false) NEKO_NOEXCEPT;
 
 private:
     std::vector<std::function<IProto*()>> mCreaterList;
@@ -392,12 +392,12 @@ public:                                                                         
     /** @brief make proto with structure */                                                                            \
     template <typename... Args>                                                                                        \
     inline static ProtoType emplaceProto(Args&&... args) NEKO_NOEXCEPT {                                               \
-        static_assert(std::is_move_constructible<className>::value, "className must be copable");                      \
+        static_assert(std::is_move_constructible<className>::value, "class " #className " must be copable");           \
         return ProtoType(className{std::forward<Args>(args)...});                                                      \
     }                                                                                                                  \
     /** @brief make proto by copying other */                                                                          \
     inline static ProtoType makeProto(const className& other) NEKO_NOEXCEPT {                                          \
-        static_assert(std::is_copy_constructible<className>::value, "className must be copable");                      \
+        static_assert(std::is_copy_constructible<className>::value, "class " #className " must be copable");           \
         return ProtoType(other);                                                                                       \
     }
 
