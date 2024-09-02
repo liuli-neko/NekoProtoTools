@@ -149,7 +149,7 @@ private:
                                            !traits::has_method_const_serialize<T, SerializerType>::value> =
                            traits::default_value_for_enable>
     inline bool processImpl(const T& value) NEKO_NOEXCEPT {
-        return traits::method_access::method_save(*mSelf, value);
+        return traits::method_access::method_const_save(*mSelf, value);
     }
     template <class T, traits::enable_if_t<traits::has_method_serialize<T, SerializerType>::value,
                                            !traits::has_method_const_save<T, SerializerType>::value,

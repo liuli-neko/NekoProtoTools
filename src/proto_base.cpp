@@ -53,16 +53,16 @@ void ProtoFactory::regist(const NEKO_STRING_VIEW& name, std::function<IProto*()>
     mCreaterList[type] = creator;
 }
 
-int ProtoFactory::proto_type(const NEKO_STRING_VIEW& name, const bool isGeneric) NEKO_NOEXCEPT {
+int ProtoFactory::proto_type(const NEKO_STRING_VIEW& name, const bool isDeclared) NEKO_NOEXCEPT {
     static std::map<NEKO_STRING_VIEW, int> protoNameMap;
     static int counter = 0;
     auto item          = protoNameMap.find(name);
     if (protoNameMap.end() == item) {
-        if (isGeneric) {
+        if (isDeclared) {
             protoNameMap.insert(std::make_pair(name, ++counter));
             return counter;
         } else {
-            NEKO_LOG_ERROR("Proto type not generic: {}, are you created a ProtoFactory and declare this type?", name);
+            NEKO_LOG_ERROR("Proto type not declared: {}, are you created a ProtoFactory and declare this type?", name);
             return -1;
         }
     }

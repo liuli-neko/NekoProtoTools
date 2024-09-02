@@ -12,7 +12,8 @@
 
 #include <regex>
 
-#include "ilias_async.hpp"
+#include "ilias/coro.hpp"
+#include "ilias/detail/expected.hpp"
 
 #ifdef NEKO_COMMUNICATION_DEBUG
 #include "../core/to_string.hpp"
@@ -103,7 +104,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
         co_return Unexpected(ret.error());
     }
 
-    ByteStream<IStreamClient, char> client1(std::move(ret.value().first));
+    IStreamClient client1(std::move(ret.value().first));
     std::vector<char> buf(MessageHeader::size(), 0);
     auto ret1 = co_await client1.recvAll(buf.data(), buf.size());
     if (!ret1) {
@@ -198,7 +199,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::makeChannel(IStreamClient&& cli
         serializer(hmsg);
         serializer(cmsg);
     }
-    ByteStream<IStreamClient, char> client1(std::move(client));
+    IStreamClient client1(std::move(client));
     auto ret = co_await client1.sendAll(buf.data(), buf.size());
     buf.clear();
 
@@ -273,7 +274,7 @@ std::vector<uint16_t> ChannelFactory::getChannelIds() {
 
 const NEKO_NAMESPACE::ProtoFactory& ChannelFactory::getProtoFactory() { return *(mFactory.get()); }
 
-ByteStreamChannel::ByteStreamChannel(ChannelFactory* ctxt, ILIAS_NAMESPACE::ByteStream<>&& client, uint16_t channelId)
+ByteStreamChannel::ByteStreamChannel(ChannelFactory* ctxt, ILIAS_NAMESPACE::IStreamClient&& client, uint16_t channelId)
     : ChannelBase(ctxt, channelId), mClient(std::move(client)) {
     mState = ChannelBase::ChannelState::Connected;
 }
@@ -370,7 +371,7 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> ByteStreamChannel
     co_return std::move(message);
 }
 
-Task<void> _closeLater(ILIAS_NAMESPACE::ByteStream<> client, std::vector<char> buf, uint16_t id,
+Task<void> _closeLater(ILIAS_NAMESPACE::IStreamClient client, std::vector<char> buf, uint16_t id,
                        NEKO_NAMESPACE::ChannelFactory* const mf) {
     // NEKO_LOG_INFO("send: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     mf->destroyChannel(id);
@@ -405,7 +406,7 @@ auto ErrorCategory::instance() -> const ErrorCategory& {
     return instance;
 }
 
-auto ErrorCategory::message(uint32_t value) const -> std::string {
+auto ErrorCategory::message(int64_t value) const -> std::string {
     switch (value) {
 #define NEKO_CHANNEL_ERROR(name, code, message, _)                                                                     \
     case code:                                                                                                         \
@@ -419,7 +420,7 @@ auto ErrorCategory::message(uint32_t value) const -> std::string {
 
 auto ErrorCategory::name() const -> std::string_view { return "NekoCommunicationError"; }
 
-auto ErrorCategory::equivalent(uint32_t self, const ILIAS_NAMESPACE::Error& other) const -> bool {
+auto ErrorCategory::equivalent(int64_t self, const ILIAS_NAMESPACE::Error& other) const -> bool {
     if (self == static_cast<uint32_t>(ErrorCode::ChannelClosedByPeer) &&
         other == ILIAS_NAMESPACE::Error::ConnectionReset) {
         return true;
