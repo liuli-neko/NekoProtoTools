@@ -8,7 +8,7 @@ compile_commands.json
 callgrind.out.*
 output-report.*
 work/
-
+vsxmake2022/
 *.o
 *.obj
 *.bin
