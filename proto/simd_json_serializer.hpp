@@ -12,7 +12,9 @@
 #if defined(NEKO_PROTO_ENABLE_SIMDJSON) || 1
 #include <simdjson.h>
 #include <sstream>
+#include <unordered_map>
 #include <vector>
+#include <iomanip> 
 
 #include "private/global.hpp"
 #include "private/helpers.hpp"
@@ -59,7 +61,7 @@ public:
     using ValueIterator  = simdjson::dom::array::iterator;
 
 public:
-    inline ConstJsonIterator() NEKO_NOEXCEPT : mType(Null_){};
+    inline ConstJsonIterator() NEKO_NOEXCEPT : mType(Null_) {};
     inline ConstJsonIterator(const JsonObject& object) NEKO_NOEXCEPT : mSize(object.size()), mType(Member) {
         if (mSize == 0) {
             mType = Null_;
@@ -137,6 +139,22 @@ private:
     std::size_t mSize;
     enum Type { Value, Member, Null_ } mType;
 };
+
+class VectorStreamBuf : public std::streambuf {
+public:
+    VectorStreamBuf(std::vector<char>& vec) : vec(vec) {}
+
+protected:
+    int_type overflow(int_type c = traits_type::eof()) override {
+        if (c != traits_type::eof()) {
+            vec.push_back(static_cast<char>(c));
+        }
+        return c;
+    }
+
+private:
+    std::vector<char>& vec;
+};
 } // namespace simd
 } // namespace detail
 
@@ -147,16 +165,22 @@ private:
 public:
     template <typename T>
     explicit inline SimdJsonOutputSerializer(T& buffer) NEKO_NOEXCEPT
-        : detail::OutputSerializer<SimdJsonOutputSerializer>(this) {
+        : detail::OutputSerializer<SimdJsonOutputSerializer>(this),
+          mBuffer(buffer),
+          mStream(&mBuffer) {
         mStateStack.emplace_back(State::Null);
     }
 
     inline SimdJsonOutputSerializer(const SimdJsonOutputSerializer& other) NEKO_NOEXCEPT
-        : detail::OutputSerializer<SimdJsonOutputSerializer>(this) {
+        : detail::OutputSerializer<SimdJsonOutputSerializer>(this),
+          mBuffer(other.mBuffer),
+          mStream(&mBuffer) {
         mStateStack.emplace_back(State::Null);
     }
     inline SimdJsonOutputSerializer(SimdJsonOutputSerializer&& other) NEKO_NOEXCEPT
-        : detail::OutputSerializer<SimdJsonOutputSerializer>(this) {
+        : detail::OutputSerializer<SimdJsonOutputSerializer>(this),
+          mBuffer(other.mBuffer),
+          mStream(&mBuffer) {
         mStateStack.emplace_back(State::Null);
     }
     inline ~SimdJsonOutputSerializer() { end(); }
@@ -200,6 +224,7 @@ public:
         return false;
     }
     inline bool saveValue(const float value) NEKO_NOEXCEPT {
+        mStream << std::fixed << std::setprecision(6);
         if (mStateStack.back() == State::AfterKey) {
             mStream << ":" << value;
             mStateStack.pop_back();
@@ -215,6 +240,7 @@ public:
         return false;
     }
     inline bool saveValue(const double value) NEKO_NOEXCEPT {
+        mStream << std::fixed << std::setprecision(15);
         if (mStateStack.back() == State::AfterKey) {
             mStream << ":" << value;
             mStateStack.pop_back();
@@ -231,15 +257,15 @@ public:
     }
     inline bool saveValue(const bool value) NEKO_NOEXCEPT {
         if (mStateStack.back() == State::AfterKey) {
-            mStream << ":" << value ? "true" : "false";
+            mStream << ":" << (value ? "true" : "false");
             mStateStack.pop_back();
             return true;
         } else if (mStateStack.back() == State::ArrayStart) {
             mStateStack.back() = State::InArray;
-            mStream << value ? "true" : "false";
+            mStream << (value ? "true" : "false");
             return true;
         } else if (mStateStack.back() == State::InArray) {
-            mStream << "," << value ? "true" : "false";
+            mStream << "," << (value ? "true" : "false");
             return true;
         }
         return false;
@@ -260,7 +286,21 @@ public:
         }
         return false;
     }
-    inline bool saveValue(const char* value) NEKO_NOEXCEPT { return false; }
+    inline bool saveValue(const char* value) NEKO_NOEXCEPT {
+        if (mStateStack.back() == State::AfterKey) {
+            mStream << ":\"" << value << "\"";
+            mStateStack.pop_back();
+            return true;
+        } else if (mStateStack.back() == State::ArrayStart) {
+            mStateStack.back() = State::InArray;
+            mStream << "\"" << value << "\"";
+            return true;
+        } else if (mStateStack.back() == State::InArray) {
+            mStream << ",\"" << value << "\"";
+            return true;
+        }
+        return false;
+    }
     inline bool saveValue(const std::nullptr_t) NEKO_NOEXCEPT {
         if (mStateStack.back() == State::AfterKey) {
             mStream << ":null";
@@ -276,6 +316,7 @@ public:
         }
         return false;
     }
+#if NEKO_CPP_PLUS >= 17
     template <typename CharT, typename Traits>
     inline bool saveValue(const std::basic_string_view<CharT, Traits> value) NEKO_NOEXCEPT {
         if (mStateStack.back() == State::AfterKey) {
@@ -304,17 +345,45 @@ public:
         if (mStateStack.back() == State::InArray) {
             mStream << ",";
         }
+        if (mStateStack.back() == State::InObject) {
+            mStream << ",";
+        }
         if (mStateStack.back() == State::ObjectStart) {
             mStateStack.back() = State::InObject;
+        }
+        mStream << '"' << std::string_view{value.name, value.nameLen} << '"';
+        mStateStack.push_back(State::AfterKey);
+        if constexpr (traits::is_optional<T>::value) {
+            if (value.value.has_value()) {
+                return (*this)(value.value.value());
+            }
+        } else {
+            return (*this)(value.value);
+        }
+    }
+#else
+    template <typename T>
+    inline bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
+        if (mStateStack.back() == State::AfterKey) {
+            return false;
+        }
+        if (mStateStack.back() == State::ArrayStart) {
+            mStateStack.back() = State::InArray;
+        }
+        if (mStateStack.back() == State::InArray) {
+            mStream << ",";
         }
         if (mStateStack.back() == State::InObject) {
             mStream << ",";
         }
-        mStream << '"' << value.name << '"';
+        if (mStateStack.back() == State::ObjectStart) {
+            mStateStack.back() = State::InObject;
+        }
+        mStream << '"' << std::string(value.name, value.nameLen) << '"';
         mStateStack.push_back(State::AfterKey);
         return (*this)(value.value);
     }
-
+#endif
     inline bool startArray(const std::size_t) NEKO_NOEXCEPT {
         if (mStateStack.back() == State::AfterKey) {
             mStateStack.push_back(State::ArrayStart);
@@ -354,6 +423,22 @@ public:
             mStream << "{";
             return true;
         }
+        if (mStateStack.back() == State::Null) {
+            mStateStack.push_back(State::ObjectStart);
+            mStream << "{";
+            return true;
+        }
+        if (mStateStack.back() == State::InArray) {
+            mStateStack.push_back(State::ObjectStart);
+            mStream << ",{";
+            return true;
+        }
+        if (mStateStack.back() == State::ArrayStart) {
+            mStateStack.back() = State::InArray;
+            mStateStack.push_back(State::ObjectStart);
+            mStream << "{";
+            return true;
+        }
         return false;
     }
     inline bool endObject() NEKO_NOEXCEPT {
@@ -371,23 +456,24 @@ public:
         if (mStateStack.back() == State::InObject || mStateStack.back() == State::ObjectStart) {
             mStateStack.pop_back();
             mStream << "}";
-            return true;
         } else if (mStateStack.back() == State::InArray || mStateStack.back() == State::ArrayStart) {
             mStream << "]";
-            return true;
         }
         if (mStateStack.back() == State::Null) {
             mStateStack.pop_back();
-            return true;
         }
-        return false;
+        if (mStateStack.size() != 0) {
+            return false;
+        }
+        mStream.flush();
     }
 
 private:
     SimdJsonOutputSerializer& operator=(const SimdJsonOutputSerializer&) = delete;
     SimdJsonOutputSerializer& operator=(SimdJsonOutputSerializer&&)      = delete;
     std::vector<State> mStateStack;
-    std::ostringstream mStream;
+    std::ostream mStream;
+    detail::simd::VectorStreamBuf mBuffer;
 };
 
 /**

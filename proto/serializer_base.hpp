@@ -57,6 +57,7 @@
 
 #include <string>
 #include <vector>
+#include <array>
 
 #include "private/global.hpp"
 #include "private/helpers.hpp"

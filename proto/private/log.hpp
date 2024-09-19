@@ -43,10 +43,10 @@ inline void neko_proto_private_log_out(const char* level, const char* message, c
     } else if (file_str.find_last_of('\\') != std::string::npos) {
         file_str = file_str.substr(file_str.find_last_of('\\') + 1);
     }
-    fprintf(stderr, "[%s.%03ld] %s - [%s:%d][%s] [%s] %s\n", buf, dis_millseconds, level, file_str.c_str(),
+    fprintf(stderr, "[%s.%03lld] %s - [%s:%d][%s] [%s] %s\n", buf, dis_millseconds, level, file_str.c_str(),
             context.line, context.func, context.module, message);
 #else
-    fprintf(stderr, "[%s.%03ld] %s - [%s] %s\n", buf, dis_millseconds, level, context.module, message);
+    fprintf(stderr, "[%s.%03lld] %s - [%s] %s\n", buf, dis_millseconds, level, context.module, message);
 #endif
 }
 

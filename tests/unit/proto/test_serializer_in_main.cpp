@@ -147,6 +147,20 @@ int main(int argc, char** argv) {
     EXPECT_STREQ(SerializableToString(testp).c_str(), SerializableToString(tp2).c_str());
     NEKO_LOG_INFO("unit test", "{}", SerializableToString(testp));
 
+    std::vector<char> outbuf;
+    {
+        SimdJsonSerializer::OutputSerializer out(outbuf);
+        out(tp2);
+    }
+    outbuf.push_back('\0');
+    NEKO_LOG_INFO("unit test", "{}", outbuf.data());
+
+    {
+        TestP tp3;
+        SimdJsonSerializer::InputSerializer in(outbuf.data(), outbuf.size() - 1);
+        EXPECT_TRUE(in(tp3));
+        EXPECT_STREQ(SerializableToString(tp3).c_str(), SerializableToString(tp2).c_str());
+    }
     zTypeTest1 zt;
     zt.a = {{1, 1}, {2, 2}};
     zt.b = {{1, "world"}};
