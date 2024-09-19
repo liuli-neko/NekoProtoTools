@@ -1,0 +1,8 @@
+target("test_co")
+    set_languages("c++20")
+    set_kind("binary")
+    add_includedirs("$(projectdir)")
+    add_packages("spdlog")
+    add_tests("co")
+    add_files("test_co.cpp")
+target_end()
