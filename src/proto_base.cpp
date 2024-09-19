@@ -9,7 +9,7 @@
  *
  */
 
-#include "../core/proto_base.hpp"
+#include "../proto/proto_base.hpp"
 
 #include <functional>
 #include <vector>
@@ -30,7 +30,7 @@ static_init_funcs(const NEKO_STRING_VIEW& name = "", std::function<void(ProtoFac
         funcs.insert(std::make_pair(name, func));
     }
     if (item != funcs.end()) {
-        NEKO_LOG_WARN("Duplicate init function: {}", name);
+        NEKO_LOG_WARN("proto", "Duplicate init function: {}", name);
     }
     return funcs;
 }
@@ -62,7 +62,7 @@ int ProtoFactory::proto_type(const NEKO_STRING_VIEW& name, const bool isDeclared
             protoNameMap.insert(std::make_pair(name, ++counter));
             return counter;
         } else {
-            NEKO_LOG_ERROR("Proto type not declared: {}, are you created a ProtoFactory and declare this type?", name);
+            NEKO_LOG_ERROR("proto", "Proto type not declared: {}, are you created a ProtoFactory and declare this type?", name);
             return -1;
         }
     }
