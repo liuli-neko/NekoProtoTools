@@ -15,9 +15,9 @@
 
 #include <queue>
 
-#include "../core/binary_serializer.hpp"
-#include "../core/proto_base.hpp"
-#include "../core/serializer_base.hpp"
+#include "proto/binary_serializer.hpp"
+#include "proto/proto_base.hpp"
+#include "proto/serializer_base.hpp"
 #include "ilias/coro.hpp"
 #include "ilias/ilias.hpp"
 #include "ilias/inet.hpp"

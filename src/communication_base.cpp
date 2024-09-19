@@ -16,8 +16,8 @@
 #include "ilias/detail/expected.hpp"
 
 #ifdef NEKO_COMMUNICATION_DEBUG
-#include "../core/to_string.hpp"
-#include "../core/types/binary_data.hpp"
+#include "../proto/to_string.hpp"
+#include "../proto/types/binary_data.hpp"
 #endif
 
 using namespace ILIAS_NAMESPACE;
@@ -39,7 +39,7 @@ Expected<std::tuple<std::string, std::string, uint16_t>, Error> parseUrl(const s
         ip       = match[2];
         port     = std::stoi(match[3]);
     } else {
-        NEKO_LOG_ERROR("Invalid url {}", url);
+        NEKO_LOG_ERROR("communication", "Invalid url {}", url);
         return Unexpected<Error>(ErrorCode::InvalidUrl);
     }
 
@@ -64,13 +64,14 @@ Expected<void, Error> ChannelFactory::listen(std::string_view hostname) {
         mListener = TcpListener(mIoContext, AF_INET);
         auto ret  = mListener.bind(IPEndpoint(IPAddress4::fromString(ip.c_str()), port));
         if (!ret) {
-            NEKO_LOG_ERROR("tcp listener Failed. can't bind {}:{}, {}", ip, port, ret.error().message());
+            NEKO_LOG_ERROR("communication", "tcp listener Failed. can't bind {}:{}, {}", ip, port,
+                           ret.error().message());
             return Unexpected<Error>(ret.error());
         }
         return Expected<void, Error>();
     }
 
-    NEKO_LOG_ERROR("unsupported protocol {}", protocol);
+    NEKO_LOG_ERROR("communication", "unsupported protocol {}", protocol);
     return Unexpected<Error>(Error(ErrorCode::InvalidUrl));
 }
 
@@ -100,7 +101,7 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::connect(std::string_view hostna
 Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
     auto ret = co_await mListener.accept();
     if (!ret) {
-        NEKO_LOG_ERROR("tcp accept Failed. {}", ret.error().message());
+        NEKO_LOG_ERROR("communication", "tcp accept Failed. {}", ret.error().message());
         co_return Unexpected(ret.error());
     }
 
@@ -108,10 +109,10 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
     std::vector<char> buf(MessageHeader::size(), 0);
     auto ret1 = co_await client1.recvAll(buf.data(), buf.size());
     if (!ret1) {
-        NEKO_LOG_ERROR("recv msg header error");
+        NEKO_LOG_ERROR("communication", "recv msg header error");
         co_return Unexpected<Error>(ret.error());
     }
-    // NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
+    // NEKO_LOG_INFO("communication", "recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     MessageHeader hmsg;
     {
         BinarySerializer::InputSerializer serializer(buf.data(), buf.size());
@@ -120,27 +121,28 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
     buf.clear();
     ChannelHeader cmsg;
     if (hmsg.transType != static_cast<uint16_t>(TransType::Channel) || hmsg.protoType != 0) {
-        NEKO_LOG_ERROR("trans type {} or protoType {} is not channel", hmsg.transType, hmsg.protoType);
+        NEKO_LOG_ERROR("communication", "trans type {} or protoType {} is not channel", hmsg.transType, hmsg.protoType);
         co_return Unexpected<Error>(Error(ErrorCode::ConnectionMessageTypeError));
     }
     buf.resize(hmsg.length);
     ret1 = co_await client1.recvAll(buf.data(), buf.size());
     if (!ret1) {
-        NEKO_LOG_ERROR("recv data error");
+        NEKO_LOG_ERROR("communication", "recv data error");
         co_return Unexpected(ret.error());
     }
-    // NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
+    // NEKO_LOG_INFO("communication", "recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     {
         BinarySerializer::InputSerializer serializer(buf.data(), buf.size());
         serializer(cmsg);
     }
     buf.clear();
     if (cmsg.messageType != static_cast<uint8_t>(ChannelHeader::MessageType::ConnectMessage)) {
-        NEKO_LOG_ERROR("message type {} is not connect message", cmsg.messageType);
+        NEKO_LOG_ERROR("communication", "message type {} is not connect message", cmsg.messageType);
         co_return Unexpected(Error(ErrorCode::ConnectionMessageTypeError));
     }
     if (cmsg.factoryVersion != getProtoFactory().version()) {
-        NEKO_LOG_ERROR("factory version {} is not {}", cmsg.factoryVersion, getProtoFactory().version());
+        NEKO_LOG_ERROR("communication", "factory version {} is not {}", cmsg.factoryVersion,
+                       getProtoFactory().version());
         co_return Unexpected(Error(ErrorCode::ProtoVersionUnsupported));
     }
     uint32_t channelId = 0;
@@ -158,11 +160,11 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::accept() {
         serializer(hmsg);
         serializer(cmsg);
     }
-    NEKO_ASSERT(buf.size() == ChannelHeader::size() + MessageHeader::size(), "buf size error");
-    // NEKO_LOG_INFO("send: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
+    NEKO_ASSERT(buf.size() == ChannelHeader::size() + MessageHeader::size(), "communication", "buf size error");
+    // NEKO_LOG_INFO("communication", "send: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     ret1 = co_await client1.sendAll(buf.data(), buf.size());
     if (!ret1) {
-        NEKO_LOG_ERROR("send data error");
+        NEKO_LOG_ERROR("communication", "send data error");
         co_return Unexpected(ret.error());
     }
 
@@ -204,17 +206,17 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::makeChannel(IStreamClient&& cli
     buf.clear();
 
     if (!ret) {
-        NEKO_LOG_ERROR("send data error");
+        NEKO_LOG_ERROR("communication", "send data error");
         co_return Unexpected(ret.error());
     }
 
     buf.resize(MessageHeader::size());
     ret = co_await client1.recvAll(buf.data(), buf.size());
     if (!ret) {
-        NEKO_LOG_ERROR("recv msg header error");
+        NEKO_LOG_ERROR("communication", "recv msg header error");
         co_return Unexpected(ret.error());
     }
-    // NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
+    // NEKO_LOG_INFO("communication", "recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     {
         BinarySerializer::InputSerializer serializer(buf.data(), buf.size());
         serializer(hmsg);
@@ -223,31 +225,32 @@ Task<std::weak_ptr<ChannelBase>> ChannelFactory::makeChannel(IStreamClient&& cli
     buf.resize(hmsg.length);
     ret = co_await client1.recvAll(buf.data(), buf.size());
     if (!ret) {
-        NEKO_LOG_ERROR("recv data error");
+        NEKO_LOG_ERROR("communication", "recv data error");
         co_return Unexpected(ret.error());
     }
-    // NEKO_LOG_INFO("recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
+    // NEKO_LOG_INFO("communication", "recv: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     {
         BinarySerializer::InputSerializer serializer(buf.data(), buf.size());
         serializer(cmsg);
     }
     if (hmsg.transType != static_cast<uint16_t>(TransType::Channel) || hmsg.protoType != 0) {
-        NEKO_LOG_ERROR("transType {} or type {} is not channel header", hmsg.transType, hmsg.protoType);
+        NEKO_LOG_ERROR("communication", "transType {} or type {} is not channel header", hmsg.transType,
+                       hmsg.protoType);
         co_return Unexpected(Error(ErrorCode::ConnectionMessageTypeError));
     }
 
     if (cmsg.messageType != static_cast<uint8_t>(ChannelHeader::MessageType::ConnectMessage)) {
-        NEKO_LOG_ERROR("message type {} is not connect message", cmsg.messageType);
+        NEKO_LOG_ERROR("communication", "message type {} is not connect message", cmsg.messageType);
         co_return Unexpected(Error(ErrorCode::ConnectionMessageTypeError));
     }
 
     if (cmsg.factoryVersion != mFactory->version()) {
-        NEKO_LOG_ERROR("factory version {} is not {}", cmsg.factoryVersion, mFactory->version());
+        NEKO_LOG_ERROR("communication", "factory version {} is not {}", cmsg.factoryVersion, mFactory->version());
         co_return Unexpected(Error(ErrorCode::ProtoVersionUnsupported));
     }
 
     if (channelId != 0 && cmsg.channelId != channelId) {
-        NEKO_LOG_ERROR("channel id {} is not {}", cmsg.channelId, channelId);
+        NEKO_LOG_ERROR("communication", "channel id {} is not {}", cmsg.channelId, channelId);
         co_return Unexpected(Error(ErrorCode::ChannelIdInconsistent));
     }
 
@@ -295,10 +298,11 @@ ILIAS_NAMESPACE::Task<void> ByteStreamChannel::send(std::unique_ptr<NEKO_NAMESPA
     sendMsg.resize(sendMsg.size() + msg.size());
     memcpy(sendMsg.data() + MessageHeader::size(), msg.data(), msg.size());
 #ifdef NEKO_COMMUNICATION_DEBUG
-    NEKO_LOG_INFO("\n========================== send ==========================\nnsend {} bytes, channel id {}, proto "
+    NEKO_LOG_INFO("communication",
+                  "\n========================== send ==========================\nnsend {} bytes, channel id {}, proto "
                   "type {}, trans type {}",
                   msgHeader.length, mChannelId, msgHeader.protoType, msgHeader.transType);
-    NEKO_LOG_INFO("send message:\n{}\n ========================== end ==========================",
+    NEKO_LOG_INFO("communication", "send message:\n{}\n ========================== end ==========================",
                   SerializableToString(BinaryData<char>(msg.data(), msg.size())));
 #endif
     msg.clear();
@@ -354,18 +358,19 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> ByteStreamChannel
 
     std::unique_ptr<NEKO_NAMESPACE::IProto> message(mChannelFactory->getProtoFactory().create(msgHeader.protoType));
     if (message == nullptr) {
-        NEKO_LOG_ERROR("unknown proto type: {}", msgHeader.protoType);
+        NEKO_LOG_ERROR("communication", "unknown proto type: {}", msgHeader.protoType);
         co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::InvalidProtoType));
     }
     auto desRet = message->formData(data);
     if (!desRet) {
-        NEKO_LOG_ERROR("deserialize message deserialize failed.");
+        NEKO_LOG_ERROR("communication", "deserialize message deserialize failed.");
     }
 #ifdef NEKO_COMMUNICATION_DEBUG
-    NEKO_LOG_INFO("\n========================== recv ==========================\nrecv {} bytes, channel id {}, proto "
+    NEKO_LOG_INFO("communication",
+                  "\n========================== recv ==========================\nrecv {} bytes, channel id {}, proto "
                   "type {}, trans type {}",
                   msgHeader.length, mChannelId, msgHeader.protoType, msgHeader.transType);
-    NEKO_LOG_INFO("recv message:\n{}\n ========================== end ==========================",
+    NEKO_LOG_INFO("communication", "recv message:\n{}\n ========================== end ==========================",
                   SerializableToString(BinaryData<char>(data.data(), data.size())));
 #endif
     co_return std::move(message);
@@ -373,7 +378,7 @@ ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> ByteStreamChannel
 
 Task<void> _closeLater(ILIAS_NAMESPACE::IStreamClient client, std::vector<char> buf, uint16_t id,
                        NEKO_NAMESPACE::ChannelFactory* const mf) {
-    // NEKO_LOG_INFO("send: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
+    // NEKO_LOG_INFO("communication", "send: {}", spdlog::to_hex(buf.data(), buf.data() + buf.size()));
     mf->destroyChannel(id);
     auto ret = co_await client.send(buf.data(), buf.size());
     co_return !ret ? Unexpected(ret.error()) : ILIAS_NAMESPACE::Result<>();

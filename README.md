@@ -25,7 +25,7 @@ Through the macros provided by this library, you only need to add a small number
 
 If you only need to use the serialization and deserialization support of the library, you will only need headers :
 ```C++
-#include "core/serializer_base.hpp"
+#include "proto/serializer_base.hpp"
 ```
 and use macro `NEKO_SERIALIZER` pack your class members you want to serialize and deserialize.
 ```C++
@@ -51,9 +51,9 @@ int main() {
 
 If you want to use the protocol factory to generate the message type of proto, you will need to add the following headers :
 ```C++
-#include "core/proto_base.hpp"
-#include "core/serializer_base.hpp" // it is needed to use the protocol factory
-#include "core/json_serializer.hpp" // it is default serializer for proto message, if you want to use your own serializer, you need provided template parameters, can remove this header if not use default serializer.
+#include "proto/proto_base.hpp"
+#include "proto/serializer_base.hpp" // it is needed to use the protocol factory
+#include "proto/json_serializer.hpp" // it is default serializer for proto message, if you want to use your own serializer, you need provided template parameters, can remove this header if not use default serializer.
 ```
 and a cpp file `src/proto_base.cpp`
 

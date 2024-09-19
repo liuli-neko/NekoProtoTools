@@ -1,0 +1,17 @@
+if has_config("enable_communication") then
+    target("test_communication")
+        set_kind("binary")
+        set_languages("c++20")
+        add_includedirs("$(projectdir)")
+        add_includedirs("$(projectdir)/modules/Ilias/include")
+        add_defines("NEKO_PROTO_STATIC", "NEKO_COMMUNICATION_DEBUG")
+        add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
+        add_packages("gtest")
+        add_options("enable_spdlog", "enable_fmt", "enable_stdformat", "enable_rapidjson", "enable_simdjson")
+        add_tests("communication_cpp20")
+        set_group("communication")
+        add_files("$(projectdir)/src/communication_base.cpp")
+        add_files("$(projectdir)/src/proto_base.cpp")
+        add_files("test_communication.cpp")
+    target_end()
+end
