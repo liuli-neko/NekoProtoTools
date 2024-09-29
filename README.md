@@ -288,7 +288,7 @@ I think I should not spend too much time designing and maintaining protocol libr
 - [x] using simdjson for json serialization
     - [x] support simdjson input serializer in simdjson::dom (this is old API?)
     - [ ] support serializer interface in simdjson::ondemand (What are the differences between the DNS APIs in the dom and ondemand namespaces?)
-    - [ ] output serializer (simdjson has API to make a json tree?)
+    - [x] output serializer (support by self)
 - [x] support more cpp stl types
 - [ ] support protoFactory dynamic layer interface
 

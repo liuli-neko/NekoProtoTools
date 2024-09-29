@@ -282,7 +282,7 @@ int main() {
 - [x] 使用simdjson的json序列化器
     - [x] 支持了 simdjson::dom 下的输入序列化器
     - [ ] 支持 simdjson::ondemand 命名空间下的接口 (simdjson::ondemand 和 simdjson::dom 命名空间下的序列化接口区别是什么?)
-    - [ ] 输出序列化器
+    - [x] 输出序列化器（手动实现了一份，效率上可能不会很好。）
 - [x] 支持更多的c++stl容器
 - [ ] 提供协议工厂的动态加载层接口
 
