@@ -17,9 +17,9 @@
 #include <arpa/inet.h>
 #endif
 
-#include "private/integer.hpp"
 #include "private/global.hpp"
 #include "private/helpers.hpp"
+#include "private/integer.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
@@ -107,7 +107,15 @@ inline uint64_t betoh(const uint64_t value) NEKO_NOEXCEPT {
     return be64toh(value);
 #endif
 }
-
+/**
+ * @brief output filed for binary format
+ * Although empty fields are supported, empty data can be artificially constructed, 
+ *  have ambiguities that are difficult to erase, or require significant additional 
+ * overhead, so it is not recommended to set optional fields in binary fields.
+ * 
+ * @note: we don't make special deals with empty fields ambiguities.
+ * 
+ */
 class BinaryOutputSerializer : public detail::OutputSerializer<BinaryOutputSerializer> {
 public:
     using BufferType = std::vector<char>;
@@ -161,6 +169,7 @@ public:
         mBuffer.insert(mBuffer.end(), value, value + size);
         return true;
     }
+    inline bool saveValue(const nullptr_t) NEKO_NOEXCEPT { return saveValue("null"); }
 #if NEKO_CPP_PLUS >= 17
     inline bool saveValue(const std::string_view value) NEKO_NOEXCEPT {
         uint32_t size = value.size();
@@ -264,6 +273,15 @@ public:
         memcpy(&value, mBuffer + mOffset, sizeof(bool));
         mOffset += sizeof(bool);
         return true;
+    }
+
+    inline bool loadValue(nullptr_t) NEKO_NOEXCEPT {
+        std::string value;
+        auto ret = loadValue(value);
+        if (ret && value == "null") {
+            return true;
+        }
+        return false;
     }
 
     template <typename T>
