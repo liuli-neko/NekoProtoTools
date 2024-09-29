@@ -77,8 +77,10 @@ struct BinaryProto {
     int32_t a     = 1;
     std::string b = "hello";
     uint32_t c    = 3;
+    std::optional<int32_t> d;
+    
 
-    NEKO_SERIALIZER(a, b, c)
+    NEKO_SERIALIZER(a, b, c, d)
     NEKO_DECLARE_PROTOCOL(BinaryProto, BinarySerializer)
 };
 
@@ -313,7 +315,7 @@ TEST_F(ProtoTest, BinaryProto) {
     auto data      = proto.makeProto().toData();
     auto base64str = Base64Covert::Encode(data);
     base64str.push_back('\0');
-    EXPECT_STREQ(base64str.data(), "AWEYAWIQaGVsbG8gTmVrbyBQcm90bwFjf8D9/AE=");
+    EXPECT_STREQ(base64str.data(), "AWEYAWIQaGVsbG8gTmVrbyBQcm90bwFjf8D9/AEBZARudWxs");
     NEKO_LOG_INFO("unit test", "{}", SerializableToString(proto));
 }
 
