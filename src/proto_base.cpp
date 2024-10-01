@@ -9,8 +9,8 @@
  *
  */
 
-#include "../proto/proto_base.hpp"
-#include "../proto/private/log.hpp"
+#include "nekoproto/proto/proto_base.hpp"
+#include "nekoproto/proto/private/log.hpp"
 
 #include <functional>
 #include <vector>
