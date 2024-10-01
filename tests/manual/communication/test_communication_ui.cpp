@@ -5,9 +5,9 @@
 #include <sstream>
 
 #include "communication/communication_base.hpp"
-#include "proto/json_serializer.hpp"
-#include "proto/serializer_base.hpp"
-#include "proto/types/vector.hpp"
+#include "nekoproto/proto/json_serializer.hpp"
+#include "nekoproto/proto/serializer_base.hpp"
+#include "nekoproto/proto/types/vector.hpp"
 
 #include "ui_test_communication_ui.h"
 

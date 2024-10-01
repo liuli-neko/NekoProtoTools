@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-#include "proto/simd_json_serializer.hpp"
-#include "proto/types/struct_unwrap.hpp"
+#include "nekoproto/proto/simd_json_serializer.hpp"
+#include "nekoproto/proto/types/struct_unwrap.hpp"
 
 NEKO_USE_NAMESPACE
 struct TestStruct {

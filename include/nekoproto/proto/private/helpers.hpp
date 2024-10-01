@@ -267,7 +267,7 @@ struct is_input_serializer : std::false_type {};
 
 template <typename T>
 struct is_input_serializer<
-    T, typename std::enable_if<std::is_base_of<::NekoProto::detail::InputSerializer<T>, T>::value>::type>
+    T, typename std::enable_if<std::is_base_of<NEKO_NAMESPACE::detail::InputSerializer<T>, T>::value>::type>
     : std::true_type {};
 
 template <typename T, class enable = void>
@@ -275,7 +275,7 @@ struct is_output_serializer : std::false_type {};
 
 template <typename T>
 struct is_output_serializer<
-    T, typename std::enable_if<std::is_base_of<::NekoProto::detail::OutputSerializer<T>, T>::value>::type>
+    T, typename std::enable_if<std::is_base_of<NEKO_NAMESPACE::detail::OutputSerializer<T>, T>::value>::type>
     : std::true_type {};
 } // namespace traits
 namespace detail {

@@ -1,5 +1,5 @@
-#include "proto/binary_serializer.hpp"
-#include "proto/serializer_base.hpp"
+#include "nekoproto/proto/binary_serializer.hpp"
+#include "nekoproto/proto/serializer_base.hpp"
 
 #include <gtest/gtest.h>
 #include <vector>

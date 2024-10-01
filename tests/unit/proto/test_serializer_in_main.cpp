@@ -1,12 +1,12 @@
 #include <gtest/gtest.h>
 
-#include "proto/binary_serializer.hpp"
-#include "proto/json_serializer.hpp"
-#include "proto/proto_base.hpp"
-#include "proto/serializer_base.hpp"
-#include "proto/simd_json_serializer.hpp"
-#include "proto/to_string.hpp"
-#include "proto/types/types.hpp"
+#include "nekoproto/proto/binary_serializer.hpp"
+#include "nekoproto/proto/json_serializer.hpp"
+#include "nekoproto/proto/proto_base.hpp"
+#include "nekoproto/proto/serializer_base.hpp"
+#include "nekoproto/proto/simd_json_serializer.hpp"
+#include "nekoproto/proto/to_string.hpp"
+#include "nekoproto/proto/types/types.hpp"
 
 NEKO_USE_NAMESPACE
 

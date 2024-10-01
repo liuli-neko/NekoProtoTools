@@ -35,7 +35,7 @@ for _, file in ipairs(os.files("./**/test_*.cpp")) do
 
     -- Otherwise, create a target for this file, in most case, it should enough
     target(name)
-        add_includedirs("$(projectdir)")
+        add_includedirs("$(projectdir)/include")
         set_kind("binary")
         set_default(false)
         set_encodings("utf-8")

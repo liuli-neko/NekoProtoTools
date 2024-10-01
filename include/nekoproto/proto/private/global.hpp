@@ -21,6 +21,7 @@
 
 #if __cplusplus >= 202002L || _MSVC_LANG >= 202002L
 #define NEKO_CPP_PLUS 20
+#include <version>
 #elif __cplusplus >= 201703L || _MSVC_LANG >= 201703L
 #define NEKO_CPP_PLUS 17
 #elif __cplusplus >= 201402L || _MSVC_LANG >= 201402L
