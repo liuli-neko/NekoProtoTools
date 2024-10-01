@@ -3,7 +3,7 @@ if has_config("enable_communication") then
         set_kind("binary")
         set_languages("c++20")
         add_includedirs("$(projectdir)")
-        add_includedirs("$(projectdir)/modules/Ilias/include")
+        add_packages("ilias")
         add_defines("NEKO_PROTO_STATIC", "NEKO_COMMUNICATION_DEBUG")
         add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
         add_packages("gtest")

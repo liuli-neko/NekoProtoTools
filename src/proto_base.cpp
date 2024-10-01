@@ -10,6 +10,7 @@
  */
 
 #include "../proto/proto_base.hpp"
+#include "../proto/private/log.hpp"
 
 #include <functional>
 #include <vector>
