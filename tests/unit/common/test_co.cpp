@@ -14,7 +14,7 @@
 #include <thread>
 #include <vector>
 
-#include "proto/private/zip.hpp"
+#include "nekoproto/proto/private/zip.hpp"
 
 #ifdef TRACER_ENABLE
 #define TRACER printf("%s:%d [%s]\n", __FILE__, __LINE__, __FUNCTION__);

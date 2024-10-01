@@ -2,15 +2,15 @@
 #include <gtest/gtest.h>
 #include <string>
 
-#include "proto/json_serializer.hpp"
-#include "proto/proto_base.hpp"
-#include "proto/serializer_base.hpp"
+#include "nekoproto/proto/json_serializer.hpp"
+#include "nekoproto/proto/proto_base.hpp"
+#include "nekoproto/proto/serializer_base.hpp"
 #if NEKO_CPP_PLUS >= 17
-#include "proto/simd_json_serializer.hpp"
+#include "nekoproto/proto/simd_json_serializer.hpp"
 #endif
-#include "proto/to_string.hpp"
-#include "proto/types/map.hpp"
-#include "proto/types/vector.hpp"
+#include "nekoproto/proto/to_string.hpp"
+#include "nekoproto/proto/types/map.hpp"
+#include "nekoproto/proto/types/vector.hpp"
 
 NEKO_USE_NAMESPACE
 struct TestStruct1 {

@@ -1,4 +1,4 @@
-set_project("neko-ccproto")
+set_project("neko-proto")
 add_rules("mode.debug", "mode.release", "mode.valgrind", "mode.coverage")
 set_version("1.0.0")
 
@@ -68,27 +68,27 @@ option("enable_communication")
 option_end()
 
 if has_config("enable_simdjson") then
-    add_requires("simdjson v3.9.3")
+    add_requires("simdjson v3.9.3", {configs = { shared = is_kind("shared")}})
     add_packages("simdjson")
 end
 
 if has_config("enable_rapidjson") then
-    add_requires("rapidjson")
+    add_requires("rapidjson", {configs = { shared = is_kind("shared")}})
     add_packages("rapidjson")
 end
 
 if has_config("enable_spdlog") then
-    add_requires("spdlog")
+    add_requires("spdlog", {configs = { shared = is_kind("shared")}})
     add_packages("spdlog")
 end
 
 if has_config("enable_fmt") then
-    add_requires("fmt")
+    add_requires("fmt", {configs = { shared = is_kind("shared")}})
     add_packages("fmt")
 end
 
 if has_config("enable_communication") then
-    add_requires("ilias")
+    add_requires("ilias", {configs = { shared = is_kind("shared")}})
 end
 
 includes("tests")
@@ -103,8 +103,9 @@ end
 
 target("NekoProtoBase")
     set_kind("static")
-    add_includedirs(".")
     add_defines("NEKO_PROTO_STATIC")
+    add_headerfiles("include/(nekoproto/proto/**.hpp)")
+    add_includedirs("include")
     add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
     add_options("enable_spdlog", "enable_fmt", "enable_stdformat", "enable_rapidjson", "enable_simdjson")
     add_files("src/proto_base.cpp")
@@ -113,7 +114,8 @@ target_end()
 if has_config("enable_communication") then
     target("NekoCommunicationBase")
         set_kind("static")
-        add_includedirs(".")
+        add_headerfiles("include/(nekoproto/communication/**.hpp)")
+        add_includedirs("include")
         add_defines("NEKO_PROTO_STATIC")
         add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
         add_packages("ilias")
