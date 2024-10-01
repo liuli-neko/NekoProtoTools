@@ -1,6 +1,7 @@
 #pragma once
 
 #include "global.hpp"
+#include "log.hpp"
 
 #include <memory>
 #include <vector>

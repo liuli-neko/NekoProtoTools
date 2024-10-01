@@ -22,7 +22,7 @@ jobs:
     - name: Install lcov
       run: sudo apt install lcov -y
     - name: Configure
-      run: xmake f -m coverage --enable_communication=y --enable_simdjson=y --enable_rapidjson=y --enable_fmt=y -y
+      run: xmake f -m coverage --enable_simdjson=y --enable_rapidjson=y --enable_fmt=y -y
     - name: Update submodules
       run: git submodule update --init --recursive
     - name: Build

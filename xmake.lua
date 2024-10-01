@@ -2,6 +2,8 @@ set_project("neko-ccproto")
 add_rules("mode.debug", "mode.release", "mode.valgrind", "mode.coverage")
 set_version("1.0.0")
 
+add_repositories("btk-repo git@github.com:Btk-Project/xmake-repo.git")
+
 option("enable_simdjson")
     set_default(false)
     set_showmenu(true)
@@ -85,6 +87,10 @@ if has_config("enable_fmt") then
     add_packages("fmt")
 end
 
+if has_config("enable_communication") then
+    add_requires("ilias")
+end
+
 includes("tests")
 
 if is_mode("debug") then
@@ -110,7 +116,7 @@ if has_config("enable_communication") then
         add_includedirs(".")
         add_defines("NEKO_PROTO_STATIC")
         add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
-        add_includedirs("./modules/Ilias/include")
+        add_packages("ilias")
         set_languages("c++20")
         add_deps("NekoProtoBase")
         add_options("enable_spdlog", "enable_fmt", "enable_stdformat", "enable_rapidjson", "enable_simdjson")

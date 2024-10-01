@@ -14,8 +14,6 @@
  */
 #pragma once
 
-#include "log.hpp"
-
 #define NEKO_BEGIN_NAMESPACE namespace NekoProto {
 #define NEKO_END_NAMESPACE   }
 #define NEKO_USE_NAMESPACE   using namespace NekoProto;
@@ -53,12 +51,6 @@
 #define NEKO_MAKE_UNIQUE(type, ...) std::unique_ptr<type>(new type(__VA_ARGS__))
 #define NEKO_NOEXCEPT               noexcept
 #endif
-
-#define NEKO_PROTO_ASSERT(cond, fmt, ...)                                                                              \
-    if (!(cond)) {                                                                                                     \
-        printf("[%s:%d][%s] Assertion failed: " fmt "\n", __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__);            \
-        abort();                                                                                                       \
-    }
 
 #ifdef _WIN32
 #define NEKO_DECL_EXPORT __declspec(dllexport)
