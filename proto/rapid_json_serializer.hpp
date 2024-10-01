@@ -12,6 +12,7 @@
 #if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
 
 #include "private/global.hpp"
+#include "private/log.hpp"
 
 #include <fstream>
 #include <rapidjson/document.h>

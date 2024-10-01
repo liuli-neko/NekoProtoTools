@@ -115,7 +115,7 @@ struct Base64Covert {
             bufptr += 3;
             datalen -= 4;
         }
-        NEKO_PROTO_ASSERT(datalen != 1, "Bad Base64 String");
+        NEKO_ASSERT(datalen != 1, "BinarySerializer", "Bad Base64 String");
         switch (datalen) {
         case 2: {
             array[0]  = QueryTable(cptr[0]);

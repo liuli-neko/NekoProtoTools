@@ -10,6 +10,8 @@
  */
 #pragma once
 
+#include "global.hpp"
+
 #if !defined(NDEBUG) && !defined(NEKO_PROTO_NDEBUG)
 #define NEKO_PROTO_DEBUG
 #endif
@@ -50,12 +52,7 @@ inline void neko_proto_private_log_out(const char* level, const char* message, c
 #endif
 }
 
-#if defined(NEKO_PROTO_USE_STD_FORMAT)
-#include <format>
-#define NEKO_PRIVATE_LOG(level, module, fmt, ...)                                                                      \
-    neko_proto_private_log_out(#level, std::format(fmt, ##__VA_ARGS__).c_str(),                                        \
-                               {module, __FILE__, __FUNCTION__, __LINE__, std::chrono::system_clock::now()})
-#elif defined(NEKO_PROTO_USE_FMT)
+#if defined(NEKO_PROTO_USE_FMT)
 #include <fmt/format.h>
 #define NEKO_PRIVATE_LOG(level, module, fmtstr, ...)                                                                   \
     neko_proto_private_log_out(#level, fmt::format(fmtstr, ##__VA_ARGS__).c_str(),                                     \
@@ -65,6 +62,11 @@ inline void neko_proto_private_log_out(const char* level, const char* message, c
 #if defined(NEKO_PROTO_LOG_CONTEXT)
 #define NEKO_PRIVATE_LOG(level, module, fmt, ...)                                                                      \
     spdlog::level("[{}][{}:{}][{}] " fmt, #module, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__)
+#elif defined(NEKO_PROTO_USE_STD_FORMAT) && __cpp_lib_format >= 201907L
+#include <format>
+#define NEKO_PRIVATE_LOG(level, module, fmt, ...)                                                                      \
+    neko_proto_private_log_out(#level, std::format(fmt, ##__VA_ARGS__).c_str(),                                        \
+                               {module, __FILE__, __FUNCTION__, __LINE__, std::chrono::system_clock::now()})
 #else
 #define NEKO_PRIVATE_LOG(level, module, fmt, ...) spdlog::level("[{}]" fmt, #module, ##__VA_ARGS__)
 #endif

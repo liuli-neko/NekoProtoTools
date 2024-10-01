@@ -19,6 +19,7 @@
 #include <typeinfo>
 
 #include "global.hpp"
+#include "log.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
