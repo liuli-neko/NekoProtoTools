@@ -583,7 +583,7 @@ public:
         return false;
     }
 
-    inline bool loadValue(std::nullptr_t&) NEKO_NOEXCEPT {
+    inline bool loadValue(std::nullptr_t) NEKO_NOEXCEPT {
         if (!(*mCurrentItem).value().is_null()) return false;
         ++(*mCurrentItem);
         return true;
