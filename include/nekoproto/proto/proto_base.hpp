@@ -71,9 +71,9 @@
 NEKO_BEGIN_NAMESPACE
 class ProtoFactory;
 
+NEKO_PROTO_API
 auto static_init_funcs(const NEKO_STRING_VIEW&, std::function<void(ProtoFactory*)>)
     -> std::map<NEKO_STRING_VIEW, std::function<void(ProtoFactory*)>>&;
-int type_counter();
 
 class NEKO_PROTO_API IProto {
 public:
