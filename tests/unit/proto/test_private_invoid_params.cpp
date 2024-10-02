@@ -55,7 +55,8 @@ TEST(PrivateInvoidParams, RefTest) {
     EXPECT_EQ(*refObject->getField<int*>("test_a", &d), 4);
 
     TestStruct ts2{};
-    TestStruct::ProtoType::Deserialize(p.toData(), ts2);
+    auto pdata = p.toData();
+    TestStruct::ProtoType::Deserialize(pdata.data(), pdata.size(), ts2);
     EXPECT_EQ(ts2.a, 4);
     EXPECT_EQ(ts2.b, 5.0);
     EXPECT_EQ(ts2.c, 6);

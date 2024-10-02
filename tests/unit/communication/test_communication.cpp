@@ -37,29 +37,26 @@ Task<void> ClientLoop(IoContext& ioContext, NEKO_NAMESPACE::ProtoFactory& protoF
     if (!ret) {
         co_return Unexpected(ret.error());
     }
-    ProtoStream<TcpClient> client(protoFactory, ioContext, std::move(tcpClient));
+    ProtoStreamClient<TcpClient> client(protoFactory, ioContext, std::move(tcpClient));
     NEKO_LOG_INFO("unit test", "Client loop started");
     int count = 10;
     while (count-- > 0) {
-        NEKO_LOG_INFO("unit test", "send message to");
+        NEKO_LOG_INFO("unit test", "send message to {}", count);
         Message msg;
         msg.msg       = "this is a message from client";
         msg.timestamp = time(NULL);
         msg.numbers   = (std::vector<int>{1, 2, 3, 5});
-        auto ret1     = co_await client.send(msg.makeProto());
+        auto ret1 = co_await client.send(msg.makeProto(), NEKO_NAMESPACE::ProtoStreamClient<TcpClient>::SerializerInThread);
         if (!ret1) {
             NEKO_LOG_ERROR("unit test", "send failed: {}", ret1.error().message());
             co_return Unexpected(ret1.error());
-        } else {
-            NEKO_LOG_ERROR("unit test", "channel expired");
-            co_return Result<>();
         }
         auto ret = co_await client.recv();
         if (!ret) {
             NEKO_LOG_ERROR("unit test", "recv failed: {}", ret.error().message());
             co_return Unexpected(ret.error());
         }
-        auto retMsg = std::shared_ptr<IProto>(ret.value().release());
+        auto retMsg = std::move(ret.value());
         auto msg1   = retMsg->cast<Message>();
         if (msg1) {
             std::cout << "timestamp: " << msg1->timestamp << std::endl;
@@ -76,8 +73,8 @@ Task<void> ClientLoop(IoContext& ioContext, NEKO_NAMESPACE::ProtoFactory& protoF
     co_return co_await client.close();
 }
 
-Task<void> HandleLoop(ProtoStream<TcpClient>&& _client) {
-    ProtoStream<TcpClient> client(std::move(_client));
+Task<void> HandleLoop(ProtoStreamClient<TcpClient>&& _client) {
+    ProtoStreamClient<TcpClient> client(std::move(_client));
     while (true) {
         NEKO_LOG_INFO("unit test", "HandleLoop");
         auto ret = co_await client.recv();
@@ -122,7 +119,7 @@ Task<void> serverLoop(IoContext& ioContext, NEKO_NAMESPACE::ProtoFactory& protoF
     }
     NEKO_LOG_INFO("unit test", "accept successed");
     auto ret1 =
-        co_await HandleLoop(ProtoStream<ilias::TcpClient>(protoFactor, ioContext, std::move(ret.value().first)));
+        co_await HandleLoop(ProtoStreamClient<ilias::TcpClient>(protoFactor, ioContext, std::move(ret.value().first)));
     if (!ret1 && ret1.error() != Error::ConnectionReset) {
         co_return Unexpected(ret1.error());
     }
@@ -139,6 +136,7 @@ Task<void> test(IoContext& ioContext, ProtoFactory& protoFactory) {
 
 int main(int argc, char** argv) {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
+    ILIAS_LOG_SET_LEVEL(ILIAS_TRACE_LEVEL);
     PlatformContext ioContext;
     NEKO_NAMESPACE::ProtoFactory protoFactory;
     TcpClient client;

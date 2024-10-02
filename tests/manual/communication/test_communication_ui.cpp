@@ -4,35 +4,13 @@
 #include <iostream>
 #include <sstream>
 
-#include "communication/communication_base.hpp"
-#include "nekoproto/proto/json_serializer.hpp"
-#include "nekoproto/proto/serializer_base.hpp"
-#include "nekoproto/proto/types/vector.hpp"
-
-#include "ui_test_communication_ui.h"
+#pragma comment(linker, "/subsystem:console /ENTRY:mainCRTStartup") // 设置连接器选项
 
 NEKO_USE_NAMESPACE
 using namespace ILIAS_NAMESPACE;
 
-struct Message {
-    uint64_t timestamp;
-    std::string msg;
-    std::vector<int> numbers;
-
-    NEKO_SERIALIZER(timestamp, msg, numbers)
-    NEKO_DECLARE_PROTOCOL(Message, JsonSerializer)
-};
-
-std::string to_hex(const std::vector<char>& data) {
-    std::stringstream ss;
-    for (auto c : data) {
-        ss << "\\" << std::hex << (uint32_t(c) & 0xFF);
-    }
-    return ss.str();
-}
-
-MainWidget::MainWidget(QIoContext* ctxt, std::shared_ptr<NEKO_NAMESPACE::ProtoFactory> protoFactory, QWidget* parent)
-    : QMainWindow(parent), ui(new Ui::MainWindow), mCtxt(ctxt), mChannelFactor(*mCtxt, protoFactory) {
+MainWidget::MainWidget(QIoContext* ctxt, NEKO_NAMESPACE::ProtoFactory& protoFactory, QWidget* parent)
+    : QMainWindow(parent), ui(new Ui::MainWindow), mCtxt(ctxt), mProtoFactor(protoFactory) {
     ui->setupUi(this);
     connect(ui->listening, &QPushButton::clicked, this, &MainWidget::startService);
     connect(ui->send, &QPushButton::clicked, this, &MainWidget::onSendMessage);
@@ -59,29 +37,23 @@ MainWidget::~MainWidget() {
     delete ui;
 }
 
-Task<void> MainWidget::clientLoop(std::weak_ptr<ChannelBase> channel) {
-    auto ch = channel.lock();
-    int id  = -1;
-    if (ch == nullptr) {
-        NEKO_LOG_ERROR("ui test", "channel expired");
-        co_return Result<void>();
-    } else {
-        id = ch->channelId();
-    }
+Task<void>
+MainWidget::clientLoop(std::map<int, NEKO_NAMESPACE::ProtoStreamClient<ILIAS_NAMESPACE::TcpClient>>::iterator client,
+                       QListWidgetItem* item) {
     mExit = false;
     while (!mExit) {
-        auto ret = co_await recvMessage(channel);
+        auto ret = co_await recvMessage(client->second);
         if (!ret) {
-            NEKO_LOG_ERROR("ui test", "Client Error {}", ret.error().message());
+            NEKO_LOG_ERROR("ui test", "Client Error {}",
+                           QString::fromUtf8(ret.error().message()).toLocal8Bit().constData());
+            mClients.erase(client);
+            auto it = ui->channelList->takeItem(ui->channelList->row(item));
+            ui->channelList->update();
+            delete it;
+            item = nullptr;
+            ui->channelList->update();
             break;
         }
-    }
-    NEKO_LOG_INFO("ui test", "Client {} exit", id);
-    QList<QListWidgetItem*> items = ui->channelList->findItems(QString("channel %1").arg(id), Qt::MatchExactly);
-    if (!items.isEmpty()) {
-        QListWidgetItem* item = items.first();
-        ui->channelList->takeItem(ui->channelList->row(item));
-        delete item;
     }
     co_return Result<>();
 }
@@ -91,145 +63,87 @@ ILIAS_NAMESPACE::Task<void> MainWidget::serverLoop() {
     if (!mExit) {
         co_return Unexpected<Error>(Error::InProgress);
     }
+    mListener = ILIAS_NAMESPACE::TcpListener(*mCtxt, AF_INET);
     ui->makeMainChannel->setDisabled(true);
     ui->listening->setDisabled(true);
+    auto ret = mListener.bind(IPEndpoint(ui->serviceUrlEdit->text().toLocal8Bit().constData()));
+    if (!ret) {
+        NEKO_LOG_ERROR("ui test", "bind failed: {}",
+                       QString::fromUtf8(ret.error().message()).toLocal8Bit().constData());
+        co_return Unexpected(ret.error());
+    }
     mExit = false;
     while (!mExit) {
-        auto ret = co_await mChannelFactor.accept();
+        NEKO_LOG_INFO("ui test", "accepting");
+        auto ret = co_await mListener.accept();
         if (!ret) {
             NEKO_LOG_ERROR("ui test", "accept failed: {}", ret.error().message());
             break;
-            NEKO_LOG_INFO("ui test", "accept successed");
         }
-        auto channel = ret.value();
-        if (!channel.expired()) {
-            auto id = channel.lock()->channelId();
-            ui->channelList->addItem(QString("channel %1").arg(id));
-            mClientLoopHandles.insert(std::make_pair(id, ilias_go clientLoop(channel)));
-        }
+        NEKO_LOG_INFO("ui test", "accept successed");
+        ui->channelList->addItem(QString("%1:%2 %3")
+                                     .arg(ret.value().second.address().toString().c_str())
+                                     .arg(ret.value().second.port())
+                                     .arg(++mChannelCount));
+        auto item   = ui->channelList->item(ui->channelList->count() - 1);
+        auto client = mClients.emplace(mChannelCount, NEKO_NAMESPACE::ProtoStreamClient<TcpClient>(
+                                                          mProtoFactor, *mCtxt, std::move(ret.value().first)));
+        ilias_go clientLoop(client.first, item);
     }
     ui->listening->setDisabled(false);
     co_return Result<>();
 }
 
 ILIAS_NAMESPACE::Task<void> MainWidget::makeMainChannel() {
-    auto mainChannel = co_await mChannelFactor.connect(ui->serviceUrlEdit->text().toLocal8Bit().constData(), 0);
-    if (!mainChannel) {
-        NEKO_LOG_ERROR("ui test", "connect failed: {}", mainChannel.error().message());
-        co_return Unexpected<Error>(mainChannel.error());
+    TcpClient client(*mCtxt, AF_INET);
+    auto ret = co_await client.connect(IPEndpoint(ui->serviceUrlEdit->text().toLocal8Bit().constData()));
+    if (!ret) {
+        NEKO_LOG_ERROR("ui test", "connect failed: {}",
+                       QString::fromUtf8(ret.error().message().c_str()).toLocal8Bit().constData());
+        co_return Unexpected(ret.error());
     }
-    auto channel = mainChannel.value();
-    if (!channel.expired()) {
-        auto id = channel.lock()->channelId();
-        ui->channelList->addItem(QString("channel %1").arg(id));
-        mClientLoopHandles.insert(std::make_pair(id, ilias_go clientLoop(channel)));
-    }
+    ui->channelList->addItem(
+        QString("%1 %2").arg(ui->serviceUrlEdit->text().toLocal8Bit().constData()).arg(++mChannelCount));
+    auto item       = ui->channelList->item(ui->channelList->count() - 1);
+    auto clientiter = mClients.emplace(
+        mChannelCount, NEKO_NAMESPACE::ProtoStreamClient<TcpClient>(mProtoFactor, *mCtxt, std::move(client)));
+    ilias_go clientLoop(clientiter.first, item);
 
     co_return Result<>();
-}
-
-ILIAS_NAMESPACE::Task<void> MainWidget::sendMessage(std::weak_ptr<NEKO_NAMESPACE::ChannelBase> channel) {
-    if (auto cl = channel.lock(); cl != nullptr) {
-        // CS_LOG_INFO("send message to channel {}", cl->channelId());
-        auto msg          = NEKO_MAKE_UNIQUE(Message::ProtoType, Message{});
-        (*msg)->msg       = std::string(ui->sendEdit->toPlainText().toUtf8());
-        (*msg)->timestamp = (time(NULL));
-        auto ids          = mChannelFactor.getChannelIds();
-        (*msg)->numbers   = std::vector<int>(ids.begin(), ids.end());
-        auto ret1         = co_await cl->send(std::move(msg));
-        if (!ret1) {
-            NEKO_LOG_ERROR("ui test", "send failed: {}", ret1.error().message());
-            co_return Unexpected(ret1.error());
-        }
-    } else {
-        NEKO_LOG_ERROR("ui test", "channel expired");
-        co_return Result<void>();
-    }
-    co_return Result<>();
-}
-
-ILIAS_NAMESPACE::Task<void> MainWidget::recvMessage(std::weak_ptr<NEKO_NAMESPACE::ChannelBase> channel) {
-    if (auto cl = channel.lock(); cl != nullptr) {
-        auto ret = co_await cl->recv();
-        if (!ret) {
-            NEKO_LOG_ERROR("ui test", "recv failed: {}", ret.error().message());
-            co_return Unexpected(ret.error());
-        }
-        auto retMsg = std::move(ret.value());
-
-        auto msg = retMsg->cast<Message>();
-        if (msg) {
-            ui->recvEdit->append(QString("from %1 [%2]:\n%3\n")
-                                     .arg(cl->channelId())
-                                     .arg(msg->timestamp)
-                                     .arg(QString::fromUtf8(msg->msg.c_str())));
-            std::cout << "current ids : ";
-            for (auto n : msg->numbers) {
-                std::cout << n << " ";
-            }
-            std::cout << std::endl;
-        } else {
-            std::cout << "recv: " << to_hex(retMsg->toData()) << std::endl;
-        }
-    } else {
-        NEKO_LOG_ERROR("ui test", "channel expired");
-        co_return Result<>();
-    }
-    co_return Result<>();
-}
-
-void MainWidget::closeChannel(std::weak_ptr<NEKO_NAMESPACE::ChannelBase> channel) {
-    int id = -1;
-    if (auto cl = channel.lock(); cl != nullptr) {
-        id = cl->channelId();
-        cl->close();
-        mChannelFactor.destroyChannel(cl->channelId());
-    }
-
-    QList<QListWidgetItem*> items = ui->channelList->findItems(QString("channel %1").arg(id), Qt::MatchExactly);
-    if (!items.isEmpty()) {
-        QListWidgetItem* item = items.first();
-        ui->channelList->takeItem(ui->channelList->row(item));
-        delete item;
-    }
 }
 
 void MainWidget::onMakeMainChannel() { ilias_go makeMainChannel(); }
 
 void MainWidget::selectedChannel(int index) {
-    auto findChannel = mChannelFactor.getChannel(index);
-    if (!findChannel.expired()) {
-        mCurrentChannel = findChannel;
-    }
-    ui->send->setDisabled(mCurrentChannel.expired());
+    ui->send->setDisabled(index < 0);
+    mCurrentIndex = index;
 }
 
-void MainWidget::onSendMessage() { ilias_go sendMessage(mCurrentChannel); }
+void MainWidget::onSendMessage() {
+    auto iter = mClients.find(mCurrentIndex);
+    if (iter != mClients.end()) {
+        NEKO_LOG_INFO("ui test", "send message");
+        ilias_go sendMessage(iter->second);
+    } else {
+        NEKO_LOG_ERROR("ui test", "channel not found");
+    }
+}
 
 void MainWidget::closeService() {
-    mChannelFactor.close();
-    for (auto& [id, h] : mClientLoopHandles) {
-        h.cancel();
-        h.join();
+    auto iter = mClients.find(mCurrentIndex);
+    if (iter != mClients.end()) {
+        NEKO_LOG_INFO("ui test", "close channel");
+        ilias_go iter->second.close();
     }
-    mClientLoopHandles.clear();
 }
 
-void MainWidget::startService() {
-    auto ret = mChannelFactor.listen(ui->serviceUrlEdit->text().toLocal8Bit().constData());
-    if (!ret) {
-        NEKO_LOG_ERROR("ui test", "listen failed: {}", ret.error().message());
-        return;
-    } else {
-        mHandles.push_back(ilias_go serverLoop());
-    }
-}
+void MainWidget::startService() { mHandles.push_back(ilias_go serverLoop()); }
 
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     app.setDesktopSettingsAware(true);
     QIoContext ioContext;
-    std::shared_ptr<NEKO_NAMESPACE::ProtoFactory> protoFactory(new NEKO_NAMESPACE::ProtoFactory());
+    NEKO_NAMESPACE::ProtoFactory protoFactory;
     MainWidget mainWidget(&ioContext, protoFactory);
     mainWidget.show();
 

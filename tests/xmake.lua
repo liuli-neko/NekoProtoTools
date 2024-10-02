@@ -21,6 +21,7 @@ option("cereal_test")
     set_description("Enable cereal test, should install cereal, to contrast with this")
 option_end()
 
+add_defines("ILIAS_ENABLE_LOG")
 -- Make all files in the directory into targets
 for _, file in ipairs(os.files("./**/test_*.cpp")) do
     local name = path.basename(file)
