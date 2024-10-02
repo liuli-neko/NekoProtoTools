@@ -10,11 +10,11 @@
  */
 #pragma once
 #if defined(NEKO_PROTO_ENABLE_SIMDJSON)
+#include <iomanip>
 #include <simdjson.h>
 #include <sstream>
 #include <unordered_map>
 #include <vector>
-#include <iomanip> 
 
 #include "private/global.hpp"
 #include "private/helpers.hpp"
@@ -61,16 +61,18 @@ public:
     using ValueIterator  = simdjson::dom::array::iterator;
 
 public:
-    inline ConstJsonIterator() NEKO_NOEXCEPT : mType(Null_) {};
-    inline ConstJsonIterator(const JsonObject& object) NEKO_NOEXCEPT : mSize(object.size()), mType(Member) {
+    inline ConstJsonIterator() NEKO_NOEXCEPT : mType(Null_){};
+    inline ConstJsonIterator(const JsonObject& object) NEKO_NOEXCEPT : mSize(object.size()),
+                                                                       mType(Member),
+                                                                       mMemberIndex(0) {
         if (mSize == 0) {
             mType = Null_;
             return;
         }
         for (auto iter = object.begin(); iter != object.end(); ++iter) {
-            mMembers.emplace(iter.key(), iter);
+            mMembers.push_back(iter);
+            mMemberMap.emplace(iter.key(), mMembers.size() - 1);
         }
-        mMemberIt = mMembers.begin();
     }
 
     inline ConstJsonIterator(const JsonArray& array) NEKO_NOEXCEPT : mValueItBegin(array.begin()),
@@ -87,7 +89,7 @@ public:
 
     inline ConstJsonIterator& operator++() NEKO_NOEXCEPT {
         if (mType == Member) {
-            ++mMemberIt;
+            ++mMemberIndex;
         } else {
             ++mValueIt;
         }
@@ -95,7 +97,7 @@ public:
     }
     inline bool eof() const NEKO_NOEXCEPT {
         if (mType == Null_ || (mType == Value && mValueIt == mValueItEnd) ||
-            (mType == Member && mMemberIt == mMembers.end())) {
+            (mType == Member && mMemberIndex >= mMembers.size())) {
             return true;
         }
         return false;
@@ -107,15 +109,15 @@ public:
         case Value:
             return *mValueIt;
         case Member:
-            return (mMemberIt->second).value();
+            return mMembers[mMemberIndex].value();
         default:
             return JsonValue(
                 simdjson::error_code::NO_SUCH_FIELD); // should never reach here, but needed to avoid compiler warning
         }
     }
     inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
-        if (mType == Member && mMemberIt != mMembers.end()) {
-            return mMemberIt->first;
+        if (mType == Member && mMemberIndex < mMembers.size()) {
+            return mMembers[mMemberIndex].key();
         } else {
             return {};
         }
@@ -124,17 +126,18 @@ public:
         if (mType != Member) {
             return JsonValue(simdjson::error_code::NO_SUCH_FIELD);
         }
-        auto it = mMembers.find(name);
-        if (it != mMembers.end()) {
-            mMemberIt = it;
-            return (mMemberIt->second).value();
+        auto it = mMemberMap.find(name);
+        if (it != mMemberMap.end()) {
+            mMemberIndex = it->second;
+            return mMembers[mMemberIndex].value();
         }
         return JsonValue(simdjson::error_code::NO_SUCH_FIELD);
     }
 
 private:
-    std::unordered_map<NEKO_STRING_VIEW, MemberIterator>::iterator mMemberIt;
-    std::unordered_map<NEKO_STRING_VIEW, MemberIterator> mMembers;
+    std::unordered_map<NEKO_STRING_VIEW, int> mMemberMap;
+    std::vector<MemberIterator> mMembers;
+    int mMemberIndex = 0;
     ValueIterator mValueItBegin, mValueItEnd, mValueIt;
     std::size_t mSize;
     enum Type { Value, Member, Null_ } mType;
