@@ -9,9 +9,9 @@
  *
  */
 #pragma once
-#if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
-
 #include "private/global.hpp"
+
+#if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
 #include "private/log.hpp"
 
 #include <fstream>
@@ -470,7 +470,8 @@ public:
             if (nullptr == v || v->IsNull()) {
                 value.value.reset();
 #if defined(NEKO_VERBOSE_LOGS)
-                NEKO_LOG_INFO("JsonSerializer", "optional field {} is not find.", std::string(value.name, value.nameLen));
+                NEKO_LOG_INFO("JsonSerializer", "optional field {} is not find.",
+                              std::string(value.name, value.nameLen));
 #endif
             } else {
 #if defined(NEKO_JSON_MAKE_STR_NONE_TO_NULL)
@@ -479,7 +480,8 @@ public:
                 if (v->IsString() && std::strcmp(v->GetString(), "None") == 0) {
                     value.value.reset();
 #if defined(NEKO_VERBOSE_LOGS)
-                    NEKO_LOG_WARN("JsonSerializer", "optional field {} is \"None\".", std::string(value.name, value.nameLen));
+                    NEKO_LOG_WARN("JsonSerializer", "optional field {} is \"None\".",
+                                  std::string(value.name, value.nameLen));
 #endif
                     return true;
                 }
@@ -489,9 +491,11 @@ public:
                 value.value.emplace(std::move(result));
 #if defined(NEKO_VERBOSE_LOGS)
                 if (ret) {
-                    NEKO_LOG_INFO("JsonSerializer", "optional field {} get value success.", std::string(value.name, value.nameLen));
+                    NEKO_LOG_INFO("JsonSerializer", "optional field {} get value success.",
+                                  std::string(value.name, value.nameLen));
                 } else {
-                    NEKO_LOG_ERROR("JsonSerializer", "optional field {} get value fail.", std::string(value.name, value.nameLen));
+                    NEKO_LOG_ERROR("JsonSerializer", "optional field {} get value fail.",
+                                   std::string(value.name, value.nameLen));
                 }
 #endif
             }
@@ -706,21 +710,25 @@ inline bool epilogue(RapidJsonInputSerializer& sa, const std::basic_string<CharT
 }
 
 template <typename CharT, typename Traits, typename Alloc, typename WriterT>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const std::basic_string<CharT, Traits, Alloc>&) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa,
+                     const std::basic_string<CharT, Traits, Alloc>&) NEKO_NOEXCEPT {
     return true;
 }
 template <typename CharT, typename Traits, typename Alloc, typename WriterT>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const std::basic_string<CharT, Traits, Alloc>&) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa,
+                     const std::basic_string<CharT, Traits, Alloc>&) NEKO_NOEXCEPT {
     return true;
 }
 
 #if NEKO_CPP_PLUS >= 17
 template <typename CharT, typename Traits, typename WriterT>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const std::basic_string_view<CharT, Traits>&) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa,
+                     const std::basic_string_view<CharT, Traits>&) NEKO_NOEXCEPT {
     return true;
 }
 template <typename CharT, typename Traits, typename WriterT>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const std::basic_string_view<CharT, Traits>&) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa,
+                     const std::basic_string_view<CharT, Traits>&) NEKO_NOEXCEPT {
     return true;
 }
 #endif

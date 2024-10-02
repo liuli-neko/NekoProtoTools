@@ -14,6 +14,8 @@
  */
 #pragma once
 
+#include "config.h"
+
 #define NEKO_BEGIN_NAMESPACE namespace NekoProto {
 #define NEKO_END_NAMESPACE   }
 #define NEKO_USE_NAMESPACE   using namespace NekoProto;
@@ -120,16 +122,14 @@ NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() NEKO_NOEXCEPT {
     }
     auto sstring = pretty_function.substr(start, end - start);
     size_t d     = sstring.find_first_of('<');
-    if (d != NEKO_STRING_VIEW::npos)
-        sstring = sstring.substr(0, d);
+    if (d != NEKO_STRING_VIEW::npos) sstring = sstring.substr(0, d);
     d = sstring.find_last_of(':');
     if (d != NEKO_STRING_VIEW::npos)
         start = d;
     else
         start = 0;
     d = sstring.find_last_of(' ');
-    if (d != NEKO_STRING_VIEW::npos)
-        start = start > d ? start : d;
+    if (d != NEKO_STRING_VIEW::npos) start = start > d ? start : d;
     while (start < sstring.size() && (sstring[start] == ' ' || sstring[start] == '>' || sstring[start] == ':')) {
         ++start;
     }
@@ -144,8 +144,7 @@ NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() NEKO_NOEXCEPT {
     NEKO_STRING_VIEW string(__FUNCSIG__);
     size_t start = string.find("_class_name<") + 15;
     size_t d     = string.find_first_of(' ', start);
-    if (d != NEKO_STRING_VIEW::npos)
-        start = d + 1;
+    if (d != NEKO_STRING_VIEW::npos) start = d + 1;
     size_t end   = string.find('<', start);
     auto sstring = string.substr(start, end - start);
     d            = sstring.find_last_of(':');
