@@ -13,6 +13,7 @@
 
 #include <errno.h>
 
+#include <ilias/detail/expected.hpp>
 #include <ilias/ilias.hpp>
 #include <ilias/io/dyn_traits.hpp>
 #include <ilias/io/traits.hpp>
@@ -21,6 +22,7 @@
 #include <ilias/task.hpp>
 #include <queue>
 
+#include "detail/thread_await.hpp"
 #include "nekoproto/proto/binary_serializer.hpp"
 #include "nekoproto/proto/proto_base.hpp"
 #include "nekoproto/proto/serializer_base.hpp"
@@ -34,10 +36,10 @@ NEKO_BEGIN_NAMESPACE
     NEKO_CHANNEL_ERROR(InvalidProtoData, 3, "receive a message, but proto parser is error", -1)                        \
     NEKO_CHANNEL_ERROR(ProtoVersionUnsupported, 4, "proto version is not supported", -1)                               \
     NEKO_CHANNEL_ERROR(ConnectionMessageTypeError, 5, "receive a error message in connection state", -1)               \
-    NEKO_CHANNEL_ERROR(Timeout, 6, "the operator is timeout", -1)
+    NEKO_CHANNEL_ERROR(Timeout, 6, "the operator is timeout", -1)                                                      \
+    NEKO_CHANNEL_ERROR(NoData, 7, "serializer maybe failed, return no data.", -1)
 
 enum MessageType {
-    Stream, // not implemented
     Complete,
     Slice, // not implemented
 };
@@ -78,50 +80,81 @@ public:
 ILIAS_DECLARE_ERROR(ErrorCode, ErrorCategory);
 
 template <ILIAS_NAMESPACE::StreamClient T = ILIAS_NAMESPACE::IStreamClient>
-class NEKO_PROTO_API ProtoStream {
+class NEKO_PROTO_API ProtoStreamClient {
+public:
     enum Strategy {
         None               = 0,
         SerializerInThread = 0x01,
     };
 
 public:
-    ProtoStream(NEKO_NAMESPACE::ProtoFactory& factory, ILIAS_NAMESPACE::IoContext& ioContext, T&& streamClient);
-    ProtoStream(const ProtoStream&) = delete;
-    ProtoStream(ProtoStream&&);
-    ~ProtoStream() noexcept;
-    auto send(const NEKO_NAMESPACE::IProto& message, int flag = Strategy::None) -> ILIAS_NAMESPACE::Task<void>;
-    auto recv(int flag = Strategy::None) -> ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>>;
+    ProtoStreamClient() = default;
+    ProtoStreamClient(ProtoFactory& factory, ILIAS_NAMESPACE::IoContext& ioContext, T&& streamClient);
+    ProtoStreamClient(const ProtoStreamClient&) = delete;
+    ProtoStreamClient(ProtoStreamClient&&);
+    ~ProtoStreamClient() noexcept;
+    auto setStreamClient(T&& streamClient) -> void;
+    auto send(const IProto& message, int flag = Strategy::None) -> ILIAS_NAMESPACE::Task<void>;
+    auto recv(int flag = Strategy::None) -> ILIAS_NAMESPACE::Task<std::unique_ptr<IProto>>;
     auto sendRaw(std::span<std::byte> data) -> ILIAS_NAMESPACE::Task<void>;
     auto recvRaw(std::span<std::byte> buf) -> ILIAS_NAMESPACE::Task<void>;
     auto close() -> ILIAS_NAMESPACE::Task<void>;
 
 private:
 private:
-    NEKO_NAMESPACE::ProtoFactory& mFactory;
-    ILIAS_NAMESPACE::IoContext& mIoContext;
+    ProtoFactory* mFactory                 = nullptr;
+    ILIAS_NAMESPACE::IoContext* mIoContext = nullptr;
     T mStreamClient;
 };
 
 template <ILIAS_NAMESPACE::StreamClient T>
-inline ProtoStream<T>::ProtoStream(NEKO_NAMESPACE::ProtoFactory& factory, ILIAS_NAMESPACE::IoContext& ioContext,
-                                   T&& streamClient)
-    : mFactory(factory), mIoContext(ioContext), mStreamClient(std::move(streamClient)) {}
+inline ProtoStreamClient<T>::ProtoStreamClient(ProtoFactory& factory, ILIAS_NAMESPACE::IoContext& ioContext,
+                                               T&& streamClient)
+    : mFactory(&factory), mIoContext(&ioContext), mStreamClient(std::move(streamClient)) {}
 
 template <ILIAS_NAMESPACE::StreamClient T>
-inline ProtoStream<T>::ProtoStream(ProtoStream&& othre)
+inline ProtoStreamClient<T>::ProtoStreamClient(ProtoStreamClient&& othre)
     : mFactory(othre.mFactory), mIoContext(othre.mIoContext), mStreamClient(std::move(othre.mStreamClient)) {}
 
 template <ILIAS_NAMESPACE::StreamClient T>
-inline ProtoStream<T>::~ProtoStream() noexcept {}
+inline ProtoStreamClient<T>::~ProtoStreamClient() noexcept {}
 
 template <ILIAS_NAMESPACE::StreamClient T>
-inline auto ProtoStream<T>::send(const NEKO_NAMESPACE::IProto& message, int flag) -> ILIAS_NAMESPACE::Task<void> {
-    auto messageData = message.toData();
+inline auto ProtoStreamClient<T>::setStreamClient(T&& streamClient) -> void {
+    mStreamClient = std::move(streamClient);
+}
+
+template <ILIAS_NAMESPACE::StreamClient T>
+inline auto ProtoStreamClient<T>::send(const IProto& message, int flag) -> ILIAS_NAMESPACE::Task<void> {
+    std::vector<char> messageData;
+    if (flag & Strategy::SerializerInThread) {
+        auto ret = co_await ThreadAwaiter<std::vector<char>>{std::bind(&IProto::toData, &message)};
+        if (ret && ret.value().size()) {
+            messageData = std::move(ret.value());
+        } else {
+            co_return ILIAS_NAMESPACE::Unexpected(ret.error_or(ILIAS_NAMESPACE::Error(ErrorCode::NoData)));
+        }
+    } else {
+        messageData = message.toData();
+        if (messageData.empty()) {
+            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::NoData));
+        }
+    }
+    auto header = MessageHeader(messageData.size(), message.type(), MessageType::Complete, mFactory->version());
+    std::vector<char> headerData;
+    do {
+        BinaryOutputSerializer serializer(headerData);
+        serializer(header);
+    } while (false);
+    auto ret = co_await sendRaw({reinterpret_cast<std::byte*>(headerData.data()), headerData.size()});
+    if (!ret) {
+        co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+    }
     co_return co_await sendRaw({reinterpret_cast<std::byte*>(messageData.data()), messageData.size()});
 }
 
 template <ILIAS_NAMESPACE::StreamClient T>
-inline auto ProtoStream<T>::recv(int flag) -> ILIAS_NAMESPACE::Task<std::unique_ptr<NEKO_NAMESPACE::IProto>> {
+inline auto ProtoStreamClient<T>::recv(int flag) -> ILIAS_NAMESPACE::Task<std::unique_ptr<IProto>> {
     MessageHeader header;
     do {
         std::vector<std::byte> messageHeader(MessageHeader::size());
@@ -134,15 +167,15 @@ inline auto ProtoStream<T>::recv(int flag) -> ILIAS_NAMESPACE::Task<std::unique_
             co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::InvalidMessageHeader));
         }
     } while (false);
-    if (header.protoVersion != mFactory.version()) {
+    if (header.protoVersion != mFactory->version()) {
         NEKO_LOG_WARN("Communication", "ProtoFactory version mismatch: {} != {}", header.protoVersion,
-                      mFactory.version());
+                      mFactory->version());
     }
     if (header.transType != MessageType::Complete) {
         NEKO_LOG_ERROR("Communication", "unsupported message type: {}", header.transType);
         co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::ConnectionMessageTypeError));
     }
-    auto proto = mFactory.create(header.protoType);
+    auto proto = mFactory->create(header.protoType);
     if (proto == nullptr) {
         NEKO_LOG_ERROR("Communication", "unsupported proto type: {}", header.protoType);
         co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::InvalidProtoType));
@@ -152,20 +185,30 @@ inline auto ProtoStream<T>::recv(int flag) -> ILIAS_NAMESPACE::Task<std::unique_
     if (!ret) {
         co_return ILIAS_NAMESPACE::Unexpected(ret.error());
     }
-    if (!proto->formData(
-            {reinterpret_cast<char*>(message.data()), reinterpret_cast<char*>(message.data()) + message.size()})) {
-        co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::InvalidProtoData));
+    if (flag & Strategy::SerializerInThread) {
+        auto ret = co_await ThreadAwaiter<bool>(
+            std::bind(&IProto::formData, proto.get(), reinterpret_cast<char*>(message.data()), message.size()));
+        if (!ret && !ret.value()) {
+            co_return ILIAS_NAMESPACE::Unexpected(ret.error_or(ILIAS_NAMESPACE::Error(ErrorCode::InvalidProtoData)));
+        }
+    } else {
+        if (!proto->formData(reinterpret_cast<char*>(message.data()), message.size())) {
+            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::InvalidProtoData));
+        }
     }
     co_return std::move(proto);
 }
 
 template <ILIAS_NAMESPACE::StreamClient T>
-inline auto ProtoStream<T>::recvRaw(std::span<std::byte> buf) -> ILIAS_NAMESPACE::Task<void> {
+inline auto ProtoStreamClient<T>::recvRaw(std::span<std::byte> buf) -> ILIAS_NAMESPACE::Task<void> {
     int readsize = 0;
     while (readsize < buf.size()) {
         ILIAS_NAMESPACE::Result<size_t> ret =
             co_await mStreamClient.read({buf.data() + readsize, buf.size() - readsize});
-        if (ret && ret.value() > 0) {
+        if (ret) {
+            if (ret.value() == 0) {
+                co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::ConnectionReset);
+            }
             readsize += ret.value();
 #ifdef _WIN32
         } else if (ret.error() == ILIAS_NAMESPACE::SystemError(WSAEWOULDBLOCK) ||
@@ -181,24 +224,27 @@ inline auto ProtoStream<T>::recvRaw(std::span<std::byte> buf) -> ILIAS_NAMESPACE
         } else if (ret.error() == ILIAS_NAMESPACE::SystemError(EINTR)) {
             continue;
         } else {
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error_or(ILIAS_NAMESPACE::Error::ConnectionReset));
+            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
         }
     }
     co_return ILIAS_NAMESPACE::Result<void>();
 }
 
 template <ILIAS_NAMESPACE::StreamClient T>
-inline auto ProtoStream<T>::close() -> ILIAS_NAMESPACE::Task<void> {
+inline auto ProtoStreamClient<T>::close() -> ILIAS_NAMESPACE::Task<void> {
     co_return co_await mStreamClient.shutdown();
 }
 
 template <ILIAS_NAMESPACE::StreamClient T>
-inline auto ProtoStream<T>::sendRaw(std::span<std::byte> data) -> ILIAS_NAMESPACE::Task<void> {
+inline auto ProtoStreamClient<T>::sendRaw(std::span<std::byte> data) -> ILIAS_NAMESPACE::Task<void> {
     int sended = 0;
     while (sended < data.size()) {
         ILIAS_NAMESPACE::Result<size_t> ret =
             co_await mStreamClient.write({data.data() + sended, data.size() - sended});
-        if (ret && ret.value() > 0) {
+        if (ret) {
+            if (ret.value() == 0) {
+                co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::ConnectionReset);
+            }
             sended += ret.value();
 #ifdef _WIN32
         } else if (ret.error() == ILIAS_NAMESPACE::SystemError(WSAEWOULDBLOCK) ||
@@ -214,9 +260,8 @@ inline auto ProtoStream<T>::sendRaw(std::span<std::byte> data) -> ILIAS_NAMESPAC
         } else if (ret.error() == ILIAS_NAMESPACE::SystemError(EINTR)) {
             continue;
         } else {
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error_or(ILIAS_NAMESPACE::Error::ConnectionReset));
+            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
         }
-        co_return ILIAS_NAMESPACE::Result<void>();
     }
     co_return ILIAS_NAMESPACE::Result<void>();
 }

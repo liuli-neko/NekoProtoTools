@@ -9,7 +9,7 @@
  *
  */
 #pragma once
-#if defined(NEKO_PROTO_ENABLE_SIMDJSON) || 1
+#if defined(NEKO_PROTO_ENABLE_SIMDJSON)
 #include <simdjson.h>
 #include <sstream>
 #include <unordered_map>
@@ -360,6 +360,7 @@ public:
         } else {
             return (*this)(value.value);
         }
+        return true;
     }
 #else
     template <typename T>
@@ -466,6 +467,7 @@ public:
             return false;
         }
         mStream.flush();
+        return true;
     }
 
 private:
