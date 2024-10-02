@@ -2,7 +2,7 @@ set_project("neko-proto")
 add_rules("mode.debug", "mode.release", "mode.valgrind", "mode.coverage")
 set_version("1.0.0")
 
-add_repositories("btk-repo git@github.com:Btk-Project/xmake-repo.git")
+add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 
 option("enable_simdjson")
     set_default(false)
