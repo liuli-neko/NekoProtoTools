@@ -1,6 +1,7 @@
 target("test_serializer_in_main")
     set_kind("binary")
     set_languages("c++17")
+    set_default(false)
     add_includedirs("$(projectdir)/include")
     add_defines("NEKO_PROTO_STATIC", "NEKO_VERBOSE_LOGS", "SIMDJSON_EXCEPTIONS=1")
     add_packages("gtest")

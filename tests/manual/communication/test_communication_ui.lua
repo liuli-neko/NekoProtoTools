@@ -3,6 +3,7 @@ if has_config("ui_test") and has_config("enable_communication") then
     
     target("test_communication_ui")
         add_rules("qt.widgetapp")
+        set_default(false)
         set_languages("c++20")
         add_packages("ilias")
         add_includedirs("$(projectdir)/include")
