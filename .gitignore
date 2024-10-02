@@ -12,5 +12,6 @@ vsxmake2022/
 *.o
 *.obj
 *.bin
+**/private/config.h
 
 vsxmake*

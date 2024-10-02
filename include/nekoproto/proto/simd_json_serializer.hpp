@@ -9,6 +9,8 @@
  *
  */
 #pragma once
+#include "private/global.hpp"
+
 #if defined(NEKO_PROTO_ENABLE_SIMDJSON)
 #include <iomanip>
 #include <simdjson.h>
@@ -16,7 +18,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "private/global.hpp"
 #include "private/helpers.hpp"
 #include "private/log.hpp"
 
