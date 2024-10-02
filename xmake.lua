@@ -112,33 +112,24 @@ end
 target("NekoProtoBase")
     if is_kind("shared") then
         set_kind("shared")
+        add_defines("NEKO_PROTO_LIBRARY")
     else
         set_kind("static")
         set_configvar("NEKO_PROTO_STATIC", true)
     end
     add_headerfiles("include/(nekoproto/proto/**.hpp)")
+    add_headerfiles("include/(nekoproto/proto/**.h)")
     add_includedirs("include")
     add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
     add_files("src/proto_base.cpp")
-target_end()
-
-if has_config("enable_communication") then
-    target("NekoCommunicationBase")
-        if is_kind("shared") then
-            set_kind("shared")
-        else
-            set_kind("static")
-            set_configvar("NEKO_PROTO_STATIC", true)
-        end
+    if has_config("enable_communication") then
         add_headerfiles("include/(nekoproto/communication/**.hpp)")
-        add_includedirs("include")
         add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
         add_packages("ilias")
         set_languages("c++20")
-        add_deps("NekoProtoBase")
         add_files("src/communication_base.cpp")
-    target_end()
-end 
+    end
+target_end()
 
 if is_mode("coverage") and is_plat("linux") then 
     target("coverage-report")
