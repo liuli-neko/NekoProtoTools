@@ -27,7 +27,7 @@
       <item>
        <widget class="QLineEdit" name="serviceUrlEdit">
         <property name="text">
-         <string>tcp://127.0.0.1:15288</string>
+         <string>127.0.0.1:15288</string>
         </property>
        </widget>
       </item>
@@ -56,7 +56,7 @@
       <item>
        <widget class="QPushButton" name="makeMainChannel">
         <property name="text">
-         <string>make main channel</string>
+         <string>make client</string>
         </property>
        </widget>
       </item>

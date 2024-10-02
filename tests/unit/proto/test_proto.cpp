@@ -78,7 +78,6 @@ struct BinaryProto {
     std::string b = "hello";
     uint32_t c    = 3;
     std::optional<int32_t> d;
-    
 
     NEKO_SERIALIZER(a, b, c, d)
     NEKO_DECLARE_PROTOCOL(BinaryProto, BinarySerializer)
@@ -226,7 +225,7 @@ TEST_F(ProtoTest, JsonProtoRef) {
                       "\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
                       "\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"l\":23}";
     auto proto      = factory->create("TestP");
-    proto->formData(std::vector<char>(str.data(), str.data() + str.length()));
+    proto->formData(str.data(), str.length());
     auto rawp = proto->cast<TestP>(); // success cast
 
     EXPECT_TRUE(proto->cast<BinaryProto>() == nullptr); // failed cast
@@ -287,24 +286,24 @@ TEST_F(ProtoTest, JsonProtoRef) {
 TEST_F(ProtoTest, InvalidParams) {
     std::string str = "{\"a\":3}";
     TestP p;
-    EXPECT_FALSE(p.makeProto().formData(std::vector<char>(str.data(), str.data() + str.length())));
+    EXPECT_FALSE(p.makeProto().formData(str.data(), str.length()));
     EXPECT_TRUE(factory->create("InvalidP") == nullptr);
     EXPECT_TRUE(factory->create(-1) == nullptr);
     str = "{\"a\":3.213123,\"b\":123"
           ",\"c\":12,\"d\":\"dddd\",\"f\":[1,2,3],\"e\":{\"a\":1,\"b\":2},\"h\":[1,2,3,0,0],"
           "\"g\":\"TEnum_A(1)\",\"j\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
           "\"TEnum_A(1)\"],\"i\":[1,\"hello\"],\"l\":23}";
-    EXPECT_FALSE(p.makeProto().formData(std::vector<char>(str.data(), str.data() + str.length())));
+    EXPECT_FALSE(p.makeProto().formData(str.data(), str.length()));
     str = "aaaaaaaaaaaaa";
-    EXPECT_FALSE(p.makeProto().formData(std::vector<char>(str.data(), str.data() + str.length())));
+    EXPECT_FALSE(p.makeProto().formData(str.data(), str.length()));
     str = "{\"a\":3.213123,\"b\":123"
           ",\"c\":12,\"d\":\"dddd\",\"f\":23,\"e\":null,\"h\":23.22,"
           "\"g\":\"TEnum_A(1)\",\"j\":[1,\"hello\",true,3.141592654,[1,2,3],"
           "\"TEnum_A(1)\"],\"i\":[1,\"hello\"],\"l\":23}";
-    EXPECT_FALSE(p.makeProto().formData(std::vector<char>(str.data(), str.data() + str.length())));
+    EXPECT_FALSE(p.makeProto().formData(str.data(), str.length()));
     auto d = TestP::ProtoType::Serialize(p);
     EXPECT_FALSE(d.empty());
-    EXPECT_FALSE(TestP::ProtoType::Deserialize(std::vector<char>(str.data(), str.data() + str.length()), p));
+    EXPECT_FALSE(TestP::ProtoType::Deserialize(str.data(), str.length(), p));
 }
 
 TEST_F(ProtoTest, BinaryProto) {

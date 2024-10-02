@@ -723,7 +723,7 @@ TEST(RandomProtoTest, StructTest) {
     EXPECT_STREQ(data.data(), StructProtoData);
 
     TestStructProto proto2;
-    proto2.makeProto().formData({StructProtoData, StructProtoData + 18184});
+    proto2.makeProto().formData(StructProtoData, 18184);
     EXPECT_EQ(proto2.a.f0, proto.a.f0);
 
     TestStructProto::ProtoType proto3;
