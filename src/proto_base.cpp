@@ -23,6 +23,7 @@ void ProtoFactory::setVersion(int major, int minor, int patch) NEKO_NOEXCEPT {
 
 uint32_t ProtoFactory::version() const NEKO_NOEXCEPT { return mVersion; }
 
+NEKO_PROTO_API
 std::map<NEKO_STRING_VIEW, std::function<void(ProtoFactory*)>>&
 static_init_funcs(const NEKO_STRING_VIEW& name = "", std::function<void(ProtoFactory*)> func = nullptr) {
     static std::map<NEKO_STRING_VIEW, std::function<void(ProtoFactory*)>> funcs = {};

@@ -735,15 +735,15 @@ inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa,
 
 // #####################################################
 // # std::nullptr_t
-inline bool prologue(RapidJsonInputSerializer& sa, const std::nullptr_t&) NEKO_NOEXCEPT { return true; }
-inline bool epilogue(RapidJsonInputSerializer& sa, const std::nullptr_t&) NEKO_NOEXCEPT { return true; }
+inline bool prologue(RapidJsonInputSerializer& sa, const std::nullptr_t) NEKO_NOEXCEPT { return true; }
+inline bool epilogue(RapidJsonInputSerializer& sa, const std::nullptr_t) NEKO_NOEXCEPT { return true; }
 
 template <typename WriterT>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const std::nullptr_t&) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const std::nullptr_t) NEKO_NOEXCEPT {
     return true;
 }
 template <typename WriterT>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const std::nullptr_t&) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const std::nullptr_t) NEKO_NOEXCEPT {
     return true;
 }
 // #####################################################
