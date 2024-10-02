@@ -1,6 +1,7 @@
 if has_config("fuzzer_test") then
     target("test_json_proto")
         set_kind("binary")
+        set_default(false)
         set_languages("c++17")
         add_defines("NEKO_PROTO_STATIC")
         add_packages("gtest")

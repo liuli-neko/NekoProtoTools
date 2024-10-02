@@ -2,6 +2,7 @@ if has_config("enable_communication") then
     target("test_communication")
         set_kind("binary")
         set_languages("c++20")
+        set_default(false)
         add_includedirs("$(projectdir)/include")
         add_packages("ilias")
         add_defines("NEKO_PROTO_STATIC", "NEKO_COMMUNICATION_DEBUG")

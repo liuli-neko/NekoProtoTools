@@ -1,6 +1,7 @@
 target("test_traits")
     set_kind("binary")
     set_languages("c++17")
+    set_default(false)
     add_defines("NEKO_PROTO_STATIC")
     add_includedirs("$(projectdir)/include")
     add_packages("gtest")
