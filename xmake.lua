@@ -1,15 +1,23 @@
 set_project("neko-proto")
 add_rules("mode.debug", "mode.release", "mode.valgrind", "mode.coverage")
 set_version("1.0.0")
-
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
+
+add_configfiles("include/nekoproto/proto/private/config.h.in")
+set_configdir("include/nekoproto/proto/private")
+
+--Version
+set_configvar("NEKOP_ROTO_VERSION_STRING","0.0.1")
+set_configvar("NEKOP_ROTO_VERSION_MAJOR",0)
+set_configvar("NEKOP_ROTO_VERSION_MINOR",0)
+set_configvar("NEKOP_ROTO_VERSION_PATCH",1)
 
 option("enable_simdjson")
     set_default(false)
     set_showmenu(true)
     set_description("Enable simdjson test, should install simdjson")
     set_category("serializer provider")
-    add_defines("NEKO_PROTO_ENABLE_SIMDJSON")
+    set_configvar("NEKO_PROTO_ENABLE_SIMDJSON", true)
 option_end()
 
 option("enable_rapidjson")
@@ -17,7 +25,7 @@ option("enable_rapidjson")
     set_showmenu(true)
     set_description("Enable rapidjson test, should install rapidjson")
     set_category("serializer provider")
-    add_defines("NEKO_PROTO_ENABLE_RAPIDJSON")
+    set_configvar("NEKO_PROTO_ENABLE_RAPIDJSON", true)
 option_end()
 
 option("enable_spdlog")
@@ -25,7 +33,7 @@ option("enable_spdlog")
     set_showmenu(true)
     set_description("Enable spdlog for log, should install spdlog")
     set_category("log provider")
-    add_defines("NEKO_PROTO_USE_SPDLOG")
+    set_configvar("NEKO_PROTO_USE_SPDLOG", true)
     after_check(function (option)
         if has_config("enable_spdlog") and has_config("enable_fmt") then 
             assert(false, "spdlog can not be used with fmt or stdformat")
@@ -38,7 +46,7 @@ option("enable_fmt")
     set_showmenu(true)
     set_description("Enable fmt for log, should install fmt")
     set_category("log provider")
-    add_defines("NEKO_PROTO_USE_FMT")
+    set_configvar("NEKO_PROTO_USE_FMT", true)
     after_check(function (option)
         if has_config("enable_fmt") and has_config("enable_spdlog") then 
             assert(false, "spdlog can not be used with fmt or stdformat")
@@ -50,7 +58,7 @@ option("enable_stdformat")
     set_showmenu(true)
     set_description("Enable std format for log, should support #include <format>")
     set_category("log provider")
-    add_defines("NEKO_PROTO_USE_STD_FORMAT")
+    set_configvar("NEKO_PROTO_USE_STD_FORMAT", true)
     add_cxxincludes("format")
     set_values(true, false)
     after_check(function (option)
@@ -102,26 +110,32 @@ if is_plat("linux") then
 end
 
 target("NekoProtoBase")
-    set_kind("static")
-    add_defines("NEKO_PROTO_STATIC")
+    if is_kind("shared") then
+        set_kind("shared")
+    else
+        set_kind("static")
+        set_configvar("NEKO_PROTO_STATIC", true)
+    end
     add_headerfiles("include/(nekoproto/proto/**.hpp)")
     add_includedirs("include")
     add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
-    add_options("enable_spdlog", "enable_fmt", "enable_stdformat", "enable_rapidjson", "enable_simdjson")
     add_files("src/proto_base.cpp")
 target_end()
 
 if has_config("enable_communication") then
     target("NekoCommunicationBase")
-        set_kind("static")
+        if is_kind("shared") then
+            set_kind("shared")
+        else
+            set_kind("static")
+            set_configvar("NEKO_PROTO_STATIC", true)
+        end
         add_headerfiles("include/(nekoproto/communication/**.hpp)")
         add_includedirs("include")
-        add_defines("NEKO_PROTO_STATIC")
         add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
         add_packages("ilias")
         set_languages("c++20")
         add_deps("NekoProtoBase")
-        add_options("enable_spdlog", "enable_fmt", "enable_stdformat", "enable_rapidjson", "enable_simdjson")
         add_files("src/communication_base.cpp")
     target_end()
 end 
