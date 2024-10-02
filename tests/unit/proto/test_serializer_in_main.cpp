@@ -176,7 +176,7 @@ int main(int argc, char** argv) {
     data_t1.push_back('\0');
 
     zTypeTest1 zt1;
-    JsonSerializer::InputSerializer input_zt1(data_t1.data(), data_t1.size());
+    JsonSerializer::InputSerializer input_zt1(data_t1.data(), data_t1.size() - 1);
     input_zt1(zt1);
     EXPECT_EQ(zt.a, zt1.a);
     EXPECT_EQ(zt.b, zt1.b);

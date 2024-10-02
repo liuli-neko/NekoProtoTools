@@ -126,8 +126,10 @@ target("NekoProtoBase")
         add_headerfiles("include/(nekoproto/communication/**.hpp)")
         add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
         add_packages("ilias")
-        set_languages("c++20")
         add_files("src/communication_base.cpp")
+        set_languages("c++20")
+    else
+        set_languages("c++17")
     end
 target_end()
 
