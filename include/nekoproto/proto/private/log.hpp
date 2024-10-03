@@ -20,7 +20,6 @@
 #define NEKO_PROTO_LOG
 #endif
 
-#if defined(NEKO_PROTO_LOG)
 #include <chrono>
 #include <stdio.h>
 #include <string>
@@ -52,6 +51,7 @@ inline void neko_proto_private_log_out(const char* level, const char* message, c
 #endif
 }
 
+#if defined(NEKO_PROTO_LOG)
 #if defined(NEKO_PROTO_USE_FMT)
 #include <fmt/format.h>
 #define NEKO_PRIVATE_LOG(level, module, fmtstr, ...)                                                                   \
@@ -59,20 +59,18 @@ inline void neko_proto_private_log_out(const char* level, const char* message, c
                                {module, __FILE__, __FUNCTION__, __LINE__, std::chrono::system_clock::now()})
 #elif defined(NEKO_PROTO_USE_SPDLOG)
 #include <spdlog/spdlog.h>
-#if defined(NEKO_PROTO_LOG_CONTEXT)
 #define NEKO_PRIVATE_LOG(level, module, fmt, ...)                                                                      \
     spdlog::level("[{}][{}:{}][{}] " fmt, #module, __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__)
-#elif defined(NEKO_PROTO_USE_STD_FORMAT) && __cpp_lib_format >= 201907L
+#elif defined(NEKO_PROTO_USE_STD_FORMAT) && NEKO_CPP_PLUS >= 20
 #include <format>
 #define NEKO_PRIVATE_LOG(level, module, fmt, ...)                                                                      \
     neko_proto_private_log_out(#level, std::format(fmt, ##__VA_ARGS__).c_str(),                                        \
                                {module, __FILE__, __FUNCTION__, __LINE__, std::chrono::system_clock::now()})
 #else
-#define NEKO_PRIVATE_LOG(level, module, fmt, ...) spdlog::level("[{}]" fmt, #module, ##__VA_ARGS__)
+#define NEKO_PRIVATE_LOG(level, module, fmt, ...)
 #endif
 #else
 #define NEKO_PRIVATE_LOG(level, module, fmt, ...)
-#endif
 #endif
 
 #if defined(NEKO_PROTO_DEBUG)

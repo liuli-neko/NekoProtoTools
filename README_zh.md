@@ -269,6 +269,67 @@ int main() {
 }
 ```
 
+#### 3.3 通信
+示例代码:
+
+> 完整代码:
+> tests\unit\communication\test_communication.cpp
+
+```C++
+#include <sstream>
+
+#include "nekoproto/communication/communication_base.hpp"
+#include "nekoproto/proto/json_serializer.hpp"
+#include "nekoproto/proto/types/vector.hpp"
+
+#include <ilias/net.hpp>
+#include <ilias/platform.hpp>
+#include <ilias/task.hpp>
+#include <ilias/task/when_all.hpp>
+NEKO_USE_NAMESPACE
+using namespace ILIAS_NAMESPACE;
+
+class Message {
+public:
+    uint64_t timestamp;
+    std::string msg;
+    std::vector<int> numbers;
+
+    NEKO_SERIALIZER(timestamp, msg, numbers);
+    NEKO_DECLARE_PROTOCOL(Message, JsonSerializer)
+};
+int main() {
+    PlatformContext ioContext;
+    ProtoFactory protoFactory;
+    TcpListener listener(ioContext, AF_INET);
+    listener.bind(IPEndpoint("127.0.0.1", 12345));
+    ilias_go listener.accept();
+    TcpClient tcpClient(ioContext, AF_INET);
+    auto ret = tcpClient.connect(IPEndpoint("127.0.0.1", 12345)).wait();
+    if (!ret) {
+        return -1;
+    }
+    ProtoStreamClient<TcpClient> client(protoFactory, ioContext, std::move(tcpClient));
+    Message msg;
+    msg.msg       = "this is a message from client";
+    msg.timestamp = time(NULL);
+    msg.numbers   = (std::vector<int>{1, 2, 3, 5});
+    auto ret1 = ilias_go client.send(msg.makeProto(),
+      ProtoStreamClient<TcpClient>::SerializerInThread);
+    if (!ret1) {
+        return -1;
+    }
+    auto ret = client.recv().wait();
+    if (!ret) {
+        return -1;
+    }
+    auto retMsg = std::move(ret.value());
+    auto msg1   = retMsg->cast<Message>();
+    client.close().wait();
+    return 0;
+}
+```
+
 ### 4. 最后
 
 为什么要做这个库？
@@ -284,7 +345,6 @@ int main() {
     - [ ] 支持 simdjson::ondemand 命名空间下的接口 (simdjson::ondemand 和 simdjson::dom 命名空间下的序列化接口区别是什么?)
     - [x] 输出序列化器（手动实现了一份，效率上可能不会很好。）
 - [x] 支持更多的c++stl容器
-- [ ] 提供协议工厂的动态加载层接口
 
 **communication**
 - [ ] 支持udp的通信通道
@@ -296,6 +356,13 @@ int main() {
     - NameValuePair, SizeTag, 等特殊的结构体不会触发节点的展开（类似json对象的嵌套对象，展开意味着从父对象的遍历深入到了子对象），其他没有minimal_serializable属性的对象将会触发一次节点的展开.
     - 支持simdjson作为json序列化后端(目前仅支持了simdjson::dom命名空间下的), 它只支持从json数据输入，目前效率比rapidjson略高.
 - 几乎支持所有stl容器
+
+### v0.2.1
+- 增加了通用的std::optional的支持
+- 增加了simdjson为后端的序列化器的序列化支持
+- 修改通信接口为传输底层的壳，通信协议可自由替换且不在关心连接。
+- 新增通信过程的序列化和反序列化支持推到其他线程执行。
+- 新增了选项来控制功能启用和日志输出
 
 #### v0.2.0 - alpha
 - 修改序列化器的接口
