@@ -275,6 +275,67 @@ int main() {
 }
 ```
 
+#### 3.3 Communication
+example:
+
+> full code in:
+> tests\unit\communication\test_communication.cpp
+
+```C++
+#include <sstream>
+
+#include "nekoproto/communication/communication_base.hpp"
+#include "nekoproto/proto/json_serializer.hpp"
+#include "nekoproto/proto/types/vector.hpp"
+
+#include <ilias/net.hpp>
+#include <ilias/platform.hpp>
+#include <ilias/task.hpp>
+#include <ilias/task/when_all.hpp>
+NEKO_USE_NAMESPACE
+using namespace ILIAS_NAMESPACE;
+
+class Message {
+public:
+    uint64_t timestamp;
+    std::string msg;
+    std::vector<int> numbers;
+
+    NEKO_SERIALIZER(timestamp, msg, numbers);
+    NEKO_DECLARE_PROTOCOL(Message, JsonSerializer)
+};
+int main() {
+    PlatformContext ioContext;
+    ProtoFactory protoFactory;
+    TcpListener listener(ioContext, AF_INET);
+    listener.bind(IPEndpoint("127.0.0.1", 12345));
+    ilias_go listener.accept();
+    TcpClient tcpClient(ioContext, AF_INET);
+    auto ret = tcpClient.connect(IPEndpoint("127.0.0.1", 12345)).wait();
+    if (!ret) {
+        return -1;
+    }
+    ProtoStreamClient<TcpClient> client(protoFactory, ioContext, std::move(tcpClient));
+    Message msg;
+    msg.msg       = "this is a message from client";
+    msg.timestamp = time(NULL);
+    msg.numbers   = (std::vector<int>{1, 2, 3, 5});
+    auto ret1 = ilias_go client.send(msg.makeProto(),
+      ProtoStreamClient<TcpClient>::SerializerInThread);
+    if (!ret1) {
+        return -1;
+    }
+    auto ret = client.recv().wait();
+    if (!ret) {
+        return -1;
+    }
+    auto retMsg = std::move(ret.value());
+    auto msg1   = retMsg->cast<Message>();
+    client.close().wait();
+    return 0;
+}
+```
+
 ### 4. the end
 
 why I want to do this?
@@ -290,7 +351,6 @@ I think I should not spend too much time designing and maintaining protocol libr
     - [ ] support serializer interface in simdjson::ondemand (What are the differences between the DNS APIs in the dom and ondemand namespaces?)
     - [x] output serializer (support by self)
 - [x] support more cpp stl types
-- [ ] support protoFactory dynamic layer interface
 
 **communication**
 - [ ] support udp protocol in communication channel
@@ -302,6 +362,13 @@ I think I should not spend too much time designing and maintaining protocol libr
     - NameValuePair, SizeTag, etc while are special struct unable to auto enter the object. because they are not a real object. Other class whitout minimal_serializable trait will be auto enter 1 level before process it.
     - support simdjson backend (now noly under simdjson::dom namespace), it only support input serializer, Slightly faster than rapidjson backend.
 - support almost all stl types
+
+### v0.2.1
+- add std::optional support
+- add simdjson output serializer support
+- refactory communication interface, make it more easy to use.
+- serializer in communication can be processed in other thread easyly.
+- more options to control feature enable and log output
 
 #### v0.2.0 - alpha
 - Modify serializer interface

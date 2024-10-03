@@ -139,7 +139,6 @@ int main(int argc, char** argv) {
     ILIAS_LOG_SET_LEVEL(ILIAS_TRACE_LEVEL);
     PlatformContext ioContext;
     NEKO_NAMESPACE::ProtoFactory protoFactory;
-    TcpClient client;
     ilias_wait test(ioContext, protoFactory);
     // cc_rpc_base::rpc_server server;
     // server.start();

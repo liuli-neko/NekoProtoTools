@@ -1,16 +1,10 @@
 set_project("neko-proto")
 add_rules("mode.debug", "mode.release", "mode.valgrind", "mode.coverage")
-set_version("1.0.0")
+set_version("0.1.0", {build = "%Y%m%d%H%M"})
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 
 add_configfiles("include/nekoproto/proto/private/config.h.in")
 set_configdir("include/nekoproto/proto/private")
-
---Version
-set_configvar("NEKOP_ROTO_VERSION_STRING","0.0.1")
-set_configvar("NEKOP_ROTO_VERSION_MAJOR",0)
-set_configvar("NEKOP_ROTO_VERSION_MINOR",0)
-set_configvar("NEKOP_ROTO_VERSION_PATCH",1)
 
 option("enable_simdjson")
     set_default(false)

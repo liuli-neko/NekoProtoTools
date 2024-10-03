@@ -1,6 +1,6 @@
 target("test_serializer_in_main")
     set_kind("binary")
-    set_languages("c++17")
+    set_languages("c++20")
     set_default(false)
     add_includedirs("$(projectdir)/include")
     add_deps("NekoProtoBase")
