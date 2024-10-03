@@ -18,6 +18,8 @@
 
 #include "nekoproto/proto/private/global.hpp"
 NEKO_BEGIN_NAMESPACE
+namespace detail {
+
 template <typename ReturnT>
 struct ThreadAwaiter {
     ThreadAwaiter(std::function<ReturnT()> func) : mCallback(std::move(func)) {}
@@ -38,4 +40,5 @@ struct ThreadAwaiter {
     std::function<ReturnT()> mCallback;
     ReturnT mResult;
 };
+} // namespace detail
 NEKO_END_NAMESPACE

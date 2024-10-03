@@ -128,7 +128,7 @@ template <ILIAS_NAMESPACE::StreamClient T>
 inline auto ProtoStreamClient<T>::send(const IProto& message, int flag) -> ILIAS_NAMESPACE::Task<void> {
     std::vector<char> messageData;
     if (flag & Strategy::SerializerInThread) {
-        auto ret = co_await ThreadAwaiter<std::vector<char>>{std::bind(&IProto::toData, &message)};
+        auto ret = co_await detail::ThreadAwaiter<std::vector<char>>{std::bind(&IProto::toData, &message)};
         if (ret && ret.value().size()) {
             messageData = std::move(ret.value());
         } else {
@@ -186,7 +186,7 @@ inline auto ProtoStreamClient<T>::recv(int flag) -> ILIAS_NAMESPACE::Task<std::u
         co_return ILIAS_NAMESPACE::Unexpected(ret.error());
     }
     if (flag & Strategy::SerializerInThread) {
-        auto ret = co_await ThreadAwaiter<bool>(
+        auto ret = co_await detail::ThreadAwaiter<bool>(
             std::bind(&IProto::formData, proto.get(), reinterpret_cast<char*>(message.data()), message.size()));
         if (!ret && !ret.value()) {
             co_return ILIAS_NAMESPACE::Unexpected(ret.error_or(ILIAS_NAMESPACE::Error(ErrorCode::InvalidProtoData)));
