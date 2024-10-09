@@ -14,7 +14,6 @@
 #include <ilias/task.hpp>
 #include <regex>
 
-
 #ifdef NEKO_COMMUNICATION_DEBUG
 #include "nekoproto/proto/to_string.hpp"
 #include "nekoproto/proto/types/binary_data.hpp"
@@ -27,18 +26,6 @@ NEKO_BEGIN_NAMESPACE
 auto ErrorCategory::instance() -> const ErrorCategory& {
     static ErrorCategory instance;
     return instance;
-}
-
-auto ErrorCategory::message(int64_t value) const -> std::string {
-    switch (value) {
-#define NEKO_CHANNEL_ERROR(name, code, message, _)                                                                     \
-    case code:                                                                                                         \
-        return message;
-        NEKO_CHANNEL_ERROR_CODE_TABLE
-#undef NEKO_CHANNEL_ERROR
-    default:
-        return "unknown error";
-    }
 }
 
 auto ErrorCategory::name() const -> std::string_view { return "NekoCommunicationError"; }
