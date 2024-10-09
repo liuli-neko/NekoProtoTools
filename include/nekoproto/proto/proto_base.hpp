@@ -141,7 +141,7 @@ protected:
 };
 
 template <typename ProtoT, typename SerializerT>
-class ProtoBase : public IProto {
+class ProtoBase final : public IProto {
 public:
     using ProtoType      = ProtoT;
     using SerializerType = SerializerT;

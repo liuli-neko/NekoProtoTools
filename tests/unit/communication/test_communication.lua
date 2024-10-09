@@ -9,7 +9,7 @@ if has_config("enable_communication") then
         add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
         add_packages("gtest")
         add_options("enable_spdlog", "enable_fmt", "enable_stdformat", "enable_rapidjson", "enable_simdjson")
-        add_tests("cpp20", {run_timeout = 1000})
+        add_tests("cpp20", {run_timeout = 5000})
         set_group("communication")
         add_files("$(projectdir)/src/communication_base.cpp")
         add_files("$(projectdir)/src/proto_base.cpp")

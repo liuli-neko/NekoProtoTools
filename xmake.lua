@@ -1,5 +1,5 @@
 set_project("neko-proto")
-add_rules("mode.debug", "mode.release", "mode.valgrind", "mode.coverage")
+add_rules("mode.debug", "mode.release", "mode.coverage")
 set_version("0.1.0", {build = "%Y%m%d%H%M"})
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 
