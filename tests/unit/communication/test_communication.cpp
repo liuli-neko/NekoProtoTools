@@ -62,7 +62,7 @@ Task<void> ClientLoop(IoContext& ioContext, ProtoFactory& protoFactory, StreamFl
     const size_t desiredSize = 10 * 1024; // 1MB
     int count                = 10;
     while (count-- > 0) {
-        NEKO_LOG_INFO("unit test", "send message to {}", count);
+        NEKO_LOG_INFO("unit test", "start {}th send test", count);
         Message msg;
         msg.msg       = generate_random_string(desiredSize);
         msg.timestamp = time(NULL);
@@ -144,9 +144,7 @@ Task<void> serverLoop(IoContext& ioContext, ProtoFactory& protoFactor, StreamFla
 Task<void> test(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlag, StreamFlag recvFlag) {
     auto [ret1, ret2] = co_await whenAll(serverLoop(ioContext, protoFactory, sendFlag, recvFlag),
                                          ClientLoop(ioContext, protoFactory, sendFlag, recvFlag));
-    if ((!ret1 && ret1.error() != Error::ConnectionReset) || (!ret2)) {
-        exit(-1);
-    }
+    EXPECT_FALSE((!ret1 && ret1.error() != Error::ConnectionReset) || (!ret2));
     co_return Result<>();
 }
 
@@ -177,7 +175,10 @@ TEST_F(CoummicationTest, Slice) { ilias_wait test(ioContext, protoFactory, Strea
 TEST_F(CoummicationTest, None) { ilias_wait test(ioContext, protoFactory, StreamFlag::None, StreamFlag::None); }
 
 int main(int argc, char** argv) {
-    ILIAS_LOG_SET_LEVEL(ILIAS_TRACE_LEVEL);
+    // ILIAS_LOG_SET_LEVEL(ILIAS_TRACE_LEVEL);
+    // installLogger([](const char* level, const char* msg, const logContext& ctxt) {
+    //     std::cout << level << ": " << msg << std::endl;
+    // });
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
