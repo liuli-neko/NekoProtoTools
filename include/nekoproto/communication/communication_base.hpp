@@ -91,7 +91,8 @@ public:
     NEKO_CHANNEL_ERROR(Timeout, 6, "the operator is timeout", -1)                                                      \
     NEKO_CHANNEL_ERROR(NoData, 7, "serializer maybe failed, return no data.", -1)                                      \
     NEKO_CHANNEL_ERROR(MessageTooLarge, 8, "message size is too large to send.", -1)                                   \
-    NEKO_CHANNEL_ERROR(ProtocolFactoryVersionMismatch, 9, "protocol factory version mismatch", -1)
+    NEKO_CHANNEL_ERROR(ProtocolFactoryVersionMismatch, 9, "protocol factory version mismatch", -1)                     \
+    NEKO_CHANNEL_ERROR(SerializationError, 10, "serialization failed, return error.", -1)
 
 #define NEKO_CHANNEL_ERROR(name, code, message, _) name = code,
 enum class ErrorCode { NEKO_CHANNEL_ERROR_CODE_TABLE };
@@ -222,7 +223,9 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
         std::vector<char> headerData;
         do {
             BinaryOutputSerializer serializer(headerData);
-            serializer(header);
+            if (!serializer(header)) {
+                co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::SerializationError));
+            }
         } while (false);
         auto ret = co_await sendRaw({reinterpret_cast<std::byte*>(headerData.data()), headerData.size()});
         NEKO_LOG_INFO("Communication", "Sending slice header, protocol: {}, size: {}", message.type(),
@@ -242,18 +245,20 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
                 break;
             }
         }
-        co_return ILIAS_NAMESPACE::Result();
+        co_return ILIAS_NAMESPACE::Result<void>();
     } else {
         // complete data
         auto header = MessageHeader(messageData.size(), message.type(), MessageType::Complete);
         std::vector<char> headerData;
         do {
             BinaryOutputSerializer serializer(headerData);
-            serializer(header);
+            if (!serializer(header)) {
+                co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::SerializationError));
+            }
         } while (false);
         auto ret = co_await sendRaw({reinterpret_cast<std::byte*>(headerData.data()), headerData.size()});
-        NEKO_LOG_INFO("Communication", "Send header: -message type: {} -data: {} -length: {}",
-                      header.messageType, header.data, header.length);
+        NEKO_LOG_INFO("Communication", "Send header: -message type: {} -data: {} -length: {}", header.messageType,
+                      header.data, header.length);
         if (!ret) {
             co_return ILIAS_NAMESPACE::Unexpected(ret.error());
         }
@@ -400,7 +405,9 @@ inline auto ProtoStreamClient<T>::sendVersion() -> ILIAS_NAMESPACE::Task<void> {
     std::vector<char> headerData;
     do {
         BinaryOutputSerializer serializer(headerData);
-        serializer(header);
+        if (!serializer(header)) {
+            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::SerializationError));
+        }
     } while (false);
     auto ret = co_await sendRaw({reinterpret_cast<std::byte*>(headerData.data()), headerData.size()});
     if (!ret) {
@@ -418,7 +425,9 @@ inline auto ProtoStreamClient<T>::sendSlice(std::span<std::byte> data, const uin
     std::vector<char> headerData;
     do {
         BinaryOutputSerializer serializer(headerData);
-        serializer(header);
+        if (!serializer(header)) {
+            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::SerializationError));
+        }
     } while (false);
     auto ret = co_await sendRaw({reinterpret_cast<std::byte*>(headerData.data()), headerData.size()});
     NEKO_LOG_INFO("Communication", "Sending slice, size: {}, offset: {}", data.size(), offset);
@@ -440,7 +449,9 @@ inline auto ProtoStreamClient<T>::sendCancel(const uint32_t data) -> ILIAS_NAMES
     std::vector<char> headerData;
     do {
         BinaryOutputSerializer serializer(headerData);
-        serializer(header);
+        if (!serializer(header)) {
+            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error(ErrorCode::SerializationError));
+        }
     } while (false);
     auto ret = co_await sendRaw({reinterpret_cast<std::byte*>(headerData.data()), headerData.size()});
     co_return ILIAS_NAMESPACE::Result<void>();
