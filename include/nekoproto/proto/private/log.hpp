@@ -28,6 +28,7 @@
 #include <string>
 #include <tuple>
 #include <functional>
+#include <algorithm>
 NEKO_BEGIN_NAMESPACE
 struct logContext {
     const char* module;
