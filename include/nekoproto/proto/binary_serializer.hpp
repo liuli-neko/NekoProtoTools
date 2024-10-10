@@ -169,7 +169,7 @@ public:
         mBuffer.insert(mBuffer.end(), value, value + size);
         return true;
     }
-    inline bool saveValue(const nullptr_t) NEKO_NOEXCEPT { return saveValue("null"); }
+    inline bool saveValue(const std::nullptr_t) NEKO_NOEXCEPT { return saveValue("null"); }
 #if NEKO_CPP_PLUS >= 17
     inline bool saveValue(const std::string_view value) NEKO_NOEXCEPT {
         uint32_t size = value.size();
@@ -275,7 +275,7 @@ public:
         return true;
     }
 
-    inline bool loadValue(nullptr_t) NEKO_NOEXCEPT {
+    inline bool loadValue(std::nullptr_t) NEKO_NOEXCEPT {
         std::string value;
         auto ret = loadValue(value);
         if (ret && value == "null") {
