@@ -10,4 +10,14 @@ target("test_serializer_in_main")
     add_tests("serializer_in_main")
     set_group("proto")
     add_files("test_serializer_in_main.cpp")
+    on_run(function (target)
+        local argv = {}
+        if has_config("memcheck") then
+            table.insert(argv, "--leak-check=full")
+            table.insert(argv, target:targetfile())
+            os.execv("valgrind", argv)
+        else
+            os.run(target:targetfile())
+        end
+    end)
 target_end()
