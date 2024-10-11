@@ -233,6 +233,7 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
         while (true) {
             auto sliceSize =
                 std::min(static_cast<uint32_t>(messageData.size()) - offset, gSliceSize - MessageHeader::size());
+            NEKO_ASSERT(sliceSize > 0, "Communication", "Slice size is 0");
             if (!ret) {
                 if (ret.error() == ILIAS_NAMESPACE::Error::Canceled) {
                     co_await sendCancel(message.type());
