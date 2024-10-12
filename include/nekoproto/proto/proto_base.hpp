@@ -84,7 +84,8 @@ public:
      *
      * @return std::vector<char> the data
      */
-    virtual std::vector<char> toData() const NEKO_NOEXCEPT = 0;
+    virtual std::vector<char> toData() const NEKO_NOEXCEPT             = 0;
+    virtual bool toData(std::vector<char>& buffer) const NEKO_NOEXCEPT = 0;
     /**
      * @brief deserializer self
      * The input data must be serialized using the same serializer as the current one
@@ -164,12 +165,14 @@ public:
     operator const ProtoT&() const NEKO_NOEXCEPT { return *mData; }
     operator ProtoT&() NEKO_NOEXCEPT { return *mData; }
 
+    bool toData(std::vector<char>& buffer) const NEKO_NOEXCEPT override;
     std::vector<char> toData() const NEKO_NOEXCEPT override;
     int type() const NEKO_NOEXCEPT override;
     bool formData(const char* data, size_t size) NEKO_NOEXCEPT override;
     NEKO_STRING_VIEW protoName() const NEKO_NOEXCEPT override;
     static NEKO_STRING_VIEW name() NEKO_NOEXCEPT;
     static std::vector<char> Serialize(const ProtoT& proto);
+    static bool Serialize(const ProtoT& proto, std::vector<char>& buffer);
     static bool Deserialize(const char* data, size_t size, ProtoT& proto);
 
 protected:
@@ -341,12 +344,20 @@ inline detail::ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionOb
 }
 
 template <typename ProtoT, typename SerializerT>
+bool ProtoBase<ProtoT, SerializerT>::Serialize(const ProtoT& proto, std::vector<char>& buffer) {
+    typename SerializerT::OutputSerializer serializer(buffer);
+    auto ret = serializer(proto);
+    if (!ret || !serializer.end()) {
+        NEKO_LOG_ERROR("proto", "{} serialize error", kProtoName);
+        return false;
+    }
+    return ret;
+}
+template <typename ProtoT, typename SerializerT>
 std::vector<char> ProtoBase<ProtoT, SerializerT>::Serialize(const ProtoT& proto) {
     std::vector<char> data;
-    typename SerializerT::OutputSerializer serializer(data);
-    auto ret = serializer(proto);
-    if (!serializer.end()) {
-        NEKO_LOG_ERROR("proto", "{} serialize error", kProtoName);
+    if (!Serialize(proto, data)) {
+        return std::vector<char>();
     }
     return data;
 }
@@ -366,6 +377,11 @@ bool ProtoBase<ProtoT, SerializerT>::Deserialize(const char* data, size_t size, 
         return false;
     }
     return true;
+}
+template <typename T, typename SerializerT>
+bool ProtoBase<T, SerializerT>::toData(std::vector<char>& buffer) const NEKO_NOEXCEPT {
+    NEKO_ASSERT(mData != nullptr, "ReflectionSerializer", "mData is nullptr");
+    return Serialize(*mData, buffer);
 }
 
 template <typename T, typename SerializerT>
