@@ -12,7 +12,13 @@
 #include <ilias/task.hpp>
 #include <ilias/task/when_all.hpp>
 NEKO_USE_NAMESPACE
-using namespace ILIAS_NAMESPACE;
+
+using ILIAS_NAMESPACE::IoContext;
+using ILIAS_NAMESPACE::IPEndpoint;
+using ILIAS_NAMESPACE::TcpClient;
+using ILIAS_NAMESPACE::TcpListener;
+using ILIAS_NAMESPACE::Unexpected;
+using ILIAS_NAMESPACE::sockopt::TcpNoDelay;
 
 class Message {
 public:
@@ -50,13 +56,15 @@ std::string to_string(const T& value) {
     return ss.str();
 }
 
-Task<void> ClientLoop(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlag, StreamFlag recvFlag) {
+ILIAS_NAMESPACE::Task<void> ClientLoop(ILIAS_NAMESPACE::IoContext& ioContext, ProtoFactory& protoFactory,
+                                       StreamFlag sendFlag, StreamFlag recvFlag) {
     TcpClient tcpClient(ioContext, AF_INET);
     NEKO_LOG_INFO("unit test", "Client connect to service");
     auto ret = co_await tcpClient.connect(IPEndpoint("127.0.0.1", 12345));
     if (!ret) {
         co_return Unexpected(ret.error());
     }
+    tcpClient.setOption(TcpNoDelay(true));
     ProtoStreamClient<TcpClient> client(protoFactory, ioContext, std::move(tcpClient));
     NEKO_LOG_INFO("unit test", "Client loop started");
     const size_t desiredSize = 10 * 1024; // 1MB
@@ -91,7 +99,7 @@ Task<void> ClientLoop(IoContext& ioContext, ProtoFactory& protoFactory, StreamFl
     co_return co_await client.close();
 }
 
-Task<void> HandleLoop(ProtoStreamClient<TcpClient>&& _client, StreamFlag sendFlag, StreamFlag recvFlag) {
+ILIAS_NAMESPACE::Task<void> HandleLoop(ProtoStreamClient<TcpClient>&& _client, StreamFlag sendFlag, StreamFlag recvFlag) {
     ProtoStreamClient<TcpClient> client(std::move(_client));
     while (true) {
         NEKO_LOG_INFO("unit test", "HandleLoop");
@@ -123,7 +131,8 @@ Task<void> HandleLoop(ProtoStreamClient<TcpClient>&& _client, StreamFlag sendFla
     }
     co_return co_await client.close();
 }
-Task<void> serverLoop(IoContext& ioContext, ProtoFactory& protoFactor, StreamFlag sendFlag, StreamFlag recvFlag) {
+
+ILIAS_NAMESPACE::Task<void> serverLoop(IoContext& ioContext, ProtoFactory& protoFactor, StreamFlag sendFlag, StreamFlag recvFlag) {
     TcpListener listener(ioContext, AF_INET);
     NEKO_LOG_INFO("unit test", "serverLoop");
     listener.bind(IPEndpoint("127.0.0.1", 12345));
@@ -133,26 +142,27 @@ Task<void> serverLoop(IoContext& ioContext, ProtoFactory& protoFactor, StreamFla
         co_return Unexpected(ret.error());
     }
     NEKO_LOG_INFO("unit test", "accept successed");
+    ret.value().first.setOption(TcpNoDelay(true));
     auto ret1 = co_await HandleLoop(
         ProtoStreamClient<ilias::TcpClient>(protoFactor, ioContext, std::move(ret.value().first)), sendFlag, recvFlag);
-    if (!ret1 && ret1.error() != Error::ConnectionReset) {
+    if (!ret1 && ret1.error() != ILIAS_NAMESPACE::Error::ConnectionReset) {
         co_return Unexpected(ret1.error());
     }
-    co_return Result<>();
+    co_return ILIAS_NAMESPACE::Result<>();
 }
 
-Task<void> test(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlag, StreamFlag recvFlag) {
+ILIAS_NAMESPACE::Task<void> test(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlag, StreamFlag recvFlag) {
     auto [ret1, ret2] = co_await whenAll(serverLoop(ioContext, protoFactory, sendFlag, recvFlag),
                                          ClientLoop(ioContext, protoFactory, sendFlag, recvFlag));
-    EXPECT_FALSE((!ret1 && ret1.error() != Error::ConnectionReset) || (!ret2));
-    co_return Result<>();
+    EXPECT_FALSE((!ret1 && ret1.error() != ILIAS_NAMESPACE::Error::ConnectionReset) || (!ret2));
+    co_return ILIAS_NAMESPACE::Result<>();
 }
 
 class CoummicationTest : public ::testing::Test {
 public:
     void SetUp() override {}
     void TearDown() override {}
-    PlatformContext ioContext;
+    ILIAS_NAMESPACE::PlatformContext ioContext;
     ProtoFactory protoFactory;
 };
 
