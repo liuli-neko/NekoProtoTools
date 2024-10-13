@@ -21,14 +21,15 @@
 #endif
 
 #if defined(NEKO_PROTO_LOG)
+#include <algorithm>
 #include <chrono>
 #include <cstdarg>
+#include <functional>
 #include <set>
 #include <stdio.h>
 #include <string>
 #include <tuple>
-#include <functional>
-#include <algorithm>
+
 NEKO_BEGIN_NAMESPACE
 struct logContext {
     const char* module;
@@ -138,8 +139,12 @@ inline void neko_proto_private_log_out(const char* level, const char* message, c
     } else if (file_str.find_last_of('\\') != std::string::npos) {
         file_str = file_str.substr(file_str.find_last_of('\\') + 1);
     }
+    std::string func_str = context.func;
+    if (func_str.find_last_of(':') != std::string::npos) {
+        func_str = func_str.substr(func_str.find_last_of(':') + 1);
+    }
     fprintf(stderr, "%s[%s.%03d] %s - [%s:%d][%s] [%s]%s %s\n", ansi_color_code(context.color), buf,
-            static_cast<int>(dis_millseconds), level, file_str.c_str(), context.line, context.func, context.module,
+            static_cast<int>(dis_millseconds), level, file_str.c_str(), context.line, func_str.c_str(), context.module,
             ansi_color_code("reset"), message);
 #else
     fprintf(stderr, "[%s.%03d] %s - [%s] %s\n", buf, static_cast<int>(dis_millseconds), level, context.module, message);
