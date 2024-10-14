@@ -68,6 +68,8 @@
 #include "private/global.hpp"
 #include "private/reflection_serializer.hpp"
 
+#define NEKO_RESERVED_PROTO_TYPE_SIZE 64
+
 NEKO_BEGIN_NAMESPACE
 class ProtoFactory;
 
@@ -196,8 +198,11 @@ public:
     template <typename T>
     void regist(const NEKO_STRING_VIEW& name) NEKO_NOEXCEPT;
     void regist(const NEKO_STRING_VIEW& name, std::function<IProto*()> creator) NEKO_NOEXCEPT;
+    const std::map<NEKO_STRING_VIEW, int>& proto_type_map() const NEKO_NOEXCEPT;
     template <typename T>
     static int proto_type() NEKO_NOEXCEPT;
+    template <typename T>
+    static int specify_proto_type(const int type) NEKO_NOEXCEPT;
     template <typename T>
     static NEKO_STRING_VIEW proto_name() NEKO_NOEXCEPT;
     /**
@@ -223,7 +228,9 @@ private:
     template <typename T>
     static IProto* creater() NEKO_NOEXCEPT;
     void setVersion(int major, int minor, int patch) NEKO_NOEXCEPT;
-    static int proto_type(const NEKO_STRING_VIEW& name, const bool isDeclared = false) NEKO_NOEXCEPT;
+    static int proto_type(const NEKO_STRING_VIEW& name, const bool isDeclared = false,
+                          const int specifyType = -1) NEKO_NOEXCEPT;
+    static std::map<NEKO_STRING_VIEW, int>& static_proto_type_map();
 
 private:
     std::vector<std::function<IProto*()>> mCreaterList;
@@ -234,6 +241,10 @@ template <typename T>
 void ProtoFactory::regist(const NEKO_STRING_VIEW& name) NEKO_NOEXCEPT {
     regist(name, creater<T>);
 }
+template <typename T>
+int ProtoFactory::specify_proto_type(const int type) NEKO_NOEXCEPT {
+    return proto_type(proto_name<T>(), true, type);
+}
 
 template <typename T>
 int ProtoFactory::proto_type() NEKO_NOEXCEPT {
@@ -242,7 +253,11 @@ int ProtoFactory::proto_type() NEKO_NOEXCEPT {
 
 template <typename T>
 NEKO_STRING_VIEW ProtoFactory::proto_name() NEKO_NOEXCEPT {
-    return decltype(T::makeProto(std::declval<T>()))::name();
+    const auto& name = decltype(T::makeProto(std::declval<T>()))::name();
+    if (name.empty()) NEKO_IF_UNLIKELY {
+            return _class_name<T>();
+        }
+    return name;
 }
 
 template <typename T>
@@ -250,9 +265,51 @@ IProto* ProtoFactory::creater() NEKO_NOEXCEPT {
     return new T();
 }
 
+namespace detail {
+class proto_method_access {
+public:
+    template <typename T>
+    static auto static_method_specify_type() NEKO_NOEXCEPT->decltype(T::specify_type()) {
+        return T::specify_type();
+    }
+};
+#define NEKO_MAKE_HAS_STATIC_METHOD_TEST1(name, test_name)                                                             \
+    namespace detail {                                                                                                 \
+    template <class T, class ResultT>                                                                                  \
+    struct has_method_##test_name##_impl {                                                                             \
+        template <class TT, class AA>                                                                                  \
+        static auto test(int)                                                                                          \
+            -> decltype(std::is_same<decltype(proto_method_access::static_method_##name<TT>()), AA>::value,            \
+                        std::true_type());                                                                             \
+        template <class, class>                                                                                        \
+        static std::false_type test(...);                                                                              \
+        static const bool value = std::is_same<decltype(test<T, ResultT>(0)), std::true_type>::value;                  \
+    };                                                                                                                 \
+    } /* end namespace detail */                                                                                       \
+    template <class T, class A>                                                                                        \
+    struct has_method_##test_name : std::integral_constant<bool, detail::has_method_##test_name##_impl<T, A>::value> { \
+    };
+
+NEKO_MAKE_HAS_STATIC_METHOD_TEST1(specify_type, specify_type)
+#undef NEKO_MAKE_HAS_STATIC_METHOD_TEST1
+template <typename ProtoT, class enable = void>
+struct declared_specify_type {
+    static void declared() {}
+};
+template <typename ProtoT>
+struct declared_specify_type<ProtoT, typename std::enable_if<has_method_specify_type<ProtoT, int>::value>::type> {
+    static void declared() NEKO_NOEXCEPT {
+        auto ret =
+            ProtoFactory::specify_proto_type<ProtoT>(proto_method_access::static_method_specify_type<ProtoT>());
+        NEKO_ASSERT(ret != -1, "proto", "type declaration failed");
+    }
+};
+} // namespace detail
+
 template <typename ProtoT, typename SerializerT>
 NEKO_STRING_VIEW ProtoBase<ProtoT, SerializerT>::kProtoName = []() NEKO_NOEXCEPT {
     NEKO_STRING_VIEW name = _class_name<ProtoT>();
+    detail::declared_specify_type<ProtoT>::declared();
     static_init_funcs(name, [name](NEKO_NAMESPACE::ProtoFactory* self) { self->regist<ProtoBaseType>(name); });
     return name;
 }();

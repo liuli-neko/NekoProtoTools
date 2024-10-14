@@ -37,6 +37,13 @@
 #elif defined(_WIN32)
 #define NEKO_USED
 #endif
+#if NEKO_CPP_PLUS >= 20
+#define NEKO_IF_LIKELY [[likely]]
+#define NEKO_IF_UNLIKELY [[unlikely]]
+#else
+#define NEKO_IF_IS_LIKELY
+#define NEKO_IF_UNLIKELY
+#endif
 #if NEKO_CPP_PLUS >= 17
 #include <string>
 #define NEKO_CONSTEXPR_FUNC         constexpr
