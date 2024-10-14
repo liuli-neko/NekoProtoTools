@@ -48,6 +48,7 @@ for _, file in ipairs(os.files("./**/test_*.cpp")) do
         add_defines("NEKO_PROTO_STATIC")
         add_options("enable_spdlog", "enable_fmt", "enable_stdformat", "enable_rapidjson", "enable_simdjson")
         add_packages("gtest")
+        set_languages("c++17")
         add_files(file, "../src/proto_base.cpp")
         -- set test in different cpp versions
         local cpp_versions = {"c++17", "c++20"}
