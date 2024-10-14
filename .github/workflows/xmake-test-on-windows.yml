@@ -1,9 +1,9 @@
 name: C/C++ CI on Windows
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: [ "master", "main", "dev"]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "master", "main", "dev"]
 jobs:
   build:
     name: Build standard
