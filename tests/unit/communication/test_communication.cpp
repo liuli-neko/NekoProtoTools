@@ -31,9 +31,6 @@ public:
 
     NEKO_SERIALIZER(timestamp, msg, numbers);
     NEKO_DECLARE_PROTOCOL(Message, JsonSerializer)
-private:
-    static int specify_type() { return 1; }
-    friend class NEKO_NAMESPACE::detail::proto_method_access;
 };
 
 std::string generate_random_string(size_t length) {
