@@ -392,6 +392,7 @@ public:
         }
         value = static_cast<T>((*mCurrentItem).value().GetUint());
         ++(*mCurrentItem);
+        return true;
     }
 
     template <typename CharT, typename Traits, typename Alloc>
