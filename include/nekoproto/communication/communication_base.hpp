@@ -68,20 +68,18 @@ class NEKO_PROTO_API MessageHeader {
 public:
     inline MessageHeader(uint32_t length = 0, int32_t data = 0, uint16_t messageType = 0)
         : length(length), data(data), messageType(messageType) {}
-    inline static int size() { return 10; }
+    inline static int size() { return 11; }
     uint32_t length = 0; // 4 : the length of the message, no't contain the header
     int32_t data    = 0; // 4 : the proto type of this message in Complete message or the slice index in Slice message
     uint16_t messageType = 0; // 2 : the type of this message
 
     template <typename SerializerT>
     bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {
-        NEKO_LOG_INFO("Communicatoin", "serialize message {}, {}, {}", length, data, messageType);
         return serializer(makeFixedLengthField(length), makeFixedLengthField(data), makeFixedLengthField(messageType));
     }
     template <typename SerializerT>
     bool serialize(SerializerT& serializer) NEKO_NOEXCEPT {
         return serializer(makeFixedLengthField(length), makeFixedLengthField(data), makeFixedLengthField(messageType));
-        NEKO_LOG_INFO("Communicatoin", "deserialize message {}, {}, {}", length, data, messageType);
     }
 
     NEKO_DECLARE_PROTOCOL(MessageHeader, BinarySerializer)
@@ -95,7 +93,7 @@ struct NEKO_PROTO_API MessageProtoMap {
     std::map<uint32_t, std::string> protoMap = {};
 
     NEKO_SERIALIZER(protoFactoryVersion, protoMap)
-    NEKO_DECLARE_PROTOCOL(MessageProtoMap, JsonSerializer)
+    NEKO_DECLARE_PROTOCOL(MessageProtoMap, BinarySerializer)
 private:
     inline static int specify_type() { return 2; }
     friend class detail::proto_method_access;
@@ -189,6 +187,7 @@ private:
     auto recvVersion(const MessageHeader& header) -> Task<void>;
     auto sendSlice(std::span<std::byte> data, const uint32_t offset) -> Task<void>;
     auto sendCancel(const uint32_t data = 0) -> Task<void>;
+    auto createProto(const uint32_t type) -> std::unique_ptr<IProto>;
 
 private:
     ProtoFactory* mFactory               = nullptr;
@@ -333,7 +332,7 @@ inline auto ProtoStreamClient<T>::recv(StreamFlag flag) -> Task<std::unique_ptr<
             co_return Unexpected<Error>(Error::Canceled);
         }
         case MessageType::VersionVerification: {
-            NEKO_LOG_INFO("Communication", "recv header: message type: VersionVerification, size: {}", mHeader.length);
+            NEKO_LOG_INFO("Communication", "recv header: message type: VersionVerification, lenght: {}", mHeader.length);
             auto ret = co_await recvVersion(mHeader);
             if (!ret) {
                 co_return Unexpected<Error>(ret.error());
@@ -341,9 +340,9 @@ inline auto ProtoStreamClient<T>::recv(StreamFlag flag) -> Task<std::unique_ptr<
             break;
         }
         case MessageType::Complete: {
-            NEKO_LOG_INFO("Communication", "recv header: message type: Complete, proto type: {}, size: {}",
+            NEKO_LOG_INFO("Communication", "recv header: message type: Complete proto type: {} lenght: {}",
                           mHeader.data, mHeader.length);
-            mMessage = mFactory->create(mHeader.data);
+            mMessage = createProto(mHeader.data);
             if (mMessage == nullptr) {
                 NEKO_LOG_ERROR("Communication", "unsupported proto type: {}", mHeader.data);
                 co_return Unexpected<Error>(Error(ErrorCode::InvalidProtoType));
@@ -359,7 +358,7 @@ inline auto ProtoStreamClient<T>::recv(StreamFlag flag) -> Task<std::unique_ptr<
         case MessageType::SliceHeader: {
             NEKO_LOG_INFO("Communication", "recv header: message type: SliceHeader, proto type: {}, size: {}",
                           mHeader.data, mHeader.length);
-            mMessage = mFactory->create(mHeader.data);
+            mMessage = createProto(mHeader.data);
             mBuffer.resize(mHeader.length);
             if (mMessage == nullptr) {
                 co_return Unexpected<Error>(Error(ErrorCode::InvalidProtoType));
@@ -441,19 +440,27 @@ inline auto ProtoStreamClient<T>::sendVersion() -> Task<void> {
     MessageProtoMap messageProtoMap     = {};
     messageProtoMap.protoFactoryVersion = mFactory->version();
     for (const auto& [name, type] : mFactory->proto_type_map()) {
-        messageProtoMap.protoMap[type] = name;
+        if (type > NEKO_RESERVED_PROTO_TYPE_SIZE) {
+            messageProtoMap.protoMap[type] = name;
+        }
     }
     std::vector<char> data;
     data.resize(MessageHeader::size());
     if (!messageProtoMap.makeProto().toData(data)) {
         co_return Unexpected<Error>(Error(ErrorCode::SerializationError));
     }
-    auto header = MessageHeader(data.size(), messageProtoMap.makeProto().type(), MessageType::VersionVerification);
+    auto header = MessageHeader(data.size() - MessageHeader::size(), messageProtoMap.makeProto().type(),
+                                MessageType::VersionVerification);
     std::vector<char> headerData;
     if (!header.makeProto().toData(headerData)) {
         co_return Unexpected<Error>(Error(ErrorCode::SerializationError));
     }
     memcpy(data.data(), headerData.data(), headerData.size());
+    NEKO_ASSERT(headerData.size() == MessageHeader::size(), "Coummunication", "header size({}) mismatch",
+                headerData.size());
+    NEKO_ASSERT(data.size() == headerData.size() + header.length, "Coummunication",
+                "data size({}) mismatch. header size({}) + data lenght({})", data.size(), headerData.size(),
+                header.length);
     auto ret = co_await sendRaw({reinterpret_cast<std::byte*>(data.data()), data.size()});
     if (!ret) {
         NEKO_LOG_WARN("Communication", "Failed to send version verification message");
@@ -482,6 +489,10 @@ inline auto ProtoStreamClient<T>::recvVersion(const MessageHeader& header) -> Ta
         NEKO_LOG_WARN("Communication", "ProtoFactory version mismatch: {} != {}", mHeader.data, mFactory->version());
     }
     mMessageProtoMap = *protoMap;
+    NEKO_LOG_INFO("Communication", "sync message proto map, version: {}.", mMessageProtoMap.protoFactoryVersion);
+    for (const auto& [type, name] : mMessageProtoMap.protoMap) {
+        NEKO_LOG_INFO("Communication", "Proto type: {} -> {}", name, type);
+    }
     co_return Result<void>();
 }
 
@@ -515,6 +526,16 @@ inline auto ProtoStreamClient<T>::sendCancel(const uint32_t data) -> Task<void> 
     }
     auto ret = co_await sendRaw({reinterpret_cast<std::byte*>(headerData.data()), headerData.size()});
     co_return Result<void>();
+}
+
+template <ILIAS_NAMESPACE::StreamClient T>
+inline auto ProtoStreamClient<T>::createProto(const uint32_t type) -> std::unique_ptr<IProto> {
+    auto it = mMessageProtoMap.protoMap.find(type);
+    if (it == mMessageProtoMap.protoMap.end()) {
+        return mFactory->create(type);
+    } else {
+        return mFactory->create(it->second.c_str());
+    }
 }
 
 template <ILIAS_NAMESPACE::StreamClient T>
@@ -577,6 +598,8 @@ public:
 
 private:
     auto sendVersion(const IPEndpoint& endpoint) -> Task<void>;
+    auto recvVersion(const MessageHeader& header) -> Task<void>;
+    auto createProto(const uint32_t type) -> std::unique_ptr<IProto>;
 
 private:
     ProtoFactory* mFactory                 = nullptr;
@@ -587,6 +610,7 @@ private:
     std::unique_ptr<IProto> mMessage       = nullptr;
     std::set<uint32_t> mSliceIdCount       = {};
     uint32_t mSliceSizeCount               = 0;
+    MessageProtoMap mMessageProtoMap       = {};
     static constexpr uint32_t gSliceSize   = 1200;
     static constexpr uint32_t gUdpMaxSize  = 65535;
 };
@@ -624,8 +648,8 @@ inline auto ProtoDatagramClient<T>::setStreamClient(ClientType&& streamClient, c
 }
 
 template <typename T>
-inline auto ProtoDatagramClient<T>::send(const IProto& message, const IPEndpoint& endpoint, StreamFlag flag)
-    -> Task<void> {
+inline auto ProtoDatagramClient<T>::send(const IProto& message, const IPEndpoint& endpoint,
+                                         StreamFlag flag) -> Task<void> {
     bool isVerify = static_cast<int>(flag & StreamFlag::VersionVerification) != 0;
     bool isThread = static_cast<int>(flag & StreamFlag::SerializerInThread) != 0;
     bool isSlice  = static_cast<int>(flag & StreamFlag::SliceData) != 0;
@@ -664,7 +688,7 @@ inline auto ProtoDatagramClient<T>::send(const IProto& message, const IPEndpoint
     }
     NEKO_ASSERT(headerData.size() == MessageHeader::size(), "Communication", "Header size error");
     memcpy(messageData.data(), headerData.data(), headerData.size());
-    NEKO_LOG_INFO("Communication", "Send header: message type:Complete proto type: {} size: {}", header.data,
+    NEKO_LOG_INFO("Communication", "Send header: message type: Complete proto type: {} size: {}", header.data,
                   header.length);
     auto ret = co_await mDatagramClient.sendto({reinterpret_cast<std::byte*>(messageData.data()), messageData.size()},
                                                endpoint);
@@ -714,17 +738,17 @@ inline auto ProtoDatagramClient<T>::recv(StreamFlag flag) -> Task<std::pair<std:
         // process header
         switch (mHeader.messageType) {
         case MessageType::VersionVerification: {
-            NEKO_LOG_INFO("Communication", "Recv header: message type: VersionVerification version: {}", mHeader.data);
-            if (mHeader.data != mFactory->version()) {
-                NEKO_LOG_WARN("Communication", "ProtoFactory version mismatch: {} != {}", mHeader.data,
-                              mFactory->version());
+            NEKO_LOG_INFO("Communication", "recv header: message type: VersionVerification, lenght: {}", mHeader.length);
+            auto ret = co_await recvVersion(mHeader);
+            if (!ret) {
+                co_return Unexpected<Error>(ret.error());
             }
             break;
         }
         case MessageType::Complete: {
-            NEKO_LOG_INFO("Communication", "Recv header: message type: Complete， proto type: {}, size: {}",
+            NEKO_LOG_INFO("Communication", "Recv header: message type: Complete proto type: {} size: {}",
                           mHeader.data, mHeader.length);
-            mMessage = mFactory->create(mHeader.data);
+            mMessage = createProto(mHeader.data);
             if (mMessage == nullptr) {
                 NEKO_LOG_ERROR("Communication", "unsupported proto type: {}", mHeader.data);
                 co_return Unexpected<Error>(Error(ErrorCode::InvalidProtoType));
@@ -777,19 +801,69 @@ inline auto ProtoDatagramClient<T>::close() -> Task<void> {
 
 template <typename T>
 inline auto ProtoDatagramClient<T>::sendVersion(const IPEndpoint& endpoint) -> Task<void> {
-    auto header = MessageHeader(0, mFactory->version(), MessageType::VersionVerification);
+    MessageProtoMap messageProtoMap     = {};
+    messageProtoMap.protoFactoryVersion = mFactory->version();
+    for (const auto& [name, type] : mFactory->proto_type_map()) {
+        if (type > NEKO_RESERVED_PROTO_TYPE_SIZE) {
+            messageProtoMap.protoMap[type] = name;
+        }
+    }
+    std::vector<char> data;
+    data.resize(MessageHeader::size());
+    if (!messageProtoMap.makeProto().toData(data)) {
+        co_return Unexpected<Error>(Error(ErrorCode::SerializationError));
+    }
+    auto header = MessageHeader(data.size() - MessageHeader::size(), messageProtoMap.makeProto().type(),
+                                MessageType::VersionVerification);
     std::vector<char> headerData;
     if (!header.makeProto().toData(headerData)) {
         co_return Unexpected<Error>(Error(ErrorCode::SerializationError));
     }
-    auto ret =
-        co_await mDatagramClient.sendto({reinterpret_cast<std::byte*>(headerData.data()), headerData.size()}, endpoint);
+    memcpy(data.data(), headerData.data(), headerData.size());
+    NEKO_ASSERT(headerData.size() == MessageHeader::size(), "Coummunication", "header size({}) mismatch",
+                headerData.size());
+    NEKO_ASSERT(data.size() == headerData.size() + header.length, "Coummunication",
+                "data size({}) mismatch. header size({}) + data lenght({})", data.size(), headerData.size(),
+                header.length);
+    auto ret = co_await mDatagramClient.sendto({reinterpret_cast<std::byte*>(data.data()), data.size()}, endpoint);
     if (!ret) {
         NEKO_LOG_WARN("Communication", "Failed to send version verification message");
         co_return Unexpected<Error>(ret.error());
     }
     NEKO_LOG_INFO("Communication", "Sent version verification message, version: {}", mFactory->version());
     co_return Result<void>();
+}
+
+template <typename T>
+inline auto ProtoDatagramClient<T>::recvVersion(const MessageHeader& header) -> Task<void> {
+    mMessage = std::make_unique<MessageProtoMap::ProtoType>();
+    if (header.data != mMessage->type()) {
+        co_return Unexpected<Error>(Error(ErrorCode::InvalidProtoType));
+    }
+    if (!mMessage->fromData(reinterpret_cast<char*>(mBuffer.data() + MessageHeader::size()),
+                            mBuffer.size() - MessageHeader::size())) {
+        co_return Unexpected<Error>(Error(ErrorCode::InvalidProtoData));
+    }
+    auto protoMap = mMessage->cast<MessageProtoMap>();
+    if (protoMap->protoFactoryVersion != mFactory->version()) {
+        NEKO_LOG_WARN("Communication", "ProtoFactory version mismatch: {} != {}", mHeader.data, mFactory->version());
+    }
+    mMessageProtoMap = *protoMap;
+    NEKO_LOG_INFO("Communication", "sync message proto map, version: {}.", mMessageProtoMap.protoFactoryVersion);
+    for (const auto& [type, name] : mMessageProtoMap.protoMap) {
+        NEKO_LOG_INFO("Communication", "Proto type: {} -> {}", name, type);
+    }
+    co_return Result<void>();
+}
+
+template <typename T>
+inline auto ProtoDatagramClient<T>::createProto(const uint32_t type) -> std::unique_ptr<IProto> {
+    auto it = mMessageProtoMap.protoMap.find(type);
+    if (it == mMessageProtoMap.protoMap.end()) {
+        return mFactory->create(type);
+    } else {
+        return mFactory->create(it->second.c_str());
+    }
 }
 
 NEKO_END_NAMESPACE
