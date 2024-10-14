@@ -27,6 +27,16 @@ template <typename T>
 struct NameValuePair;
 
 namespace detail {
+template <typename T>
+struct is_name_value_pair {
+    static constexpr bool value = false;
+};
+
+template <typename T>
+struct is_name_value_pair<NameValuePair<T>> {
+    static constexpr bool value = true;
+};
+
 class ReflectionFieldBase {
 public:
     ReflectionFieldBase() NEKO_NOEXCEPT                          = default;
@@ -173,6 +183,11 @@ private:
     template <typename T>
     inline bool process(const NameValuePair<T>& field) {
         return nullptr != mObject.bindField(NEKO_STRING_VIEW(field.name, field.nameLen), std::addressof(field.value));
+    }
+    template <typename T, typename std::enable_if<!is_name_value_pair<T>::value, char>::type = 0>
+    inline bool process(const T&) {
+        NEKO_LOG_WARN("ReflectionSerializer", "Types other than NameValuePair are not supported reflection");
+        return true;
     }
 
 private:

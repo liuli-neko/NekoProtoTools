@@ -41,7 +41,7 @@ TEST(BinarySerializer, Serialize) {
     EXPECT_EQ(buf.size(), 50);
     TestP p2;
     BinarySerializer::InputSerializer input(buf.data(), buf.size());
-    input(p2);
+    p2.serialize(input);
     EXPECT_EQ(int(p2.a), -12);
     EXPECT_EQ(p2.b, 332);
     EXPECT_EQ(p2.c, 333);

@@ -43,5 +43,5 @@ struct zTypeTest {
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size) {
     zTypeTest proto;
     std::vector<char> DataVec(Data, Data + Size);
-    return proto.makeProto().formData(DataVec);
+    return proto.makeProto().fromData(DataVec);
 }
