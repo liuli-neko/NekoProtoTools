@@ -2,9 +2,9 @@ name: CI for linux by xmake
 
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: [ "master", "main", "dev"]
   pull_request:
-    branches: [ "master", "main" ]
+    branches: [ "master", "main", "dev"]
 
 jobs:
   build-and-test:

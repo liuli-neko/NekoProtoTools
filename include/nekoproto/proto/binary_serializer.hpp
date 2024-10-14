@@ -27,7 +27,7 @@
 NEKO_BEGIN_NAMESPACE
 
 inline int16_t htobe(const int16_t value) NEKO_NOEXCEPT {
-    NEKO_LOG_INFO("binaryserializer", "htobe16");
+    // NEKO_LOG_INFO("binaryserializer", "htobe16");
 #ifdef _WIN32
     return _byteswap_ushort(value);
 #else
@@ -35,7 +35,7 @@ inline int16_t htobe(const int16_t value) NEKO_NOEXCEPT {
 #endif
 }
 inline int16_t betoh(const int16_t value) NEKO_NOEXCEPT {
-    NEKO_LOG_INFO("binaryserializer", "be16toh");
+    // NEKO_LOG_INFO("binaryserializer", "be16toh");
 #ifdef _WIN32
     return _byteswap_ushort(value);
 #else
@@ -43,7 +43,7 @@ inline int16_t betoh(const int16_t value) NEKO_NOEXCEPT {
 #endif
 }
 inline uint16_t htobe(const uint16_t value) NEKO_NOEXCEPT {
-    NEKO_LOG_INFO("binaryserializer", "htobe16");
+    // NEKO_LOG_INFO("binaryserializer", "htobe16");
 #ifdef _WIN32
     return _byteswap_ushort(value);
 #else
@@ -51,7 +51,7 @@ inline uint16_t htobe(const uint16_t value) NEKO_NOEXCEPT {
 #endif
 }
 inline uint16_t betoh(const uint16_t value) NEKO_NOEXCEPT {
-    NEKO_LOG_INFO("binaryserializer", "be16toh");
+    // NEKO_LOG_INFO("binaryserializer", "be16toh");
 #ifdef _WIN32
     return _byteswap_ushort(value);
 #else
@@ -59,7 +59,7 @@ inline uint16_t betoh(const uint16_t value) NEKO_NOEXCEPT {
 #endif
 }
 inline int32_t htobe(const int32_t value) NEKO_NOEXCEPT {
-    NEKO_LOG_INFO("binaryserializer", "htobe32");
+    // NEKO_LOG_INFO("binaryserializer", "htobe32");
 #ifdef _WIN32
     return _byteswap_ulong(value);
 #else
@@ -67,7 +67,7 @@ inline int32_t htobe(const int32_t value) NEKO_NOEXCEPT {
 #endif
 }
 inline int32_t betoh(const int32_t value) NEKO_NOEXCEPT {
-    NEKO_LOG_INFO("binaryserializer", "be32toh");
+    // NEKO_LOG_INFO("binaryserializer", "be32toh");
 #ifdef _WIN32
     return _byteswap_ulong(value);
 #else
@@ -75,7 +75,7 @@ inline int32_t betoh(const int32_t value) NEKO_NOEXCEPT {
 #endif
 }
 inline uint32_t htobe(const uint32_t value) NEKO_NOEXCEPT {
-    NEKO_LOG_INFO("binaryserializer", "htobe32");
+    // NEKO_LOG_INFO("binaryserializer", "htobe32");
 #ifdef _WIN32
     return _byteswap_ulong(value);
 #else
@@ -83,7 +83,7 @@ inline uint32_t htobe(const uint32_t value) NEKO_NOEXCEPT {
 #endif
 }
 inline uint32_t betoh(const uint32_t value) NEKO_NOEXCEPT {
-    NEKO_LOG_INFO("binaryserializer", "be32toh");
+    // NEKO_LOG_INFO("binaryserializer", "be32toh");
 #ifdef _WIN32
     return _byteswap_ulong(value);
 #else
@@ -91,7 +91,7 @@ inline uint32_t betoh(const uint32_t value) NEKO_NOEXCEPT {
 #endif
 }
 inline int64_t htobe(const int64_t value) NEKO_NOEXCEPT {
-    NEKO_LOG_INFO("binaryserializer", "htobe64");
+    // NEKO_LOG_INFO("binaryserializer", "htobe64");
 #ifdef _WIN32
     return _byteswap_uint64(value);
 #else
@@ -99,7 +99,7 @@ inline int64_t htobe(const int64_t value) NEKO_NOEXCEPT {
 #endif
 }
 inline int64_t betoh(const int64_t value) NEKO_NOEXCEPT {
-    NEKO_LOG_INFO("binaryserializer", "be64toh");
+    // NEKO_LOG_INFO("binaryserializer", "be64toh");
 #ifdef _WIN32
     return _byteswap_uint64(value);
 #else
@@ -107,7 +107,7 @@ inline int64_t betoh(const int64_t value) NEKO_NOEXCEPT {
 #endif
 }
 inline uint64_t htobe(const uint64_t value) NEKO_NOEXCEPT {
-    NEKO_LOG_INFO("binaryserializer", "htobe64");
+    // NEKO_LOG_INFO("binaryserializer", "htobe64");
 #ifdef _WIN32
     return _byteswap_uint64(value);
 #else
@@ -115,7 +115,7 @@ inline uint64_t htobe(const uint64_t value) NEKO_NOEXCEPT {
 #endif
 }
 inline uint64_t betoh(const uint64_t value) NEKO_NOEXCEPT {
-    NEKO_LOG_INFO("binaryserializer", "be64toh");
+    // NEKO_LOG_INFO("binaryserializer", "be64toh");
 #ifdef _WIN32
     return _byteswap_uint64(value);
 #else
@@ -257,7 +257,6 @@ public:
     template <typename T, traits::enable_if_t<std::is_integral<T>::value, sizeof(T) <= sizeof(int64_t),
                                               !std::is_enum<T>::value> = traits::default_value_for_enable>
     inline bool loadValue(T& value) NEKO_NOEXCEPT {
-        NEKO_LOG_INFO("BinarySerializer", "load integer");
         if (mOffset >= mSize) {
             return false;
         }
@@ -345,22 +344,15 @@ public:
     inline std::size_t offset() const { return mOffset; }
 
     bool startNode() {
-        if (mNodeStack.empty()) {
-            NEKO_LOG_INFO("BinarySerializer", "start node 1");
-            mNodeStack.push_back(1);
-            return true;
-        }
         std::size_t size;
         if (!loadValue(size)) {
             return false;
         }
-        NEKO_LOG_INFO("BinarySerializer", "start node {}", size);
         mNodeStack.push_back(size);
         return true;
     };
 
     bool finishNode() {
-        NEKO_LOG_INFO("BinarySerializer", "finish node");
         if (mNodeStack.size() == 0) {
             return false;
         }
@@ -386,10 +378,8 @@ private:
 
 public:
     FixedLengthField(T&& value) : value(std::forward<T>(value)) {}
-    template <typename Serializer>
-    bool save(Serializer& serializer) const;
-    template <typename Serializer>
-    bool load(Serializer& serializer);
+    bool save(BinaryOutputSerializer& serializer) const;
+    bool load(BinaryInputSerializer& serializer);
     Type value;
 };
 
@@ -404,9 +394,7 @@ struct BinarySerializer {
 };
 
 template <typename T, size_t Size>
-template <typename Serializer>
-inline bool FixedLengthField<T, Size>::save(Serializer& serializer) const {
-    NEKO_LOG_INFO("BinarySerializer", "save fixed length field, size: {}", Size);
+inline bool FixedLengthField<T, Size>::save(BinaryOutputSerializer& serializer) const {
     if (Size != sizeof(T)) {
         auto size = serializer.size();
         auto ret  = serializer.saveValue(value);
@@ -416,12 +404,12 @@ inline bool FixedLengthField<T, Size>::save(Serializer& serializer) const {
         return ret;
     } else {
         char buffer[Size];
-        // if (std::is_integral<typename std::remove_reference<typename std::remove_const<T>::type>::type>::value) {
-        //     auto t = htobe(value);
-        //     memcpy(buffer, &t, Size);
-        // } else {
-        memcpy(buffer, &value, Size);
-        // }
+        if (std::is_integral<typename std::remove_reference<typename std::remove_const<T>::type>::type>::value) {
+            auto t = htobe(value);
+            memcpy(buffer, &t, Size);
+        } else {
+            memcpy(buffer, &value, Size);
+        }
         for (auto& c : buffer) {
             if (!serializer.push(c)) {
                 return false;
@@ -432,9 +420,7 @@ inline bool FixedLengthField<T, Size>::save(Serializer& serializer) const {
 }
 
 template <typename T, size_t Size>
-template <typename Serializer>
-inline bool FixedLengthField<T, Size>::load(Serializer& serializer) {
-    NEKO_LOG_INFO("BinarySerializer", "load fixed length field, size: {}", Size);
+inline bool FixedLengthField<T, Size>::load(BinaryInputSerializer& serializer) {
     if (Size != sizeof(T)) {
         auto size = serializer.offset();
         auto ret  = serializer.loadValue(value);

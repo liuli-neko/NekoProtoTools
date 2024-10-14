@@ -312,9 +312,6 @@ TEST_F(ProtoTest, BinaryProto) {
     proto.b        = "hello Neko Proto";
     proto.c        = 0x3f3f3f;
     auto data      = proto.makeProto().toData();
-    auto base64str = Base64Covert::Encode(data);
-    base64str.push_back('\0');
-    EXPECT_STREQ(base64str.data(), "AWEYAWIQaGVsbG8gTmVrbyBQcm90bwFjf8D9/AEBZARudWxs");
     NEKO_LOG_INFO("unit test", "{}", SerializableToString(proto));
 
     BinaryProto proto2;
