@@ -31,6 +31,9 @@ public:
 
     NEKO_SERIALIZER(timestamp, msg, numbers);
     NEKO_DECLARE_PROTOCOL(Message, JsonSerializer)
+private:
+    static int specify_type() { return 1; }
+    friend class NEKO_NAMESPACE::detail::proto_method_access;
 };
 
 std::string generate_random_string(size_t length) {
@@ -193,7 +196,7 @@ ILIAS_NAMESPACE::Task<void> udpClient(IoContext& ioContext, ProtoFactory& protoF
     while (count--) {
         NEKO_LOG_INFO("unit test", "{}th testing...", count);
         Message msg1;
-        msg1.msg       = ("this is a message from server");
+        msg1.msg       = ("this is a message from server " + std::to_string(count));
         msg1.timestamp = (time(NULL));
         msg1.numbers   = (std::vector<int>{1, 2, 3});
         auto ret       = co_await client.send(msg1.makeProto(), endpoint, sendFlags);
@@ -210,8 +213,62 @@ ILIAS_NAMESPACE::Task<void> udpClient(IoContext& ioContext, ProtoFactory& protoF
         }
         auto msg   = std::move(ret1.value().first);
         auto proto = msg->cast<Message>();
-        NEKO_LOG_INFO("unit test", "recv successed: {}, from: {}", proto->msg, ret1.value().second.toString());
+        NEKO_LOG_INFO("unit test", "recv successed: {}, from: {}, count: {}", proto->msg, ret1.value().second.toString(), count);
     }
+    client.close();
+    NEKO_LOG_INFO("unit test", "udp test finished");
+    co_return ILIAS_NAMESPACE::Result<void>();
+}
+
+ILIAS_NAMESPACE::Task<void> udpClientPeer(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlags,
+                                      StreamFlag recvFlags, const IPEndpoint& bindPoint, const IPEndpoint& endpoint) {
+    NEKO_LOG_INFO("unit test", "testing udp client ...");
+    UdpClient udpclient(ioContext, AF_INET);
+#ifdef _WIN32
+    auto fd = udpclient.socket().get();
+    // 关闭SIO_UDP_CONNRESET
+    DWORD optionValue = FALSE; // 禁用连接重置
+    int optionLength  = sizeof(optionValue);
+    DWORD returnValue;
+    int returnLength = sizeof(returnValue);
+    DWORD lpcbBytesReturned;
+    auto wsaRet = WSAIoctl(fd, SIO_UDP_CONNRESET, &optionValue, optionLength, &returnValue, returnLength,
+                           &lpcbBytesReturned, nullptr, nullptr);
+    if (wsaRet == SOCKET_ERROR) {
+        NEKO_LOG_ERROR("unit test", "WSAIoctl fd {} failed: {}", fd,
+                       ILIAS_NAMESPACE::SystemError::fromErrno().toString());
+    }
+#endif
+    auto ret = udpclient.bind(bindPoint);
+    if (!ret) {
+        NEKO_LOG_ERROR("unit test", "udp bind failed: {}", ret.error().message());
+        co_return Unexpected(ret.error());
+    }
+    ProtoDatagramClient<UdpClient> client(protoFactory, ioContext, std::move(udpclient));
+    int count = 10;
+    while (count--) {
+        NEKO_LOG_INFO("unit test", "{}th testing...", count);
+        auto ret1 = co_await client.recv(recvFlags);
+        if (!ret1) {
+            NEKO_LOG_ERROR("unit test", "recv failed: {}", ret1.error().toString());
+            co_return Unexpected(ret1.error());
+        }
+        auto msg   = std::move(ret1.value().first);
+        auto proto = msg->cast<Message>();
+        NEKO_LOG_INFO("unit test", "recv successed: {}, from: {}, count: {}", proto->msg, ret1.value().second.toString(), count);
+        Message msg1;
+        msg1.msg       = ("this is a message from server " + std::to_string(count));
+        msg1.timestamp = (time(NULL));
+        msg1.numbers   = (std::vector<int>{1, 2, 3});
+        auto ret       = co_await client.send(msg1.makeProto(), endpoint, sendFlags);
+
+        if (!ret) {
+            NEKO_LOG_ERROR("unit test", "send failed: {}", ret.error().message());
+            co_return Unexpected(ret.error());
+        }
+    }
+    client.close();
+    NEKO_LOG_INFO("unit test", "udp test finished");
     co_return ILIAS_NAMESPACE::Result<void>();
 }
 
@@ -219,7 +276,7 @@ ILIAS_NAMESPACE::Task<void> udpTest(IoContext& ioContext, ProtoFactory& protoFac
                                     StreamFlag recvFlags) {
     auto port1        = rand() % 1000 + 10000;
     auto port2        = rand() % 1000 + 10000;
-    auto [ret1, ret2] = co_await whenAll(udpClient(ioContext, protoFactory, sendFlags, recvFlags,
+    auto [ret1, ret2] = co_await whenAll(udpClientPeer(ioContext, protoFactory, sendFlags, recvFlags,
                                                    IPEndpoint("127.0.0.1", port1), IPEndpoint("127.0.0.1", port2)),
                                          udpClient(ioContext, protoFactory, sendFlags, recvFlags,
                                                    IPEndpoint("127.0.0.1", port2), IPEndpoint("127.0.0.1", port1)));

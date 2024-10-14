@@ -91,7 +91,7 @@ protected:
 };
 
 TEST_F(ProtoTest, StructSerialize) {
-    EXPECT_EQ(factory->proto_type<TestP>(), 2);
+    EXPECT_EQ(factory->proto_type<TestP>(), NEKO_RESERVED_PROTO_TYPE_SIZE + 2);
     TestP testp;
     testp.a = 3;
     testp.b = "Struct test";
