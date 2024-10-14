@@ -329,6 +329,7 @@ TEST_F(Communication, UdpNone) { ilias_wait udpTest(ioContext, protoFactory, Str
 
 int main(int argc, char** argv) {
     // ILIAS_LOG_SET_LEVEL(ILIAS_TRACE_LEVEL);
+    NEKO_LOG_INCLUDE("communication");
     // installLogger([](const char* level, const char* msg, const logContext& ctxt) {
     //     std::cout << level << ": " << msg << std::endl;
     // });
