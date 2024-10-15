@@ -179,6 +179,7 @@ public:
     auto send(const IProto& message, StreamFlag flag = StreamFlag::None) -> Task<void>;
     auto recv(StreamFlag flag = StreamFlag::None) -> Task<std::unique_ptr<IProto>>;
     auto close() -> Task<void>;
+    auto setProtoMap(const uint32_t version, const std::map<uint32_t, std::string>& protoMap) -> void;
 
 private:
     auto sendRaw(std::span<std::byte> data) -> Task<void>;
@@ -332,7 +333,8 @@ inline auto ProtoStreamClient<T>::recv(StreamFlag flag) -> Task<std::unique_ptr<
             co_return Unexpected<Error>(Error::Canceled);
         }
         case MessageType::VersionVerification: {
-            NEKO_LOG_INFO("Communication", "recv header: message type: VersionVerification, lenght: {}", mHeader.length);
+            NEKO_LOG_INFO("Communication", "recv header: message type: VersionVerification, lenght: {}",
+                          mHeader.length);
             auto ret = co_await recvVersion(mHeader);
             if (!ret) {
                 co_return Unexpected<Error>(ret.error());
@@ -544,6 +546,12 @@ inline auto ProtoStreamClient<T>::close() -> Task<void> {
 }
 
 template <ILIAS_NAMESPACE::StreamClient T>
+inline auto ProtoStreamClient<T>::setProtoMap(const uint32_t version,
+                                              const std::map<uint32_t, std::string>& protoMap) -> void {
+    mMessageProtoMap = MessageProtoMap {version, protoMap};
+}
+
+template <ILIAS_NAMESPACE::StreamClient T>
 inline auto ProtoStreamClient<T>::sendRaw(std::span<std::byte> data) -> Task<void> {
     int sended = 0;
     while (sended < data.size()) {
@@ -595,6 +603,7 @@ public:
     auto send(const IProto& message, const IPEndpoint& endpoint, StreamFlag flag = StreamFlag::None) -> Task<void>;
     auto recv(StreamFlag flag = StreamFlag::None) -> Task<std::pair<std::unique_ptr<IProto>, IPEndpoint>>;
     auto close() -> Task<void>;
+    auto setProtoMap(const uint32_t version, const std::map<uint32_t, std::string>& protoMap) -> void;
 
 private:
     auto sendVersion(const IPEndpoint& endpoint) -> Task<void>;
@@ -648,8 +657,8 @@ inline auto ProtoDatagramClient<T>::setStreamClient(ClientType&& streamClient, c
 }
 
 template <typename T>
-inline auto ProtoDatagramClient<T>::send(const IProto& message, const IPEndpoint& endpoint,
-                                         StreamFlag flag) -> Task<void> {
+inline auto ProtoDatagramClient<T>::send(const IProto& message, const IPEndpoint& endpoint, StreamFlag flag)
+    -> Task<void> {
     bool isVerify = static_cast<int>(flag & StreamFlag::VersionVerification) != 0;
     bool isThread = static_cast<int>(flag & StreamFlag::SerializerInThread) != 0;
     bool isSlice  = static_cast<int>(flag & StreamFlag::SliceData) != 0;
@@ -738,7 +747,8 @@ inline auto ProtoDatagramClient<T>::recv(StreamFlag flag) -> Task<std::pair<std:
         // process header
         switch (mHeader.messageType) {
         case MessageType::VersionVerification: {
-            NEKO_LOG_INFO("Communication", "recv header: message type: VersionVerification, lenght: {}", mHeader.length);
+            NEKO_LOG_INFO("Communication", "recv header: message type: VersionVerification, lenght: {}",
+                          mHeader.length);
             auto ret = co_await recvVersion(mHeader);
             if (!ret) {
                 co_return Unexpected<Error>(ret.error());
@@ -746,8 +756,8 @@ inline auto ProtoDatagramClient<T>::recv(StreamFlag flag) -> Task<std::pair<std:
             break;
         }
         case MessageType::Complete: {
-            NEKO_LOG_INFO("Communication", "Recv header: message type: Complete proto type: {} size: {}",
-                          mHeader.data, mHeader.length);
+            NEKO_LOG_INFO("Communication", "Recv header: message type: Complete proto type: {} size: {}", mHeader.data,
+                          mHeader.length);
             mMessage = createProto(mHeader.data);
             if (mMessage == nullptr) {
                 NEKO_LOG_ERROR("Communication", "unsupported proto type: {}", mHeader.data);
@@ -797,6 +807,12 @@ template <typename T>
 inline auto ProtoDatagramClient<T>::close() -> Task<void> {
     mDatagramClient.close();
     co_return Result<void>{};
+}
+
+template <typename T>
+inline auto ProtoDatagramClient<T>::setProtoMap(const uint32_t version,
+                                                const std::map<uint32_t, std::string>& protoMap) -> void {
+    mMessageProtoMap = MessageProtoMap{version, protoMap};
 }
 
 template <typename T>

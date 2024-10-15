@@ -353,7 +353,7 @@ I think I should not spend too much time designing and maintaining protocol libr
 - [x] support more cpp stl types
 
 **communication**
-- [ ] support udp protocol in communication channel
+- [x] support udp protocol in communication channel
 - [ ] support more protocol in communication channel
 
 ### 6. the future
@@ -362,13 +362,15 @@ I think I should not spend too much time designing and maintaining protocol libr
     - NameValuePair, SizeTag, etc while are special struct unable to auto enter the object. because they are not a real object. Other class whitout minimal_serializable trait will be auto enter 1 level before process it.
     - support simdjson backend (now noly under simdjson::dom namespace), it only support input serializer, Slightly faster than rapidjson backend.
 - support almost all stl types
-
-### v0.2.1
 - add std::optional support
 - add simdjson output serializer support
 - refactory communication interface, make it more easy to use.
 - serializer in communication can be processed in other thread easyly.
 - more options to control feature enable and log output
+- support udp protocol in communication channel
+- support syncronize protocol table (should be compatible with the same name protocol)
+- reserved 1-64 protocol type for control information transmission
+- fix some serialization problems in binary protocol
 
 #### v0.2.0 - alpha
 - Modify serializer interface
