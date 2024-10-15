@@ -14,11 +14,6 @@
 #include <ilias/task.hpp>
 #include <regex>
 
-#ifdef NEKO_COMMUNICATION_DEBUG
-#include "nekoproto/proto/to_string.hpp"
-#include "nekoproto/proto/types/binary_data.hpp"
-#endif
-
 using namespace ILIAS_NAMESPACE;
 
 NEKO_BEGIN_NAMESPACE

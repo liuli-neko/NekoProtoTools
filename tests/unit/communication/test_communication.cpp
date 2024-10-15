@@ -62,42 +62,48 @@ std::string to_string(const T& value) {
 ILIAS_NAMESPACE::Task<void> ClientLoop(ILIAS_NAMESPACE::IoContext& ioContext, ProtoFactory& protoFactory,
                                        StreamFlag sendFlag, StreamFlag recvFlag) {
     TcpClient tcpClient(ioContext, AF_INET);
-    NEKO_LOG_INFO("unit test", "Client connect to service");
+    NEKO_LOG_DEBUG("unit test", "Client connect to service");
     auto ret = co_await tcpClient.connect(IPEndpoint("127.0.0.1", 12345));
     if (!ret) {
         co_return Unexpected(ret.error());
     }
     tcpClient.setOption(TcpNoDelay(true));
     ProtoStreamClient<TcpClient> client(protoFactory, ioContext, std::move(tcpClient));
-    NEKO_LOG_INFO("unit test", "Client loop started");
+    NEKO_LOG_DEBUG("unit test", "Client loop started");
     const size_t desiredSize = 10 * 1024; // 1MB
     int count                = 10;
     while (count-- > 0) {
-        NEKO_LOG_INFO("unit test", "start {}th send test", count);
+        NEKO_LOG_DEBUG("unit test", "start {}th send test", count);
         Message msg;
         msg.msg       = generate_random_string(desiredSize);
         msg.timestamp = time(NULL);
         msg.numbers   = (std::vector<int>{1, 2, 3, 5});
         auto ret1     = co_await client.send(msg.makeProto(), sendFlag);
         if (!ret1) {
-            NEKO_LOG_ERROR("unit test", "send failed: {}", ret1.error().message());
+            NEKO_LOG_DEBUG("unit test", "send failed: {}", ret1.error().message());
             co_return Unexpected(ret1.error());
         }
-        NEKO_LOG_INFO("unit test", "send message: timestamp: {}, msg: {} numbers: {}", msg.timestamp,
+        NEKO_LOG_DEBUG("unit test", "send message: timestamp: {}, msg: {} numbers: {}", msg.timestamp,
                       msg.msg.substr(0, 20) + "...", to_string(msg.numbers));
         auto ret = co_await client.recv(recvFlag);
         if (!ret) {
-            NEKO_LOG_ERROR("unit test", "recv failed: {}", ret.error().message());
+            NEKO_LOG_DEBUG("unit test", "recv failed: {}", ret.error().message());
             co_return Unexpected(ret.error());
         }
         auto retMsg = std::move(ret.value());
         auto msg1   = retMsg->cast<Message>();
         if (msg1) {
-            NEKO_LOG_INFO("unit test", "recv success: timestamp: {} msg: {} numbers: {}", msg1->timestamp,
+            NEKO_LOG_DEBUG("unit test", "recv success: timestamp: {} msg: {} numbers: {}", msg1->timestamp,
                           msg1->msg.substr(0, 20) + "...", to_string(msg1->numbers));
         } else {
             EXPECT_TRUE(false);
         }
+    }
+    if (static_cast<int>(sendFlag & StreamFlag::VersionVerification)) {
+        const auto& protoTable = client.getProtoTable();
+        EXPECT_EQ(protoTable.protocolFactoryVersion, 1);
+        EXPECT_EQ(protoTable.protoTable.size(), 1);
+        EXPECT_STREQ(protoTable.protoTable.begin()->second.c_str(), "Message");
     }
     co_return co_await client.close();
 }
@@ -105,24 +111,25 @@ ILIAS_NAMESPACE::Task<void> ClientLoop(ILIAS_NAMESPACE::IoContext& ioContext, Pr
 ILIAS_NAMESPACE::Task<void> HandleLoop(ProtoStreamClient<TcpClient>&& _client, StreamFlag sendFlag,
                                        StreamFlag recvFlag) {
     ProtoStreamClient<TcpClient> client(std::move(_client));
+    const size_t desiredSize = 10 * 1024; // 1MB
     while (true) {
-        NEKO_LOG_INFO("unit test", "HandleLoop");
+        NEKO_LOG_DEBUG("unit test", "HandleLoop");
         auto ret = co_await client.recv(recvFlag);
         if (!ret) {
-            NEKO_LOG_ERROR("unit test", "recv failed: {}", ret.error().toString());
+            NEKO_LOG_DEBUG("unit test", "recv failed: {}", ret.error().toString());
             co_await client.close();
             co_return Unexpected(ret.error());
         }
         auto retMsg = std::shared_ptr<IProto>(ret.value().release());
         auto msg    = retMsg->cast<Message>();
         if (msg) {
-            NEKO_LOG_INFO("unit test", "recv success: timestamp: {}  msg: {}  numbers: {}", msg->timestamp,
+            NEKO_LOG_DEBUG("unit test", "recv success: timestamp: {}  msg: {}  numbers: {}", msg->timestamp,
                           msg->msg.substr(0, 20) + "...", to_string(msg->numbers));
         } else {
             EXPECT_TRUE(false);
         }
         Message msg1;
-        msg1.msg       = ("this is a message from server");
+        msg1.msg       = generate_random_string(desiredSize);
         msg1.timestamp = (time(NULL));
         msg1.numbers   = (std::vector<int>{1, 2, 3});
         auto ret1      = co_await client.send(msg->makeProto(), sendFlag);
@@ -130,8 +137,14 @@ ILIAS_NAMESPACE::Task<void> HandleLoop(ProtoStreamClient<TcpClient>&& _client, S
             co_await client.close();
             co_return Unexpected(ret1.error());
         }
-        NEKO_LOG_INFO("unit test", "send message: timestamp: {}, msg: {} numbers: {}", msg1.timestamp,
+        NEKO_LOG_DEBUG("unit test", "send message: timestamp: {}, msg: {} numbers: {}", msg1.timestamp,
                       msg1.msg.substr(0, 20) + "...", to_string(msg1.numbers));
+    }
+    if (static_cast<int>(sendFlag & StreamFlag::VersionVerification)) {
+        const auto& protoTable = client.getProtoTable();
+        EXPECT_EQ(protoTable.protocolFactoryVersion, 1);
+        EXPECT_EQ(protoTable.protoTable.size(), 1);
+        EXPECT_STREQ(protoTable.protoTable.begin()->second.c_str(), "Message");
     }
     co_return co_await client.close();
 }
@@ -139,14 +152,14 @@ ILIAS_NAMESPACE::Task<void> HandleLoop(ProtoStreamClient<TcpClient>&& _client, S
 ILIAS_NAMESPACE::Task<void> serverLoop(IoContext& ioContext, ProtoFactory& protoFactor, StreamFlag sendFlag,
                                        StreamFlag recvFlag) {
     TcpListener listener(ioContext, AF_INET);
-    NEKO_LOG_INFO("unit test", "serverLoop");
+    NEKO_LOG_DEBUG("unit test", "serverLoop");
     listener.bind(IPEndpoint("127.0.0.1", 12345));
     auto ret = co_await listener.accept();
     if (!ret) {
-        NEKO_LOG_ERROR("unit test", "accept failed: {}", ret.error().message());
+        NEKO_LOG_DEBUG("unit test", "accept failed: {}", ret.error().message());
         co_return Unexpected(ret.error());
     }
-    NEKO_LOG_INFO("unit test", "accept successed");
+    NEKO_LOG_DEBUG("unit test", "accept successed");
     ret.value().first.setOption(TcpNoDelay(true));
     auto ret1 = co_await HandleLoop(
         ProtoStreamClient<ilias::TcpClient>(protoFactor, ioContext, std::move(ret.value().first)), sendFlag, recvFlag);
@@ -166,7 +179,7 @@ ILIAS_NAMESPACE::Task<void> test(IoContext& ioContext, ProtoFactory& protoFactor
 
 ILIAS_NAMESPACE::Task<void> udpClient(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlags,
                                       StreamFlag recvFlags, const IPEndpoint& bindPoint, const IPEndpoint& endpoint) {
-    NEKO_LOG_INFO("unit test", "testing udp client ...");
+    NEKO_LOG_DEBUG("unit test", "testing udp client ...");
     UdpClient udpclient(ioContext, AF_INET);
 #ifdef _WIN32
     auto fd = udpclient.socket().get();
@@ -179,19 +192,19 @@ ILIAS_NAMESPACE::Task<void> udpClient(IoContext& ioContext, ProtoFactory& protoF
     auto wsaRet = WSAIoctl(fd, SIO_UDP_CONNRESET, &optionValue, optionLength, &returnValue, returnLength,
                            &lpcbBytesReturned, nullptr, nullptr);
     if (wsaRet == SOCKET_ERROR) {
-        NEKO_LOG_ERROR("unit test", "WSAIoctl fd {} failed: {}", fd,
+        NEKO_LOG_DEBUG("unit test", "WSAIoctl fd {} failed: {}", fd,
                        ILIAS_NAMESPACE::SystemError::fromErrno().toString());
     }
 #endif
     auto ret = udpclient.bind(bindPoint);
     if (!ret) {
-        NEKO_LOG_ERROR("unit test", "udp bind failed: {}", ret.error().message());
+        NEKO_LOG_DEBUG("unit test", "udp bind failed: {}", ret.error().message());
         co_return Unexpected(ret.error());
     }
     ProtoDatagramClient<UdpClient> client(protoFactory, ioContext, std::move(udpclient));
     int count = 10;
     while (count--) {
-        NEKO_LOG_INFO("unit test", "{}th testing...", count);
+        NEKO_LOG_DEBUG("unit test", "{}th testing...", count);
         Message msg1;
         msg1.msg       = ("this is a message from server " + std::to_string(count));
         msg1.timestamp = (time(NULL));
@@ -199,27 +212,35 @@ ILIAS_NAMESPACE::Task<void> udpClient(IoContext& ioContext, ProtoFactory& protoF
         auto ret       = co_await client.send(msg1.makeProto(), endpoint, sendFlags);
 
         if (!ret) {
-            NEKO_LOG_ERROR("unit test", "send failed: {}", ret.error().message());
+            NEKO_LOG_DEBUG("unit test", "send failed: {}", ret.error().message());
             co_return Unexpected(ret.error());
         }
 
         auto ret1 = co_await client.recv(recvFlags);
         if (!ret1) {
-            NEKO_LOG_ERROR("unit test", "recv failed: {}", ret1.error().toString());
+            NEKO_LOG_DEBUG("unit test", "recv failed: {}", ret1.error().toString());
             co_return Unexpected(ret1.error());
         }
         auto msg   = std::move(ret1.value().first);
         auto proto = msg->cast<Message>();
-        NEKO_LOG_INFO("unit test", "recv successed: {}, from: {}, count: {}", proto->msg, ret1.value().second.toString(), count);
+        NEKO_LOG_DEBUG("unit test", "recv successed: {}, from: {}, count: {}", proto->msg,
+                      ret1.value().second.toString(), count);
+    }
+    if (static_cast<int>(sendFlags & StreamFlag::VersionVerification)) {
+        const auto& protoTable = client.getProtoTable();
+        EXPECT_EQ(protoTable.protocolFactoryVersion, 1);
+        EXPECT_EQ(protoTable.protoTable.size(), 1);
+        EXPECT_STREQ(protoTable.protoTable.begin()->second.c_str(), "Message");
     }
     client.close();
-    NEKO_LOG_INFO("unit test", "udp test finished");
+    NEKO_LOG_DEBUG("unit test", "udp test finished");
     co_return ILIAS_NAMESPACE::Result<void>();
 }
 
 ILIAS_NAMESPACE::Task<void> udpClientPeer(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlags,
-                                      StreamFlag recvFlags, const IPEndpoint& bindPoint, const IPEndpoint& endpoint) {
-    NEKO_LOG_INFO("unit test", "testing udp client ...");
+                                          StreamFlag recvFlags, const IPEndpoint& bindPoint,
+                                          const IPEndpoint& endpoint) {
+    NEKO_LOG_DEBUG("unit test", "testing udp client ...");
     UdpClient udpclient(ioContext, AF_INET);
 #ifdef _WIN32
     auto fd = udpclient.socket().get();
@@ -232,27 +253,28 @@ ILIAS_NAMESPACE::Task<void> udpClientPeer(IoContext& ioContext, ProtoFactory& pr
     auto wsaRet = WSAIoctl(fd, SIO_UDP_CONNRESET, &optionValue, optionLength, &returnValue, returnLength,
                            &lpcbBytesReturned, nullptr, nullptr);
     if (wsaRet == SOCKET_ERROR) {
-        NEKO_LOG_ERROR("unit test", "WSAIoctl fd {} failed: {}", fd,
+        NEKO_LOG_DEBUG("unit test", "WSAIoctl fd {} failed: {}", fd,
                        ILIAS_NAMESPACE::SystemError::fromErrno().toString());
     }
 #endif
     auto ret = udpclient.bind(bindPoint);
     if (!ret) {
-        NEKO_LOG_ERROR("unit test", "udp bind failed: {}", ret.error().message());
+        NEKO_LOG_DEBUG("unit test", "udp bind failed: {}", ret.error().message());
         co_return Unexpected(ret.error());
     }
     ProtoDatagramClient<UdpClient> client(protoFactory, ioContext, std::move(udpclient));
     int count = 10;
     while (count--) {
-        NEKO_LOG_INFO("unit test", "{}th testing...", count);
+        NEKO_LOG_DEBUG("unit test", "{}th testing...", count);
         auto ret1 = co_await client.recv(recvFlags);
         if (!ret1) {
-            NEKO_LOG_ERROR("unit test", "recv failed: {}", ret1.error().toString());
+            NEKO_LOG_DEBUG("unit test", "recv failed: {}", ret1.error().toString());
             co_return Unexpected(ret1.error());
         }
         auto msg   = std::move(ret1.value().first);
         auto proto = msg->cast<Message>();
-        NEKO_LOG_INFO("unit test", "recv successed: {}, from: {}, count: {}", proto->msg, ret1.value().second.toString(), count);
+        NEKO_LOG_DEBUG("unit test", "recv successed: {}, from: {}, count: {}", proto->msg,
+                      ret1.value().second.toString(), count);
         Message msg1;
         msg1.msg       = ("this is a message from server " + std::to_string(count));
         msg1.timestamp = (time(NULL));
@@ -260,12 +282,18 @@ ILIAS_NAMESPACE::Task<void> udpClientPeer(IoContext& ioContext, ProtoFactory& pr
         auto ret       = co_await client.send(msg1.makeProto(), endpoint, sendFlags);
 
         if (!ret) {
-            NEKO_LOG_ERROR("unit test", "send failed: {}", ret.error().message());
+            NEKO_LOG_DEBUG("unit test", "send failed: {}", ret.error().message());
             co_return Unexpected(ret.error());
         }
     }
+    if (static_cast<int>(sendFlags & StreamFlag::VersionVerification)) {
+        const auto& protoTable = client.getProtoTable();
+        EXPECT_EQ(protoTable.protocolFactoryVersion, 1);
+        EXPECT_EQ(protoTable.protoTable.size(), 1);
+        EXPECT_STREQ(protoTable.protoTable.begin()->second.c_str(), "Message");
+    }
     client.close();
-    NEKO_LOG_INFO("unit test", "udp test finished");
+    NEKO_LOG_DEBUG("unit test", "udp test finished");
     co_return ILIAS_NAMESPACE::Result<void>();
 }
 
@@ -274,14 +302,14 @@ ILIAS_NAMESPACE::Task<void> udpTest(IoContext& ioContext, ProtoFactory& protoFac
     auto port1        = rand() % 1000 + 10000;
     auto port2        = rand() % 1000 + 10000;
     auto [ret1, ret2] = co_await whenAll(udpClientPeer(ioContext, protoFactory, sendFlags, recvFlags,
-                                                   IPEndpoint("127.0.0.1", port1), IPEndpoint("127.0.0.1", port2)),
+                                                       IPEndpoint("127.0.0.1", port1), IPEndpoint("127.0.0.1", port2)),
                                          udpClient(ioContext, protoFactory, sendFlags, recvFlags,
                                                    IPEndpoint("127.0.0.1", port2), IPEndpoint("127.0.0.1", port1)));
     if (!ret1) {
-        NEKO_LOG_ERROR("unit test", "udp test failed: {}", ret1.error().message());
+        NEKO_LOG_DEBUG("unit test", "udp test failed: {}", ret1.error().message());
     }
     if (!ret2) {
-        NEKO_LOG_ERROR("unit test", "udp test failed: {}", ret2.error().message());
+        NEKO_LOG_DEBUG("unit test", "udp test failed: {}", ret2.error().message());
     }
     co_return ILIAS_NAMESPACE::Result<void>();
 }
@@ -329,7 +357,9 @@ TEST_F(Communication, UdpNone) { ilias_wait udpTest(ioContext, protoFactory, Str
 
 int main(int argc, char** argv) {
     // ILIAS_LOG_SET_LEVEL(ILIAS_TRACE_LEVEL);
-    NEKO_LOG_INCLUDE("communication");
+    // NEKO_LOG_INCLUDE("communication");
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
     // installLogger([](const char* level, const char* msg, const logContext& ctxt) {
     //     std::cout << level << ": " << msg << std::endl;
     // });

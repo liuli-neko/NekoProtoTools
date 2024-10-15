@@ -97,6 +97,8 @@ struct zTypeTest1 {
 
 int main(int argc, char** argv) {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
     testing::InitGoogleTest(&argc, argv);
     std::string str = "{\"a\":3,\"b\":\"Struct "
                       "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
@@ -145,7 +147,7 @@ int main(int argc, char** argv) {
     TestP tp2;
     tp2.makeProto() = testp;
     EXPECT_STREQ(SerializableToString(testp).c_str(), SerializableToString(tp2).c_str());
-    NEKO_LOG_INFO("unit test", "{}", SerializableToString(testp));
+    NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(testp));
 
     std::vector<char> outbuf;
     {
@@ -153,7 +155,7 @@ int main(int argc, char** argv) {
         out(tp2);
     }
     outbuf.push_back('\0');
-    NEKO_LOG_INFO("unit test", "{}", outbuf.data());
+    NEKO_LOG_DEBUG("unit test", "{}", outbuf.data());
 
     {
         TestP tp3;
