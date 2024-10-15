@@ -174,10 +174,12 @@ public:
         return true;
     }
     inline bool saveValue(const std::string& value) NEKO_NOEXCEPT {
+        NEKO_LOG_INFO("BinarySerializer", "save string({})", value);
         mBuffer.insert(mBuffer.end(), value.begin(), value.end());
         return true;
     }
     inline bool saveValue(const char* value) NEKO_NOEXCEPT {
+        NEKO_LOG_INFO("BinarySerializer", "save string({})", value);
         uint32_t size = strlen(value);
         mBuffer.insert(mBuffer.end(), value, value + size);
         return true;
@@ -185,12 +187,14 @@ public:
     inline bool saveValue(const std::nullptr_t) NEKO_NOEXCEPT { return saveValue("null"); }
 #if NEKO_CPP_PLUS >= 17
     inline bool saveValue(const std::string_view value) NEKO_NOEXCEPT {
+        NEKO_LOG_INFO("BinarySerializer", "save string_view({})", value);
         mBuffer.insert(mBuffer.end(), value.begin(), value.end());
         return true;
     }
 #endif
     template <typename T>
     inline bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
+        NEKO_LOG_INFO("BinarySerializer", "save name({}) value pair", NEKO_STRING_VIEW{value.name, value.nameLen});
         return this->operator()(NEKO_STRING_VIEW{value.name, value.nameLen}) && this->operator()(value.value);
     }
     // as serializer(makeSizeTag(size));
@@ -504,7 +508,8 @@ inline bool epilogue(BinaryOutputSerializer& sa, const FixedLengthField<T>& valu
 // #########################################################
 // class apart from name value pair, size tag, std::string, NEKO_STRING_VIEW
 template <class T, traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::value,
-          !traits::has_method_const_serialize<T, BinaryOutputSerializer>::value> = traits::default_value_for_enable>
+                                       !traits::has_method_const_serialize<T, BinaryOutputSerializer>::value> =
+                       traits::default_value_for_enable>
 inline bool prologue(BinaryInputSerializer& sa, const T&) NEKO_NOEXCEPT {
     return sa.startNode();
 }
