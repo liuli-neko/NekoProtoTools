@@ -12,6 +12,7 @@
 
 #include <stdint.h>
 
+#include <map>
 #include <vector>
 #ifndef _WIN32
 #include <arpa/inet.h>
@@ -250,6 +251,7 @@ public:
         }
         value.resize(size);
         std::copy(mBuffer + mOffset, mBuffer + mOffset + size, value.begin());
+        NEKO_LOG_INFO("BinarySerializer", "Load string: {}", value);
         mOffset += size;
         return true;
     }
@@ -313,12 +315,11 @@ public:
 
     template <typename T>
     inline bool loadValue(const SizeTag<T>& value) NEKO_NOEXCEPT {
-        NEKO_LOG_INFO("BinarySerializer", "load size tag");
-        if (mNodeStack.size()) {
-            value.size = mNodeStack.back();
-            return true;
+        if (!loadValue(value.size)) {
+            return false;
         }
-        return false;
+        NEKO_LOG_INFO("BinarySerializer", "load size tag {}", value.size);
+        return true;
     }
 
     template <typename T>
@@ -344,19 +345,12 @@ public:
     inline std::size_t offset() const { return mOffset; }
 
     bool startNode() {
-        std::size_t size;
-        if (!loadValue(size)) {
-            return false;
-        }
-        mNodeStack.push_back(size);
+        NEKO_LOG_INFO("BinarySerializer", "start node");
         return true;
     };
 
     bool finishNode() {
-        if (mNodeStack.size() == 0) {
-            return false;
-        }
-        mNodeStack.pop_back();
+        NEKO_LOG_INFO("BinarySerializer", "finish node");
         return true;
     }
 
@@ -368,7 +362,6 @@ private:
     const char* mBuffer;
     std::size_t mSize;
     std::size_t mOffset = 0;
-    std::vector<int> mNodeStack;
 };
 
 template <typename T, size_t Size = sizeof(T)>
@@ -510,12 +503,13 @@ inline bool epilogue(BinaryOutputSerializer& sa, const FixedLengthField<T>& valu
 
 // #########################################################
 // class apart from name value pair, size tag, std::string, NEKO_STRING_VIEW
-template <class T, traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::value> =
-                       traits::default_value_for_enable>
+template <class T, traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::value,
+          !traits::has_method_const_serialize<T, BinaryOutputSerializer>::value> = traits::default_value_for_enable>
 inline bool prologue(BinaryInputSerializer& sa, const T&) NEKO_NOEXCEPT {
     return sa.startNode();
 }
-template <typename T, traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::value> =
+template <typename T, traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::value,
+                                          !traits::has_method_const_serialize<T, BinaryOutputSerializer>::value> =
                           traits::default_value_for_enable>
 inline bool epilogue(BinaryInputSerializer& sa, const T&) NEKO_NOEXCEPT {
     return sa.finishNode();
@@ -547,6 +541,21 @@ template <typename T, traits::enable_if_t<traits::has_method_const_serialize<T, 
                           traits::default_value_for_enable>
 inline bool epilogue(BinaryOutputSerializer& sa, const T&) NEKO_NOEXCEPT {
     return sa.endObject();
+}
+
+template <typename T, traits::enable_if_t<traits::has_method_const_serialize<T, BinaryInputSerializer>::value ||
+                                          traits::has_method_serialize<T, BinaryInputSerializer>::value> =
+                          traits::default_value_for_enable>
+inline bool prologue(BinaryInputSerializer& sa, const T&) NEKO_NOEXCEPT {
+    std::size_t size;
+    sa(makeSizeTag(size));
+    return sa.startNode() && size == 1;
+}
+template <typename T, traits::enable_if_t<traits::has_method_const_serialize<T, BinaryInputSerializer>::value ||
+                                          traits::has_method_serialize<T, BinaryInputSerializer>::value> =
+                          traits::default_value_for_enable>
+inline bool epilogue(BinaryInputSerializer& sa, const T&) NEKO_NOEXCEPT {
+    return sa.finishNode();
 }
 
 // #########################################################
