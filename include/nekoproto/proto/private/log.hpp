@@ -78,6 +78,9 @@ inline std::string to_lower(const std::string& str) {
     ANSI_COLOR(lightcyan, "\033[96m")                                                                                  \
     ANSI_COLOR(white, "\033[97m")
 
+#ifdef NEKO_LOG_NO_COLOR
+iline const char* ansi_color_code(const char*) { return ""; }
+#else
 inline const char* ansi_color_code(const char* name) {
 #define ANSI_COLOR(color, code)                                                                                        \
     if (strcmp(to_lower(name).c_str(), #color) == 0) return code;
@@ -85,12 +88,37 @@ inline const char* ansi_color_code(const char* name) {
     return "";
 }
 #undef ANSI_COLOR
+#endif
 #undef ANSI_COLOR_TABLE
 
 enum log_fliter_mode {
     FilterInclude,
     FilterExclude,
 };
+inline bool log_level_filter(const std::string& level, int op) {
+    static std::vector<std::string> levels = {"fatal", "error", "warn", "info"};
+    static std::set<std::string> filter    = {"fatal", "error", "warn"};
+    if (op == 0) {
+        if (level == "debug") {
+            filter.insert("debug");
+        } else {
+            filter.clear();
+            for (const auto& l : levels) {
+                if (l != level) {
+                    filter.insert(l);
+                } else {
+                    filter.insert(l);
+                    break;
+                }
+            }
+        }
+    } else if (op == 1) {
+        if (filter.find(level) == filter.end()) return false;
+    } else {
+        if (filter.find(level) != filter.end()) return false;
+    }
+    return true;
+}
 inline std::tuple<int, std::set<std::string>>& log_filter(int opt, int flag = FilterInclude,
                                                           const std::string& module = "") {
     static std::tuple<int, std::set<std::string>> neko_log_filter = {FilterExclude, {}};
@@ -116,6 +144,9 @@ inline void add_log_filter(const int flag, Args&&... args) {
 inline void neko_proto_private_log_out(const char* level, const char* message, const logContext& context) {
     if (loggerFunc() != nullptr) {
         loggerFunc()(level, message, context);
+        return;
+    }
+    if (!log_level_filter(level, 1)) {
         return;
     }
     auto& [flag, filters] = log_filter(1);
@@ -152,10 +183,16 @@ inline void neko_proto_private_log_out(const char* level, const char* message, c
 }
 } // namespace logdetail
 NEKO_END_NAMESPACE
+#define NEKO_LOG_LEVEL_DEBUG "debug"
+#define NEKO_LOG_LEVEL_INFO  "info"
+#define NEKO_LOG_LEVEL_WARN  "warn"
+#define NEKO_LOG_LEVEL_ERROR "error"
+#define NEKO_LOG_LEVEL_FATAL "fatal"
 #define NEKO_LOG_INCLUDE(module, ...)                                                                                  \
     NEKO_NAMESPACE::logdetail::add_log_filter(NEKO_NAMESPACE::logdetail::FilterInclude, module, ##__VA_ARGS__)
 #define NEKO_LOG_EXCLUDE(module, ...)                                                                                  \
     NEKO_NAMESPACE::logdetail::add_log_filter(NEKO_NAMESPACE::logdetail::FilterExclude, module, ##__VA_ARGS__)
+#define NEKO_LOG_SET_LEVEL(level) NEKO_NAMESPACE::logdetail::log_level_filter(level, 0)
 #if defined(NEKO_PROTO_USE_FMT)
 #include <fmt/format.h>
 #define NEKO_PRIVATE_LOG(level, color, module, fmtstr, ...)                                                            \
@@ -177,26 +214,35 @@ NEKO_END_NAMESPACE
 #endif
 #else
 #define NEKO_PRIVATE_LOG(...)
-#define NEKO_LOG_FILTER(...)
+#define NEKO_LOG_LEVEL_DEBUG
+#define NEKO_LOG_LEVEL_INFO
+#define NEKO_LOG_LEVEL_WARN
+#define NEKO_LOG_LEVEL_ERROR
+#define NEKO_LOG_LEVEL_FATAL
+#define NEKO_LOG_INCLUDE(...)
+#define NEKO_LOG_EXCLUDE(...)
+#define NEKO_LOG_SET_LEVEL(...)
 #endif
 
 #if defined(NEKO_PROTO_DEBUG)
-#define NEKO_DEBUG(module, ...) NEKO_PRIVATE_LOG(debug, blue, module, __VA_ARGS__)
+#define NEKO_LOG_DEBUG(module, ...) NEKO_PRIVATE_LOG(debug, blue, module, __VA_ARGS__)
 #define NEKO_ASSERT(cond, module, ...)                                                                                 \
     if (!(cond)) {                                                                                                     \
-        NEKO_PRIVATE_LOG(error, lightRed, module, __VA_ARGS__);                                                        \
+        NEKO_PRIVATE_LOG(fatal, lightRed, module, __VA_ARGS__);                                                        \
         abort();                                                                                                       \
     }
 #else
 #define NEKO_ASSERT(cond, fmt, ...)
-#define NEKO_DEBUG(...)
+#define NEKO_LOG_DEBUG(...)
 #endif
 
 #if defined(NEKO_PROTO_LOG)
 #define NEKO_LOG_INFO(module, ...)  NEKO_PRIVATE_LOG(info, darkGray, module, __VA_ARGS__)
 #define NEKO_LOG_WARN(module, ...)  NEKO_PRIVATE_LOG(warn, yellow, module, __VA_ARGS__)
 #define NEKO_LOG_ERROR(module, ...) NEKO_PRIVATE_LOG(error, lightRed, module, __VA_ARGS__)
-#define NEKO_LOG_FATAL(module, ...) NEKO_PRIVATE_LOG(critical, red, module, __VA_ARGS__)
+#define NEKO_LOG_FATAL(module, ...)                                                                                    \
+    NEKO_PRIVATE_LOG(fatal, red, module, __VA_ARGS__);                                                                 \
+    abort()
 #else
 #define NEKO_LOG_INFO(...)
 #define NEKO_LOG_WARN(...)

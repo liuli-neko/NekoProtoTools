@@ -717,7 +717,7 @@ TEST(RandomProtoTest, StructTest) {
 
     TestStructProto proto;
     proto.b.f0 = {4};
-    NEKO_LOG_INFO("unit test", "{}", SerializableToString(proto));
+    NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(proto));
     auto data = proto.makeProto().toData();
     data.push_back('\0');
     EXPECT_STREQ(data.data(), StructProtoData);
@@ -824,6 +824,8 @@ TEST(RandomProtoTest, EnumTest) {
 
 int main(int argc, char** argv) {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

@@ -37,7 +37,7 @@ inline bool load(Serializer& sa, StructA& value) {
     uint32_t size;
     auto ret = sa(makeSizeTag(size));
     if (size != 8) {
-        NEKO_LOG_ERROR("unit test", "struct size mismatch: json obejct size {} != struct size 8", size);
+        NEKO_LOG_DEBUG("unit test", "struct size mismatch: json obejct size {} != struct size 8", size);
         return false;
     }
     ret = sa(value.a, value.b, value.c, value.d, value.e, value.f, value.g, value.h) && ret;
@@ -169,7 +169,7 @@ TEST_F(ProtoTest, StructDeserialize) {
     TestP tp2;
     tp2.makeProto() = testp;
     EXPECT_STREQ(SerializableToString(testp).c_str(), SerializableToString(tp2).c_str());
-    NEKO_LOG_INFO("unit test", "{}", SerializableToString(testp));
+    NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(testp));
 }
 
 TEST_F(ProtoTest, Base64Covert) {
@@ -280,7 +280,7 @@ TEST_F(ProtoTest, JsonProtoRef) {
     EXPECT_EQ(rawp->i.h, TEnum_A);
     EXPECT_EQ(std::get<0>(rawp->j), 1);
     EXPECT_STREQ(std::get<1>(rawp->j).c_str(), "hello");
-    NEKO_LOG_INFO("unit test", "{}", SerializableToString(*rawp));
+    NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(*rawp));
 }
 
 TEST_F(ProtoTest, InvalidParams) {
@@ -312,7 +312,7 @@ TEST_F(ProtoTest, BinaryProto) {
     proto.b        = "hello Neko Proto";
     proto.c        = 0x3f3f3f;
     auto data      = proto.makeProto().toData();
-    NEKO_LOG_INFO("unit test", "{}", SerializableToString(proto));
+    NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(proto));
 
     BinaryProto proto2;
     EXPECT_TRUE(proto2.makeProto().fromData(data.data(), data.size()));
@@ -405,6 +405,8 @@ TEST_F(ProtoTest, AllType) {
 
 int main(int argc, char** argv) {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

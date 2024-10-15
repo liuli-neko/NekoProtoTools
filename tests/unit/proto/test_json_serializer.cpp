@@ -925,7 +925,7 @@ TEST_F(JsonSerializerTest, Struct) {
     EXPECT_EQ(testp.g, testp2.g);
     EXPECT_EQ(testp.h, testp2.h);
     EXPECT_EQ(testp.k, testp2.k);
-    NEKO_LOG_INFO("unit test", "{}", SerializableToString(testp));
+    NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(testp));
 
     {
         std::vector<char> buffer;
@@ -936,7 +936,7 @@ TEST_F(JsonSerializerTest, Struct) {
         EXPECT_TRUE(output.end());
         buffer.push_back('\0');
         const char* str = buffer.data();
-        NEKO_LOG_INFO("unit test", "{}", str);
+        NEKO_LOG_DEBUG("unit test", "{}", str);
     }
 }
 
@@ -963,7 +963,7 @@ TEST_F(JsonSerializerTest, SerializableTest) {
     t.f = {{"hello", std::make_shared<std::string>("world")}, {"nullptr", nullptr}};
     t.g = std::make_unique<std::string>("hello");
     t.i = 123;
-    NEKO_LOG_INFO("unit test", "{}", SerializableToString(t));
+    NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(t));
     EXPECT_TRUE(output(t));
     buffer.push_back('\0');
 
@@ -985,6 +985,8 @@ TEST_F(JsonSerializerTest, SerializableTest) {
 
 int main(int argc, char** argv) {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
     std::setlocale(LC_ALL, "en_US.UTF-8");
     testing::InitGoogleTest(&argc, argv);
     ProtoFactory factor(1, 0, 0);

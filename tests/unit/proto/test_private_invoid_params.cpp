@@ -65,6 +65,8 @@ TEST(PrivateInvoidParams, RefTest) {
 
 int main(int argc, char** argv) {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

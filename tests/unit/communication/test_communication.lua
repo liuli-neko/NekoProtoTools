@@ -5,7 +5,7 @@ if has_config("enable_communication") then
         set_default(false)
         add_includedirs("$(projectdir)/include")
         add_packages("ilias")
-        add_defines("NEKO_PROTO_STATIC", "NEKO_COMMUNICATION_DEBUG", "ILIAS_USE_FMT", "ILIAS_ENABLE_LOG")
+        add_defines("NEKO_PROTO_STATIC", "ILIAS_USE_FMT", "ILIAS_ENABLE_LOG")
         add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
         add_packages("gtest")
         add_options("enable_spdlog", "enable_fmt", "enable_stdformat", "enable_rapidjson", "enable_simdjson")
