@@ -50,6 +50,7 @@ inline bool load(Serializer& sa, std::map<K, V>& value) {
     ret = sa(makeSizeTag(s));
     value.clear();
     while (ret && s--) {
+        std::size_t ksize;
         ret = sa.startNode() && ret;
         if (sa(makeNameValuePair("key", 3, k)) && sa(makeNameValuePair("value", 5, v))) {
             value.emplace(std::move(k), std::move(v));
@@ -68,7 +69,7 @@ inline bool load(Serializer& sa, std::map<std::string, V>& value) {
     std::size_t s;
     ret = sa(makeSizeTag(s));
     value.clear();
-    while (ret) {
+    for(int i = 0; i < s; ++i) {
         const auto& name = sa.name();
         if (name == "") {
             break;
