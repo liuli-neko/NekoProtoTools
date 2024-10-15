@@ -88,12 +88,12 @@ private:
     friend class detail::proto_method_access;
 };
 
-struct NEKO_PROTO_API MessageProtoMap {
-    uint32_t protoFactoryVersion             = 0;
-    std::map<uint32_t, std::string> protoMap = {};
+struct NEKO_PROTO_API ProtocolTable {
+    uint32_t protocolFactoryVersion            = 0;
+    std::map<uint32_t, std::string> protoTable = {};
 
-    NEKO_SERIALIZER(protoFactoryVersion, protoMap)
-    NEKO_DECLARE_PROTOCOL(MessageProtoMap, BinarySerializer)
+    NEKO_SERIALIZER(protocolFactoryVersion, protoTable)
+    NEKO_DECLARE_PROTOCOL(ProtocolTable, BinarySerializer)
 private:
     inline static int specify_type() { return 2; }
     friend class detail::proto_method_access;
@@ -179,7 +179,8 @@ public:
     auto send(const IProto& message, StreamFlag flag = StreamFlag::None) -> Task<void>;
     auto recv(StreamFlag flag = StreamFlag::None) -> Task<std::unique_ptr<IProto>>;
     auto close() -> Task<void>;
-    auto setProtoMap(const uint32_t version, const std::map<uint32_t, std::string>& protoMap) -> void;
+    auto setProtoTable(const uint32_t version, const std::map<uint32_t, std::string>& protoTable) -> void;
+    auto getProtoTable() const -> const ProtocolTable&;
 
 private:
     auto sendRaw(std::span<std::byte> data) -> Task<void>;
@@ -198,7 +199,7 @@ private:
     MessageHeader mHeader                = {};
     std::unique_ptr<IProto> mMessage     = {};
     uint32_t mSliceSizeCount             = 0;
-    MessageProtoMap mMessageProtoMap     = {};
+    ProtocolTable mProtocolTable         = {};
     static constexpr uint32_t gSliceSize = 1200;
 };
 
@@ -439,19 +440,19 @@ inline auto ProtoStreamClient<T>::recvRaw(std::span<std::byte> buf) -> ILIAS_NAM
 
 template <ILIAS_NAMESPACE::StreamClient T>
 inline auto ProtoStreamClient<T>::sendVersion() -> Task<void> {
-    MessageProtoMap messageProtoMap     = {};
-    messageProtoMap.protoFactoryVersion = mFactory->version();
+    ProtocolTable protocolTable          = {};
+    protocolTable.protocolFactoryVersion = mFactory->version();
     for (const auto& [name, type] : mFactory->proto_type_map()) {
         if (type > NEKO_RESERVED_PROTO_TYPE_SIZE) {
-            messageProtoMap.protoMap[type] = name;
+            protocolTable.protoTable[type] = name;
         }
     }
     std::vector<char> data;
     data.resize(MessageHeader::size());
-    if (!messageProtoMap.makeProto().toData(data)) {
+    if (!protocolTable.makeProto().toData(data)) {
         co_return Unexpected<Error>(Error(ErrorCode::SerializationError));
     }
-    auto header = MessageHeader(data.size() - MessageHeader::size(), messageProtoMap.makeProto().type(),
+    auto header = MessageHeader(data.size() - MessageHeader::size(), protocolTable.makeProto().type(),
                                 MessageType::VersionVerification);
     std::vector<char> headerData;
     if (!header.makeProto().toData(headerData)) {
@@ -474,7 +475,7 @@ inline auto ProtoStreamClient<T>::sendVersion() -> Task<void> {
 
 template <ILIAS_NAMESPACE::StreamClient T>
 inline auto ProtoStreamClient<T>::recvVersion(const MessageHeader& header) -> Task<void> {
-    mMessage = std::make_unique<MessageProtoMap::ProtoType>();
+    mMessage = std::make_unique<ProtocolTable::ProtoType>();
     if (header.data != mMessage->type()) {
         co_return Unexpected<Error>(Error(ErrorCode::InvalidProtoType));
     }
@@ -486,13 +487,14 @@ inline auto ProtoStreamClient<T>::recvVersion(const MessageHeader& header) -> Ta
     if (!mMessage->fromData(reinterpret_cast<char*>(mBuffer.data()), mBuffer.size())) {
         co_return Unexpected<Error>(Error(ErrorCode::InvalidProtoData));
     }
-    auto protoMap = mMessage->cast<MessageProtoMap>();
-    if (protoMap->protoFactoryVersion != mFactory->version()) {
+    auto protoTable = mMessage->cast<ProtocolTable>();
+    if (protoTable->protocolFactoryVersion != mFactory->version()) {
         NEKO_LOG_WARN("Communication", "ProtoFactory version mismatch: {} != {}", mHeader.data, mFactory->version());
     }
-    mMessageProtoMap = *protoMap;
-    NEKO_LOG_INFO("Communication", "sync message proto map, version: {}.", mMessageProtoMap.protoFactoryVersion);
-    for (const auto& [type, name] : mMessageProtoMap.protoMap) {
+    mProtocolTable = *protoTable;
+    NEKO_LOG_INFO("Communication", "sync message proto table, version: {}. size: {}",
+                  mProtocolTable.protocolFactoryVersion, mProtocolTable.protoTable.size());
+    for (const auto& [type, name] : mProtocolTable.protoTable) {
         NEKO_LOG_INFO("Communication", "Proto type: {} -> {}", name, type);
     }
     co_return Result<void>();
@@ -532,8 +534,8 @@ inline auto ProtoStreamClient<T>::sendCancel(const uint32_t data) -> Task<void> 
 
 template <ILIAS_NAMESPACE::StreamClient T>
 inline auto ProtoStreamClient<T>::createProto(const uint32_t type) -> std::unique_ptr<IProto> {
-    auto it = mMessageProtoMap.protoMap.find(type);
-    if (it == mMessageProtoMap.protoMap.end()) {
+    auto it = mProtocolTable.protoTable.find(type);
+    if (it == mProtocolTable.protoTable.end()) {
         return mFactory->create(type);
     } else {
         return mFactory->create(it->second.c_str());
@@ -546,9 +548,14 @@ inline auto ProtoStreamClient<T>::close() -> Task<void> {
 }
 
 template <ILIAS_NAMESPACE::StreamClient T>
-inline auto ProtoStreamClient<T>::setProtoMap(const uint32_t version,
-                                              const std::map<uint32_t, std::string>& protoMap) -> void {
-    mMessageProtoMap = MessageProtoMap {version, protoMap};
+inline auto ProtoStreamClient<T>::setProtoTable(const uint32_t version,
+                                                const std::map<uint32_t, std::string>& protoTable) -> void {
+    mProtocolTable = ProtocolTable{version, protoTable};
+}
+
+template <ILIAS_NAMESPACE::StreamClient T>
+inline auto ProtoStreamClient<T>::getProtoTable() const -> const ProtocolTable& {
+    return mProtocolTable;
 }
 
 template <ILIAS_NAMESPACE::StreamClient T>
@@ -603,7 +610,8 @@ public:
     auto send(const IProto& message, const IPEndpoint& endpoint, StreamFlag flag = StreamFlag::None) -> Task<void>;
     auto recv(StreamFlag flag = StreamFlag::None) -> Task<std::pair<std::unique_ptr<IProto>, IPEndpoint>>;
     auto close() -> Task<void>;
-    auto setProtoMap(const uint32_t version, const std::map<uint32_t, std::string>& protoMap) -> void;
+    auto setProtoTable(const uint32_t version, const std::map<uint32_t, std::string>& protoTable) -> void;
+    auto getProtoTable() const -> const ProtocolTable&;
 
 private:
     auto sendVersion(const IPEndpoint& endpoint) -> Task<void>;
@@ -619,7 +627,7 @@ private:
     std::unique_ptr<IProto> mMessage       = nullptr;
     std::set<uint32_t> mSliceIdCount       = {};
     uint32_t mSliceSizeCount               = 0;
-    MessageProtoMap mMessageProtoMap       = {};
+    ProtocolTable mProtocolTable           = {};
     static constexpr uint32_t gSliceSize   = 1200;
     static constexpr uint32_t gUdpMaxSize  = 65535;
 };
@@ -810,26 +818,31 @@ inline auto ProtoDatagramClient<T>::close() -> Task<void> {
 }
 
 template <typename T>
-inline auto ProtoDatagramClient<T>::setProtoMap(const uint32_t version,
-                                                const std::map<uint32_t, std::string>& protoMap) -> void {
-    mMessageProtoMap = MessageProtoMap{version, protoMap};
+inline auto ProtoDatagramClient<T>::setProtoTable(const uint32_t version,
+                                                  const std::map<uint32_t, std::string>& protoTable) -> void {
+    mProtocolTable = ProtocolTable{version, protoTable};
+}
+
+template <typename T>
+inline auto ProtoDatagramClient<T>::getProtoTable() const -> const ProtocolTable& {
+    return mProtocolTable;
 }
 
 template <typename T>
 inline auto ProtoDatagramClient<T>::sendVersion(const IPEndpoint& endpoint) -> Task<void> {
-    MessageProtoMap messageProtoMap     = {};
-    messageProtoMap.protoFactoryVersion = mFactory->version();
+    ProtocolTable protocolTable          = {};
+    protocolTable.protocolFactoryVersion = mFactory->version();
     for (const auto& [name, type] : mFactory->proto_type_map()) {
         if (type > NEKO_RESERVED_PROTO_TYPE_SIZE) {
-            messageProtoMap.protoMap[type] = name;
+            protocolTable.protoTable[type] = name;
         }
     }
     std::vector<char> data;
     data.resize(MessageHeader::size());
-    if (!messageProtoMap.makeProto().toData(data)) {
+    if (!protocolTable.makeProto().toData(data)) {
         co_return Unexpected<Error>(Error(ErrorCode::SerializationError));
     }
-    auto header = MessageHeader(data.size() - MessageHeader::size(), messageProtoMap.makeProto().type(),
+    auto header = MessageHeader(data.size() - MessageHeader::size(), protocolTable.makeProto().type(),
                                 MessageType::VersionVerification);
     std::vector<char> headerData;
     if (!header.makeProto().toData(headerData)) {
@@ -852,7 +865,7 @@ inline auto ProtoDatagramClient<T>::sendVersion(const IPEndpoint& endpoint) -> T
 
 template <typename T>
 inline auto ProtoDatagramClient<T>::recvVersion(const MessageHeader& header) -> Task<void> {
-    mMessage = std::make_unique<MessageProtoMap::ProtoType>();
+    mMessage = std::make_unique<ProtocolTable::ProtoType>();
     if (header.data != mMessage->type()) {
         co_return Unexpected<Error>(Error(ErrorCode::InvalidProtoType));
     }
@@ -860,13 +873,14 @@ inline auto ProtoDatagramClient<T>::recvVersion(const MessageHeader& header) -> 
                             mBuffer.size() - MessageHeader::size())) {
         co_return Unexpected<Error>(Error(ErrorCode::InvalidProtoData));
     }
-    auto protoMap = mMessage->cast<MessageProtoMap>();
-    if (protoMap->protoFactoryVersion != mFactory->version()) {
+    auto protoTable = mMessage->cast<ProtocolTable>();
+    if (protoTable->protocolFactoryVersion != mFactory->version()) {
         NEKO_LOG_WARN("Communication", "ProtoFactory version mismatch: {} != {}", mHeader.data, mFactory->version());
     }
-    mMessageProtoMap = *protoMap;
-    NEKO_LOG_INFO("Communication", "sync message proto map, version: {}.", mMessageProtoMap.protoFactoryVersion);
-    for (const auto& [type, name] : mMessageProtoMap.protoMap) {
+    mProtocolTable = *protoTable;
+    NEKO_LOG_INFO("Communication", "sync message proto table, version: {}. size: {}",
+                  mProtocolTable.protocolFactoryVersion, mProtocolTable.protoTable.size());
+    for (const auto& [type, name] : mProtocolTable.protoTable) {
         NEKO_LOG_INFO("Communication", "Proto type: {} -> {}", name, type);
     }
     co_return Result<void>();
@@ -874,8 +888,8 @@ inline auto ProtoDatagramClient<T>::recvVersion(const MessageHeader& header) -> 
 
 template <typename T>
 inline auto ProtoDatagramClient<T>::createProto(const uint32_t type) -> std::unique_ptr<IProto> {
-    auto it = mMessageProtoMap.protoMap.find(type);
-    if (it == mMessageProtoMap.protoMap.end()) {
+    auto it = mProtocolTable.protoTable.find(type);
+    if (it == mProtocolTable.protoTable.end()) {
         return mFactory->create(type);
     } else {
         return mFactory->create(it->second.c_str());
