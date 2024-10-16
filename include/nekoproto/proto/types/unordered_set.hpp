@@ -27,7 +27,7 @@ inline bool save(Serializer& sa, const std::unordered_set<T>& value) {
 template <typename Serializer, typename T>
 inline bool load(Serializer& sa, std::unordered_set<T>& value) {
     std::size_t s = 0;
-    auto ret      = sa(makeSizeTag(s));
+    auto ret      = sa(make_size_tag(s));
     if (!ret) {
         return false;
     }

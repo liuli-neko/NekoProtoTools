@@ -221,7 +221,7 @@ template <typename SerializerT, typename T,
                               !traits::has_method_serialize<T, SerializerT>::value> = traits::default_value_for_enable>
 inline bool load(SerializerT& sa, T& value) {
     uint32_t s;
-    sa(makeSizeTag(s));
+    sa(make_size_tag(s));
     if (s != std::tuple_size<decltype(detail::unwrap_struct(std::declval<T&>()))>::value) {
         NEKO_LOG_ERROR("proto", "struct size mismatch: json object size {} != struct size {}", s,
                        std::tuple_size<decltype(detail::unwrap_struct(std::declval<T&>()))>::value);

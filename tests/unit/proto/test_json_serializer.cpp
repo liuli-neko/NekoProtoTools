@@ -37,7 +37,7 @@ inline bool save(Serializer& sa, const StructA& value) {
 template <typename Serializer>
 inline bool load(Serializer& sa, StructA& value) {
     uint32_t size;
-    auto ret = sa(makeSizeTag(size));
+    auto ret = sa(make_size_tag(size));
     if (size != 8) {
         NEKO_LOG_ERROR("unit test", "struct size mismatch: json obejct size {} != struct size 8", size);
         return false;
@@ -118,7 +118,7 @@ protected:
 TEST_F(JsonSerializerTest, Int) {
     int a = 1;
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":1}");
@@ -126,7 +126,7 @@ TEST_F(JsonSerializerTest, Int) {
     int a1 = 0;
     InputSerializer input(buffer.data(), buffer.size());
     EXPECT_TRUE(input.startNode());
-    EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+    EXPECT_TRUE(input(make_name_value_pair("a", a1)));
     EXPECT_TRUE(input.finishNode());
     EXPECT_EQ(a1, a);
 }
@@ -134,7 +134,7 @@ TEST_F(JsonSerializerTest, Int) {
 TEST_F(JsonSerializerTest, String) {
     std::string a = "hello";
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":\"hello\"}");
@@ -143,7 +143,7 @@ TEST_F(JsonSerializerTest, String) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_STREQ(a1.c_str(), a.c_str());
@@ -153,7 +153,7 @@ TEST_F(JsonSerializerTest, EmptyString) {
     std::string a = "";
     buffer.clear();
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":\"\"}");
@@ -162,7 +162,7 @@ TEST_F(JsonSerializerTest, EmptyString) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_STREQ(a1.c_str(), a.c_str());
@@ -171,7 +171,7 @@ TEST_F(JsonSerializerTest, EmptyString) {
 TEST_F(JsonSerializerTest, Bool) {
     bool a = true;
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     const char* str = buffer.data();
@@ -180,7 +180,7 @@ TEST_F(JsonSerializerTest, Bool) {
     bool a1 = false;
     InputSerializer input(buffer.data(), buffer.size());
     EXPECT_TRUE(input.startNode());
-    EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+    EXPECT_TRUE(input(make_name_value_pair("a", a1)));
     EXPECT_TRUE(input.finishNode());
     EXPECT_EQ(a1, a);
 }
@@ -188,7 +188,7 @@ TEST_F(JsonSerializerTest, Bool) {
 TEST_F(JsonSerializerTest, Double) {
     double a = 3.14;
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     const char* str = buffer.data();
@@ -197,7 +197,7 @@ TEST_F(JsonSerializerTest, Double) {
     double a1 = 0;
     InputSerializer input(buffer.data(), buffer.size());
     EXPECT_TRUE(input.startNode());
-    EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+    EXPECT_TRUE(input(make_name_value_pair("a", a1)));
     EXPECT_TRUE(input.finishNode());
     EXPECT_DOUBLE_EQ(a1, a);
 }
@@ -205,7 +205,7 @@ TEST_F(JsonSerializerTest, Double) {
 TEST_F(JsonSerializerTest, Vector) {
     std::vector<int> a = {1, 2, 3, 4, 5};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     const char* str = buffer.data();
@@ -215,7 +215,7 @@ TEST_F(JsonSerializerTest, Vector) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -225,7 +225,7 @@ TEST_F(JsonSerializerTest, EmptyVector) {
     std::vector<int> a = {}, a1 = {1, 2, 3};
     buffer.clear();
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":[]}");
@@ -233,7 +233,7 @@ TEST_F(JsonSerializerTest, EmptyVector) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -242,7 +242,7 @@ TEST_F(JsonSerializerTest, EmptyVector) {
 TEST_F(JsonSerializerTest, List) {
     std::list<int> a = {1, 2, 3, 4, 5};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     const char* str = buffer.data();
@@ -252,7 +252,7 @@ TEST_F(JsonSerializerTest, List) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -263,7 +263,7 @@ TEST_F(JsonSerializerTest, EmptyList) {
     std::list<int> a = {}, a1 = {1, 2, 3};
     buffer.clear();
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":[]}");
@@ -272,7 +272,7 @@ TEST_F(JsonSerializerTest, EmptyList) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a2)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a2)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a2, a);
@@ -281,7 +281,7 @@ TEST_F(JsonSerializerTest, EmptyList) {
 TEST_F(JsonSerializerTest, Map) {
     std::map<std::string, int> a = {{"a", 1}, {"b", 2}, {"c", 3}};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     const char* str = buffer.data();
@@ -291,7 +291,7 @@ TEST_F(JsonSerializerTest, Map) {
     {
         InputSerializer input(str, strlen(str));
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -301,7 +301,7 @@ TEST_F(JsonSerializerTest, EmptyMap) {
     std::map<std::string, int> a = {};
     buffer.clear();
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":{}}");
@@ -310,7 +310,7 @@ TEST_F(JsonSerializerTest, EmptyMap) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -319,7 +319,7 @@ TEST_F(JsonSerializerTest, EmptyMap) {
 TEST_F(JsonSerializerTest, Map1) {
     std::map<double, int> a = {{1.1, 1}, {2.2, 2}, {3.3, 3}};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     const char* str = buffer.data();
@@ -329,7 +329,7 @@ TEST_F(JsonSerializerTest, Map1) {
     {
         InputSerializer input(str, strlen(str));
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -339,7 +339,7 @@ TEST_F(JsonSerializerTest, EmptyMap1) {
     std::map<std::string, std::vector<int>> a;
     buffer.clear();
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":{}}");
@@ -348,7 +348,7 @@ TEST_F(JsonSerializerTest, EmptyMap1) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -357,14 +357,14 @@ TEST_F(JsonSerializerTest, EmptyMap1) {
 TEST_F(JsonSerializerTest, UnorderedMap) {
     std::unordered_map<std::string, int> a = {{"a", 1}, {"b", 2}, {"c", 3}};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
 
     std::unordered_map<std::string, int> a1;
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -374,7 +374,7 @@ TEST_F(JsonSerializerTest, EmptyUnorderedMap) {
     std::unordered_map<std::string, std::vector<int>> a;
     buffer.clear();
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":{}}");
@@ -383,7 +383,7 @@ TEST_F(JsonSerializerTest, EmptyUnorderedMap) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -392,14 +392,14 @@ TEST_F(JsonSerializerTest, EmptyUnorderedMap) {
 TEST_F(JsonSerializerTest, UnorderedMap1) {
     std::unordered_map<double, int> a = {{1.1, 1}, {2.2, 2}, {3.3, 3}};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
 
     std::unordered_map<double, int> a1;
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -410,7 +410,7 @@ TEST_F(JsonSerializerTest, EmptyUnorderedMap1) {
     std::unordered_map<double, double> a;
     buffer.clear();
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":[]}");
@@ -419,7 +419,7 @@ TEST_F(JsonSerializerTest, EmptyUnorderedMap1) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -428,14 +428,14 @@ TEST_F(JsonSerializerTest, EmptyUnorderedMap1) {
 TEST_F(JsonSerializerTest, MultiMap) {
     std::unordered_map<std::string, int> a = {{"a", 1}, {"a", 2}, {"c", 3}, {"c", 4}};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
 
     std::unordered_map<std::string, int> a1;
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -445,7 +445,7 @@ TEST_F(JsonSerializerTest, EmptyMultiMap) {
     std::unordered_map<std::string, int> a;
     buffer.clear();
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":{}}");
@@ -454,7 +454,7 @@ TEST_F(JsonSerializerTest, EmptyMultiMap) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -463,14 +463,14 @@ TEST_F(JsonSerializerTest, EmptyMultiMap) {
 TEST_F(JsonSerializerTest, UnorderedMultiMap) {
     std::unordered_map<std::string, int> a = {{"a", 1}, {"a", 2}, {"c", 3}, {"c", 4}};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
 
     std::unordered_map<std::string, int> a1;
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -479,7 +479,7 @@ TEST_F(JsonSerializerTest, UnorderedMultiMap) {
 TEST_F(JsonSerializerTest, EmptyUnorderedMultiMap) {
     std::unordered_map<std::string, int> a;
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     const char* str = buffer.data();
@@ -489,7 +489,7 @@ TEST_F(JsonSerializerTest, EmptyUnorderedMultiMap) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -498,7 +498,7 @@ TEST_F(JsonSerializerTest, EmptyUnorderedMultiMap) {
 TEST_F(JsonSerializerTest, Set) {
     std::set<int> a = {1, 2, 3, 4, 5};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     const char* str = buffer.data();
@@ -508,7 +508,7 @@ TEST_F(JsonSerializerTest, Set) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -517,7 +517,7 @@ TEST_F(JsonSerializerTest, Set) {
 TEST_F(JsonSerializerTest, EmptySet) {
     std::set<int> a;
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":[]}");
@@ -526,7 +526,7 @@ TEST_F(JsonSerializerTest, EmptySet) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -535,14 +535,14 @@ TEST_F(JsonSerializerTest, EmptySet) {
 TEST_F(JsonSerializerTest, UnorderedSet) {
     std::unordered_set<int> a = {1, 2, 3, 4, 5};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
 
     std::unordered_set<int> a1;
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -551,14 +551,14 @@ TEST_F(JsonSerializerTest, UnorderedSet) {
 TEST_F(JsonSerializerTest, MultiSet) {
     std::multiset<int> a = {1, 1, 1, 1, 2, 2, 2, 3};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
 
     std::multiset<int> a1;
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -567,14 +567,14 @@ TEST_F(JsonSerializerTest, MultiSet) {
 TEST_F(JsonSerializerTest, UnorderedMultiSet) {
     std::unordered_multiset<int> a = {1, 1, 1, 1, 2, 2, 2, 3};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
 
     std::unordered_multiset<int> a1;
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -583,7 +583,7 @@ TEST_F(JsonSerializerTest, UnorderedMultiSet) {
 TEST_F(JsonSerializerTest, Atomic) {
     std::atomic<int> a{5};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":5}");
@@ -592,7 +592,7 @@ TEST_F(JsonSerializerTest, Atomic) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -602,7 +602,7 @@ TEST_F(JsonSerializerTest, BinaryData) {
     std::string data = "hello world";
     BinaryData<const char> a(data.data(), data.size());
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":\"aGVsbG8gd29ybGQ=\"}");
@@ -613,7 +613,7 @@ TEST_F(JsonSerializerTest, BinaryData) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     data1.push_back('\0');
@@ -623,7 +623,7 @@ TEST_F(JsonSerializerTest, BinaryData) {
 TEST_F(JsonSerializerTest, Bitset) {
     std::bitset<5> a = 0b10101;
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":\"10101\"}");
@@ -632,7 +632,7 @@ TEST_F(JsonSerializerTest, Bitset) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_STREQ(a1.to_string().c_str(), "10101");
@@ -641,7 +641,7 @@ TEST_F(JsonSerializerTest, Bitset) {
 TEST_F(JsonSerializerTest, Pair) {
     std::pair<int, std::string> a = {1, "hello world"};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":{\"first\":1,\"second\":\"hello world\"}}");
@@ -650,7 +650,7 @@ TEST_F(JsonSerializerTest, Pair) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_STREQ(a1.second.c_str(), "hello world");
@@ -659,7 +659,7 @@ TEST_F(JsonSerializerTest, Pair) {
 TEST_F(JsonSerializerTest, SharedPtr) {
     std::shared_ptr<int> a = std::make_shared<int>(42);
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":42}");
@@ -668,7 +668,7 @@ TEST_F(JsonSerializerTest, SharedPtr) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(*a1, 42);
@@ -677,7 +677,7 @@ TEST_F(JsonSerializerTest, SharedPtr) {
 TEST_F(JsonSerializerTest, EmptySharedPtr) {
     std::shared_ptr<int> a;
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":null}");
@@ -687,7 +687,7 @@ TEST_F(JsonSerializerTest, EmptySharedPtr) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_FALSE(a1);
@@ -696,7 +696,7 @@ TEST_F(JsonSerializerTest, EmptySharedPtr) {
 TEST_F(JsonSerializerTest, UniquePtr) {
     std::unique_ptr<int> a(new int{42});
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":42}");
@@ -705,7 +705,7 @@ TEST_F(JsonSerializerTest, UniquePtr) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(*a1, 42);
@@ -714,7 +714,7 @@ TEST_F(JsonSerializerTest, UniquePtr) {
 TEST_F(JsonSerializerTest, EmptyUniquePtr) {
     std::unique_ptr<int> a;
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":null}");
@@ -724,7 +724,7 @@ TEST_F(JsonSerializerTest, EmptyUniquePtr) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_FALSE(a1);
@@ -733,7 +733,7 @@ TEST_F(JsonSerializerTest, EmptyUniquePtr) {
 TEST_F(JsonSerializerTest, Array) {
     std::array<int, 5> a = {1, 2, 3, 4, 5};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", a)));
+    EXPECT_TRUE(output(make_name_value_pair("a", a)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     const char* str = buffer.data();
@@ -743,7 +743,7 @@ TEST_F(JsonSerializerTest, Array) {
     {
         InputSerializer input(str, strlen(str));
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", a1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", a1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(a1, a);
@@ -757,7 +757,7 @@ TEST_F(JsonSerializerTest, AnyStruct) {
         bool c;
     } testp{3, "Struct test", true}, testp1;
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", testp)));
+    EXPECT_TRUE(output(make_name_value_pair("a", testp)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":[3,\"Struct test\",true]}");
@@ -765,7 +765,7 @@ TEST_F(JsonSerializerTest, AnyStruct) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", testp1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", testp1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(testp.a, testp1.a);
@@ -776,7 +776,7 @@ TEST_F(JsonSerializerTest, AnyStruct) {
 TEST_F(JsonSerializerTest, Variant) {
     std::variant<int, std::string> v{3}, v1;
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", v)));
+    EXPECT_TRUE(output(make_name_value_pair("a", v)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":3}");
@@ -784,7 +784,7 @@ TEST_F(JsonSerializerTest, Variant) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", v1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", v1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(std::get<0>(v), std::get<0>(v1));
@@ -793,7 +793,7 @@ TEST_F(JsonSerializerTest, Variant) {
 TEST_F(JsonSerializerTest, Variant1) {
     std::variant<int, std::string> v{"test"}, v1;
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", v)));
+    EXPECT_TRUE(output(make_name_value_pair("a", v)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":\"test\"}");
@@ -801,7 +801,7 @@ TEST_F(JsonSerializerTest, Variant1) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", v1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", v1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_STREQ(std::get<1>(v).c_str(), std::get<1>(v1).c_str());
@@ -810,7 +810,7 @@ TEST_F(JsonSerializerTest, Variant1) {
 TEST_F(JsonSerializerTest, Optional) {
     std::optional<int> v{3}, v1;
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", v)));
+    EXPECT_TRUE(output(make_name_value_pair("a", v)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":3}");
@@ -818,7 +818,7 @@ TEST_F(JsonSerializerTest, Optional) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", v1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", v1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(v.value(), v1.value());
@@ -828,7 +828,7 @@ TEST_F(JsonSerializerTest, Optional1) {
     // null
     std::optional<int> v, v1{3};
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", v)));
+    EXPECT_TRUE(output(make_name_value_pair("a", v)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{}");
@@ -836,7 +836,7 @@ TEST_F(JsonSerializerTest, Optional1) {
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", v1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", v1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_EQ(v1.has_value(), v.has_value());
@@ -849,14 +849,14 @@ TEST_F(JsonSerializerTest, U8string) {
     std::u8string v = u8"这是一个测试; this is a test.";
     std::u8string v1;
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", v)));
+    EXPECT_TRUE(output(make_name_value_pair("a", v)));
     EXPECT_TRUE(output.end());
     buffer.push_back('\0');
     EXPECT_STREQ(buffer.data(), "{\"a\":\"这是一个测试; this is a test.\"}");
     {
         InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", v1)));
+        EXPECT_TRUE(input(make_name_value_pair("a", v1)));
         EXPECT_TRUE(input.finishNode());
     }
     EXPECT_TRUE(v1 == v);
@@ -881,7 +881,7 @@ TEST_F(JsonSerializerTest, Struct) {
     std::get<1>(testp.l.a).c = TestA{1221, "this is a test for optional"};
 #endif
     EXPECT_TRUE(output.startObject(1));
-    EXPECT_TRUE(output(makeNameValuePair("a", testp)));
+    EXPECT_TRUE(output(make_name_value_pair("a", testp)));
     EXPECT_TRUE(output.end());
 #if NEKO_CPP_PLUS >= 17
     const char* answer =
@@ -914,7 +914,7 @@ TEST_F(JsonSerializerTest, Struct) {
     {
         JsonSerializer::InputSerializer input(buffer.data(), buffer.size());
         EXPECT_TRUE(input.startNode());
-        EXPECT_TRUE(input(makeNameValuePair("a", testp2)));
+        EXPECT_TRUE(input(make_name_value_pair("a", testp2)));
     }
     EXPECT_EQ(testp.a, testp2.a);
     EXPECT_STREQ(testp.b.c_str(), testp2.b.c_str());
@@ -930,9 +930,9 @@ TEST_F(JsonSerializerTest, Struct) {
     {
         std::vector<char> buffer;
         RapidJsonOutputSerializer<detail::PrettyJsonWriter<>> output(
-            buffer, makePrettyJsonWriter(JsonOutputFormatOptions::Default()));
+            buffer, make_pretty_json_writer(JsonOutputFormatOptions::Default()));
         EXPECT_TRUE(output.startObject(1));
-        EXPECT_TRUE(output(makeNameValuePair("a", testp)));
+        EXPECT_TRUE(output(make_name_value_pair("a", testp)));
         EXPECT_TRUE(output.end());
         buffer.push_back('\0');
         const char* str = buffer.data();

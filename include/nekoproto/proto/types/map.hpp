@@ -22,8 +22,8 @@ inline bool save(Serializer& sa, const std::map<K, V>& value) {
     bool ret = sa.startArray(value.size());
     for (const auto& v : value) {
         ret = sa.startObject(1) && ret;
-        ret = sa(makeNameValuePair("key", 3, v.first)) && ret;
-        ret = sa(makeNameValuePair("value", 5, v.second)) && ret;
+        ret = sa(make_name_value_pair("key", 3, v.first)) && ret;
+        ret = sa(make_name_value_pair("value", 5, v.second)) && ret;
         ret = sa.endObject() && ret;
     }
     return ret && sa.endArray();
@@ -34,7 +34,7 @@ inline bool save(Serializer& sa, const std::map<std::string, V>& value) {
     bool ret = true;
     ret      = sa.startObject(value.size()) && ret;
     for (const auto& v : value) {
-        ret = sa(makeNameValuePair(v.first.c_str(), v.first.size(), v.second)) && ret;
+        ret = sa(make_name_value_pair(v.first.c_str(), v.first.size(), v.second)) && ret;
     }
     ret = sa.endObject() && ret;
     return ret;
@@ -47,13 +47,13 @@ inline bool load(Serializer& sa, std::map<K, V>& value) {
     V v;
     bool ret;
     std::size_t s;
-    ret = sa(makeSizeTag(s));
+    ret = sa(make_size_tag(s));
     value.clear();
     while (ret && s--) {
         std::size_t ksize;
         ret = sa.startNode() && ret;
-        sa(makeSizeTag(ksize));
-        if (sa(makeNameValuePair("key", 3, k)) && sa(makeNameValuePair("value", 5, v))) {
+        sa(make_size_tag(ksize));
+        if (sa(make_name_value_pair("key", 3, k)) && sa(make_name_value_pair("value", 5, v))) {
             value.emplace(std::move(k), std::move(v));
         } else {
             break;
@@ -68,7 +68,7 @@ inline bool load(Serializer& sa, std::map<std::string, V>& value) {
     bool ret = true;
     V v;
     std::size_t s;
-    ret = sa(makeSizeTag(s));
+    ret = sa(make_size_tag(s));
     value.clear();
     for(int i = 0; i < s; ++i) {
         const auto& name = sa.name();

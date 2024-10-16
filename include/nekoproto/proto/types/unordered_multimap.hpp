@@ -21,8 +21,8 @@ inline bool save(Serializer& sa, const std::unordered_multimap<K, V>& value) {
     bool ret = sa.startArray(value.size());
     for (const auto& v : value) {
         ret = sa.startObject(1) && ret;
-        ret = sa(makeNameValuePair("key", 3, v.first)) && ret;
-        ret = sa(makeNameValuePair("value", 5, v.second)) && ret;
+        ret = sa(make_name_value_pair("key", 3, v.first)) && ret;
+        ret = sa(make_name_value_pair("value", 5, v.second)) && ret;
         ret = sa.endObject() && ret;
     }
     return ret && sa.endArray();
@@ -34,11 +34,11 @@ inline bool load(Serializer& sa, std::unordered_multimap<K, V>& value) {
     V v;
     bool ret;
     std::size_t s;
-    ret = sa(makeSizeTag(s));
+    ret = sa(make_size_tag(s));
     value.clear();
     while (ret && s--) {
         ret = sa.startNode() && ret;
-        if (sa(makeNameValuePair("key", 3, k)) && sa(makeNameValuePair("value", 5, v))) {
+        if (sa(make_name_value_pair("key", 3, k)) && sa(make_name_value_pair("value", 5, v))) {
             value.emplace(std::move(k), std::move(v));
         } else {
             break;

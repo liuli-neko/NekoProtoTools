@@ -36,7 +36,7 @@ inline bool save(Serializer& sa, const StructA& value) {
 template <typename Serializer>
 inline bool load(Serializer& sa, StructA& value) {
     uint32_t size;
-    auto ret = sa(makeSizeTag(size));
+    auto ret = sa(make_size_tag(size));
     if (size != 8) {
         NEKO_LOG_ERROR("unit test", "struct size mismatch: json obejct size {} != struct size 8", size);
         return false;
