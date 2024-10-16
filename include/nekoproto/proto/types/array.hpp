@@ -27,7 +27,7 @@ inline bool save(Serializer& sa, const std::array<T, N>& value) {
 template <typename Serializer, typename T, std::size_t N>
 inline bool load(Serializer& sa, std::array<T, N>& value) {
     std::size_t s = 0;
-    auto ret      = sa(makeSizeTag(s));
+    auto ret      = sa(make_size_tag(s));
     if (!ret || s != N) {
         NEKO_LOG_WARN("proto", "load array error or size mismatch: expected {}, got {}", N, s);
         return false;

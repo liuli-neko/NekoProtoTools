@@ -35,7 +35,7 @@ inline bool save(Serializer& sa, const StructA& value) {
 template <typename Serializer>
 inline bool load(Serializer& sa, StructA& value) {
     uint32_t size;
-    auto ret = sa(makeSizeTag(size));
+    auto ret = sa(make_size_tag(size));
     if (size != 8) {
         NEKO_LOG_DEBUG("unit test", "struct size mismatch: json obejct size {} != struct size 8", size);
         return false;
@@ -85,13 +85,13 @@ struct BinaryProto {
 
 class ProtoTest : public testing::Test {
 protected:
-    virtual void SetUp() { factory.reset(new ProtoFactory()); }
+    virtual void SetUp() { mFactory.reset(new ProtoFactory()); }
     virtual void TearDown() {}
-    std::unique_ptr<ProtoFactory> factory;
+    std::unique_ptr<ProtoFactory> mFactory;
 };
 
 TEST_F(ProtoTest, StructSerialize) {
-    EXPECT_EQ(factory->proto_type<TestP>(), NEKO_RESERVED_PROTO_TYPE_SIZE + 2);
+    EXPECT_EQ(mFactory->protoType<TestP>(), NEKO_RESERVED_PROTO_TYPE_SIZE + 2);
     TestP testp;
     testp.a = 3;
     testp.b = "Struct test";
@@ -224,9 +224,9 @@ TEST_F(ProtoTest, JsonProtoRef) {
                       "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
                       "\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
                       "\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"l\":23}";
-    auto proto      = factory->create("TestP");
+    auto proto      = mFactory->create("TestP");
     proto->fromData(str.data(), str.length());
-    auto rawp = proto->cast<TestP>(); // success cast
+    auto *rawp = proto->cast<TestP>(); // success cast
 
     EXPECT_TRUE(proto->cast<BinaryProto>() == nullptr); // failed cast
     // get field test
@@ -287,8 +287,8 @@ TEST_F(ProtoTest, InvalidParams) {
     std::string str = "{\"a\":3}";
     TestP p;
     EXPECT_FALSE(p.makeProto().fromData(str.data(), str.length()));
-    EXPECT_TRUE(factory->create("InvalidP") == nullptr);
-    EXPECT_TRUE(factory->create(-1) == nullptr);
+    EXPECT_TRUE(mFactory->create("InvalidP") == nullptr);
+    EXPECT_TRUE(mFactory->create(-1) == nullptr);
     str = "{\"a\":3.213123,\"b\":123"
           ",\"c\":12,\"d\":\"dddd\",\"f\":[1,2,3],\"e\":{\"a\":1,\"b\":2},\"h\":[1,2,3,0,0],"
           "\"g\":\"TEnum_A(1)\",\"j\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"

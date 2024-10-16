@@ -257,20 +257,20 @@ struct TestStruct4 {
 std::vector<char> makeData(const char* data) { return std::vector<char>(data, data + std::strlen(data)); }
 
 TEST(BigProtoTest, Serializer) {
-    NEKO_LOG_DEBUG("unit test", "{} size {}", ProtoFactory::proto_name<TestStruct1>(), sizeof(TestStruct1));
-    NEKO_LOG_DEBUG("unit test", "{} type size {}", ProtoFactory::proto_name<TestStruct1>(),
+    NEKO_LOG_DEBUG("unit test", "{} size {}", ProtoFactory::protoName<TestStruct1>(), sizeof(TestStruct1));
+    NEKO_LOG_DEBUG("unit test", "{} type size {}", ProtoFactory::protoName<TestStruct1>(),
                   sizeof(TestStruct1::ProtoType));
 
-    NEKO_LOG_DEBUG("unit test", "{} size {}", ProtoFactory::proto_name<TestStruct2>(), sizeof(TestStruct2));
-    NEKO_LOG_DEBUG("unit test", "{} type size {}", ProtoFactory::proto_name<TestStruct2>(),
+    NEKO_LOG_DEBUG("unit test", "{} size {}", ProtoFactory::protoName<TestStruct2>(), sizeof(TestStruct2));
+    NEKO_LOG_DEBUG("unit test", "{} type size {}", ProtoFactory::protoName<TestStruct2>(),
                   sizeof(TestStruct2::ProtoType));
 
-    NEKO_LOG_DEBUG("unit test", "{} size {}", ProtoFactory::proto_name<TestStruct3>(), sizeof(TestStruct3));
-    NEKO_LOG_DEBUG("unit test", "{} type size {}", ProtoFactory::proto_name<TestStruct3>(),
+    NEKO_LOG_DEBUG("unit test", "{} size {}", ProtoFactory::protoName<TestStruct3>(), sizeof(TestStruct3));
+    NEKO_LOG_DEBUG("unit test", "{} type size {}", ProtoFactory::protoName<TestStruct3>(),
                   sizeof(TestStruct3::ProtoType));
 
-    NEKO_LOG_DEBUG("unit test", "{} size {}", ProtoFactory::proto_name<TestStruct4>(), sizeof(TestStruct4));
-    NEKO_LOG_DEBUG("unit test", "{} type size {}", ProtoFactory::proto_name<TestStruct4>(),
+    NEKO_LOG_DEBUG("unit test", "{} size {}", ProtoFactory::protoName<TestStruct4>(), sizeof(TestStruct4));
+    NEKO_LOG_DEBUG("unit test", "{} type size {}", ProtoFactory::protoName<TestStruct4>(),
                   sizeof(TestStruct4::ProtoType));
 
     // 统计解析时长

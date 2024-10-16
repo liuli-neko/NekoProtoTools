@@ -150,7 +150,7 @@ This repository provides a default binary serializer.
 | NamePairValue\<std::string, T\> | yes | name len + value len | binary_serializer.hpp |
 
 **Note:**
-other types are supported like json, more info can see in json support which in folder "types", the binary len is 4 + value len * container size.
+container types are supported like json, more info can see in json support which in folder "types", the binary len is 4 + value len * container size.
 
 ##### 3.1.3. custom serializer
 

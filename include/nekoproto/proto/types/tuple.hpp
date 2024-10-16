@@ -62,7 +62,7 @@ inline bool save(SerializerT& sa, const std::tuple<Ts...>& value) {
 template <typename SerializerT, typename... Ts>
 inline bool load(SerializerT& sa, std::tuple<Ts...>& value) {
     uint32_t size = 0;
-    sa(makeSizeTag(size));
+    sa(make_size_tag(size));
     if (size != sizeof...(Ts)) {
         NEKO_LOG_ERROR("proto", "tuple size mismatch, expected: {}, got: {}", sizeof...(Ts), size);
         return false;

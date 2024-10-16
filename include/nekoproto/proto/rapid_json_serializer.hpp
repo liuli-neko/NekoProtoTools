@@ -14,7 +14,6 @@
 #if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
 #include "private/log.hpp"
 
-#include <fstream>
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/ostreamwrapper.h>
@@ -33,10 +32,6 @@
 #ifdef GetObject
 #undef GetObject
 #endif
-#endif
-
-#if NEKO_CPP_PLUS >= 17
-#include <optional>
 #endif
 
 #include "private/helpers.hpp"
@@ -59,7 +54,7 @@ template <typename BufferT = OutBufferWrapper>
 using PrettyJsonWriter = rapidjson::PrettyWriter<BufferT>;
 
 template <typename T, class enable = void>
-struct json_output_wrapper_type {
+struct json_output_wrapper_type { // NOLINT(readability-identifier-naming)
     using output_stream_type = void;
 };
 template <typename OutputStream, typename SourceEncoding, typename TargetEncoding, typename StackAllocator,
@@ -76,7 +71,7 @@ struct json_output_wrapper_type<
 };
 
 template <typename T, class enable = void>
-struct json_output_buffer_type {
+struct json_output_buffer_type { // NOLINT(readability-identifier-naming)
     using output_buffer_type = void;
 };
 
@@ -97,7 +92,7 @@ public:
     using ValueIterator  = JsonValue::ConstValueIterator;
 
 public:
-    inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null_){};
+    inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null){};
     inline ConstJsonIterator(MemberIterator begin, MemberIterator end) NEKO_NOEXCEPT : mMemberItBegin(begin),
                                                                                        mMemberItEnd(end),
                                                                                        mIndex(0),
@@ -109,7 +104,7 @@ public:
             ++mSize;
         }
         if (mSize == 0) {
-            mType = Null_;
+            mType = Null;
             return;
         }
     }
@@ -120,7 +115,7 @@ public:
                                                                                      mSize(std::distance(begin, end)),
                                                                                      mType(Value) {
         if (mSize == 0) {
-            mType = Null_;
+            mType = Null;
         }
     }
 
@@ -135,16 +130,13 @@ public:
         return *this;
     }
     inline bool eof() const NEKO_NOEXCEPT {
-        if (mType == Null_ || (mType == Value && mIndex >= mSize) || (mType == Member && mMemberIt == mMemberItEnd)) {
-            return true;
-        }
-        return false;
+        return mType == Null || (mType == Value && mIndex >= mSize) || (mType == Member && mMemberIt == mMemberItEnd);
     }
     inline std::size_t size() const NEKO_NOEXCEPT { return mSize; }
     inline const JsonValue& value() NEKO_NOEXCEPT {
-        static JsonValue null;
+        static JsonValue kNull;
         if (eof()) {
-            return null;
+            return kNull;
         }
         switch (mType) {
         case Value:
@@ -152,24 +144,22 @@ public:
         case Member:
             return mMemberIt->value;
         default:
-            return null; // should never reach here, but needed to avoid compiler warning
+            return kNull; // should never reach here, but needed to avoid compiler warning
         }
     }
     inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
         if (mType == Member && mMemberIt != mMemberItEnd) {
             return {mMemberIt->name.GetString(), mMemberIt->name.GetStringLength()};
-        } else {
-            return {};
         }
+        return {};
     };
-    inline const JsonValue* move_to_member(const NEKO_STRING_VIEW& name) NEKO_NOEXCEPT {
+    inline const JsonValue* moveToMember(const NEKO_STRING_VIEW& name) NEKO_NOEXCEPT {
         auto it = mMemberMap.find(name);
         if (it != mMemberMap.end()) {
             mMemberIt = it->second;
             return &(mMemberIt)->value;
-        } else {
-            return nullptr;
         }
+        return nullptr;
     };
 
 private:
@@ -177,34 +167,38 @@ private:
     ValueIterator mValueItBegin;
     std::size_t mIndex, mSize;
     std::unordered_map<NEKO_STRING_VIEW, MemberIterator> mMemberMap;
-    enum Type { Value, Member, Null_ } mType;
+    enum Type { Value, Member, Null } mType;
 };
 } // namespace detail
 
 struct JsonOutputFormatOptions {
 public:
     enum class Indent : char {
-        kSpace   = ' ',
-        kNewline = '\n',
-        kTab     = '\t',
+        Space   = ' ',
+        Newline = '\n',
+        Tab     = '\t',
     };
     using FormatOptions = rapidjson::PrettyFormatOptions;
-    static JsonOutputFormatOptions Default() { return JsonOutputFormatOptions(); }
-    static JsonOutputFormatOptions Compact() { return JsonOutputFormatOptions(Indent::kSpace, 0); }
-    explicit JsonOutputFormatOptions(Indent indentChar = Indent::kSpace, uint32_t indentLength = 4,
+    static JsonOutputFormatOptions Default() { // NOLINT(readability-identifier-naming)
+        return JsonOutputFormatOptions();
+    }
+    static JsonOutputFormatOptions Compact() { // NOLINT(readability-identifier-naming)
+        return JsonOutputFormatOptions(Indent::Space, 0);
+    }
+    explicit JsonOutputFormatOptions(Indent indentChar = Indent::Space, uint32_t indentLength = 4,
                                      FormatOptions formatOptions = FormatOptions::kFormatSingleLineArray,
                                      int precision               = detail::JsonWriter<>::kDefaultMaxDecimalPlaces)
         : indentChar(static_cast<char>(indentChar)), indentLength(indentLength), formatOptions(formatOptions),
           precision(precision) {}
 
-    char indentChar             = static_cast<char>(Indent::kSpace);
+    char indentChar             = static_cast<char>(Indent::Space);
     int indentLength            = 4;
     FormatOptions formatOptions = FormatOptions::kFormatDefault;
     int precision               = detail::PrettyJsonWriter<>::kDefaultMaxDecimalPlaces;
 };
 
-inline auto makePrettyJsonWriter(const JsonOutputFormatOptions& options = JsonOutputFormatOptions::Default())
-    NEKO_NOEXCEPT->detail::PrettyJsonWriter<detail::OutBufferWrapper> {
+inline auto make_pretty_json_writer(const JsonOutputFormatOptions& options = JsonOutputFormatOptions::Default())
+    NEKO_NOEXCEPT -> detail::PrettyJsonWriter<detail::OutBufferWrapper> {
     auto writer = detail::PrettyJsonWriter<detail::OutBufferWrapper>(0);
     writer.SetIndent(options.indentChar, options.indentLength);
     writer.SetMaxDecimalPlaces(options.precision);
@@ -244,7 +238,7 @@ public:
           mWriter(std::move(other.mWriter)) {}
     inline ~RapidJsonOutputSerializer() { end(); }
     template <typename T>
-    inline bool saveValue(SizeTag<T> const&) {
+    inline bool saveValue(SizeTag<T> const& /*unused*/) {
         return true;
     }
 
@@ -292,7 +286,7 @@ public:
         return mWriter.Key(value.name, value.nameLen) && (*this)(value.value);
     }
 #endif
-    inline bool startArray(const std::size_t) NEKO_NOEXCEPT {
+    inline bool startArray(const std::size_t /*unused*/) NEKO_NOEXCEPT {
         ++mCurrentLevel;
         return mWriter.StartArray();
     }
@@ -300,7 +294,7 @@ public:
         --mCurrentLevel;
         return mWriter.EndArray();
     }
-    inline bool startObject(const std::size_t = -1) NEKO_NOEXCEPT {
+    inline bool startObject(const std::size_t /*unused*/ = -1) NEKO_NOEXCEPT {
         ++mCurrentLevel;
         return mWriter.StartObject();
     }
@@ -341,7 +335,7 @@ private:
  * you should not is(vec), because it will try unfold the first node as array.
  * you should call a load function like load(sa, vec). or do it like this:
  * size_t size;
- * is(makeSizeTag(size));
+ * is(make_size_tag(size));
  * vec.resize(size);
  * for (auto &v : vec) {
  *     is(v);
@@ -367,7 +361,9 @@ public:
 
     inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if ((*mCurrentItem).eof()) return {};
+        if ((*mCurrentItem).eof()) {
+            return {};
+        }
         return (*mCurrentItem).name();
     }
 
@@ -401,15 +397,17 @@ public:
         if (!(*mCurrentItem).value().IsString()) {
             return false;
         }
-        const auto& v = (*mCurrentItem).value();
-        value         = std::basic_string<CharT, Traits, Alloc>{v.GetString(), v.GetStringLength()};
+        const auto& cvalue = (*mCurrentItem).value();
+        value              = std::basic_string<CharT, Traits, Alloc>{cvalue.GetString(), cvalue.GetStringLength()};
         ++(*mCurrentItem);
         return true;
     }
 
     inline bool loadValue(int64_t& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsInt64()) return false;
+        if (!(*mCurrentItem).value().IsInt64()) {
+            return false;
+        }
         value = (*mCurrentItem).value().GetInt64();
         ++(*mCurrentItem);
         return true;
@@ -417,7 +415,9 @@ public:
 
     inline bool loadValue(uint64_t& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsUint64()) return false;
+        if (!(*mCurrentItem).value().IsUint64()) {
+            return false;
+        }
         value = (*mCurrentItem).value().GetUint64();
         ++(*mCurrentItem);
         return true;
@@ -425,7 +425,9 @@ public:
 
     inline bool loadValue(float& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsNumber()) return false;
+        if (!(*mCurrentItem).value().IsNumber()) {
+            return false;
+        }
         value = (*mCurrentItem).value().GetDouble();
         ++(*mCurrentItem);
         return true;
@@ -433,7 +435,9 @@ public:
 
     inline bool loadValue(double& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsNumber()) return false;
+        if (!(*mCurrentItem).value().IsNumber()) {
+            return false;
+        }
         value = (*mCurrentItem).value().GetDouble();
         ++(*mCurrentItem);
         return true;
@@ -441,7 +445,9 @@ public:
 
     inline bool loadValue(bool& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsBool()) return false;
+        if (!(*mCurrentItem).value().IsBool()) {
+            return false;
+        }
         value = (*mCurrentItem).value().GetBool();
         ++(*mCurrentItem);
         return true;
@@ -449,7 +455,9 @@ public:
 
     inline bool loadValue(std::nullptr_t) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsNull()) return false;
+        if (!(*mCurrentItem).value().IsNull()) {
+            return false;
+        }
         ++(*mCurrentItem);
         return true;
     }
@@ -465,10 +473,10 @@ public:
     template <typename T>
     inline bool loadValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        const auto& v = (*mCurrentItem).move_to_member({value.name, value.nameLen});
-        bool ret      = true;
+        const auto& cvalue = (*mCurrentItem).moveToMember({value.name, value.nameLen});
+        bool ret           = true;
         if constexpr (traits::is_optional<T>::value) {
-            if (nullptr == v || v->IsNull()) {
+            if (nullptr == cvalue || cvalue->IsNull()) {
                 value.value.reset();
 #if defined(NEKO_VERBOSE_LOGS)
                 NEKO_LOG_INFO("JsonSerializer", "optional field {} is not find.",
@@ -478,7 +486,7 @@ public:
 #if defined(NEKO_JSON_MAKE_STR_NONE_TO_NULL)
                 // Why would anyone write "None" in json?
                 // I've seen it, and it's a disaster.
-                if (v->IsString() && std::strcmp(v->GetString(), "None") == 0) {
+                if (cvalue->IsString() && std::strcmp(cvalue->GetString(), "None") == 0) {
                     value.value.reset();
 #if defined(NEKO_VERBOSE_LOGS)
                     NEKO_LOG_WARN("JsonSerializer", "optional field {} is \"None\".",
@@ -501,7 +509,7 @@ public:
 #endif
             }
         } else {
-            if (nullptr == v) {
+            if (nullptr == cvalue) {
 #if defined(NEKO_VERBOSE_LOGS)
                 NEKO_LOG_ERROR("JsonSerializer", "field {} is not find.", std::string(value.name, value.nameLen));
 #endif
@@ -604,11 +612,11 @@ inline bool epilogue(RapidJsonInputSerializer& sa, const NameValuePair<T>& value
 }
 
 template <typename T, typename WriterT>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const NameValuePair<T>&) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, typename WriterT>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const NameValuePair<T>&) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
@@ -636,12 +644,12 @@ inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const SizeTag<T>& v
 // class apart from name value pair, size tag, std::string, NEKO_STRING_VIEW
 template <class T, traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::value> =
                        traits::default_value_for_enable>
-inline bool prologue(RapidJsonInputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return sa.startNode();
 }
 template <typename T, traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::value> =
                           traits::default_value_for_enable>
-inline bool epilogue(RapidJsonInputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return sa.finishNode();
 }
 
@@ -650,7 +658,7 @@ template <class T, typename WriterT,
                               !is_minimal_serializable<T>::valueT,
                               !traits::has_method_const_serialize<T, RapidJsonOutputSerializer<WriterT>>::value> =
               traits::default_value_for_enable>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const T&) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
@@ -658,7 +666,7 @@ template <typename T, typename WriterT,
           traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::valueT,
                               !traits::has_method_const_serialize<T, RapidJsonOutputSerializer<WriterT>>::value> =
               traits::default_value_for_enable>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const T&) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
@@ -666,70 +674,72 @@ template <typename T, typename WriterT,
           traits::enable_if_t<traits::has_method_const_serialize<T, RapidJsonOutputSerializer<WriterT>>::value ||
                               traits::has_method_serialize<T, RapidJsonOutputSerializer<WriterT>>::value> =
               traits::default_value_for_enable>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const T&) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return sa.startObject(-1);
 }
 template <typename T, typename WriterT,
           traits::enable_if_t<traits::has_method_const_serialize<T, RapidJsonOutputSerializer<WriterT>>::value ||
                               traits::has_method_serialize<T, RapidJsonOutputSerializer<WriterT>>::value> =
               traits::default_value_for_enable>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const T&) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return sa.endObject();
 }
 
 // #########################################################
 // # arithmetic types
 template <typename T, traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool prologue(RapidJsonInputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(RapidJsonInputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename T, typename WriterT,
           traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const T&) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, typename WriterT,
           traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const T&) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 // #####################################################
 // # std::string
 template <typename CharT, typename Traits, typename Alloc>
-inline bool prologue(RapidJsonInputSerializer& sa, const std::basic_string<CharT, Traits, Alloc>&) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonInputSerializer& sa,
+                     const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename CharT, typename Traits, typename Alloc>
-inline bool epilogue(RapidJsonInputSerializer& sa, const std::basic_string<CharT, Traits, Alloc>&) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonInputSerializer& sa,
+                     const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename CharT, typename Traits, typename Alloc, typename WriterT>
 inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa,
-                     const std::basic_string<CharT, Traits, Alloc>&) NEKO_NOEXCEPT {
+                     const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename CharT, typename Traits, typename Alloc, typename WriterT>
 inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa,
-                     const std::basic_string<CharT, Traits, Alloc>&) NEKO_NOEXCEPT {
+                     const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 #if NEKO_CPP_PLUS >= 17
 template <typename CharT, typename Traits, typename WriterT>
 inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa,
-                     const std::basic_string_view<CharT, Traits>&) NEKO_NOEXCEPT {
+                     const std::basic_string_view<CharT, Traits>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename CharT, typename Traits, typename WriterT>
 inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa,
-                     const std::basic_string_view<CharT, Traits>&) NEKO_NOEXCEPT {
+                     const std::basic_string_view<CharT, Traits>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 #endif
@@ -750,22 +760,22 @@ inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const std::nullptr_
 // #####################################################
 // # minimal serializable
 template <typename T, traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
-inline bool prologue(RapidJsonInputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(RapidJsonInputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename T, typename WriterT,
           traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const T&) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, typename WriterT,
           traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const T&) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
