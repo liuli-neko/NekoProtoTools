@@ -495,7 +495,7 @@ private:
  * you should not is(vec), because it will try unfold the first node as array.
  * you should call a load function like load(sa, vec). or do it like this:
  * size_t size;
- * is(makeSizeTag(size));
+ * is(make_size_tag(size));
  * vec.resize(size);
  * for (auto &v : vec) {
  *     is(v);

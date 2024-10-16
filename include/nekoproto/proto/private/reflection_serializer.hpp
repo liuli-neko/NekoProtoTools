@@ -11,7 +11,6 @@
 
 #pragma once
 
-#include <cstddef>
 #include <map>
 #include <memory>
 #include <stdexcept>
@@ -28,13 +27,13 @@ struct NameValuePair;
 
 namespace detail {
 template <typename T>
-struct is_name_value_pair {
-    static constexpr bool value = false;
+struct is_name_value_pair { // NOLINT(readability-identifier-naming)
+    static constexpr bool Value = false;
 };
 
 template <typename T>
 struct is_name_value_pair<NameValuePair<T>> {
-    static constexpr bool value = true;
+    static constexpr bool Value = true;
 };
 
 class ReflectionFieldBase {
@@ -170,22 +169,22 @@ public:
 
     template <typename... Ts>
     inline bool operator()(const Ts&... fields) {
-        return process(fields...);
+        return _process(fields...);
     }
 
     inline ReflectionObject* getObject() { return &mObject; }
 
 private:
     template <typename T, typename... Ts>
-    inline bool process(const T& field, const Ts&... fields) {
-        return process(field) && process(fields...);
+    inline bool _process(const T& field, const Ts&... fields) {
+        return _process(field) && _process(fields...);
     }
     template <typename T>
-    inline bool process(const NameValuePair<T>& field) {
+    inline bool _process(const NameValuePair<T>& field) {
         return nullptr != mObject.bindField(NEKO_STRING_VIEW(field.name, field.nameLen), std::addressof(field.value));
     }
-    template <typename T, typename std::enable_if<!is_name_value_pair<T>::value, char>::type = 0>
-    inline bool process(const T&) {
+    template <typename T, typename std::enable_if<!is_name_value_pair<T>::Value, char>::type = 0>
+    inline bool _process(const T& /*unused*/) {
         NEKO_LOG_WARN("ReflectionSerializer", "Types other than NameValuePair are not supported reflection");
         return true;
     }

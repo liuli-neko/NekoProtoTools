@@ -131,7 +131,7 @@ inline std::vector<neko_string_view> _parse_names(const char* names) NEKO_NOEXCE
 template <typename SerializerT, typename NamesT, typename T>
 inline bool unfold_function_imp(SerializerT& serializer, const NamesT& namesVec, int i, T&& value) NEKO_NOEXCEPT {
     NEKO_ASSERT(i < namesVec.size(), "serializer", "unfoldFunctionImp: index out of range");
-    return serializer(makeNameValuePair(namesVec[i].data(), namesVec[i].size(), std::forward<T>(value)));
+    return serializer(make_name_value_pair(namesVec[i].data(), namesVec[i].size(), std::forward<T>(value)));
 }
 
 template <typename SerializerT, typename NamesT, typename T, typename... Args>
@@ -139,7 +139,7 @@ inline bool unfold_function_imp(SerializerT& serializer, const NamesT& namesVec,
                                 Args&&... args) NEKO_NOEXCEPT {
     bool ret = 0;
     NEKO_ASSERT(i < namesVec.size(), "serializer", "unfoldFunctionImp: index out of range");
-    ret = serializer(makeNameValuePair(namesVec[i].data(), namesVec[i].size(), std::forward<T>(value)));
+    ret = serializer(make_name_value_pair(namesVec[i].data(), namesVec[i].size(), std::forward<T>(value)));
 
     return unfold_function_imp<SerializerT>(serializer, namesVec, i + 1, args...) && ret;
 }
