@@ -21,8 +21,8 @@ template <typename Serializer, typename K, typename V>
 inline bool save(Serializer& sa, const std::pair<K, V>& value) {
     bool ret = true;
     ret      = sa.startObject(2) && ret;
-    ret      = sa(makeNameValuePair("first", 5, value.first)) && ret;
-    ret      = sa(makeNameValuePair("second", 6, value.second)) && ret;
+    ret      = sa(make_name_value_pair("first", 5, value.first)) && ret;
+    ret      = sa(make_name_value_pair("second", 6, value.second)) && ret;
     ret      = sa.endObject() && ret;
     return ret;
 }
@@ -33,9 +33,9 @@ inline bool load(Serializer& sa, std::pair<K, V>& value) {
     V v;
     bool ret;
     std::size_t s;
-    ret = sa(makeSizeTag(s));
+    ret = sa(make_size_tag(s));
     if (ret) {
-        if (sa(makeNameValuePair("first", 5, k)) && sa(makeNameValuePair("second", 6, v))) {
+        if (sa(make_name_value_pair("first", 5, k)) && sa(make_name_value_pair("second", 6, v))) {
             value = std::make_pair(std::move(k), std::move(v));
         }
     }

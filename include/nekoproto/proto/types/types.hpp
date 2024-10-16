@@ -16,6 +16,7 @@
 #if NEKO_CPP_PLUS >= 17
 #include "struct_unwrap.hpp"
 #include "optional.hpp"
+#include "byte.hpp"
 #endif
 #include "tuple.hpp"
 #if NEKO_CPP_PLUS >= 20

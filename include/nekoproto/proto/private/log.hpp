@@ -11,6 +11,7 @@
 #pragma once
 
 #include "global.hpp"
+#include <cstring>
 
 #if !defined(NDEBUG) && !defined(NEKO_PROTO_NDEBUG)
 #define NEKO_PROTO_DEBUG
@@ -31,7 +32,7 @@
 #include <tuple>
 
 NEKO_BEGIN_NAMESPACE
-struct logContext {
+struct LogContext {
     const char* module;
     const char* file;
     const char* func;
@@ -40,23 +41,23 @@ struct logContext {
     const char* color;
 };
 namespace logdetail {
-inline std::function<void(const char* level, const char* message, const logContext& context)>&
-loggerFunc(std::function<void(const char* level, const char* message, const logContext& context)> logger = nullptr) {
-    static std::function<void(const char* level, const char* message, const logContext& context)> loggerFunc = logger;
+inline std::function<void(const char* level, const char* message, const LogContext& context)>&
+logger_func(std::function<void(const char* level, const char* message, const LogContext& context)> logger = nullptr) {
+    static std::function<void(const char* level, const char* message, const LogContext& context)> kLoggerFunc = logger;
     if (logger) {
-        loggerFunc = logger;
+        kLoggerFunc = logger;
     }
-    return loggerFunc;
+    return kLoggerFunc;
 }
 } // namespace logdetail
 inline void
-installLogger(std::function<void(const char* level, const char* message, const logContext& context)> logger) {
-    logdetail::loggerFunc(logger);
+install_logger(std::function<void(const char* level, const char* message, const LogContext& context)> logger) {
+    logdetail::logger_func(logger);
 }
 namespace logdetail {
 inline std::string to_lower(const std::string& str) {
     std::string result = str; // 创建字符串副本
-    std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c) { return std::tolower(c); });
+    std::transform(result.begin(), result.end(), result.begin(), [](unsigned char ch) { return std::tolower(ch); });
     return result;
 }
 #define ANSI_COLOR_TABLE                                                                                               \
@@ -91,59 +92,59 @@ inline const char* ansi_color_code(const char* name) {
 #endif
 #undef ANSI_COLOR_TABLE
 
-enum log_fliter_mode {
+enum LogFliterMode {
     FilterInclude,
     FilterExclude,
 };
 inline bool log_level_filter(const std::string& level, int op) {
-    static std::vector<std::string> levels = {"fatal", "error", "warn", "info"};
-    static std::set<std::string> filter    = {"fatal", "error", "warn"};
+    static std::vector<std::string> kLevels = {"fatal", "error", "warn", "info"};
+    static std::set<std::string> kFilter    = {"fatal", "error", "warn"};
     if (op == 0) {
         if (level == "debug") {
-            filter.insert("debug");
+            kFilter.insert("debug");
         } else {
-            filter.clear();
-            for (const auto& l : levels) {
-                if (l != level) {
-                    filter.insert(l);
+            kFilter.clear();
+            for (const auto& mlevel : kLevels) {
+                if (mlevel != level) {
+                    kFilter.insert(mlevel);
                 } else {
-                    filter.insert(l);
+                    kFilter.insert(mlevel);
                     break;
                 }
             }
         }
-    } else if (op == 1) {
-        if (filter.find(level) == filter.end()) return false;
-    } else {
-        if (filter.find(level) != filter.end()) return false;
+        return true;
     }
-    return true;
+    if (op == 1) {
+        return kFilter.find(level) != kFilter.end();
+    }
+    return kFilter.find(level) == kFilter.end();
 }
 inline std::tuple<int, std::set<std::string>>& log_filter(int opt, int flag = FilterInclude,
                                                           const std::string& module = "") {
-    static std::tuple<int, std::set<std::string>> neko_log_filter = {FilterExclude, {}};
+    static std::tuple<int, std::set<std::string>> kNekoLogFilter = {FilterExclude, {}};
     if (opt == 0) {
-        if (flag == std::get<0>(neko_log_filter)) {
-            std::get<1>(neko_log_filter).insert(to_lower(module));
+        if (flag == std::get<0>(kNekoLogFilter)) {
+            std::get<1>(kNekoLogFilter).insert(to_lower(module));
         } else {
-            std::get<0>(neko_log_filter) = flag;
-            std::get<1>(neko_log_filter).clear();
-            std::get<1>(neko_log_filter).insert(to_lower(module));
+            std::get<0>(kNekoLogFilter) = flag;
+            std::get<1>(kNekoLogFilter).clear();
+            std::get<1>(kNekoLogFilter).insert(to_lower(module));
         }
     } else if (opt == 2) {
-        std::get<1>(neko_log_filter).clear();
-        std::get<0>(neko_log_filter) = FilterExclude;
+        std::get<1>(kNekoLogFilter).clear();
+        std::get<0>(kNekoLogFilter) = FilterExclude;
     }
-    return neko_log_filter;
+    return kNekoLogFilter;
 }
 template <typename... Args>
 inline void add_log_filter(const int flag, Args&&... args) {
     (log_filter(0, flag, std::forward<Args>(args)), ...);
 }
 
-inline void neko_proto_private_log_out(const char* level, const char* message, const logContext& context) {
-    if (loggerFunc() != nullptr) {
-        loggerFunc()(level, message, context);
+inline void neko_proto_private_log_out(const char* level, const char* message, const LogContext& context) {
+    if (logger_func() != nullptr) {
+        logger_func()(level, message, context);
         return;
     }
     if (!log_level_filter(level, 1)) {
@@ -152,33 +153,35 @@ inline void neko_proto_private_log_out(const char* level, const char* message, c
     auto& [flag, filters] = log_filter(1);
     if (flag == FilterExclude && !filters.empty() && filters.find(to_lower(context.module)) != filters.end()) {
         return;
-    } else if (flag == FilterInclude && filters.empty()) {
-        return;
-    } else if (flag == FilterInclude && filters.find(to_lower(context.module)) == filters.end()) {
+    }
+    if (flag == FilterInclude && filters.empty()) {
         return;
     }
-    time_t t     = std::chrono::system_clock::to_time_t(context.time);
+    if (flag == FilterInclude && filters.find(to_lower(context.module)) == filters.end()) {
+        return;
+    }
+    time_t time  = std::chrono::system_clock::to_time_t(context.time);
     char buf[64] = {0};
-    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", localtime(&t));
-    uint64_t dis_millseconds =
+    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", localtime(&time));
+    uint64_t disMillseconds =
         std::chrono::duration_cast<std::chrono::milliseconds>(context.time.time_since_epoch()).count() -
         std::chrono::duration_cast<std::chrono::seconds>(context.time.time_since_epoch()).count() * 1000;
 #if defined(NEKO_PROTO_LOG_CONTEXT)
-    std::string file_str = context.file;
-    if (file_str.find_last_of('/') != std::string::npos) {
-        file_str = file_str.substr(file_str.find_last_of('/') + 1);
-    } else if (file_str.find_last_of('\\') != std::string::npos) {
-        file_str = file_str.substr(file_str.find_last_of('\\') + 1);
+    std::string fileStr = context.file;
+    if (fileStr.find_last_of('/') != std::string::npos) {
+        fileStr = fileStr.substr(fileStr.find_last_of('/') + 1);
+    } else if (fileStr.find_last_of('\\') != std::string::npos) {
+        fileStr = fileStr.substr(fileStr.find_last_of('\\') + 1);
     }
-    std::string func_str = context.func;
-    if (func_str.find_last_of(':') != std::string::npos) {
-        func_str = func_str.substr(func_str.find_last_of(':') + 1);
+    std::string funcStr = context.func;
+    if (funcStr.find_last_of(':') != std::string::npos) {
+        funcStr = funcStr.substr(funcStr.find_last_of(':') + 1);
     }
     fprintf(stderr, "%s[%s.%03d] %s - [%s:%d][%s] [%s]%s %s\n", ansi_color_code(context.color), buf,
-            static_cast<int>(dis_millseconds), level, file_str.c_str(), context.line, func_str.c_str(), context.module,
+            static_cast<int>(disMillseconds), level, fileStr.c_str(), context.line, funcStr.c_str(), context.module,
             ansi_color_code("reset"), message);
 #else
-    fprintf(stderr, "[%s.%03d] %s - [%s] %s\n", buf, static_cast<int>(dis_millseconds), level, context.module, message);
+    fprintf(stderr, "[%s.%03d] %s - [%s] %s\n", buf, static_cast<int>(disMillseconds), level, context.module, message);
 #endif
 }
 } // namespace logdetail
