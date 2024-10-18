@@ -930,8 +930,7 @@ TEST_F(JsonSerializerTest, Struct) {
     std::ofstream fs("test.json");
     {
         std::vector<char> buffer;
-        RapidJsonOutputSerializer<detail::PrettyJsonWriter<>> output(
-            buffer, make_pretty_json_writer(JsonOutputFormatOptions::Default()));
+        RapidJsonOutputSerializer<detail::PrettyJsonWriter<>> output(buffer, JsonOutputFormatOptions::Default());
         EXPECT_TRUE(output.startObject(1));
         EXPECT_TRUE(output(make_name_value_pair("a", testp)));
         EXPECT_TRUE(output.end());

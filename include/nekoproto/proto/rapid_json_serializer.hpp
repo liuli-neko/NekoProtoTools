@@ -59,35 +59,60 @@ struct json_output_buffer_type { // NOLINT(readability-identifier-naming)
 };
 
 template <>
-struct json_output_buffer_type<std::vector<char>&, void> {
-    using output_buffer_type = std::vector<char>&;
+struct json_output_buffer_type<std::vector<char>, void> {
+    using output_buffer_type = std::vector<char>;
     using wrapper_type       = OutBufferWrapper;
-    using writer_type       = JsonWriter<OutBufferWrapper>;
+    using writer_type        = JsonWriter<OutBufferWrapper>;
     using char_type          = char;
 };
 
 template <typename T>
 struct json_output_buffer_type<T, typename std::enable_if<std::is_base_of<std::ostream, T>::value>::type> {
-    using output_buffer_type = typename std::remove_reference<T>::type&;
+    using output_buffer_type = typename std::remove_reference<T>::type;
     using wrapper_type       = rapidjson::BasicOStreamWrapper<T>;
-    using writer_type       = JsonWriter<rapidjson::BasicOStreamWrapper<T>>;
+    using writer_type        = JsonWriter<rapidjson::BasicOStreamWrapper<T>>;
     using char_type          = typename rapidjson::BasicOStreamWrapper<T>::Ch;
+};
+
+template <>
+struct json_output_buffer_type<OutBufferWrapper, void> {
+    using output_buffer_type = std::vector<char>;
+    using wrapper_type       = OutBufferWrapper;
+    using char_type          = OutBufferWrapper::Ch;
 };
 
 template <typename T>
 struct json_output_buffer_type<PrettyJsonWriter<T>, void> {
     using output_buffer_type = typename json_output_buffer_type<T>::output_buffer_type;
     using wrapper_type       = typename json_output_buffer_type<T>::wrapper_type;
-    using writer_type       = typename json_output_buffer_type<T>::writer_type;
+    using writer_type        = PrettyJsonWriter<T>;
     using char_type          = typename json_output_buffer_type<T>::char_type;
 };
+
+template <typename T, class enable = void>
+struct json_input_buffer_type : std::false_type {
+    using input_buffer_type = void;
+};
+
+template <typename T>
+struct json_input_buffer_type<T, typename std::enable_if<std::is_base_of<std::istream, T>::value>::type>
+    : std::true_type {
+    using input_buffer_type = T;
+};
+
+template <typename T, class enable = void>
+struct is_pretty_json_writer : std::false_type {};
+
+template <typename T>
+struct is_pretty_json_writer<PrettyJsonWriter<T>> : std::true_type {};
+
 class ConstJsonIterator {
 public:
     using MemberIterator = JsonValue::ConstMemberIterator;
     using ValueIterator  = JsonValue::ConstValueIterator;
 
 public:
-    inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null){};
+    inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null) {};
     inline ConstJsonIterator(MemberIterator begin, MemberIterator end) NEKO_NOEXCEPT : mMemberItBegin(begin),
                                                                                        mMemberItEnd(end),
                                                                                        mIndex(0),
@@ -192,14 +217,23 @@ public:
     int precision               = detail::PrettyJsonWriter<>::kDefaultMaxDecimalPlaces;
 };
 
-inline auto make_pretty_json_writer(const JsonOutputFormatOptions& options = JsonOutputFormatOptions::Default())
-    NEKO_NOEXCEPT -> detail::PrettyJsonWriter<detail::OutBufferWrapper> {
-    auto writer = detail::PrettyJsonWriter<detail::OutBufferWrapper>(0);
-    writer.SetIndent(options.indentChar, options.indentLength);
-    writer.SetMaxDecimalPlaces(options.precision);
-    writer.SetFormatOptions(options.formatOptions);
-    return std::move(writer);
-}
+namespace detail {
+template <typename T, class enable = void>
+struct set_json_format_option { // NOLINT(readability-identifier-naming)
+    static void setting(T& /* unused */, const JsonOutputFormatOptions& /* unused */) {
+        NEKO_LOG_INFO("rapidjson", "No output format options support for this writer({})", _class_name<T>());
+    };
+};
+
+template <typename T>
+struct set_json_format_option<T, typename std::enable_if<is_pretty_json_writer<T>::value>::type> {
+    static void setting(T& writer, const JsonOutputFormatOptions& options) {
+        writer.SetIndent(options.indentChar, options.indentLength);
+        writer.SetFormatOptions(options.formatOptions);
+        writer.SetMaxDecimalPlaces(options.precision);
+    }
+};
+} // namespace detail
 
 template <typename BufferT>
 class RapidJsonOutputSerializer : public detail::OutputSerializer<RapidJsonOutputSerializer<BufferT>> {
@@ -208,17 +242,26 @@ public:
 
 public:
     explicit inline RapidJsonOutputSerializer(
-        typename detail::json_output_buffer_type<BufferT>::output_buffer_type& buffer)
-        NEKO_NOEXCEPT : detail::OutputSerializer<RapidJsonOutputSerializer>(this),
-                        mStream(buffer),
-                        mWriter(mStream) {}
+        typename detail::json_output_buffer_type<BufferT>::output_buffer_type& buffer) NEKO_NOEXCEPT
+        : detail::OutputSerializer<RapidJsonOutputSerializer>(this),
+          mStream(buffer),
+          mWriter(mStream) {}
 
     explicit inline RapidJsonOutputSerializer(
         typename detail::json_output_buffer_type<BufferT>::output_buffer_type& buffer,
         WriterType&& writer) NEKO_NOEXCEPT : detail::OutputSerializer<RapidJsonOutputSerializer>(this),
-                                          mStream(buffer),
-                                          mWriter(std::move(writer)) {
+                                             mStream(buffer),
+                                             mWriter(std::move(writer)) {
         mWriter.Reset(mStream);
+    }
+
+    explicit inline RapidJsonOutputSerializer(
+        typename detail::json_output_buffer_type<BufferT>::output_buffer_type& buffer,
+        const JsonOutputFormatOptions& formatOptions) NEKO_NOEXCEPT
+        : detail::OutputSerializer<RapidJsonOutputSerializer>(this),
+          mStream(buffer),
+          mWriter(mStream) {
+        detail::set_json_format_option<WriterType>::setting(mWriter, formatOptions);
     }
 
     inline RapidJsonOutputSerializer(const RapidJsonOutputSerializer& other) NEKO_NOEXCEPT
@@ -335,7 +378,8 @@ private:
  * }
  *
  */
-class RapidJsonInputSerializer : public detail::InputSerializer<RapidJsonInputSerializer> {
+template <typename BufferT>
+class RapidJsonInputSerializer : public detail::InputSerializer<RapidJsonInputSerializer<BufferT>> {
 
 public:
     inline explicit RapidJsonInputSerializer(const char* buf, std::size_t size) NEKO_NOEXCEPT
@@ -344,12 +388,22 @@ public:
           mItemStack() {
         mDocument.Parse(buf, size);
     }
-    inline explicit RapidJsonInputSerializer(rapidjson::IStreamWrapper& stream) NEKO_NOEXCEPT
+
+    inline explicit RapidJsonInputSerializer(BufferT& stream) NEKO_NOEXCEPT
         : detail::InputSerializer<RapidJsonInputSerializer>(this),
           mDocument(),
+          mStream(new rapidjson::BasicIStreamWrapper<BufferT>(stream)),
           mItemStack() {
-        mDocument.ParseStream(stream);
+        mDocument.ParseStream(*mStream);
     }
+
+    inline ~RapidJsonInputSerializer() NEKO_NOEXCEPT {
+        if (mStream) {
+            delete mStream;
+            mStream = nullptr;
+        }
+    }
+
     inline operator bool() const NEKO_NOEXCEPT { return mDocument.GetParseError() == rapidjson::kParseErrorNone; }
 
     inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
@@ -489,7 +543,7 @@ public:
                 }
 #endif
                 typename traits::is_optional<T>::value_type result;
-                ret = operator()(result);
+                ret = (*this)(result);
                 value.value.emplace(std::move(result));
 #if defined(NEKO_VERBOSE_LOGS)
                 if (ret) {
@@ -508,7 +562,7 @@ public:
 #endif
                 return false;
             }
-            ret = operator()(value.value);
+            ret = (*this)(value.value);
 #if defined(NEKO_VERBOSE_LOGS)
             if (ret) {
                 NEKO_LOG_INFO("JsonSerializer", "field {} get value success.", std::string(value.name, value.nameLen));
@@ -586,7 +640,8 @@ private:
 private:
     detail::JsonDocument mDocument;
     std::vector<detail::ConstJsonIterator> mItemStack;
-    detail::ConstJsonIterator* mCurrentItem;
+    detail::ConstJsonIterator* mCurrentItem          = nullptr;
+    rapidjson::BasicIStreamWrapper<BufferT>* mStream = nullptr;
 };
 
 // #######################################################
@@ -595,12 +650,12 @@ private:
 
 // #######################################################
 // name value pair
-template <typename T>
-inline bool prologue(RapidJsonInputSerializer& sa, const NameValuePair<T>& value) NEKO_NOEXCEPT {
+template <typename T, typename BufferT>
+inline bool prologue(RapidJsonInputSerializer<BufferT>& sa, const NameValuePair<T>& value) NEKO_NOEXCEPT {
     return true;
 }
-template <typename T>
-inline bool epilogue(RapidJsonInputSerializer& sa, const NameValuePair<T>& value) NEKO_NOEXCEPT {
+template <typename T, typename BufferT>
+inline bool epilogue(RapidJsonInputSerializer<BufferT>& sa, const NameValuePair<T>& value) NEKO_NOEXCEPT {
     return true;
 }
 
@@ -615,12 +670,12 @@ inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const NameValuePair
 
 // #########################################################
 //  size tag
-template <typename T>
-inline bool prologue(RapidJsonInputSerializer& sa, const SizeTag<T>& value) NEKO_NOEXCEPT {
+template <typename T, typename BufferT>
+inline bool prologue(RapidJsonInputSerializer<BufferT>& sa, const SizeTag<T>& value) NEKO_NOEXCEPT {
     return true;
 }
-template <typename T>
-inline bool epilogue(RapidJsonInputSerializer& sa, const SizeTag<T>& value) NEKO_NOEXCEPT {
+template <typename T, typename BufferT>
+inline bool epilogue(RapidJsonInputSerializer<BufferT>& sa, const SizeTag<T>& value) NEKO_NOEXCEPT {
     return true;
 }
 
@@ -635,14 +690,16 @@ inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const SizeTag<T>& v
 
 // #########################################################
 // class apart from name value pair, size tag, std::string, NEKO_STRING_VIEW
-template <class T, traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::value> =
-                       traits::default_value_for_enable>
-inline bool prologue(RapidJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+template <
+    class T, typename BufferT,
+    traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::value> = traits::default_value_for_enable>
+inline bool prologue(RapidJsonInputSerializer<BufferT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return sa.startNode();
 }
-template <typename T, traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::value> =
-                          traits::default_value_for_enable>
-inline bool epilogue(RapidJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+template <
+    typename T, typename BufferT,
+    traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::value> = traits::default_value_for_enable>
+inline bool epilogue(RapidJsonInputSerializer<BufferT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return sa.finishNode();
 }
 
@@ -680,12 +737,14 @@ inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/
 
 // #########################################################
 // # arithmetic types
-template <typename T, traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool prologue(RapidJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+template <typename T, typename BufferT,
+          traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
+inline bool prologue(RapidJsonInputSerializer<BufferT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
-template <typename T, traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(RapidJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+template <typename T, typename BufferT,
+          traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
+inline bool epilogue(RapidJsonInputSerializer<BufferT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
@@ -702,13 +761,13 @@ inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/
 
 // #####################################################
 // # std::string
-template <typename CharT, typename Traits, typename Alloc>
-inline bool prologue(RapidJsonInputSerializer& sa,
+template <typename BufferT, typename CharT, typename Traits, typename Alloc>
+inline bool prologue(RapidJsonInputSerializer<BufferT>& sa,
                      const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
-template <typename CharT, typename Traits, typename Alloc>
-inline bool epilogue(RapidJsonInputSerializer& sa,
+template <typename BufferT, typename CharT, typename Traits, typename Alloc>
+inline bool epilogue(RapidJsonInputSerializer<BufferT>& sa,
                      const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
@@ -739,8 +798,14 @@ inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa,
 
 // #####################################################
 // # std::nullptr_t
-inline bool prologue(RapidJsonInputSerializer& sa, const std::nullptr_t) NEKO_NOEXCEPT { return true; }
-inline bool epilogue(RapidJsonInputSerializer& sa, const std::nullptr_t) NEKO_NOEXCEPT { return true; }
+template <typename BufferT>
+inline bool prologue(RapidJsonInputSerializer<BufferT>& sa, const std::nullptr_t) NEKO_NOEXCEPT {
+    return true;
+}
+template <typename BufferT>
+inline bool epilogue(RapidJsonInputSerializer<BufferT>& sa, const std::nullptr_t) NEKO_NOEXCEPT {
+    return true;
+}
 
 template <typename WriterT>
 inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const std::nullptr_t) NEKO_NOEXCEPT {
@@ -752,12 +817,14 @@ inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const std::nullptr_
 }
 // #####################################################
 // # minimal serializable
-template <typename T, traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
-inline bool prologue(RapidJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+template <typename T, typename BufferT,
+          traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
+inline bool prologue(RapidJsonInputSerializer<BufferT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
-template <typename T, traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(RapidJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+template <typename T, typename BufferT,
+          traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
+inline bool epilogue(RapidJsonInputSerializer<BufferT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
@@ -775,8 +842,8 @@ inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/
 // #####################################################
 // default JsonSerializer type definition
 struct RapidJsonSerializer {
-    using OutputSerializer = RapidJsonOutputSerializer<detail::JsonWriter<detail::OutBufferWrapper>>;
-    using InputSerializer  = RapidJsonInputSerializer;
+    using OutputSerializer = RapidJsonOutputSerializer<std::vector<char>>;
+    using InputSerializer  = RapidJsonInputSerializer<std::istream>;
 };
 
 NEKO_END_NAMESPACE
