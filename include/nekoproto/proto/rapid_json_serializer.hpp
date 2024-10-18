@@ -54,37 +54,32 @@ template <typename BufferT = OutBufferWrapper>
 using PrettyJsonWriter = rapidjson::PrettyWriter<BufferT>;
 
 template <typename T, class enable = void>
-struct json_output_wrapper_type { // NOLINT(readability-identifier-naming)
-    using output_stream_type = void;
-};
-template <typename OutputStream, typename SourceEncoding, typename TargetEncoding, typename StackAllocator,
-          unsigned writeFlags>
-struct json_output_wrapper_type<
-    rapidjson::Writer<OutputStream, SourceEncoding, TargetEncoding, StackAllocator, writeFlags>, void> {
-    using output_stream_type = OutputStream;
-};
-template <typename OutputStream, typename SourceEncoding, typename TargetEncoding, typename StackAllocator,
-          unsigned writeFlags>
-struct json_output_wrapper_type<
-    rapidjson::PrettyWriter<OutputStream, SourceEncoding, TargetEncoding, StackAllocator, writeFlags>, void> {
-    using output_stream_type = OutputStream;
-};
-
-template <typename T, class enable = void>
 struct json_output_buffer_type { // NOLINT(readability-identifier-naming)
     using output_buffer_type = void;
 };
 
 template <>
-struct json_output_buffer_type<OutBufferWrapper, void> {
-    using output_buffer_type = std::vector<char>;
+struct json_output_buffer_type<std::vector<char>&, void> {
+    using output_buffer_type = std::vector<char>&;
+    using wrapper_type       = OutBufferWrapper;
+    using writer_type       = JsonWriter<OutBufferWrapper>;
     using char_type          = char;
 };
 
 template <typename T>
-struct json_output_buffer_type<rapidjson::BasicOStreamWrapper<T>, void> {
-    using output_buffer_type = T;
-    using char_type          = typename T::Ch;
+struct json_output_buffer_type<T, typename std::enable_if<std::is_base_of<std::ostream, T>::value>::type> {
+    using output_buffer_type = typename std::remove_reference<T>::type&;
+    using wrapper_type       = rapidjson::BasicOStreamWrapper<T>;
+    using writer_type       = JsonWriter<rapidjson::BasicOStreamWrapper<T>>;
+    using char_type          = typename rapidjson::BasicOStreamWrapper<T>::Ch;
+};
+
+template <typename T>
+struct json_output_buffer_type<PrettyJsonWriter<T>, void> {
+    using output_buffer_type = typename json_output_buffer_type<T>::output_buffer_type;
+    using wrapper_type       = typename json_output_buffer_type<T>::wrapper_type;
+    using writer_type       = typename json_output_buffer_type<T>::writer_type;
+    using char_type          = typename json_output_buffer_type<T>::char_type;
 };
 class ConstJsonIterator {
 public:
@@ -206,23 +201,21 @@ inline auto make_pretty_json_writer(const JsonOutputFormatOptions& options = Jso
     return std::move(writer);
 }
 
-template <typename WriterT = detail::JsonWriter<>>
-class RapidJsonOutputSerializer : public detail::OutputSerializer<RapidJsonOutputSerializer<WriterT>> {
+template <typename BufferT>
+class RapidJsonOutputSerializer : public detail::OutputSerializer<RapidJsonOutputSerializer<BufferT>> {
 public:
-    using WriterType = WriterT;
+    using WriterType = typename detail::json_output_buffer_type<BufferT>::writer_type;
 
 public:
     explicit inline RapidJsonOutputSerializer(
-        typename detail::json_output_buffer_type<
-            typename detail::json_output_wrapper_type<WriterType>::output_stream_type>::output_buffer_type& buffer)
+        typename detail::json_output_buffer_type<BufferT>::output_buffer_type& buffer)
         NEKO_NOEXCEPT : detail::OutputSerializer<RapidJsonOutputSerializer>(this),
                         mStream(buffer),
                         mWriter(mStream) {}
 
     explicit inline RapidJsonOutputSerializer(
-        typename detail::json_output_buffer_type<
-            typename detail::json_output_wrapper_type<WriterType>::output_stream_type>::output_buffer_type& buffer,
-        WriterT&& writer) NEKO_NOEXCEPT : detail::OutputSerializer<RapidJsonOutputSerializer>(this),
+        typename detail::json_output_buffer_type<BufferT>::output_buffer_type& buffer,
+        WriterType&& writer) NEKO_NOEXCEPT : detail::OutputSerializer<RapidJsonOutputSerializer>(this),
                                           mStream(buffer),
                                           mWriter(std::move(writer)) {
         mWriter.Reset(mStream);
@@ -319,7 +312,7 @@ private:
 private:
     WriterType mWriter;
     int mCurrentLevel = 0;
-    typename detail::json_output_wrapper_type<WriterType>::output_stream_type mStream;
+    typename detail::json_output_buffer_type<BufferT>::wrapper_type mStream;
 };
 
 /**
