@@ -60,6 +60,7 @@
 #include <array>
 
 #include "private/global.hpp"
+#include "private/log.hpp"
 #include "private/helpers.hpp"
 
 NEKO_BEGIN_NAMESPACE

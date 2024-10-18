@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <iostream>
 #include <locale>
+#include <fstream>
 
 #include "nekoproto/proto/binary_serializer.hpp"
 #include "nekoproto/proto/json_serializer.hpp"
@@ -926,7 +927,7 @@ TEST_F(JsonSerializerTest, Struct) {
     EXPECT_EQ(testp.h, testp2.h);
     EXPECT_EQ(testp.k, testp2.k);
     NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(testp));
-
+    std::ofstream fs("test.json");
     {
         std::vector<char> buffer;
         RapidJsonOutputSerializer<detail::PrettyJsonWriter<>> output(
