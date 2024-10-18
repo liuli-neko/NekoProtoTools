@@ -50,8 +50,8 @@ using JsonDocument    = rapidjson::Document;
 using OStreamWrapper  = rapidjson::OStreamWrapper;
 template <typename BufferT = OutBufferWrapper>
 using JsonWriter = rapidjson::Writer<BufferT>;
-template <typename BufferT = OutBufferWrapper>
-using PrettyJsonWriter = rapidjson::PrettyWriter<BufferT>;
+template <typename BufferT = std::vector<char>>
+struct PrettyJsonWriter {};
 
 template <typename T, class enable = void>
 struct json_output_buffer_type { // NOLINT(readability-identifier-naming)
@@ -85,7 +85,7 @@ template <typename T>
 struct json_output_buffer_type<PrettyJsonWriter<T>, void> {
     using output_buffer_type = typename json_output_buffer_type<T>::output_buffer_type;
     using wrapper_type       = typename json_output_buffer_type<T>::wrapper_type;
-    using writer_type        = PrettyJsonWriter<T>;
+    using writer_type        = rapidjson::PrettyWriter<wrapper_type>;
     using char_type          = typename json_output_buffer_type<T>::char_type;
 };
 
@@ -214,7 +214,7 @@ public:
     char indentChar             = static_cast<char>(Indent::Space);
     int indentLength            = 4;
     FormatOptions formatOptions = FormatOptions::kFormatDefault;
-    int precision               = detail::PrettyJsonWriter<>::kDefaultMaxDecimalPlaces;
+    int precision               = rapidjson::PrettyWriter<detail::OutBufferWrapper>::kDefaultMaxDecimalPlaces;
 };
 
 namespace detail {
