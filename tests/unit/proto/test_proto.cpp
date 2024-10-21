@@ -168,8 +168,8 @@ TEST_F(ProtoTest, StructDeserialize) {
 #endif
     TestP tp2;
     tp2.makeProto() = testp;
-    EXPECT_STREQ(SerializableToString(testp).c_str(), SerializableToString(tp2).c_str());
-    NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(testp));
+    EXPECT_STREQ(serializable_to_string(testp).c_str(), serializable_to_string(tp2).c_str());
+    NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(testp));
 }
 
 TEST_F(ProtoTest, Base64Covert) {
@@ -280,7 +280,7 @@ TEST_F(ProtoTest, JsonProtoRef) {
     EXPECT_EQ(rawp->i.h, TEnum_A);
     EXPECT_EQ(std::get<0>(rawp->j), 1);
     EXPECT_STREQ(std::get<1>(rawp->j).c_str(), "hello");
-    NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(*rawp));
+    NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(*rawp));
 }
 
 TEST_F(ProtoTest, InvalidParams) {
@@ -312,7 +312,7 @@ TEST_F(ProtoTest, BinaryProto) {
     proto.b        = "hello Neko Proto";
     proto.c        = 0x3f3f3f;
     auto data      = proto.makeProto().toData();
-    NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(proto));
+    NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(proto));
 
     BinaryProto proto2;
     EXPECT_TRUE(proto2.makeProto().fromData(data.data(), data.size()));

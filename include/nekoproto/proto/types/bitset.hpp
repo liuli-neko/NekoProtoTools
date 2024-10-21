@@ -24,13 +24,19 @@ inline bool save(Serializer& sa, const std::bitset<N>& value) {
 
 template <typename Serializer, std::size_t N>
 inline bool load(Serializer& sa, std::bitset<N>& value) {
-    std::string s;
-    if (!sa(s)) return false;
-    if (s.size() != N) return false;
-    for (auto c : s) {
-        if (c != '0' && c != '1') return false;
+    std::string str;
+    if (!sa(str)) {
+        return false;
     }
-    value = std::bitset<N>(s);
+    if (str.size() != N) {
+        return false;
+    }
+    for (auto ch : str) {
+        if (ch != '0' && ch != '1') {
+            return false;
+        }
+    }
+    value = std::bitset<N>(str);
     return true;
 }
 

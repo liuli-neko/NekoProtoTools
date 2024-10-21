@@ -11,20 +11,11 @@
 #pragma once
 
 #include "private/helpers.hpp"
-#include "serializer_base.hpp"
 
-#include <list>
-#include <map>
-#include <set>
 #include <sstream>
 #include <string>
-#include <vector>
 #if NEKO_CPP_PLUS >= 17
 #include <string_view>
-#include <variant>
-#endif
-#ifndef NEKO_SERIALIZABLE_TO_STRING_ENABLE
-#define NEKO_SERIALIZABLE_TO_STRING_ENABLE 1
 #endif
 
 NEKO_BEGIN_NAMESPACE
@@ -95,10 +86,10 @@ public:
         if constexpr (traits::is_optional<T>::value) {
             if (value.value.has_value()) {
                 return (*this)(value.value.value());
-            } else {
-                mBuffer += "null, ";
-                return true;
             }
+            mBuffer += "null, ";
+            return true;
+
         } else {
             return (*this)(value.value);
         }
@@ -110,7 +101,7 @@ public:
         return (*this)(value.value);
     }
 #endif
-    bool startArray(const std::size_t) NEKO_NOEXCEPT {
+    bool startArray(const std::size_t /*unused*/) NEKO_NOEXCEPT {
         mBuffer += "[";
         return true;
     }
@@ -122,7 +113,7 @@ public:
         mBuffer += "], ";
         return true;
     }
-    bool startObject(const std::size_t) NEKO_NOEXCEPT {
+    bool startObject(const std::size_t /*unused*/) NEKO_NOEXCEPT {
         mBuffer += "{";
         return true;
     }
@@ -151,7 +142,7 @@ private:
 };
 
 template <typename T>
-inline std::string SerializableToString(T&& value) NEKO_NOEXCEPT {
+inline std::string serializable_to_string(T&& value) NEKO_NOEXCEPT {
     std::string buffer;
     PrintSerializer print(buffer);
     print(value);

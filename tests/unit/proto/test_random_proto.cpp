@@ -717,7 +717,7 @@ TEST(RandomProtoTest, StructTest) {
 
     TestStructProto proto;
     proto.b.f0 = {4};
-    NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(proto));
+    NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(proto));
     auto data = proto.makeProto().toData();
     data.push_back('\0');
     EXPECT_STREQ(data.data(), StructProtoData);

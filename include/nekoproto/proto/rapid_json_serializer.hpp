@@ -90,7 +90,8 @@ struct json_output_buffer_type<PrettyJsonWriter<T>, void> {
 };
 
 template <typename T, class enable = void>
-struct json_input_buffer_type : std::false_type {
+struct json_input_buffer_type // NOLINT(readability-identifier-naming)
+    : std::false_type {
     using input_buffer_type = void;
 };
 
@@ -101,7 +102,8 @@ struct json_input_buffer_type<T, typename std::enable_if<std::is_base_of<std::is
 };
 
 template <typename T, class enable = void>
-struct is_pretty_json_writer : std::false_type {};
+struct is_pretty_json_writer // NOLINT(readability-identifier-naming)
+    : std::false_type {};
 
 template <typename T>
 struct is_pretty_json_writer<rapidjson::PrettyWriter<T>> : std::true_type {};
@@ -112,7 +114,7 @@ public:
     using ValueIterator  = JsonValue::ConstValueIterator;
 
 public:
-    inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null) {};
+    inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null){};
     inline ConstJsonIterator(MemberIterator begin, MemberIterator end) NEKO_NOEXCEPT : mMemberItBegin(begin),
                                                                                        mMemberItEnd(end),
                                                                                        mIndex(0),

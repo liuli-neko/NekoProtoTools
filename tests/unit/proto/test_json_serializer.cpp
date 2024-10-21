@@ -926,7 +926,7 @@ TEST_F(JsonSerializerTest, Struct) {
     EXPECT_EQ(testp.g, testp2.g);
     EXPECT_EQ(testp.h, testp2.h);
     EXPECT_EQ(testp.k, testp2.k);
-    NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(testp));
+    NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(testp));
     {
         std::vector<char> buffer;
         RapidJsonOutputSerializer<detail::PrettyJsonWriter<>> output(buffer, JsonOutputFormatOptions::Default());
@@ -1021,7 +1021,7 @@ TEST_F(JsonSerializerTest, SerializableTest) {
     t.f = {{"hello", std::make_shared<std::string>("world")}, {"nullptr", nullptr}};
     t.g = std::make_unique<std::string>("hello");
     t.i = 123;
-    NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(t));
+    NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(t));
     EXPECT_TRUE(output(t));
     buffer.push_back('\0');
 
