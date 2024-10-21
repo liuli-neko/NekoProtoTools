@@ -14,7 +14,6 @@
 #if defined(NEKO_PROTO_ENABLE_SIMDJSON)
 #include <iomanip>
 #include <simdjson.h>
-#include <sstream>
 #include <unordered_map>
 #include <vector>
 
@@ -43,11 +42,11 @@ using JsonDocument  = simdjson::dom::document;
 using JsonParser    = simdjson::dom::parser;
 
 template <typename T, class enable = void>
-struct json_output_wrapper_type {
+struct json_output_wrapper_type { // NOLINT(readability-identifier-naming)
     using output_stream_type = void;
 };
 template <typename T, class enable = void>
-struct json_output_buffer_type {
+struct json_output_buffer_type { // NOLINT(readability-identifier-naming)
     using output_buffer_type = void;
 };
 template <>
@@ -62,12 +61,12 @@ public:
     using ValueIterator  = simdjson::dom::array::iterator;
 
 public:
-    inline ConstJsonIterator() NEKO_NOEXCEPT : mType(Null_){};
+    inline ConstJsonIterator() NEKO_NOEXCEPT : mType(Null){};
     inline ConstJsonIterator(const JsonObject& object) NEKO_NOEXCEPT : mSize(object.size()),
                                                                        mType(Member),
                                                                        mMemberIndex(0) {
         if (mSize == 0) {
-            mType = Null_;
+            mType = Null;
             return;
         }
         for (auto iter = object.begin(); iter != object.end(); ++iter) {
@@ -82,7 +81,7 @@ public:
                                                                      mSize(array.size()),
                                                                      mType(Value) {
         if (mSize == 0) {
-            mType = Null_;
+            mType = Null;
         }
     }
 
@@ -97,11 +96,8 @@ public:
         return *this;
     }
     inline bool eof() const NEKO_NOEXCEPT {
-        if (mType == Null_ || (mType == Value && mValueIt == mValueItEnd) ||
-            (mType == Member && mMemberIndex >= mMembers.size())) {
-            return true;
-        }
-        return false;
+        return mType == Null || (mType == Value && mValueIt == mValueItEnd) ||
+               (mType == Member && mMemberIndex >= mMembers.size());
     }
     inline std::size_t size() const NEKO_NOEXCEPT { return mSize; }
     inline JsonValue value() NEKO_NOEXCEPT {
@@ -119,11 +115,10 @@ public:
     inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
         if (mType == Member && mMemberIndex < mMembers.size()) {
             return mMembers[mMemberIndex].key();
-        } else {
-            return {};
         }
+        return {};
     };
-    inline JsonValue move_to_member(const NEKO_STRING_VIEW& name) NEKO_NOEXCEPT {
+    inline JsonValue moveToMember(const NEKO_STRING_VIEW& name) NEKO_NOEXCEPT {
         if (mType != Member) {
             return JsonValue(simdjson::error_code::NO_SUCH_FIELD);
         }
@@ -141,23 +136,23 @@ private:
     int mMemberIndex = 0;
     ValueIterator mValueItBegin, mValueItEnd, mValueIt;
     std::size_t mSize;
-    enum Type { Value, Member, Null_ } mType;
+    enum Type { Value, Member, Null } mType;
 };
 
 class VectorStreamBuf : public std::streambuf {
 public:
-    VectorStreamBuf(std::vector<char>& vec) : vec(vec) {}
+    VectorStreamBuf(std::vector<char>& vec) : mVec(vec) {}
 
 protected:
-    int_type overflow(int_type c = traits_type::eof()) override {
-        if (c != traits_type::eof()) {
-            vec.push_back(static_cast<char>(c));
+    int_type overflow(int_type ch = traits_type::eof()) override {
+        if (ch != traits_type::eof()) {
+            mVec.push_back(static_cast<char>(ch));
         }
-        return c;
+        return ch;
     }
 
 private:
-    std::vector<char>& vec;
+    std::vector<char>& mVec;
 };
 } // namespace simd
 } // namespace detail
@@ -189,7 +184,7 @@ public:
     }
     inline ~SimdJsonOutputSerializer() { end(); }
     template <typename T>
-    inline bool saveValue(SizeTag<T> const&) {
+    inline bool saveValue(SizeTag<T> const& /*unused*/) {
         return true;
     }
 
@@ -200,11 +195,13 @@ public:
             mStream << ":" << value;
             mStateStack.pop_back();
             return true;
-        } else if (mStateStack.back() == State::ArrayStart) {
+        }
+        if (mStateStack.back() == State::ArrayStart) {
             mStateStack.back() = State::InArray;
             mStream << value;
             return true;
-        } else if (mStateStack.back() == State::InArray) {
+        }
+        if (mStateStack.back() == State::InArray) {
             mStream << "," << value;
             return true;
         }
@@ -217,11 +214,13 @@ public:
             mStream << ":" << value;
             mStateStack.pop_back();
             return true;
-        } else if (mStateStack.back() == State::ArrayStart) {
+        }
+        if (mStateStack.back() == State::ArrayStart) {
             mStateStack.back() = State::InArray;
             mStream << value;
             return true;
-        } else if (mStateStack.back() == State::InArray) {
+        }
+        if (mStateStack.back() == State::InArray) {
             mStream << "," << value;
             return true;
         }
@@ -233,11 +232,13 @@ public:
             mStream << ":" << value;
             mStateStack.pop_back();
             return true;
-        } else if (mStateStack.back() == State::ArrayStart) {
+        }
+        if (mStateStack.back() == State::ArrayStart) {
             mStateStack.back() = State::InArray;
             mStream << value;
             return true;
-        } else if (mStateStack.back() == State::InArray) {
+        }
+        if (mStateStack.back() == State::InArray) {
             mStream << "," << value;
             return true;
         }
@@ -249,11 +250,13 @@ public:
             mStream << ":" << value;
             mStateStack.pop_back();
             return true;
-        } else if (mStateStack.back() == State::ArrayStart) {
+        }
+        if (mStateStack.back() == State::ArrayStart) {
             mStateStack.back() = State::InArray;
             mStream << value;
             return true;
-        } else if (mStateStack.back() == State::InArray) {
+        }
+        if (mStateStack.back() == State::InArray) {
             mStream << "," << value;
             return true;
         }
@@ -264,11 +267,13 @@ public:
             mStream << ":" << (value ? "true" : "false");
             mStateStack.pop_back();
             return true;
-        } else if (mStateStack.back() == State::ArrayStart) {
+        }
+        if (mStateStack.back() == State::ArrayStart) {
             mStateStack.back() = State::InArray;
             mStream << (value ? "true" : "false");
             return true;
-        } else if (mStateStack.back() == State::InArray) {
+        }
+        if (mStateStack.back() == State::InArray) {
             mStream << "," << (value ? "true" : "false");
             return true;
         }
@@ -280,11 +285,13 @@ public:
             mStream << ":\"" << value << "\"";
             mStateStack.pop_back();
             return true;
-        } else if (mStateStack.back() == State::ArrayStart) {
+        }
+        if (mStateStack.back() == State::ArrayStart) {
             mStateStack.back() = State::InArray;
             mStream << "\"" << value << "\"";
             return true;
-        } else if (mStateStack.back() == State::InArray) {
+        }
+        if (mStateStack.back() == State::InArray) {
             mStream << ",\"" << value << "\"";
             return true;
         }
@@ -295,11 +302,13 @@ public:
             mStream << ":\"" << value << "\"";
             mStateStack.pop_back();
             return true;
-        } else if (mStateStack.back() == State::ArrayStart) {
+        }
+        if (mStateStack.back() == State::ArrayStart) {
             mStateStack.back() = State::InArray;
             mStream << "\"" << value << "\"";
             return true;
-        } else if (mStateStack.back() == State::InArray) {
+        }
+        if (mStateStack.back() == State::InArray) {
             mStream << ",\"" << value << "\"";
             return true;
         }
@@ -310,11 +319,13 @@ public:
             mStream << ":null";
             mStateStack.pop_back();
             return true;
-        } else if (mStateStack.back() == State::ArrayStart) {
+        }
+        if (mStateStack.back() == State::ArrayStart) {
             mStateStack.back() = State::InArray;
             mStream << "null";
             return true;
-        } else if (mStateStack.back() == State::InArray) {
+        }
+        if (mStateStack.back() == State::InArray) {
             mStream << ",null";
             return true;
         }
@@ -327,11 +338,13 @@ public:
             mStream << ":\"" << value << "\"";
             mStateStack.pop_back();
             return true;
-        } else if (mStateStack.back() == State::ArrayStart) {
+        }
+        if (mStateStack.back() == State::ArrayStart) {
             mStateStack.back() = State::InArray;
             mStream << "\"" << value << "\"";
             return true;
-        } else if (mStateStack.back() == State::InArray) {
+        }
+        if (mStateStack.back() == State::InArray) {
             mStream << ",\"" << value << "\"";
             return true;
         }
@@ -389,19 +402,21 @@ public:
         return (*this)(value.value);
     }
 #endif
-    inline bool startArray(const std::size_t) NEKO_NOEXCEPT {
+    inline bool startArray(const std::size_t /*unused*/) NEKO_NOEXCEPT {
         if (mStateStack.back() == State::AfterKey) {
             mStateStack.push_back(State::ArrayStart);
             mStream << ":";
             mStream << "[";
             return true;
-        } else if (mStateStack.back() == State::InArray) {
+        }
+        if (mStateStack.back() == State::InArray) {
             mStateStack.back() = State::InArray;
             mStateStack.push_back(State::ArrayStart);
             mStream << ",";
             mStream << "[";
             return true;
-        } else if (mStateStack.back() == State::ArrayStart) {
+        }
+        if (mStateStack.back() == State::ArrayStart) {
             mStateStack.back() = State::InArray;
             mStateStack.push_back(State::ArrayStart);
             mStream << "[";
@@ -421,7 +436,7 @@ public:
         }
         return false;
     }
-    inline bool startObject(const std::size_t) NEKO_NOEXCEPT {
+    inline bool startObject(const std::size_t /*unused*/) NEKO_NOEXCEPT {
         if (mStateStack.back() == State::AfterKey) {
             mStateStack.push_back(State::ObjectStart);
             mStream << ":";
@@ -509,7 +524,7 @@ public:
         : detail::InputSerializer<SimdJsonInputSerializer>(this),
           mItemStack() {
         auto error = mParser.parse(buf, size).get(mRoot);
-        if (error) {
+        if (error != 0U) {
             NEKO_LOG_INFO("JsonSerializer", "simdjson parser error: {}", simdjson::error_message(error));
             mParserError = true;
             return;
@@ -518,7 +533,9 @@ public:
     inline operator bool() const NEKO_NOEXCEPT { return !mParserError; }
 
     inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
-        if ((*mCurrentItem).eof()) return {};
+        if ((*mCurrentItem).eof()) {
+            return {};
+        }
         return (*mCurrentItem).name();
     }
 
@@ -551,15 +568,15 @@ public:
         if (!(*mCurrentItem).value().is_string()) {
             return false;
         }
-        const auto& v = (*mCurrentItem).value();
-        value         = std::basic_string<CharT, Traits, Alloc>(v.get_string().take_value());
+        const auto& cvalue = (*mCurrentItem).value();
+        value              = std::basic_string<CharT, Traits, Alloc>(cvalue.get_string().take_value());
         ++(*mCurrentItem);
         return true;
     }
 
     inline bool loadValue(float& value) NEKO_NOEXCEPT {
         double ret;
-        if (!(*mCurrentItem).value().get_double().get(ret)) {
+        if ((*mCurrentItem).value().get_double().get(ret) == 0U) {
             value = ret;
             ++(*mCurrentItem);
             return true;
@@ -568,7 +585,7 @@ public:
     }
 
     inline bool loadValue(double& value) NEKO_NOEXCEPT {
-        if (!(*mCurrentItem).value().get_double().get(value)) {
+        if ((*mCurrentItem).value().get_double().get(value) == 0U) {
             ++(*mCurrentItem);
             return true;
         }
@@ -576,7 +593,7 @@ public:
     }
 
     inline bool loadValue(bool& value) NEKO_NOEXCEPT {
-        if (!(*mCurrentItem).value().get_bool().get(value)) {
+        if ((*mCurrentItem).value().get_bool().get(value) == 0U) {
             ++(*mCurrentItem);
             return true;
         }
@@ -584,7 +601,9 @@ public:
     }
 
     inline bool loadValue(std::nullptr_t) NEKO_NOEXCEPT {
-        if (!(*mCurrentItem).value().is_null()) return false;
+        if (!(*mCurrentItem).value().is_null()) {
+            return false;
+        }
         ++(*mCurrentItem);
         return true;
     }
@@ -597,10 +616,10 @@ public:
 
     template <typename T>
     inline bool loadValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
-        const auto& v = (*mCurrentItem).move_to_member({value.name, value.nameLen});
-        bool ret      = true;
+        const auto& cvalue = (*mCurrentItem).moveToMember({value.name, value.nameLen});
+        bool ret           = true;
         if constexpr (traits::is_optional<T>::value) {
-            if (v.error() != simdjson::error_code::SUCCESS || v.is_null()) {
+            if (cvalue.error() != simdjson::error_code::SUCCESS || cvalue.is_null()) {
                 value.value.reset();
 #if defined(NEKO_VERBOSE_LOGS)
                 NEKO_LOG_INFO("JsonSerializer", "optional field {} is not find.",
@@ -610,7 +629,7 @@ public:
 #if defined(NEKO_JSON_MAKE_STR_NONE_TO_NULL)
                 // Why would anyone write "None" in json?
                 // I've seen it, and it's a disaster.
-                if (v->is_string() && v->get_string() == "None") {
+                if (cvalue->is_string() && cvalue->get_string() == "None") {
                     value.value.reset();
 #if defined(NEKO_VERBOSE_LOGS)
                     NEKO_LOG_WARN("JsonSerializer", "optional field {} is \"None\".",
@@ -633,10 +652,10 @@ public:
 #endif
             }
         } else {
-            if (v.error() != simdjson::error_code::SUCCESS) {
+            if (cvalue.error() != simdjson::error_code::SUCCESS) {
 #if defined(NEKO_VERBOSE_LOGS)
                 NEKO_LOG_ERROR("JsonSerializer", "{} field {} is not find. error {}", NEKO_PRETTY_FUNCTION_NAME,
-                               std::string(value.name, value.nameLen), simdjson::error_message(v.error()));
+                               std::string(value.name, value.nameLen), simdjson::error_message(cvalue.error()));
 #endif
                 return false;
             }
@@ -680,7 +699,8 @@ public:
             mCurrentItem = &mItemStack.back();
             ++(*mCurrentItem);
             return true;
-        } else if (mItemStack.size() == 1) {
+        }
+        if (mItemStack.size() == 1) {
             mItemStack.pop_back();
             mCurrentItem = nullptr;
             return true;
@@ -716,11 +736,11 @@ inline bool epilogue(SimdJsonInputSerializer& sa, const NameValuePair<T>& value)
 }
 
 template <typename T>
-inline bool prologue(SimdJsonOutputSerializer& sa, const NameValuePair<T>&) NEKO_NOEXCEPT {
+inline bool prologue(SimdJsonOutputSerializer& sa, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T>
-inline bool epilogue(SimdJsonOutputSerializer& sa, const NameValuePair<T>&) NEKO_NOEXCEPT {
+inline bool epilogue(SimdJsonOutputSerializer& sa, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
@@ -748,12 +768,12 @@ inline bool epilogue(SimdJsonOutputSerializer& sa, const SizeTag<T>& value) NEKO
 // class apart from name value pair, size tag, std::string, NEKO_STRING_VIEW
 template <class T, traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::value> =
                        traits::default_value_for_enable>
-inline bool prologue(SimdJsonInputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool prologue(SimdJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return sa.startNode();
 }
 template <typename T, traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::value> =
                           traits::default_value_for_enable>
-inline bool epilogue(SimdJsonInputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool epilogue(SimdJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return sa.finishNode();
 }
 
@@ -761,103 +781,109 @@ template <class T, traits::enable_if_t<std::is_class<T>::value, !std::is_same<st
                                        !is_minimal_serializable<T>::valueT,
                                        !traits::has_method_const_serialize<T, SimdJsonOutputSerializer>::value> =
                        traits::default_value_for_enable>
-inline bool prologue(SimdJsonOutputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool prologue(SimdJsonOutputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename T, traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::valueT,
                                           !traits::has_method_const_serialize<T, SimdJsonOutputSerializer>::value> =
                           traits::default_value_for_enable>
-inline bool epilogue(SimdJsonOutputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool epilogue(SimdJsonOutputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename T, traits::enable_if_t<traits::has_method_const_serialize<T, SimdJsonOutputSerializer>::value> =
                           traits::default_value_for_enable>
-inline bool prologue(SimdJsonOutputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool prologue(SimdJsonOutputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return sa.startObject(-1);
 }
 template <typename T, traits::enable_if_t<traits::has_method_const_serialize<T, SimdJsonOutputSerializer>::value> =
                           traits::default_value_for_enable>
-inline bool epilogue(SimdJsonOutputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool epilogue(SimdJsonOutputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return sa.endObject();
 }
 
 // #########################################################
 // # arithmetic types
 template <typename T, traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool prologue(SimdJsonInputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool prologue(SimdJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(SimdJsonInputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool epilogue(SimdJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename T, traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool prologue(SimdJsonOutputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool prologue(SimdJsonOutputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(SimdJsonOutputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool epilogue(SimdJsonOutputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 // #####################################################
 // # std::string
 template <typename CharT, typename Traits, typename Alloc>
-inline bool prologue(SimdJsonInputSerializer& sa, const std::basic_string<CharT, Traits, Alloc>&) NEKO_NOEXCEPT {
+inline bool prologue(SimdJsonInputSerializer& sa,
+                     const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename CharT, typename Traits, typename Alloc>
-inline bool epilogue(SimdJsonInputSerializer& sa, const std::basic_string<CharT, Traits, Alloc>&) NEKO_NOEXCEPT {
+inline bool epilogue(SimdJsonInputSerializer& sa,
+                     const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename CharT, typename Traits, typename Alloc>
-inline bool prologue(SimdJsonOutputSerializer& sa, const std::basic_string<CharT, Traits, Alloc>&) NEKO_NOEXCEPT {
+inline bool prologue(SimdJsonOutputSerializer& sa,
+                     const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename CharT, typename Traits, typename Alloc>
-inline bool epilogue(SimdJsonOutputSerializer& sa, const std::basic_string<CharT, Traits, Alloc>&) NEKO_NOEXCEPT {
+inline bool epilogue(SimdJsonOutputSerializer& sa,
+                     const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 #if NEKO_CPP_PLUS >= 17
 template <typename CharT, typename Traits>
-inline bool prologue(SimdJsonOutputSerializer& sa, const std::basic_string_view<CharT, Traits>&) NEKO_NOEXCEPT {
+inline bool prologue(SimdJsonOutputSerializer& sa,
+                     const std::basic_string_view<CharT, Traits>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename CharT, typename Traits>
-inline bool epilogue(SimdJsonOutputSerializer& sa, const std::basic_string_view<CharT, Traits>&) NEKO_NOEXCEPT {
+inline bool epilogue(SimdJsonOutputSerializer& sa,
+                     const std::basic_string_view<CharT, Traits>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 #endif
 
 // #####################################################
 // # std::nullptr_t
-inline bool prologue(SimdJsonInputSerializer& sa, const std::nullptr_t&) NEKO_NOEXCEPT { return true; }
-inline bool epilogue(SimdJsonInputSerializer& sa, const std::nullptr_t&) NEKO_NOEXCEPT { return true; }
+inline bool prologue(SimdJsonInputSerializer& sa, const std::nullptr_t& /*unused*/) NEKO_NOEXCEPT { return true; }
+inline bool epilogue(SimdJsonInputSerializer& sa, const std::nullptr_t& /*unused*/) NEKO_NOEXCEPT { return true; }
 
-inline bool prologue(SimdJsonOutputSerializer& sa, const std::nullptr_t&) NEKO_NOEXCEPT { return true; }
-inline bool epilogue(SimdJsonOutputSerializer& sa, const std::nullptr_t&) NEKO_NOEXCEPT { return true; }
+inline bool prologue(SimdJsonOutputSerializer& sa, const std::nullptr_t& /*unused*/) NEKO_NOEXCEPT { return true; }
+inline bool epilogue(SimdJsonOutputSerializer& sa, const std::nullptr_t& /*unused*/) NEKO_NOEXCEPT { return true; }
 // #####################################################
 // # minimal serializable
 template <typename T, traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
-inline bool prologue(SimdJsonInputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool prologue(SimdJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(SimdJsonInputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool epilogue(SimdJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename T, traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
-inline bool prologue(SimdJsonOutputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool prologue(SimdJsonOutputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(SimdJsonOutputSerializer& sa, const T&) NEKO_NOEXCEPT {
+inline bool epilogue(SimdJsonOutputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 

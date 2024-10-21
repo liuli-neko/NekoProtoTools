@@ -927,7 +927,6 @@ TEST_F(JsonSerializerTest, Struct) {
     EXPECT_EQ(testp.h, testp2.h);
     EXPECT_EQ(testp.k, testp2.k);
     NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(testp));
-    std::ofstream fs("test.json");
     {
         std::vector<char> buffer;
         RapidJsonOutputSerializer<detail::PrettyJsonWriter<>> output(buffer, JsonOutputFormatOptions::Default());
@@ -938,6 +937,65 @@ TEST_F(JsonSerializerTest, Struct) {
         const char* str = buffer.data();
         NEKO_LOG_DEBUG("unit test", "{}", str);
     }
+}
+
+TEST_F(JsonSerializerTest, IOStreamTest) {
+    std::string filepath = "test" + std::to_string(rand()) + ".json";
+    std::ofstream ofs(filepath);
+    TestP testp;
+    // {3, "Struct test", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A, {1, "hello"}};
+    testp.a = 3;
+    testp.b = "Struct test";
+    testp.c = true;
+    testp.d = 3.141592654;
+    testp.e = {1, 2, 3};
+    testp.f = {{"a", 1}, {"b", 2}};
+    testp.g = {1, 2, 3};
+    testp.h = TEnum_A;
+    testp.i = {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
+    testp.j = {1, "hello"};
+    testp.k = std::vector<int>({1, 2, 3, 4, 5});
+#if NEKO_CPP_PLUS >= 17
+    std::get<1>(testp.l.a).c = TestA{1221, "this is a test for optional"};
+#endif
+
+    {
+        RapidJsonOutputSerializer<detail::PrettyJsonWriter<std::ofstream>> output(ofs);
+        output(testp);
+    }
+    ofs.close();
+
+    std::ifstream ifs(filepath);
+    TestP testp2;
+    {
+        RapidJsonInputSerializer<std::ifstream> input(ifs);
+        input(testp2);
+    }
+    ifs.close();
+
+    EXPECT_EQ(testp2.a, testp.a);
+    EXPECT_STREQ(testp2.b.c_str(), testp.b.c_str());
+    EXPECT_EQ(testp2.c, testp.c);
+    EXPECT_EQ(testp2.d, testp.d);
+    EXPECT_EQ(testp2.e, testp.e);
+    EXPECT_EQ(testp2.f, testp.f);
+    EXPECT_EQ(testp2.g, testp.g);
+    EXPECT_EQ(testp2.h, testp.h);
+    EXPECT_EQ(testp2.i.a, testp.i.a);
+    EXPECT_STREQ(testp2.i.b.c_str(), testp.i.b.c_str());
+    EXPECT_EQ(testp2.i.c, testp.i.c);
+    EXPECT_EQ(testp2.i.d, testp.i.d);
+    EXPECT_EQ(testp2.i.e, testp.i.e);
+    EXPECT_EQ(testp2.i.f, testp.i.f);
+    EXPECT_EQ(testp2.i.g, testp.i.g);
+    EXPECT_EQ(testp2.i.h, testp.i.h);
+    EXPECT_EQ(testp2.j, testp.j);
+    EXPECT_EQ(testp2.k, testp.k);
+#if NEKO_CPP_PLUS >= 17
+    EXPECT_EQ(std::get<1>(testp2.l.a).c->a, std::get<1>(testp.l.a).c->a);
+    EXPECT_STREQ(std::get<1>(testp2.l.a).c->b.c_str(), std::get<1>(testp.l.a).c->b.c_str());
+#endif
+
 }
 
 struct zTypeTest1 {
