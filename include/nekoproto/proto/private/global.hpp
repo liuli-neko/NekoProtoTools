@@ -38,7 +38,7 @@
 #define NEKO_USED
 #endif
 #if NEKO_CPP_PLUS >= 20
-#define NEKO_IF_LIKELY [[likely]]
+#define NEKO_IF_LIKELY   [[likely]]
 #define NEKO_IF_UNLIKELY [[unlikely]]
 #else
 #define NEKO_IF_IS_LIKELY
@@ -120,23 +120,28 @@ NEKO_BEGIN_NAMESPACE
 #define NEKO_PRETTY_FUNCTION_NAME __PRETTY_FUNCTION__
 namespace {
 template <class T>
-NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() NEKO_NOEXCEPT {
-    NEKO_STRING_VIEW pretty_function = __PRETTY_FUNCTION__;
-    size_t start                     = pretty_function.find_last_of('[');
-    size_t end                       = start;
-    while (end < pretty_function.size() && (pretty_function[end] != ';')) {
+NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() NEKO_NOEXCEPT { // NOLINT(readability-identifier-naming)
+    NEKO_CONSTEXPR_VAR NEKO_STRING_VIEW PrettyFunction = __PRETTY_FUNCTION__;
+    size_t start                                       = PrettyFunction.find_last_of('[');
+    size_t end                                         = start;
+    while (end < PrettyFunction.size() && (PrettyFunction[end] != ';')) {
         end++;
     }
-    auto sstring = pretty_function.substr(start, end - start);
-    size_t d     = sstring.find_first_of('<');
-    if (d != NEKO_STRING_VIEW::npos) sstring = sstring.substr(0, d);
-    d = sstring.find_last_of(':');
-    if (d != NEKO_STRING_VIEW::npos)
-        start = d;
-    else
+    auto sstring  = PrettyFunction.substr(start, end - start);
+    size_t nstart = sstring.find_first_of('<');
+    if (nstart != NEKO_STRING_VIEW::npos) {
+        sstring = sstring.substr(0, nstart);
+    }
+    nstart = sstring.find_last_of(':');
+    if (nstart != NEKO_STRING_VIEW::npos) {
+        start = nstart;
+    } else {
         start = 0;
-    d = sstring.find_last_of(' ');
-    if (d != NEKO_STRING_VIEW::npos) start = start > d ? start : d;
+    }
+    nstart = sstring.find_last_of(' ');
+    if (nstart != NEKO_STRING_VIEW::npos) {
+        start = start > nstart ? start : nstart;
+    }
     while (start < sstring.size() && (sstring[start] == ' ' || sstring[start] == '>' || sstring[start] == ':')) {
         ++start;
     }

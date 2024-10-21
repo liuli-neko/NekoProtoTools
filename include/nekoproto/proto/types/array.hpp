@@ -18,22 +18,24 @@ NEKO_BEGIN_NAMESPACE
 template <typename Serializer, typename T, std::size_t N>
 inline bool save(Serializer& sa, const std::array<T, N>& value) {
     auto ret = sa.startArray(N);
-    for (const auto& v : value)
-        ret = sa(v) && ret;
+    for (const auto& value : value) {
+        ret = sa(value) && ret;
+    }
     ret = sa.endArray() && ret;
     return ret;
 }
 
 template <typename Serializer, typename T, std::size_t N>
-inline bool load(Serializer& sa, std::array<T, N>& value) {
-    std::size_t s = 0;
-    auto ret      = sa(make_size_tag(s));
-    if (!ret || s != N) {
-        NEKO_LOG_WARN("proto", "load array error or size mismatch: expected {}, got {}", N, s);
+inline bool load(Serializer& sa, std::array<T, N>& values) {
+    std::size_t size = 0;
+    auto ret         = sa(make_size_tag(size));
+    if (!ret || size != N) {
+        NEKO_LOG_WARN("proto", "load array error or size mismatch: expected {}, got {}", N, size);
         return false;
     }
-    for (auto& v : value)
-        ret = sa(v) && ret;
+    for (auto& value : values) {
+        ret = sa(value) && ret;
+    }
     return ret;
 }
 

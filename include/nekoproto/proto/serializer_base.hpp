@@ -55,21 +55,22 @@
  */
 #pragma once
 
+#include <array>
 #include <string>
 #include <vector>
-#include <array>
 
 #include "private/global.hpp"
-#include "private/log.hpp"
 #include "private/helpers.hpp"
+#include "private/log.hpp"
 
 NEKO_BEGIN_NAMESPACE
+// NOLINTBEGIN
 namespace detail {
 #if NEKO_CPP_PLUS >= 17
-inline constexpr int _members_size(std::string_view names) NEKO_NOEXCEPT {
-    int count  = 0;
-    auto begin = 0;
-    auto end   = names.find_first_of(',', begin + 1);
+inline constexpr int _members_size(std::string_view names) NEKO_NOEXCEPT { // NOLINT(readability-identifier-naming)
+    int count         = 0;
+    std::size_t begin = 0;
+    std::size_t end   = names.find_first_of(',', begin + 1);
     while (end != std::string::npos) {
         begin = end + 1;
         end   = names.find_first_of(',', begin + 1);
@@ -81,22 +82,23 @@ inline constexpr int _members_size(std::string_view names) NEKO_NOEXCEPT {
     return count;
 }
 template <int N>
-inline constexpr std::array<std::string_view, N> _parse_names(std::string_view names) NEKO_NOEXCEPT {
+inline constexpr std::array<std::string_view, N>
+_parse_names(std::string_view names) NEKO_NOEXCEPT { // NOLINT(readability-identifier-naming)
     std::array<std::string_view, N> namesVec;
-    auto begin = 0;
-    auto end   = names.find_first_of(',', begin + 1);
-    int i      = 0;
+    std::size_t begin = 0;
+    std::size_t end   = names.find_first_of(',', begin + 1);
+    int icount        = 0;
     while (end != std::string_view::npos) {
-        auto bbegin            = names.find_first_not_of(' ', begin);
-        auto eend              = names.find_last_not_of(' ', end);
+        std::size_t bbegin     = names.find_first_not_of(' ', begin);
+        std::size_t eend       = names.find_last_not_of(' ', end);
         std::string_view token = names.substr(bbegin, eend - bbegin);
-        namesVec[i++]          = token;
+        namesVec[icount++]     = token;
         begin                  = end + 1;
         end                    = names.find_first_of(',', begin + 1);
     }
     if (begin != names.size()) {
-        auto bbegin            = names.find_first_not_of(' ', begin);
-        auto eend              = names.back() == ' ' ? names.find_last_not_of(' ') : names.size();
+        std::size_t bbegin     = names.find_first_not_of(' ', begin);
+        std::size_t eend       = names.back() == ' ' ? names.find_last_not_of(' ') : names.size();
         std::string_view token = names.substr(bbegin, eend - bbegin);
         namesVec[N - 1]        = token;
     }
@@ -112,46 +114,48 @@ struct neko_string_view {
 inline std::vector<neko_string_view> _parse_names(const char* names) NEKO_NOEXCEPT {
     std::string namesStr(names);
     std::vector<neko_string_view> namesVec;
-    auto begin = 0;
-    auto end   = namesStr.find_first_of(',', begin + 1);
+    std::size_t begin = 0;
+    std::size_t end   = namesStr.find_first_of(',', begin + 1);
     while (end != std::string::npos) {
-        auto bbegin = namesStr.find_first_not_of(' ', begin);
-        auto eend   = namesStr.find_last_not_of(' ', end);
+        std::size_t bbegin = namesStr.find_first_not_of(' ', begin);
+        std::size_t eend   = namesStr.find_last_not_of(' ', end);
         namesVec.push_back({names + bbegin, eend - bbegin});
         begin = end + 1;
         end   = namesStr.find_first_of(',', begin + 1);
     }
     if (begin != namesStr.size()) {
-        auto bbegin = namesStr.find_first_not_of(' ', begin);
-        auto eend   = namesStr.back() == ' ' ? namesStr.find_last_not_of(' ') : namesStr.size();
+        std::size_t bbegin = namesStr.find_first_not_of(' ', begin);
+        std::size_t eend   = namesStr.back() == ' ' ? namesStr.find_last_not_of(' ') : namesStr.size();
         namesVec.push_back({names + bbegin, eend - bbegin});
     }
     return namesVec;
 }
 #endif
 template <typename SerializerT, typename NamesT, typename T>
-inline bool unfold_function_imp(SerializerT& serializer, const NamesT& namesVec, int i, T&& value) NEKO_NOEXCEPT {
-    NEKO_ASSERT(i < namesVec.size(), "serializer", "unfoldFunctionImp: index out of range");
-    return serializer(make_name_value_pair(namesVec[i].data(), namesVec[i].size(), std::forward<T>(value)));
+inline bool unfold_function_imp(SerializerT& serializer, const NamesT& namesVec, int nameIdx, T&& value) NEKO_NOEXCEPT {
+    NEKO_ASSERT(nameIdx < namesVec.size(), "serializer", "unfoldFunctionImp: index out of range");
+    return serializer(make_name_value_pair(namesVec[nameIdx].data(), namesVec[nameIdx].size(), std::forward<T>(value)));
 }
 
 template <typename SerializerT, typename NamesT, typename T, typename... Args>
-inline bool unfold_function_imp(SerializerT& serializer, const NamesT& namesVec, int i, T&& value,
+inline bool unfold_function_imp(SerializerT& serializer, const NamesT& namesVec, int nameIdx, T&& value,
                                 Args&&... args) NEKO_NOEXCEPT {
     bool ret = 0;
-    NEKO_ASSERT(i < namesVec.size(), "serializer", "unfoldFunctionImp: index out of range");
-    ret = serializer(make_name_value_pair(namesVec[i].data(), namesVec[i].size(), std::forward<T>(value)));
+    NEKO_ASSERT(nameIdx < namesVec.size(), "serializer", "unfoldFunctionImp: index out of range");
+    ret = serializer(make_name_value_pair(namesVec[nameIdx].data(), namesVec[nameIdx].size(), std::forward<T>(value)));
 
-    return unfold_function_imp<SerializerT>(serializer, namesVec, i + 1, args...) && ret;
+    return unfold_function_imp<SerializerT>(serializer, namesVec, nameIdx + 1, args...) && ret;
 }
 template <typename SerializerT, typename NamesT, typename... Args>
-inline bool _unfold_function(SerializerT& serializer, const NamesT& namesVec, Args&&... args) NEKO_NOEXCEPT {
-    int i = 0;
-    return unfold_function_imp<SerializerT>(serializer, namesVec, i, args...);
+inline bool _unfold_function(SerializerT& serializer, const NamesT& namesVec, // NOLINT(readability-identifier-naming)
+                             Args&&... args) NEKO_NOEXCEPT {
+    int index = 0;
+    return unfold_function_imp<SerializerT>(serializer, namesVec, index, args...);
 }
 } // namespace detail
 
 NEKO_END_NAMESPACE
+// NOLINTEND
 
 #if NEKO_CPP_PLUS < 17
 /**

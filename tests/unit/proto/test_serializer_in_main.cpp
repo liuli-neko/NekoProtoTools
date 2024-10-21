@@ -146,8 +146,8 @@ int main(int argc, char** argv) {
 #endif
     TestP tp2;
     tp2.makeProto() = testp;
-    EXPECT_STREQ(SerializableToString(testp).c_str(), SerializableToString(tp2).c_str());
-    NEKO_LOG_DEBUG("unit test", "{}", SerializableToString(testp));
+    EXPECT_STREQ(serializable_to_string(testp).c_str(), serializable_to_string(tp2).c_str());
+    NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(testp));
 
     std::vector<char> outbuf;
     {
@@ -161,7 +161,7 @@ int main(int argc, char** argv) {
         TestP tp3;
         SimdJsonSerializer::InputSerializer in(outbuf.data(), outbuf.size() - 1);
         EXPECT_TRUE(in(tp3));
-        EXPECT_STREQ(SerializableToString(tp3).c_str(), SerializableToString(tp2).c_str());
+        EXPECT_STREQ(serializable_to_string(tp3).c_str(), serializable_to_string(tp2).c_str());
     }
     zTypeTest1 zt;
     zt.a = {{1, 1}, {2, 2}};

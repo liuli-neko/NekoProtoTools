@@ -1,6 +1,7 @@
 #pragma once
 
 #include "global.hpp"
+#include "log.hpp"
 
 #include <array>
 #include <string>
@@ -70,42 +71,45 @@ public:
     explicit Span(std::vector<U>& data)
         : mData(reinterpret_cast<pointer>(data.data())), mSize(data.size() * sizeof(U) / sizeof(T)) {}
 
-    reference operator[](const size_type index) { return mData[index]; }
-    const_reference operator[](const size_type index) const { return mData[index]; }
-    const_reference at(const size_type index) const {
+    auto operator[](const size_type index) -> reference { return mData[index]; }
+    auto operator[](const size_type index) const -> const_reference { return mData[index]; }
+    auto at(const size_type index) const -> const_reference {
         NEKO_ASSERT(index < mSize, "span", "Index out of span view");
         return mData[index];
     }
-    reference at(const size_type index) {
+    auto at(const size_type index) -> reference {
         NEKO_ASSERT(index < mSize, "span", "Index out of span view");
         return mData[index];
     }
 
-    iterator begin() const { return mData; }
-    iterator end() const { return mData + mSize; }
-    const_iterator cbegin() const { return mData; }
-    const_iterator cend() const { return mData + mSize; }
-    reverse_iterator rbegin() const { return reverse_iterator(end()); }
-    reverse_iterator rend() const { return reverse_iterator(begin()); }
-    const_reverse_iterator crbegin() const { return const_reverse_iterator(end()); }
-    const_reverse_iterator crend() const { return const_reverse_iterator(begin()); }
+    auto begin() const -> iterator { return mData; }
+    auto end() const -> iterator { return mData + mSize; }
+    auto cbegin() const -> const_iterator { return mData; }
+    auto cend() const -> const_iterator { return mData + mSize; }
+    auto rbegin() const -> reverse_iterator { return reverse_iterator(end()); }
+    auto rend() const -> reverse_iterator { return reverse_iterator(begin()); }
+    auto crbegin() const -> const_reverse_iterator { return const_reverse_iterator(end()); }
+    auto crend() const -> const_reverse_iterator { return const_reverse_iterator(begin()); }
 
-    size_type size_bytes() const { return mSize * sizeof(T); }
-    size_type size() const { return mSize; }
-    bool empty() const { return mSize == 0; }
+    auto size_bytes() const -> size_type // NOLINT(readability-identifier-naming)
+    {
+        return mSize * sizeof(T);
+    }
+    auto size() const -> size_type { return mSize; }
+    auto empty() const -> bool { return mSize == 0; }
 
-    const_reference front() const { return mData[0]; }
-    reference front() { return mData[0]; }
-    const_reference back() const { return mData[mSize - 1]; }
-    reference back() { return mData[mSize - 1]; }
+    auto front() const -> const_reference { return mData[0]; }
+    auto front() -> reference { return mData[0]; }
+    auto back() const -> const_reference { return mData[mSize - 1]; }
+    auto back() -> reference { return mData[mSize - 1]; }
 
-    pointer data() { return mData; }
-    const_pointer data() const { return mData; }
+    auto data() -> pointer { return mData; }
+    auto data() const -> const_pointer { return mData; }
 
-    Span subspan(size_type offset, size_type count) const { return Span(mData + offset, count); }
-    Span subspan(size_type offset) const { return Span(mData + offset, mSize - offset); }
-    Span first(size_type count) const { return Span(mData, count); }
-    Span last(size_type count) const { return Span(mData + mSize - count, count); }
+    auto subspan(size_type offset, size_type count) const -> Span { return Span(mData + offset, count); }
+    auto subspan(size_type offset) const -> Span { return Span(mData + offset, mSize - offset); }
+    auto first(size_type count) const -> Span { return Span(mData, count); }
+    auto last(size_type count) const -> Span { return Span(mData + mSize - count, count); }
 
 private:
     size_type mSize;
