@@ -104,7 +104,7 @@ template <typename T, class enable = void>
 struct is_pretty_json_writer : std::false_type {};
 
 template <typename T>
-struct is_pretty_json_writer<PrettyJsonWriter<T>> : std::true_type {};
+struct is_pretty_json_writer<rapidjson::PrettyWriter<T>> : std::true_type {};
 
 class ConstJsonIterator {
 public:
