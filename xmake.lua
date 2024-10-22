@@ -9,7 +9,7 @@ set_configdir("include/nekoproto/proto/private")
 option("enable_simdjson")
     set_default(false)
     set_showmenu(true)
-    set_description("Enable simdjson test, should install simdjson")
+    set_description("Enable simdjson support, should install simdjson")
     set_category("serializer provider")
     set_configvar("NEKO_PROTO_ENABLE_SIMDJSON", true)
 option_end()
@@ -17,9 +17,17 @@ option_end()
 option("enable_rapidjson")
     set_default(false)
     set_showmenu(true)
-    set_description("Enable rapidjson test, should install rapidjson")
+    set_description("Enable rapidjson support, should install rapidjson")
     set_category("serializer provider")
     set_configvar("NEKO_PROTO_ENABLE_RAPIDJSON", true)
+option_end()
+
+option("enable_rapidxml")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable rapidxml support, should install rapidxml")
+    set_category("serializer provider")
+    set_configvar("NEKO_PROTO_ENABLE_RAPIDXML", true)
 option_end()
 
 option("enable_spdlog")
@@ -79,6 +87,11 @@ if has_config("enable_rapidjson") then
     add_packages("rapidjson")
 end
 
+if has_config("enable_rapidxml") then
+    add_requires("rapidxml", {configs = { shared = is_kind("shared")}})
+    add_packages("rapidxml")
+end
+
 if has_config("enable_spdlog") then
     add_requires("spdlog", {configs = { shared = is_kind("shared")}})
     add_packages("spdlog")
@@ -111,6 +124,7 @@ target("NekoProtoBase")
         set_kind("static")
         set_configvar("NEKO_PROTO_STATIC", true)
     end
+    add_options("enable_spdlog", "enable_fmt", "enable_stdformat", "enable_rapidjson", "enable_simdjson", "enable_rapidxml", "enable_communication")
     add_headerfiles("include/(nekoproto/proto/**.hpp)")
     add_headerfiles("include/(nekoproto/proto/**.h)")
     add_includedirs("include")

@@ -8,7 +8,6 @@ if has_config("fuzzer_test") then
         set_policy("build.sanitizer.address", true)
         add_includedirs("../../../")
         set_toolchains("clang-14")
-        add_options("enable_spdlog", "enable_fmt", "enable_stdformat", "enable_rapidjson", "enable_simdjson")
         add_cxxflags("clang::-fsanitize=fuzzer")
         add_linkdirs("/usr/lib/llvm-14/lib")
         add_links("Fuzzer")

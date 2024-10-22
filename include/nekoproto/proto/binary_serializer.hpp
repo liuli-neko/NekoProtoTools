@@ -142,12 +142,12 @@ public:
         : OutputSerializer<BinaryOutputSerializer>(this),
           mBuffer(other.mBuffer) {}
     template <typename T>
-    inline bool saveValue(SizeTag<T> const& size) NEKO_NOEXCEPT {
+    bool saveValue(SizeTag<T> const& size) NEKO_NOEXCEPT {
         return saveValue(size.size);
     }
     template <typename T, traits::enable_if_t<std::is_integral<T>::value, sizeof(T) <= sizeof(int64_t),
                                               !std::is_enum<T>::value> = traits::default_value_for_enable>
-    inline bool saveValue(const T value) NEKO_NOEXCEPT {
+    bool saveValue(const T value) NEKO_NOEXCEPT {
         if (value < 0) {
             mBuffer.push_back(0x80);
             return detail::IntegerEncoder::encode(-value, mBuffer, 1) == 0;
@@ -189,7 +189,7 @@ public:
     }
 #endif
     template <typename T>
-    inline bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
+    bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
         NEKO_LOG_INFO("BinarySerializer", "save name({}) value pair", NEKO_STRING_VIEW{value.name, value.nameLen});
         return this->operator()(NEKO_STRING_VIEW{value.name, value.nameLen}) && this->operator()(value.value);
     }
@@ -260,7 +260,7 @@ public:
 
     template <typename T, traits::enable_if_t<std::is_integral<T>::value, sizeof(T) <= sizeof(int64_t),
                                               !std::is_enum<T>::value> = traits::default_value_for_enable>
-    inline bool loadValue(T& value) NEKO_NOEXCEPT {
+    bool loadValue(T& value) NEKO_NOEXCEPT {
         if (mOffset >= mSize) {
             return false;
         }
@@ -313,7 +313,7 @@ public:
     }
 
     template <typename T>
-    inline bool loadValue(const SizeTag<T>& value) NEKO_NOEXCEPT {
+    bool loadValue(const SizeTag<T>& value) NEKO_NOEXCEPT {
         if (!loadValue(value.size)) {
             return false;
         }
@@ -322,7 +322,7 @@ public:
     }
 
     template <typename T>
-    inline bool loadValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
+    bool loadValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
         NEKO_LOG_INFO("BinarySerializer", "load name({}) value pair", std::string(value.name, value.nameLen));
         std::string name;
         if (!operator()(name)) {

@@ -9,7 +9,6 @@
  *
  */
 #pragma once
-#include <type_traits>
 #include <unordered_map>
 
 #include "../serializer_base.hpp"
@@ -17,29 +16,29 @@
 NEKO_BEGIN_NAMESPACE
 
 template <typename Serializer, typename K, typename V>
-inline bool save(Serializer& sa, const std::unordered_multimap<K, V>& value) {
-    bool ret = sa.startArray(value.size());
-    for (const auto& v : value) {
+inline bool save(Serializer& sa, const std::unordered_multimap<K, V>& values) {
+    bool ret = sa.startArray(values.size());
+    for (const auto& value : values) {
         ret = sa.startObject(1) && ret;
-        ret = sa(make_name_value_pair("key", 3, v.first)) && ret;
-        ret = sa(make_name_value_pair("value", 5, v.second)) && ret;
+        ret = sa(make_name_value_pair("key", 3, value.first)) && ret;
+        ret = sa(make_name_value_pair("value", 5, value.second)) && ret;
         ret = sa.endObject() && ret;
     }
     return ret && sa.endArray();
 }
 
 template <typename Serializer, typename K, typename V>
-inline bool load(Serializer& sa, std::unordered_multimap<K, V>& value) {
-    K k;
-    V v;
+inline bool load(Serializer& sa, std::unordered_multimap<K, V>& values) {
+    K key;
+    V value;
     bool ret;
-    std::size_t s;
-    ret = sa(make_size_tag(s));
-    value.clear();
-    while (ret && s--) {
+    std::size_t size;
+    ret = sa(make_size_tag(size));
+    values.clear();
+    while (ret && size--) {
         ret = sa.startNode() && ret;
-        if (sa(make_name_value_pair("key", 3, k)) && sa(make_name_value_pair("value", 5, v))) {
-            value.emplace(std::move(k), std::move(v));
+        if (sa(make_name_value_pair("key", 3, key)) && sa(make_name_value_pair("value", 5, value))) {
+            values.emplace(std::move(key), std::move(value));
         } else {
             break;
         }
