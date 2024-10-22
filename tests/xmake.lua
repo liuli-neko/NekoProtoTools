@@ -46,7 +46,6 @@ for _, file in ipairs(os.files("./**/test_*.cpp")) do
         set_encodings("utf-8")
         add_defines("SIMDJSON_EXCEPTIONS=1")
         add_defines("NEKO_PROTO_STATIC")
-        add_options("enable_spdlog", "enable_fmt", "enable_stdformat", "enable_rapidjson", "enable_simdjson")
         add_packages("gtest")
         set_languages("c++17")
         add_files(file, "../src/proto_base.cpp")

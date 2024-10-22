@@ -19,7 +19,6 @@
 #include <vector>
 #endif
 
-#include "../json_serializer.hpp"
 #include "../private/global.hpp"
 #include "../private/helpers.hpp"
 #include "../serializer_base.hpp"
@@ -36,7 +35,7 @@ NEKO_BEGIN_NAMESPACE
 #define NEKO_STRINGIFY_TYPE_RAW(x) NEKO_STRINGIFY_TYPEINFO(typeid(x))
 #define NEKO_FUNCTION              __PRETTY_FUNCTION__
 
-namespace {
+namespace detail {
 template <typename T, T Value>
 constexpr auto _Neko_GetEnumName() noexcept {
     // constexpr auto _Neko_GetEnumName() [with T = MyEnum; T Value = MyValues]
@@ -66,7 +65,7 @@ inline std::string NEKO_STRINGIFY_TYPEINFO(const std::type_info& info) {
 #define NEKO_STRINGIFY_TYPE_RAW(type) NEKO_STRINGIFY_TYPEINFO(typeid(type))
 #define NEKO_ENUM_TO_NAME(enumType)
 #define NEKO_FUNCTION __FUNCTION__
-namespace {
+namespace detail {
 inline const char* NEKO_STRINGIFY_TYPEINFO(const std::type_info& info) {
     // Skip struct class prefix
     auto name = info.name();
@@ -97,7 +96,7 @@ constexpr auto _Neko_GetEnumName() noexcept {
     return body;
 }
 #else
-namespace {
+namespace detail {
 #define NEKO_STRINGIFY_TYPE_RAW(type) typeid(type).name()
 template <typename T, T Value>
 constexpr auto _Neko_GetEnumName() noexcept {
@@ -140,19 +139,24 @@ constexpr auto _Neko_GetValidEnumNames(std::index_sequence<N...> seq) noexcept {
 
     return arr;
 }
-} // namespace
+template <typename T>
+std::string enum_to_string(const T& value) {
+    constexpr static auto KEnumArr = _Neko_GetValidEnumNames<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
+    std::string ret;
+    for (int i = 0; i < KEnumArr.size(); ++i) {
+        if (KEnumArr[i].first == value) {
+            ret = std::string(KEnumArr[i].second);
+        }
+    }
+    return ret;
+}
+}   // namespace detail
 /// ====================== end enum string =====================
 
 template <typename SerializerT, typename T,
           traits::enable_if_t<std::is_enum<T>::value> = traits::default_value_for_enable>
 inline bool save(SerializerT& sa, const T& value) {
-    constexpr static auto kEnumArr = _Neko_GetValidEnumNames<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
-    std::string ret;
-    for (int i = 0; i < kEnumArr.size(); ++i) {
-        if (kEnumArr[i].first == value) {
-            ret = std::string(kEnumArr[i].second);
-        }
-    }
+    std::string ret = detail::enum_to_string(value);
     ret += "(" + std::to_string(static_cast<int32_t>(value)) + ")";
     return sa(ret);
 }

@@ -14,7 +14,6 @@ if has_config("ui_test") and has_config("enable_communication") then
         add_files("$(projectdir)/src/communication_base.cpp")
         add_defines("NEKO_PROTO_STATIC")
         add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
-        add_options("enable_spdlog", "enable_fmt", "enable_stdformat", "enable_rapidjson", "enable_simdjson")
         add_frameworks("QtCore", "QtNetwork", "QtWidgets", "QtGui")
     target_end()
 end 
