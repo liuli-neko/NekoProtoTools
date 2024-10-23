@@ -21,9 +21,12 @@ option("cereal_test")
     set_description("Enable cereal test, should install cereal, to contrast with this")
 option_end()
 
-option("memcheck")
-    set_default(false)
-    set_showmenu(true)
+if is_plat("linux") then 
+    option("memcheck")
+        set_default(false)
+        set_showmenu(true)
+    option_end()
+end 
 
 add_defines("ILIAS_ENABLE_LOG")
 -- Make all files in the directory into targets
@@ -54,16 +57,14 @@ for _, file in ipairs(os.files("./**/test_*.cpp")) do
         for i = 1, #cpp_versions do
             add_tests(string.gsub(cpp_versions[i], '+', 'p', 2), {group = "proto", kind = "binary", files = {"../src/proto_base.cpp", file}, languages = cpp_versions[i], run_timeout = 30000})
         end
-        on_run(function (target)
-            local argv = {}
-            if has_config("memcheck") then
+        if has_config("memcheck") then
+            on_run(function (target)
+                local argv = {}
                 table.insert(argv, "--leak-check=full")
                 table.insert(argv, target:targetfile())
                 os.execv("valgrind", argv)
-            else
-                os.run(target:targetfile())
-            end
-        end)
+            end)
+        end 
     target_end()
 
     ::continue::

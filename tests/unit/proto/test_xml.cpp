@@ -64,23 +64,28 @@ TEST(XML, Parse) {
     ASSERT_EQ(breakfastMenu.breakfast_menu.size(), 5);
     EXPECT_STREQ(breakfastMenu.breakfast_menu[0].name.c_str(), "Belgian Waffles");
     EXPECT_STREQ(breakfastMenu.breakfast_menu[0].price.c_str(), "$5.95");
-    EXPECT_STREQ(breakfastMenu.breakfast_menu[0].description.c_str(), "Two of our famous Belgian Waffles with plenty of real maple syrup");
+    EXPECT_STREQ(breakfastMenu.breakfast_menu[0].description.c_str(),
+                 "Two of our famous Belgian Waffles with plenty of real maple syrup");
     EXPECT_EQ(breakfastMenu.breakfast_menu[0].calories, 650);
     EXPECT_STREQ(breakfastMenu.breakfast_menu[1].name.c_str(), "Strawberry Belgian Waffles");
     EXPECT_STREQ(breakfastMenu.breakfast_menu[1].price.c_str(), "$7.95");
-    EXPECT_STREQ(breakfastMenu.breakfast_menu[1].description.c_str(), "Light Belgian waffles covered with strawberries and whipped cream");
+    EXPECT_STREQ(breakfastMenu.breakfast_menu[1].description.c_str(),
+                 "Light Belgian waffles covered with strawberries and whipped cream");
     EXPECT_EQ(breakfastMenu.breakfast_menu[1].calories, 900);
     EXPECT_STREQ(breakfastMenu.breakfast_menu[2].name.c_str(), "Berry-Berry Belgian Waffles");
     EXPECT_STREQ(breakfastMenu.breakfast_menu[2].price.c_str(), "$8.95");
-    EXPECT_STREQ(breakfastMenu.breakfast_menu[2].description.c_str(), "Light Belgian waffles covered with an assortment of fresh berries and whipped cream");
+    EXPECT_STREQ(breakfastMenu.breakfast_menu[2].description.c_str(),
+                 "Light Belgian waffles covered with an assortment of fresh berries and whipped cream");
     EXPECT_EQ(breakfastMenu.breakfast_menu[2].calories, 900);
     EXPECT_STREQ(breakfastMenu.breakfast_menu[3].name.c_str(), "French Toast");
     EXPECT_STREQ(breakfastMenu.breakfast_menu[3].price.c_str(), "$4.50");
-    EXPECT_STREQ(breakfastMenu.breakfast_menu[3].description.c_str(), "Thick slices made from our homemade sourdough bread");
+    EXPECT_STREQ(breakfastMenu.breakfast_menu[3].description.c_str(),
+                 "Thick slices made from our homemade sourdough bread");
     EXPECT_EQ(breakfastMenu.breakfast_menu[3].calories, 600);
     EXPECT_STREQ(breakfastMenu.breakfast_menu[4].name.c_str(), "Homestyle Breakfast");
     EXPECT_STREQ(breakfastMenu.breakfast_menu[4].price.c_str(), "$6.95");
-    EXPECT_STREQ(breakfastMenu.breakfast_menu[4].description.c_str(), "Two eggs, bacon or sausage, toast, and our ever-popular hash browns");
+    EXPECT_STREQ(breakfastMenu.breakfast_menu[4].description.c_str(),
+                 "Two eggs, bacon or sausage, toast, and our ever-popular hash browns");
     EXPECT_EQ(breakfastMenu.breakfast_menu[4].calories, 950);
 }
 

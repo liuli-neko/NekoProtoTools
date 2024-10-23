@@ -6,15 +6,13 @@ if has_config("cereal_test") then
         set_languages("c++17")
         add_packages("gtest", "cereal")
         add_files("test_random_big_data_cereal.cpp")
-        on_run(function (target)
-            local argv = {}
-            if has_config("memcheck") then
+        if has_config("memcheck") then
+            on_run(function (target)
+                local argv = {}
                 table.insert(argv, "--leak-check=full")
                 table.insert(argv, target:targetfile())
                 os.execv("valgrind", argv)
-            else
-                os.run(target:targetfile())
-            end
-        end)
+            end)
+        end
     target_end()
 end 

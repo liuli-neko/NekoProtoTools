@@ -56,6 +56,13 @@ option("enable_fmt")
     end)
 option_end()
 
+option("enable_tests")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable test")
+    set_category("enable test")
+option_end()
+
 option("enable_stdformat")
     set_showmenu(true)
     set_description("Enable std format for log, should support #include <format>")
@@ -106,7 +113,9 @@ if has_config("enable_communication") then
     add_requires("ilias", {configs = { shared = is_kind("shared")}})
 end
 
-includes("tests")
+if has_config("enable_tests") then
+    includes("tests")
+end
 
 if is_mode("debug") then
     add_defines("NEKO_PROTO_LOG_CONTEXT")
@@ -124,7 +133,13 @@ target("NekoProtoBase")
         set_kind("static")
         set_configvar("NEKO_PROTO_STATIC", true)
     end
-    add_options("enable_spdlog", "enable_fmt", "enable_stdformat", "enable_rapidjson", "enable_simdjson", "enable_rapidxml", "enable_communication")
+    add_options("enable_spdlog", 
+                "enable_fmt", 
+                "enable_stdformat", 
+                "enable_rapidjson", 
+                "enable_simdjson", 
+                "enable_rapidxml", 
+                "enable_communication")
     add_headerfiles("include/(nekoproto/proto/**.hpp)")
     add_headerfiles("include/(nekoproto/proto/**.h)")
     add_includedirs("include")

@@ -83,7 +83,7 @@ struct BinaryProto {
     NEKO_DECLARE_PROTOCOL(BinaryProto, BinarySerializer)
 };
 
-struct zTypeTest1 {
+struct ZTypeTest1 {
     std::unordered_map<int, int> a;
     std::unordered_map<int, std::string> b;
     std::unordered_set<int> c;
@@ -163,7 +163,7 @@ int main(int argc, char** argv) {
         EXPECT_TRUE(in(tp3));
         EXPECT_STREQ(serializable_to_string(tp3).c_str(), serializable_to_string(tp2).c_str());
     }
-    zTypeTest1 zt;
+    ZTypeTest1 zt;
     zt.a = {{1, 1}, {2, 2}};
     zt.b = {{1, "world"}};
     zt.c = {1, 2, 3};
@@ -171,15 +171,15 @@ int main(int argc, char** argv) {
     zt.e = {1.1, 2.2, 3.3, 3.3};
     zt.f = {{"hello", std::make_shared<std::string>("world")}, {"nullptr", nullptr}};
     zt.g = std::make_unique<std::string>("hello");
-    std::vector<char> data_t1;
-    JsonSerializer::OutputSerializer output(data_t1);
+    std::vector<char> dataT1;
+    JsonSerializer::OutputSerializer output(dataT1);
     output(zt);
     output.end();
-    data_t1.push_back('\0');
+    dataT1.push_back('\0');
 
-    zTypeTest1 zt1;
-    JsonSerializer::InputSerializer input_zt1(data_t1.data(), data_t1.size() - 1);
-    input_zt1(zt1);
+    ZTypeTest1 zt1;
+    JsonSerializer::InputSerializer inputZt1(dataT1.data(), dataT1.size() - 1);
+    inputZt1(zt1);
     EXPECT_EQ(zt.a, zt1.a);
     EXPECT_EQ(zt.b, zt1.b);
     EXPECT_EQ(zt.c, zt1.c);

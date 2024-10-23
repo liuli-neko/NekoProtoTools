@@ -105,11 +105,20 @@ public:
     virtual int type() const NEKO_NOEXCEPT = 0;
     /**
      * @brief proto message name
-     *
+     * This name is the same as the class name
      * @return NEKO_STRING_VIEW is std::string_view after c++17 and std::string before c++14
      */
     virtual NEKO_STRING_VIEW protoName() const NEKO_NOEXCEPT = 0;
 
+    /**
+     * @brief Get the Field object
+     *  use the member name to get the field, only support nameValuePair field.
+     * @tparam T 
+     * @param name the field name in nameValuePair in serializer
+     * @param result the field value, the type must be the same as the field type
+     * @return true if the field exists, otherwise false
+     * @return false field not exists or field type is not the same as the result type
+     */
     template <typename T>
     bool getField(const NEKO_STRING_VIEW& name, T* result) NEKO_NOEXCEPT {
         auto* reflectionObject = _getReflectionObject();

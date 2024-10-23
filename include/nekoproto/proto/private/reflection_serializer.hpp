@@ -47,15 +47,15 @@ public:
 template <typename T>
 class ReflectionField : public ReflectionFieldBase {
 public:
-    inline explicit ReflectionField(const NEKO_STRING_VIEW& name, T* value) : mValue(value), mName(name) {
+    explicit ReflectionField(const NEKO_STRING_VIEW& name, T* value) : mValue(value), mName(name) {
         if (value == nullptr) {
             throw std::invalid_argument("can not make reflection object " + std::string(name) + " for nullptr");
         }
     }
-    inline const T& getField() const NEKO_NOEXCEPT { return *mValue; }
-    inline void setField(const T& value) NEKO_NOEXCEPT { (*mValue) = value; }
-    inline const NEKO_STRING_VIEW& name() const NEKO_NOEXCEPT override { return mName; }
-    inline const std::type_info& typeInfo() const NEKO_NOEXCEPT override { return typeid(T); }
+    const T& getField() const NEKO_NOEXCEPT { return *mValue; }
+    void setField(const T& value) NEKO_NOEXCEPT { (*mValue) = value; }
+    const NEKO_STRING_VIEW& name() const NEKO_NOEXCEPT override { return mName; }
+    const std::type_info& typeInfo() const NEKO_NOEXCEPT override { return typeid(T); }
 
 private:
     T* const mValue;
@@ -75,7 +75,7 @@ public:
     }
 
     template <typename T>
-    inline T getField(const NEKO_STRING_VIEW& name, const T& defaultValue) const NEKO_NOEXCEPT {
+    T getField(const NEKO_STRING_VIEW& name, const T& defaultValue) const NEKO_NOEXCEPT {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             NEKO_LOG_ERROR("ReflectionSerializer", "field {} not found.", name);
@@ -99,7 +99,7 @@ public:
     }
 
     template <typename T>
-    inline bool getField(const NEKO_STRING_VIEW& name, T* result) const NEKO_NOEXCEPT {
+    bool getField(const NEKO_STRING_VIEW& name, T* result) const NEKO_NOEXCEPT {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             NEKO_LOG_ERROR("ReflectionSerializer", "field {} not found.", name);
@@ -123,7 +123,7 @@ public:
         return true;
     }
     template <typename T>
-    inline bool setField(const NEKO_STRING_VIEW& name, const T& value) NEKO_NOEXCEPT {
+    bool setField(const NEKO_STRING_VIEW& name, const T& value) NEKO_NOEXCEPT {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             NEKO_LOG_ERROR("ReflectionSerializer", "field {} not found.", name);
@@ -145,7 +145,7 @@ public:
     }
 
     template <typename T>
-    inline ReflectionField<T>* bindField(const NEKO_STRING_VIEW& name, T* value) {
+    ReflectionField<T>* bindField(const NEKO_STRING_VIEW& name, T* value) {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             mFields.insert(std::make_pair(name, new ReflectionField<T>(name, value)));
@@ -168,7 +168,7 @@ public:
     inline operator bool() const { return true; }
 
     template <typename... Ts>
-    inline bool operator()(const Ts&... fields) {
+    bool operator()(const Ts&... fields) {
         return _process(fields...);
     }
 
@@ -176,15 +176,15 @@ public:
 
 private:
     template <typename T, typename... Ts>
-    inline bool _process(const T& field, const Ts&... fields) {
+    bool _process(const T& field, const Ts&... fields) {
         return _process(field) && _process(fields...);
     }
     template <typename T>
-    inline bool _process(const NameValuePair<T>& field) {
+    bool _process(const NameValuePair<T>& field) {
         return nullptr != mObject.bindField(NEKO_STRING_VIEW(field.name, field.nameLen), std::addressof(field.value));
     }
     template <typename T, typename std::enable_if<!is_name_value_pair<T>::Value, char>::type = 0>
-    inline bool _process(const T& /*unused*/) {
+    bool _process(const T& /*unused*/) {
         NEKO_LOG_WARN("ReflectionSerializer", "Types other than NameValuePair are not supported reflection");
         return true;
     }

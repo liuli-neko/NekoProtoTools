@@ -17,7 +17,7 @@
 #include <string>
 
 NEKO_USE_NAMESPACE
-struct zTypeTest {
+struct ZTypeTest {
     int a                   = 1;
     std::string b           = "field set test";
     bool c                  = false;
@@ -26,7 +26,7 @@ struct zTypeTest {
     std::map<int, int> f    = {{1, 1}, {2, 2}};
     std::list<double> g     = {1.1, 2.2, 3.3, 4.4, 5.5};
     std::set<std::string> h = {"a", "b", "c"};
-    std::deque<float> i     = {1.1f, 2.2f, 3.3f, 4.4f, 5.5f, 6.6f, 7.7f};
+    std::deque<float> i     = {1.1F, 2.2F, 3.3F, 4.4F, 5.5F, 6.6F, 7.7F};
     std::array<int, 7> j    = {1, 2, 3, 4, 5, 6, 7};
     std::tuple<int, std::string, bool, double, std::vector<int>, std::map<int, int>> k = {
         1, "hello", true, 3.141592654, {1, 2, 3}, {{1, 1}, {2, 2}}};
@@ -37,11 +37,10 @@ struct zTypeTest {
     std::bitset<16> v                     = {0x3f3f3f};
     std::pair<std::string, std::string> w = {"hello", "world"};
     NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k, l, p, q, t, v, w)
-    NEKO_DECLARE_PROTOCOL(zTypeTest, JsonSerializer)
+    NEKO_DECLARE_PROTOCOL(ZTypeTest, JsonSerializer)
 };
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size) {
-    zTypeTest proto;
-    std::vector<char> DataVec(Data, Data + Size);
-    return proto.makeProto().fromData(DataVec);
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+    ZTypeTest proto;
+    return static_cast<int>(proto.makeProto().fromData(reinterpret_cast<const char *>(data), size));
 }

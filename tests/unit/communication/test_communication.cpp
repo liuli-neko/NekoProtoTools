@@ -299,8 +299,8 @@ ILIAS_NAMESPACE::Task<void> udp_client_peer(IoContext& ioContext, ProtoFactory& 
 
 ILIAS_NAMESPACE::Task<void> udp_test(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlags,
                                     StreamFlag recvFlags) {
-    auto port1        = rand() % 1000 + 10000;
-    auto port2        = rand() % 1000 + 10000;
+    auto port1        = (rand() % 1000) + 10000;
+    auto port2        = (rand() % 1000) + 10000;
     auto [ret1, ret2] = co_await whenAll(udp_client_peer(ioContext, protoFactory, sendFlags, recvFlags,
                                                        IPEndpoint("127.0.0.1", port1), IPEndpoint("127.0.0.1", port2)),
                                          udp_client(ioContext, protoFactory, sendFlags, recvFlags,

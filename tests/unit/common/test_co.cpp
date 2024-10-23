@@ -521,12 +521,6 @@ int main() {
         std::cout << "a = " << a << ", b = " << b << ", c = " << c << " key:" << d.first << " value: " << d.second
                   << std::endl;
     }
-    //  auto zipd = Zip(va, vb, vc, vd);
-    //  for (auto items = zipd.begin(); items != zipd.end(); ++items) {
-    //    auto [a ,b ,c ,d] = *items;
-    //    std::cout << "a = " << a << ", b = " << b << ", c = " << c << " key:" << d.first << " value: " << d.second
-    //                  << std::endl;
-    //  }
 
     std::cout << "end" << std::endl;
 

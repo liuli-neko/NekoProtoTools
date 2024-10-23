@@ -13,15 +13,13 @@ if has_config("enable_communication") then
         add_files("$(projectdir)/src/communication_base.cpp")
         add_files("$(projectdir)/src/proto_base.cpp")
         add_files("test_communication.cpp")
-        on_run(function (target)
-            local argv = {}
-            if has_config("memcheck") then
+        if has_config("memcheck") then
+            on_run(function (target)
+                local argv = {}
                 table.insert(argv, "--leak-check=full")
                 table.insert(argv, target:targetfile())
                 os.execv("valgrind", argv)
-            else
-                os.run(target:targetfile())
-            end
-        end)
+            end)
+        end
     target_end()
 end

@@ -28,7 +28,7 @@ struct IntegerEncoder {
      * @return int
      */
     template <typename T>
-    static int encode(T&& value, std::vector<char>& outputBuffer, const uint8_t bitsOffset = 0);
+    static int encode(T&& value, std::vector<char>& outputBuffer, uint8_t bitsOffset = 0);
 };
 
 struct IntegerDecoder {
@@ -80,25 +80,25 @@ struct IntegerDecoder {
      * @return int the next position if successful, -1 otherwise
      */
     template <typename T>
-    static int decode(const uint8_t* buffer, const int size, T& value, const uint8_t bitsOffset = 0);
+    static int decode(const uint8_t* buffer, int size, T& value, uint8_t bitsOffset = 0);
 };
 
 template <typename T>
-inline int IntegerEncoder::encode(T&& value, std::vector<char>& outputBuffer, const uint8_t bitsOffset) {
+inline int IntegerEncoder::encode(T&& value, std::vector<char>& outputBuffer, uint8_t bitsOffset) {
     NEKO_ASSERT(bitsOffset < 8 && bitsOffset >= 0, "serializer", "bitsOffset must be between 0 and 8");
     if (outputBuffer.empty()) {
         outputBuffer.emplace_back(0);
     }
-    uint8_t b{static_cast<uint8_t>((1U << (8 - bitsOffset)) - 1U)};
-    if (value < b) {
+    uint8_t byte{static_cast<uint8_t>((1U << (8 - bitsOffset)) - 1U)};
+    if (value < byte) {
         outputBuffer.back() |= value;
     } else {
-        outputBuffer.back() |= b;
-        auto remain = value - b;
+        outputBuffer.back() |= byte;
+        auto remain = value - byte;
         while (remain > 0x7F) {
-            auto r = remain % 0x80;
-            r += 0x80;
-            outputBuffer.push_back(r);
+            auto remainByte = remain % 0x80;
+            remainByte += 0x80;
+            outputBuffer.push_back(remainByte);
             remain /= 0x80;
         }
         outputBuffer.push_back(remain);
@@ -107,16 +107,17 @@ inline int IntegerEncoder::encode(T&& value, std::vector<char>& outputBuffer, co
 }
 
 template <typename T>
-inline int IntegerDecoder::decode(const uint8_t* buffer, const int size, T& value, const uint8_t bitsOffset) {
+inline int IntegerDecoder::decode(const uint8_t* buffer, int size, T& value, uint8_t bitsOffset) {
     NEKO_ASSERT(bitsOffset < 8 && bitsOffset >= 0, "serializer", "bitsOffset must be between 0 and 8");
     NEKO_ASSERT(size > 0, "serializer", "buffer must not be empty");
 
-    uint8_t b{static_cast<uint8_t>((1U << (8 - bitsOffset)) - 1U)};
-    if ((buffer[0] & b) < b) {
-        value = static_cast<T>(buffer[0] & b);
+    uint8_t byte{static_cast<uint8_t>((1U << (8 - bitsOffset)) - 1U)};
+    if ((buffer[0] & byte) < byte) {
+        value = static_cast<T>(buffer[0] & byte);
         return 1;
     }
-    int current = 1, valueBitsOffset = 0;
+    int current = 1;
+    int valueBitsOffset = 0;
     value = 0;
     while (current < size && (buffer[current] & 0b10000000U)) {
         value |= static_cast<T>(buffer[current] & 0b01111111U) << valueBitsOffset;
@@ -128,7 +129,7 @@ inline int IntegerDecoder::decode(const uint8_t* buffer, const int size, T& valu
     }
     if (current < size) {
         value |= static_cast<T>(buffer[current] & 0b01111111U) << valueBitsOffset;
-        value += b;
+        value += byte;
         return current + 1;
     }
     return -2;

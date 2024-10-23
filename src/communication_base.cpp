@@ -12,15 +12,14 @@
 
 #include <ilias/detail/expected.hpp>
 #include <ilias/task.hpp>
-#include <regex>
 
 using namespace ILIAS_NAMESPACE;
 
 NEKO_BEGIN_NAMESPACE
 
 auto ErrorCategory::instance() -> const ErrorCategory& {
-    static ErrorCategory instance;
-    return instance;
+    static ErrorCategory kInstance;
+    return kInstance;
 }
 
 auto ErrorCategory::name() const -> std::string_view { return "NekoCommunicationError"; }
