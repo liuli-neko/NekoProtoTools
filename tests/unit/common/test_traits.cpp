@@ -1,12 +1,19 @@
 #include <gtest/gtest.h>
 
+#include "nekoproto/proto/serializer_base.hpp"
 #include "nekoproto/proto/simd_json_serializer.hpp"
+#include "nekoproto/proto/types/optional.hpp"
 #include "nekoproto/proto/types/struct_unwrap.hpp"
+#include "nekoproto/proto/types/vector.hpp"
 
 NEKO_USE_NAMESPACE
 struct TestStruct {
     int a;
     std::string b;
+    std::optional<std::vector<int>> c;
+    std::optional<std::string> d;
+
+    NEKO_SERIALIZER(a, b, c, d)
 };
 
 TEST(TraitsTest, test) {
@@ -19,15 +26,25 @@ TEST(TraitsTest, test) {
 }
 
 TEST(TraitsTest, simdjson) {
+    TestStruct ts;
+    ts.a = 1;
+    ts.b = "hello";
+    ts.c = std::nullopt;
+    ts.d = "world";
     std::vector<char> buffer;
-    SimdJsonOutputSerializer serializer(buffer);
-    simdjson::padded_string json_str = "{\"a\": 1, \"b\": \"hello\"}"_padded;
-    simdjson::dom::parser parser;
-    simdjson::dom::element el;
-    simdjson::dom::object obj;
-    std::cout << "1111111111" << std::endl;
-    std::cout << (el == simdjson::dom::element()) << std::endl;
-    std::cout << "22222222" << std::endl;
+    {
+        SimdJsonOutputSerializer os(buffer);
+        os(ts);
+    }
+    TestStruct ts2;
+    {
+        SimdJsonInputSerializer is(buffer.data(), buffer.size());
+        is(ts2);
+    }
+    EXPECT_EQ(ts.a, ts2.a);
+    EXPECT_EQ(ts.b, ts2.b);
+    EXPECT_EQ(ts.c.has_value(), ts2.c.has_value());
+    EXPECT_EQ(ts.d.value(), ts2.d.value());
 }
 
 int main(int argc, char** argv) {

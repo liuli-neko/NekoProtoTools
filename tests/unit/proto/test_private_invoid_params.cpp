@@ -35,32 +35,33 @@ struct TestStruct {
 
 TEST(PrivateInvoidParams, RefTest) {
     TestStruct ts;
-    auto p = ts.makeProto();
-    p.setField("a", 4);
-    p.setField("b", 5.0);
-    p.setField("c", 6);
+    auto proto = ts.makeProto();
+    proto.setField("a", 4);
+    proto.setField("b", 5.0);
+    proto.setField("c", 6);
     detail::ReflectionSerializer refs;
     bool ret       = ts.serialize(refs);
-    auto refObject = refs.getObject();
-    const int a    = 1;
-    refObject->bindField("test_a", &a);
+    auto *refObject = refs.getObject();
+    const int num    = 1;
+    refObject->bindField("test_a", &num);
     EXPECT_FALSE(refObject->setField("test_a", 4));
     EXPECT_EQ(refObject->getField<const int>("test_a", 123), 1);
     EXPECT_EQ(refObject->getField("test_a", 123), 1);
     EXPECT_THROW(refObject->bindField<double>("test_b", nullptr), std::invalid_argument);
-    int* b = nullptr;
-    refObject->bindField("test_a", &b);
-    int c = 4, d = 2;
-    EXPECT_TRUE(refObject->setField<int*>("test_a", &c));
-    EXPECT_EQ(*refObject->getField<int*>("test_a", &d), 4);
+    int* numptr = nullptr;
+    refObject->bindField("test_a", &numptr);
+    int num2 = 4;
+    int num3 = 2;
+    EXPECT_TRUE(refObject->setField<int*>("test_a", &num2));
+    EXPECT_EQ(*refObject->getField<int*>("test_a", &num3), 4);
 
     TestStruct ts2{};
-    auto pdata = p.toData();
+    auto pdata = proto.toData();
     TestStruct::ProtoType::Deserialize(pdata.data(), pdata.size(), ts2);
     EXPECT_EQ(ts2.a, 4);
     EXPECT_EQ(ts2.b, 5.0);
     EXPECT_EQ(ts2.c, 6);
-    EXPECT_STREQ(std::string(p.protoName().data(), p.protoName().size()).c_str(), "TestStruct");
+    EXPECT_STREQ(std::string(proto.protoName().data(), proto.protoName().size()).c_str(), "TestStruct");
 }
 
 int main(int argc, char** argv) {

@@ -230,17 +230,17 @@ TEST_F(ProtoTest, JsonProtoRef) {
 
     EXPECT_TRUE(proto->cast<BinaryProto>() == nullptr); // failed cast
     // get field test
-    int a = {};
-    EXPECT_TRUE(proto->getField("a", &a));                                      // success get field
-    EXPECT_FALSE(proto->getField("b", &a));                                     // get field by wrong type
-    EXPECT_FALSE(proto->getField("unexist field", &a));                         // get unexist field
+    int num = {};
+    EXPECT_TRUE(proto->getField("a", &num));                                      // success get field
+    EXPECT_FALSE(proto->getField("b", &num));                                     // get field by wrong type
+    EXPECT_FALSE(proto->getField("unexist field", &num));                         // get unexist field
     EXPECT_STREQ(proto->getField<std::string>("b", "").c_str(), "Struct test"); // success get field
     EXPECT_TRUE(proto->getField<bool>("c", false));                             // success get field
     EXPECT_FALSE(proto->getField<bool>("b", false));                            // get field by wrong type
     EXPECT_FALSE(proto->getField<bool>("unexist field", false));                // get unexist field
     EXPECT_STREQ(proto->getField<std::string>("", "false").c_str(), "false");   // get unexist field
     EXPECT_FALSE(proto->getField<bool>("", false));                             // get unexist field
-    EXPECT_EQ(a, 3);
+    EXPECT_EQ(num, 3);
 
     // set field test
     EXPECT_TRUE(proto->setField("a", 14));                            // success set field
@@ -285,25 +285,25 @@ TEST_F(ProtoTest, JsonProtoRef) {
 
 TEST_F(ProtoTest, InvalidParams) {
     std::string str = "{\"a\":3}";
-    TestP p;
-    EXPECT_FALSE(p.makeProto().fromData(str.data(), str.length()));
+    TestP proto;
+    EXPECT_FALSE(proto.makeProto().fromData(str.data(), str.length()));
     EXPECT_TRUE(mFactory->create("InvalidP") == nullptr);
     EXPECT_TRUE(mFactory->create(-1) == nullptr);
     str = "{\"a\":3.213123,\"b\":123"
           ",\"c\":12,\"d\":\"dddd\",\"f\":[1,2,3],\"e\":{\"a\":1,\"b\":2},\"h\":[1,2,3,0,0],"
           "\"g\":\"TEnum_A(1)\",\"j\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
           "\"TEnum_A(1)\"],\"i\":[1,\"hello\"],\"l\":23}";
-    EXPECT_FALSE(p.makeProto().fromData(str.data(), str.length()));
+    EXPECT_FALSE(proto.makeProto().fromData(str.data(), str.length()));
     str = "aaaaaaaaaaaaa";
-    EXPECT_FALSE(p.makeProto().fromData(str.data(), str.length()));
+    EXPECT_FALSE(proto.makeProto().fromData(str.data(), str.length()));
     str = "{\"a\":3.213123,\"b\":123"
           ",\"c\":12,\"d\":\"dddd\",\"f\":23,\"e\":null,\"h\":23.22,"
           "\"g\":\"TEnum_A(1)\",\"j\":[1,\"hello\",true,3.141592654,[1,2,3],"
           "\"TEnum_A(1)\"],\"i\":[1,\"hello\"],\"l\":23}";
-    EXPECT_FALSE(p.makeProto().fromData(str.data(), str.length()));
-    auto d = TestP::ProtoType::Serialize(p);
-    EXPECT_FALSE(d.empty());
-    EXPECT_FALSE(TestP::ProtoType::Deserialize(str.data(), str.length(), p));
+    EXPECT_FALSE(proto.makeProto().fromData(str.data(), str.length()));
+    auto dest = TestP::ProtoType::Serialize(proto);
+    EXPECT_FALSE(dest.empty());
+    EXPECT_FALSE(TestP::ProtoType::Deserialize(str.data(), str.length(), proto));
 }
 
 TEST_F(ProtoTest, BinaryProto) {
@@ -321,7 +321,7 @@ TEST_F(ProtoTest, BinaryProto) {
     EXPECT_EQ(proto2.c, proto.c);
 }
 
-struct zTypeTest {
+struct ZTypeTest {
     int a                   = 1;
     std::string b           = "field set test";
     bool c                  = false;
@@ -330,7 +330,7 @@ struct zTypeTest {
     std::map<int, int> f    = {{1, 1}, {2, 2}};
     std::list<double> g     = {1.1, 2.2, 3.3, 4.4, 5.5};
     std::set<std::string> h = {"a", "b", "c"};
-    std::deque<float> i     = {1.1f, 2.2f, 3.3f, 4.4f, 5.5f, 6.6f, 7.7f};
+    std::deque<float> i     = {1.1F, 2.2F, 3.3F, 4.4F, 5.5F, 6.6F, 7.7F};
     std::array<int, 7> j    = {1, 2, 3, 4, 5, 6, 7};
     std::tuple<int, std::string, bool, double, std::vector<int>, std::map<int, int>, TEnum> k = {
         1, "hello", true, 3.141592654, {1, 2, 3}, {{1, 1}, {2, 2}}, TEnum_A};
@@ -347,11 +347,11 @@ struct zTypeTest {
 #else
     NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k, l, p, q, t, v, w);
 #endif
-    NEKO_DECLARE_PROTOCOL(zTypeTest, JsonSerializer)
+    NEKO_DECLARE_PROTOCOL(ZTypeTest, JsonSerializer)
 };
 
 #if NEKO_CPP_PLUS >= 17
-static const char* zTypeTestStr =
+static const char* gZTypeTestStr =
     "{\"a\":1,\"b\":\"field set "
     "test\",\"c\":false,\"d\":3.141592654,\"e\":[1,2,3],\"f\":[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"g\":["
     "1.1,2.2,3.3,4.4,5.5],\"h\":[\"a\",\"b\",\"c\"],\"i\":[1.100000023841858,2.200000047683716,3.299999952316284,4."
@@ -375,32 +375,32 @@ static const char* zTypeTestStr =
 #endif
 
 TEST_F(ProtoTest, AllType) {
-    zTypeTest t = {};
-    t.a         = 1;
-    t.b         = "field set test";
-    t.c         = false;
-    t.d         = 3.141592654;
-    t.e         = {1, 2, 3};
-    t.f         = {{1, 1}, {2, 2}};
-    t.g         = {1.1, 2.2, 3.3, 4.4, 5.5};
-    t.h         = {"a", "b", "c"};
-    t.i         = {1.1f, 2.2f, 3.3f, 4.4f, 5.5f, 6.6f, 7.7f};
-    t.j         = {1, 2, 3, 4, 5, 6, 7};
-    t.k         = {1, "hello", true, 3.141592654, {1, 2, 3}, {{1, 1}, {2, 2}}, TEnum_A};
-    t.l         = std::make_shared<std::string>("hello shared ptr");
-    t.p         = {{1, "hello"}, {2, "world"}, {1, "world"}};
-    t.q         = {"a", "b", "c", "a", "b"};
-    t.t         = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-    t.v         = {0x3f3f3f};
-    t.w         = {"hello", "world"};
+    ZTypeTest tproto = {};
+    tproto.a         = 1;
+    tproto.b         = "field set test";
+    tproto.c         = false;
+    tproto.d         = 3.141592654;
+    tproto.e         = {1, 2, 3};
+    tproto.f         = {{1, 1}, {2, 2}};
+    tproto.g         = {1.1, 2.2, 3.3, 4.4, 5.5};
+    tproto.h         = {"a", "b", "c"};
+    tproto.i         = {1.1F, 2.2F, 3.3F, 4.4F, 5.5F, 6.6F, 7.7F};
+    tproto.j         = {1, 2, 3, 4, 5, 6, 7};
+    tproto.k         = {1, "hello", true, 3.141592654, {1, 2, 3}, {{1, 1}, {2, 2}}, TEnum_A};
+    tproto.l         = std::make_shared<std::string>("hello shared ptr");
+    tproto.p         = {{1, "hello"}, {2, "world"}, {1, "world"}};
+    tproto.q         = {"a", "b", "c", "a", "b"};
+    tproto.t         = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    tproto.v         = {0x3f3f3f};
+    tproto.w         = {"hello", "world"};
 #if NEKO_CPP_PLUS >= 17
-    t.x = 1;
-    t.y = "hello";
+    tproto.x = 1;
+    tproto.y = "hello";
 #endif
 
-    auto data = t.makeProto().toData();
+    auto data = tproto.makeProto().toData();
     data.push_back('\0');
-    EXPECT_STREQ(zTypeTestStr, data.data());
+    EXPECT_STREQ(gZTypeTestStr, data.data());
 }
 
 int main(int argc, char** argv) {
