@@ -31,7 +31,7 @@
  *
  * int main() {
  *     ProtoFactory factory(1, 0, 0);
- *     IProto msg = factory.create("ProtoMessage"); // or auto msg = makeProtocol(ProtoMessage{});
+ *     IProto msg = factory.create("ProtoMessage"); // or auto msg = ProtoMessage::emplaceProto({});
  *     auto* raw = msg.cast<ProtoMessage>();
  *     raw->a = 1;
  *     raw->b = "hello";

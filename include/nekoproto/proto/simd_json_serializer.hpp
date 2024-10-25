@@ -115,6 +115,9 @@ public:
         if (mType != Member) {
             return JsonValue(simdjson::error_code::NO_SUCH_FIELD);
         }
+        if (mMemberIndex < mMembers.size() && mMembers[mMemberIndex].key() == name) {
+            return mMembers[mMemberIndex].value();
+        }
         auto it = mMemberMap.find(name);
         if (it != mMemberMap.end()) {
             mMemberIndex = it->second;
@@ -230,13 +233,7 @@ public:
     }
     bool saveValue(const float value) NEKO_NOEXCEPT {
         if (_updateSeparatorAndState()) {
-            std::ostringstream ss;
-            ss << std::fixed << std::setprecision(6) << value;
-            auto str = ss.str();
-            while (str.back() == '0' && str.size() > 3) {
-                str.pop_back();
-            }
-            mStream << str;
+            mStream << std::setprecision(6) << value;
             return true;
         }
         NEKO_LOG_WARN("JsonSerializer", "save float in Invalid state {}", detail::enum_to_string(mStateStack.back()));
@@ -244,13 +241,7 @@ public:
     }
     bool saveValue(const double value) NEKO_NOEXCEPT {
         if (_updateSeparatorAndState()) {
-            std::ostringstream ss;
-            ss << std::fixed << std::setprecision(15) << value;
-            auto str = ss.str();
-            while (str.back() == '0' && str.size() > 3) {
-                str.pop_back();
-            }
-            mStream << str;
+            mStream << std::setprecision(15) << value;
             return true;
         }
         NEKO_LOG_WARN("JsonSerializer", "save double in Invalid state {}", detail::enum_to_string(mStateStack.back()));
