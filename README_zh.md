@@ -25,7 +25,7 @@
 
 如果你只需要序列化与反序列化的支持，需要如下头文件:
 ```C++
-#include "core/serializer_base.hpp"
+#include "nekoproto/proto/serializer_base.hpp"
 ```
 and use macro `NEKO_SERIALIZER` pack your class members you want to serialize and deserialize.
 ```C++
@@ -51,11 +51,11 @@ int main() {
 
 如果你需要提供反射和多态的协议，需要如下头文件 :
 ```C++
-#include "core/proto_base.hpp"
-#include "core/serializer_base.hpp" // it is needed to use the protocol factory
-#include "core/json_serializer.hpp" // it is default serializer for proto message, if you want to use your own serializer, you need provided template parameters, can remove this header if not use default serializer.
+#include "nekoproto/proto/proto_base.hpp"
+#include "nekoproto/proto/serializer_base.hpp" // it is needed to use the protocol factory
+#include "nekoproto/proto/json_serializer.hpp" // it is default serializer for proto message, if you want to use your own serializer, you need provided template parameters, can remove this header if not use default serializer.
 ```
-and a cpp file `src/proto_base.cpp`
+and a cpp file `nekoproto/proto/proto_base.cpp`
 
 and use macro `NEKO_DECLARE_PROTOCOL` to declare your class you want to register as the message type of proto.
 ```C++
@@ -68,8 +68,10 @@ struct SerializerAble {
 }
 
 int main() {
-    auto sa = makeProtocol(SerializerAble{1, "hello"});
-    auto data = sa.toData(); // for proto message, you can serialize it by toData() and deserialize it by fromData(data)
+    auto sa = SerializerAble::emplaceProto();
+    (*sa)->a = 1;
+    (*sa)->b = "hello";
+    auto data = sa->toData(); // for proto message, you can serialize it by toData() and deserialize it by fromData(data)
 
     ProtoFactory factory(1, 0, 0); // you can generate the factory. and proto message while auto regist to this factory.
     auto proto = factory.create("SerializerAble"); // you can create the proto message by the name or type value.
@@ -149,8 +151,10 @@ int main() {
 
 **Note:**
 其他c++容器库支持同json序列化器，占用长度为 4 + value len * container size.
+##### 3.1.3. xml序列化器
+类型支持同二进制序列化器，所有对象都会被转换成字符串存储。
 
-##### 3.1.3. 自定义序列化器
+##### 3.1.4. 自定义序列化器
 
 如果你需要使用自己的序列化器，你需要实现接口如下：
 
@@ -363,6 +367,11 @@ int main() {
 - 新增同步自身协议表的支持（协议仍旧得保证同名协议的兼容性）
 - 预留了1-64号的协议类型，用于支持控制信息的传输
 - 完善了二进制协议，修复了部分类型的序列化问题
+- 在协议传输中支持了更多的flag
+    - 支持发送时先分享协议表，接收端在收到协议表后，根据协议表进行反序列化
+    - 支持接收端在收到自身无法处理的协议时，将数据作为二进制数据包继续接收
+    - 流传输支持切片传输，并在中途中途中断取消
+- 支持了xml的序列化
 
 #### v0.2.0 - alpha
 - 修改序列化器的接口

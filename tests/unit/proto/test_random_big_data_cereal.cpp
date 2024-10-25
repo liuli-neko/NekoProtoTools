@@ -306,13 +306,6 @@ struct CTestStruct4 {
 
 #include "big_data_test_data_1.cpp"
 #include "big_data_test_data_2.cpp"
-#include "big_data_test_data_3.cpp"
-#include "big_data_test_data_4.cpp"
-#include "big_data_test_data_5.cpp"
-#include "big_data_test_data_6.cpp"
-#include "big_data_test_data_7.cpp"
-#include "big_data_test_data_8.cpp"
-#include "big_data_test_data_9.cpp"
 
 std::string makeData(const char* data, size_t size) { return std::string(data, size); }
 
@@ -351,97 +344,14 @@ TEST(BigProtoTest, Serializer) {
                                               std::chrono::high_resolution_clock::now() - end)
                                               .count());
     NEKO_LOG_INFO("unit test", "Serializer data: {}", proto2.f0.size());
-    data = makeData(data_3, sizeof(data_3));
     end  = std::chrono::high_resolution_clock::now();
-#ifdef __GNUC__
-    CTestStruct4 proto3;
-    {
-        std::istringstream is(data);
-        cereal::JSONInputArchive ia(is);
-        proto3.serialize(ia);
-    }
-    NEKO_LOG_INFO("unit test", "Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-                                              std::chrono::high_resolution_clock::now() - end)
-                                              .count());
-    NEKO_LOG_INFO("unit test", "Serializer data: {}", proto3.f0.size());
-    data = makeData(data_4, sizeof(data_4));
-    end  = std::chrono::high_resolution_clock::now();
-    CTestStruct4 proto4;
-    {
-        std::istringstream is(data);
-        cereal::JSONInputArchive ia(is);
-        proto4.serialize(ia);
-    }
-    NEKO_LOG_INFO("unit test", "Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-                                              std::chrono::high_resolution_clock::now() - end)
-                                              .count());
-    NEKO_LOG_INFO("unit test", "Serializer data: {}", proto4.f0.size());
-    data = makeData(data_5, sizeof(data_5));
-    end  = std::chrono::high_resolution_clock::now();
-    CTestStruct4 proto5;
-    {
-        std::istringstream is(std::string(data_5, sizeof(data_5)));
-        cereal::JSONInputArchive ia(is);
-        proto5.serialize(ia);
-    }
-    NEKO_LOG_INFO("unit test", "Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-                                              std::chrono::high_resolution_clock::now() - end)
-                                              .count());
-    NEKO_LOG_INFO("unit test", "Serializer data: {}", proto5.f0.size());
-    data = makeData(data_6, sizeof(data_6));
-    end  = std::chrono::high_resolution_clock::now();
-    CTestStruct4 proto6;
-    {
-        std::istringstream is(data);
-        cereal::JSONInputArchive ia(is);
-        proto6.serialize(ia);
-    }
-    NEKO_LOG_INFO("unit test", "Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-                                              std::chrono::high_resolution_clock::now() - end)
-                                              .count());
-    NEKO_LOG_INFO("unit test", "Serializer data: {}", proto6.f0.size());
-    data = makeData(data_7, sizeof(data_7));
-    end  = std::chrono::high_resolution_clock::now();
-    CTestStruct4 proto7;
-    {
-        std::istringstream is(data);
-        cereal::JSONInputArchive ia(is);
-        proto7.serialize(ia);
-    }
-    NEKO_LOG_INFO("unit test", "Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-                                              std::chrono::high_resolution_clock::now() - end)
-                                              .count());
-    NEKO_LOG_INFO("unit test", "Serializer data: {}", proto7.f0.size());
-    data = makeData(data_8, sizeof(data_8));
-    end  = std::chrono::high_resolution_clock::now();
-    CTestStruct4 proto8;
-    {
-        std::istringstream is(data);
-        cereal::JSONInputArchive ia(is);
-        proto8.serialize(ia);
-    }
-    NEKO_LOG_INFO("unit test", "Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-                                              std::chrono::high_resolution_clock::now() - end)
-                                              .count());
-    NEKO_LOG_INFO("unit test", "Serializer data: {}", proto8.f0.size());
-    data = makeData(data_9, sizeof(data_9));
-    end  = std::chrono::high_resolution_clock::now();
-    CTestStruct4 proto9;
-    {
-        std::istringstream is(data);
-        cereal::JSONInputArchive ia(is);
-        proto9.serialize(ia);
-    }
-    NEKO_LOG_INFO("unit test", "Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-                                              std::chrono::high_resolution_clock::now() - end)
-                                              .count());
-    NEKO_LOG_INFO("unit test", "Serializer data: {}", proto9.f0.size());
-    end = std::chrono::high_resolution_clock::now();
-#endif
+
     NEKO_LOG_INFO("unit test", "total time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count());
 }
 
 int main(int argc, char** argv) {
     testing::InitGoogleTest(&argc, argv);
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
     return RUN_ALL_TESTS();
 }

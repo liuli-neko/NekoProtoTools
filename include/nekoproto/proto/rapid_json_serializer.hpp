@@ -176,6 +176,10 @@ public:
         return {};
     };
     inline const JsonValue* moveToMember(const NEKO_STRING_VIEW& name) NEKO_NOEXCEPT {
+        if (mMemberIt != mMemberItEnd &&
+            name == NEKO_STRING_VIEW{mMemberIt->name.GetString(), mMemberIt->name.GetStringLength()}) {
+            return &(mMemberIt)->value;
+        }
         auto it = mMemberMap.find(name);
         if (it != mMemberMap.end()) {
             mMemberIt = it->second;
