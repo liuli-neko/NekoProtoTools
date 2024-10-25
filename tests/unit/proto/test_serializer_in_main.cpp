@@ -58,12 +58,13 @@ struct TestP {
     TEnum h                      = TEnum_A;
     StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum_A};
     std::tuple<int, std::string> j = {1, "hello"};
+    std::vector<double> m          = {1.1, 2.2, 3.3, 2.0, 1.0, 0.0, 1.11451555213339};
 #if NEKO_CPP_PLUS >= 17
     std::optional<int> k;
     std::variant<int, std::string, double> l;
-    NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k, l)
+    NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k, l, m)
 #else
-    NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j)
+    NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j, m)
 #endif
     NEKO_DECLARE_PROTOCOL(TestP, JsonSerializer)
 };
@@ -100,10 +101,11 @@ int main(int argc, char** argv) {
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
     testing::InitGoogleTest(&argc, argv);
-    std::string str = "{\"a\":3,\"b\":\"Struct "
-                      "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
-                      "\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
-                      "\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"k\":1,\"l\":1.114514}";
+    std::string str =
+        "{\"a\":3,\"b\":\"Struct "
+        "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A(1)"
+        "\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,"
+        "\"hello\"],\"k\":1,\"l\":1.114514,\"m\":[1.1,2.2,3.3,2,1,0,1.11451555213339]}";
     std::vector<char> data(str.begin(), str.end());
     TestP testp;
     SimdJsonSerializer::InputSerializer input(data.data(), data.size());
@@ -188,5 +190,5 @@ int main(int argc, char** argv) {
     EXPECT_EQ(*zt.g, *zt1.g);
     EXPECT_EQ(*zt.f["hello"], *zt1.f["hello"]);
     EXPECT_EQ(zt.f["nullptr"], zt1.f["nullptr"]);
-    return 0;
+    return RUN_ALL_TESTS();
 }

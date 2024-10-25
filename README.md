@@ -25,7 +25,7 @@ Through the macros provided by this library, you only need to add a small number
 
 If you only need to use the serialization and deserialization support of the library, you will only need headers :
 ```C++
-#include "proto/serializer_base.hpp"
+#include "nekoproto/proto/serializer_base.hpp"
 ```
 and use macro `NEKO_SERIALIZER` pack your class members you want to serialize and deserialize.
 ```C++
@@ -51,9 +51,9 @@ int main() {
 
 If you want to use the protocol factory to generate the message type of proto, you will need to add the following headers :
 ```C++
-#include "proto/proto_base.hpp"
-#include "proto/serializer_base.hpp" // it is needed to use the protocol factory
-#include "proto/json_serializer.hpp" // it is default serializer for proto message, if you want to use your own serializer, you need provided template parameters, can remove this header if not use default serializer.
+#include "nekoproto/proto/proto_base.hpp"
+#include "nekoproto/proto/serializer_base.hpp" // it is needed to use the protocol factory
+#include "nekoproto/proto/json_serializer.hpp" // it is default serializer for proto message, if you want to use your own serializer, you need provided template parameters, can remove this header if not use default serializer.
 ```
 and a cpp file `src/proto_base.cpp`
 
@@ -68,7 +68,7 @@ struct SerializerAble {
 }
 
 int main() {
-    auto sa = makeProtocol(SerializerAble{1, "hello"});
+    auto sa = SerializerAble::emplaceProto({1, "hello"});
     auto data = sa.toData(); // for proto message, you can serialize it by toData() and deserialize it by fromData(data)
 
     ProtoFactory factory(1, 0, 0); // you can generate the factory. and proto message while auto regist to this factory.
@@ -150,7 +150,11 @@ This repository provides a default binary serializer.
 **Note:**
 container types are supported like json, more info can see in json support which in folder "types", the binary len is 4 + value len * container size.
 
-##### 3.1.3. custom serializer
+##### 3.1.3. xml serializer
+
+type support same as binary serializer. all objects will be converted to string.
+
+##### 3.1.4. custom serializer
 
 If you want to use your own serializer. you need implement interface as:
 
@@ -345,7 +349,7 @@ I think I should not spend too much time designing and maintaining protocol libr
 - [x] support visit fields by name
 - [x] using simdjson for json serialization
     - [x] support simdjson input serializer in simdjson::dom (this is old API?)
-    - [ ] support serializer interface in simdjson::ondemand (What are the differences between the DNS APIs in the dom and ondemand namespaces?)
+    - [ ] support serializer interface in simdjson::ondemand (What are the differences between the APIs in the dom and ondemand namespaces?)
     - [x] output serializer (support by self)
 - [x] support more cpp stl types
 
@@ -368,6 +372,11 @@ I think I should not spend too much time designing and maintaining protocol libr
 - support syncronize protocol table (should be compatible with the same name protocol)
 - reserved 1-64 protocol type for control information transmission
 - fix some serialization problems in binary protocol
+- support more flags for protocol transmission
+    - support send protocol table before send data
+    - The receiver is allowed to continue to receive data as a binary packet when it receives a protocol that it cannot process
+    - Streaming supports sliced transfers and cancels in the middle of the process
+- support xml serialization by rapidxml
 
 #### v0.2.0 - alpha
 - Modify serializer interface
