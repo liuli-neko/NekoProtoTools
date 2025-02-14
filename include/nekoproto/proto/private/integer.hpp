@@ -98,10 +98,10 @@ inline int IntegerEncoder::encode(T&& value, std::vector<char>& outputBuffer, ui
         while (remain > 0x7F) {
             auto remainByte = remain % 0x80;
             remainByte += 0x80;
-            outputBuffer.push_back(remainByte);
+            outputBuffer.push_back((char)remainByte);
             remain /= 0x80;
         }
-        outputBuffer.push_back(remain);
+        outputBuffer.push_back((char)remain);
     }
     return 0;
 }
@@ -116,9 +116,9 @@ inline int IntegerDecoder::decode(const uint8_t* buffer, int size, T& value, uin
         value = static_cast<T>(buffer[0] & byte);
         return 1;
     }
-    int current = 1;
+    int current         = 1;
     int valueBitsOffset = 0;
-    value = 0;
+    value               = 0;
     while (current < size && (buffer[current] & 0b10000000U)) {
         value |= static_cast<T>(buffer[current] & 0b01111111U) << valueBitsOffset;
         valueBitsOffset += 7;

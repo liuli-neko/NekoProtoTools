@@ -4,7 +4,7 @@
 #include <iostream>
 #include <sstream>
 
-#pragma comment(linker, "/subsystem:console /ENTRY:mainCRTStartup") // 设置连接器选项
+#pragma comment(linker, "/subsystem:console") // 设置连接器选项
 
 NEKO_USE_NAMESPACE
 using namespace ILIAS_NAMESPACE;

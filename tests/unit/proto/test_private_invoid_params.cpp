@@ -40,9 +40,10 @@ TEST(PrivateInvoidParams, RefTest) {
     proto.setField("b", 5.0);
     proto.setField("c", 6);
     detail::ReflectionSerializer refs;
-    bool ret       = ts.serialize(refs);
-    auto *refObject = refs.getObject();
-    const int num    = 1;
+    bool ret = ts.serialize(refs);
+    EXPECT_TRUE(ret);
+    auto* refObject = refs.getObject();
+    const int num   = 1;
     refObject->bindField("test_a", &num);
     EXPECT_FALSE(refObject->setField("test_a", 4));
     EXPECT_EQ(refObject->getField<const int>("test_a", 123), 1);

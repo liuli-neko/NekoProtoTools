@@ -2,6 +2,7 @@ set_project("neko-proto")
 add_rules("mode.debug", "mode.release", "mode.coverage")
 set_version("0.1.0", {build = "%Y%m%d%H%M"})
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
+set_warnings("allextra")
 
 add_configfiles("include/nekoproto/proto/private/config.h.in")
 set_configdir("include/nekoproto/proto/private")

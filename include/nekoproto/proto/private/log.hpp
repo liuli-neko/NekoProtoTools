@@ -165,7 +165,7 @@ inline void neko_proto_private_log_out(const char* level, const char* message, c
     strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", localtime(&time));
     uint64_t disMillseconds =
         std::chrono::duration_cast<std::chrono::milliseconds>(context.time.time_since_epoch()).count() -
-        std::chrono::duration_cast<std::chrono::seconds>(context.time.time_since_epoch()).count() * 1000;
+        (std::chrono::duration_cast<std::chrono::seconds>(context.time.time_since_epoch()).count() * 1000);
 #if defined(NEKO_PROTO_LOG_CONTEXT)
     std::string fileStr = context.file;
     if (fileStr.find_last_of('/') != std::string::npos) {

@@ -153,14 +153,14 @@ inline std::string serializable_to_string(T&& value) NEKO_NOEXCEPT {
 template <typename T, traits::enable_if_t<traits::has_method_const_serialize<T, PrintSerializer>::value ||
                                           traits::has_method_serialize<T, PrintSerializer>::value> =
                           traits::default_value_for_enable>
-inline bool prologue(PrintSerializer& sa, const T& value) NEKO_NOEXCEPT {
-    sa.startObject(-1);
+inline bool prologue(PrintSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+    sa.startObject((std::size_t)-1);
     return true;
 }
 template <typename T, traits::enable_if_t<traits::has_method_const_serialize<T, PrintSerializer>::value ||
                                           traits::has_method_serialize<T, PrintSerializer>::value> =
                           traits::default_value_for_enable>
-inline bool epilogue(PrintSerializer& sa, const T& value) NEKO_NOEXCEPT {
+inline bool epilogue(PrintSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     sa.endObject();
     return true;
 }
@@ -168,13 +168,13 @@ inline bool epilogue(PrintSerializer& sa, const T& value) NEKO_NOEXCEPT {
 template <typename T, traits::enable_if_t<!traits::has_method_const_serialize<T, PrintSerializer>::value,
                                           !traits::has_method_serialize<T, PrintSerializer>::value> =
                           traits::default_value_for_enable>
-inline bool prologue(PrintSerializer& sa, const T& value) NEKO_NOEXCEPT {
+inline bool prologue(PrintSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, traits::enable_if_t<!traits::has_method_const_serialize<T, PrintSerializer>::value,
                                           !traits::has_method_serialize<T, PrintSerializer>::value> =
                           traits::default_value_for_enable>
-inline bool epilogue(PrintSerializer& sa, const T& value) NEKO_NOEXCEPT {
+inline bool epilogue(PrintSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
