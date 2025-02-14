@@ -60,7 +60,7 @@ and a cpp file `src/proto_base.cpp`
 and use macro `NEKO_DECLARE_PROTOCOL` to declare your class you want to register as the message type of proto.
 ```C++
 // SelfT is the type of your class, SerializerT is the type of serializer you want to use. default is JsonSerializer.
-class SerializerAble {
+struct SerializerAble {
     int a;
     std::string b;
     NEKO_SERIALIZER(a, b);
@@ -68,14 +68,12 @@ class SerializerAble {
 }
 
 int main() {
-    auto sa = makeProtocol(SerializerAble{});
-    (*sa)->a = 1;
-    (*sa)->b = "hello";
-    auto data = sa->toData(); // for proto message, you can serialize it by toData() and deserialize it by fromData(data)
+    auto sa = makeProtocol(SerializerAble{1, "hello"});
+    auto data = sa.toData(); // for proto message, you can serialize it by toData() and deserialize it by fromData(data)
 
     ProtoFactory factory(1, 0, 0); // you can generate the factory. and proto message while auto regist to this factory.
     auto proto = factory.create("SerializerAble"); // you can create the proto message by the name or type value.
-    proto->fromData(data);
+    proto.fromData(data);
     return 0;
 }
 ```
@@ -231,16 +229,16 @@ public:
      * @brief create a proto object by type
      *  this object is a pointer, you need to delete it by yourself
      * @param type
-     * @return std::unique_ptr<IProto>
+     * @return IProto
      */
-    std::unique_ptr<IProto> create(int type) const;
+    IProto create(int type) const;
     /**
      * @brief create a proto object by name
      *  this object is a pointer, you need to delete it by yourself
      * @param name
-     * @return std::unique_ptr<IProto>
+     * @return IProto
      */
-    inline std::unique_ptr<IProto> create(const char* name) const;
+    inline IProto create(const char* name) const;
     uint32_t version() const;
 };
 ```
@@ -259,11 +257,11 @@ struct ProtoMessage {
 int main() {
     ProtoFactory factory(1, 0, 0);
     auto msg = factory.create("ProtoMessage");
-    auto raw = msg->cast<ProtoMessage>();
+    auto* raw = msg.cast<ProtoMessage>();
     raw->a = 1;
     raw->b = "hello";
     std::vector<char> data;
-    data = msg->toData();
+    data = msg.toData();
     // do something
     return 0;
 }
@@ -323,8 +321,7 @@ int main() {
     if (!ret) {
         return -1;
     }
-    auto retMsg = std::move(ret.value());
-    auto msg1   = retMsg->cast<Message>();
+    auto msg1   = ret->cast<Message>();
     client.close().wait();
     return 0;
 }

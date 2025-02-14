@@ -31,12 +31,12 @@
  *
  * int main() {
  *     ProtoFactory factory(1, 0, 0);
- *     IProto* msg = factory.create("ProtoMessage"); // or auto msg = makeProtocol(ProtoMessage{});
- *     auto raw = msg->cast<ProtoMessage>();
+ *     IProto msg = factory.create("ProtoMessage"); // or auto msg = makeProtocol(ProtoMessage{});
+ *     auto* raw = msg.cast<ProtoMessage>();
  *     raw->a = 1;
  *     raw->b = "hello";
  *     std::vector<char> data;
- *     data = msg->toData();
+ *     data = msg.toData();
  *     // do something
  *     delete msg;
  *     return 0;
@@ -174,7 +174,7 @@ public:
      * @brief create a proto object by name
      *  this object is a pointer, you need to delete it by yourself
      * @param name
-     * @return IProto*
+     * @return IProto
      */
     IProto create(const char* name) const NEKO_NOEXCEPT;
     uint32_t version() const NEKO_NOEXCEPT;

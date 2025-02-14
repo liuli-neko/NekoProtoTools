@@ -55,7 +55,7 @@ struct xml_output_buffer_type { // NOLINT(readability-identifier-naming)
 
 template <typename BufferT = void>
 class RapidXmlOutputSerializer : public detail::OutputSerializer<RapidXmlOutputSerializer<BufferT>> {
-public:
+    static_assert(std::is_class<BufferT>::value, "XmlOutputSerializer not implement");
 public:
     explicit RapidXmlOutputSerializer() NEKO_NOEXCEPT : detail::OutputSerializer<RapidXmlOutputSerializer>(this) {}
 
@@ -66,34 +66,34 @@ public:
     ~RapidXmlOutputSerializer() { end(); }
     template <typename T>
     bool saveValue(SizeTag<T> const& /*unused*/) {
-        return true;
+        return false;
     }
 
     template <typename T, traits::enable_if_t<std::is_signed<T>::value, sizeof(T) < sizeof(int64_t),
                                               !std::is_enum<T>::value> = traits::default_value_for_enable>
     bool saveValue(const T value) NEKO_NOEXCEPT {
-        return true;
+        return false;
     }
     template <typename T, traits::enable_if_t<std::is_unsigned<T>::value, sizeof(T) < sizeof(uint64_t),
                                               !std::is_enum<T>::value> = traits::default_value_for_enable>
     bool saveValue(const T value) NEKO_NOEXCEPT {
-        return true;
+        return false;
     }
-    bool saveValue(const int64_t value) NEKO_NOEXCEPT { return true; }
-    bool saveValue(const uint64_t value) NEKO_NOEXCEPT { return true; }
-    bool saveValue(const float value) NEKO_NOEXCEPT { return true; }
-    bool saveValue(const double value) NEKO_NOEXCEPT { return true; }
-    bool saveValue(const bool value) NEKO_NOEXCEPT { return true; }
+    bool saveValue(const int64_t value) NEKO_NOEXCEPT { return false; }
+    bool saveValue(const uint64_t value) NEKO_NOEXCEPT { return false; }
+    bool saveValue(const float value) NEKO_NOEXCEPT { return false; }
+    bool saveValue(const double value) NEKO_NOEXCEPT { return false; }
+    bool saveValue(const bool value) NEKO_NOEXCEPT { return false; }
     template <typename CharT, typename Traits, typename Alloc>
     bool saveValue(const std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
-        return true;
+        return false;
     }
-    bool saveValue(const char* value) NEKO_NOEXCEPT { return true; }
-    bool saveValue(const std::nullptr_t) NEKO_NOEXCEPT { return true; }
+    bool saveValue(const char* value) NEKO_NOEXCEPT { return false; }
+    bool saveValue(const std::nullptr_t) NEKO_NOEXCEPT { return false; }
 #if NEKO_CPP_PLUS >= 17
     template <typename CharT, typename Traits>
     bool saveValue(const std::basic_string_view<CharT, Traits> value) NEKO_NOEXCEPT {
-        return true;
+        return false;
     }
 
     template <typename T>
@@ -102,10 +102,10 @@ public:
             if (value.value.has_value()) {
                 return /*write key &&*/ (*this)(value.value.value());
             }
+            return true;
         } else {
             return /*write key &&*/ (*this)(value.value);
         }
-        return true;
     }
 #else
     template <typename T>
