@@ -53,7 +53,7 @@ ProtoFactory::ProtoFactory(int major, int minor, int patch) {
 
 void ProtoFactory::regist(const NEKO_STRING_VIEW& name, std::function<IProto()> creator) NEKO_NOEXCEPT {
     auto type = _protoType(name, true);
-    if (type < mCreaterList.size()) {
+    if (type < (int)mCreaterList.size()) {
         mCreaterList[type] = creator;
     } else {
         if (mDynamicCreaterMap.find(type) != mDynamicCreaterMap.end()) {
@@ -104,10 +104,10 @@ int ProtoFactory::_protoType(const NEKO_STRING_VIEW& name, const bool isDeclared
 }
 
 IProto ProtoFactory::create(int type) const NEKO_NOEXCEPT {
-    if (type > 0 && type < mCreaterList.size() && nullptr != mCreaterList[type]) {
+    if (type > 0 && type < (int)mCreaterList.size() && nullptr != mCreaterList[type]) {
         return mCreaterList[type]();
     }
-    if (type >= mCreaterList.size()) {
+    if (type >= (int)mCreaterList.size()) {
         auto it = mDynamicCreaterMap.find(type);
         if (it != mDynamicCreaterMap.end()) {
             return it->second();

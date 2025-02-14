@@ -123,8 +123,7 @@ ILIAS_NAMESPACE::IoTask<void> handle_loop(ProtoStreamClient<TcpClient>&& pClient
             co_await client.close();
             co_return Unexpected(ret.error());
         }
-        IProto retMsg(std::move(ret.value()));
-        auto* msg = retMsg.cast<Message>();
+        auto* msg = ret->cast<Message>();
         if (msg != nullptr) {
             NEKO_LOG_DEBUG("unit test", "recv success: timestamp: {}  msg: {}  numbers: {}", msg->timestamp,
                            msg->msg.substr(0, 20) + "...", to_string(msg->numbers));
