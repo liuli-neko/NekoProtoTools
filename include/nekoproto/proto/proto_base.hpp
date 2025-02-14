@@ -206,7 +206,8 @@ int ProtoFactory::specifyProtoType(const int type) NEKO_NOEXCEPT {
 
 template <typename T>
 int ProtoFactory::protoType() NEKO_NOEXCEPT {
-    return _protoType(protoName<T>(), false);
+    static int kType = _protoType(protoName<T>(), false);
+    return kType;
 }
 
 template <typename T>
@@ -362,17 +363,17 @@ NEKO_STRING_VIEW ProtoBase<ProtoT, SerializerT>::gProtoName = []() NEKO_NOEXCEPT
 public:                                                                                                                \
     using ProtoType = typename NEKO_NAMESPACE::detail::ProtoBase<className, Serializer>;                               \
     /** @brief make proto from self pointer */                                                                         \
-    inline IProto makeProto() NEKO_NOEXCEPT { return IProto{new ProtoType(this)}; }                                    \
+    inline NEKO_NAMESPACE::IProto makeProto() NEKO_NOEXCEPT { return NEKO_NAMESPACE::IProto{new ProtoType(this)}; }    \
     /** @brief make proto with structure */                                                                            \
     template <typename... Args>                                                                                        \
-    inline static IProto emplaceProto(Args&&... args) NEKO_NOEXCEPT {                                                  \
+    inline static NEKO_NAMESPACE::IProto emplaceProto(Args&&... args) NEKO_NOEXCEPT {                                  \
         static_assert(std::is_move_constructible<className>::value, "class " #className " must be copable");           \
-        return IProto{new ProtoType(className{std::forward<Args>(args)...})};                                          \
+        return NEKO_NAMESPACE::IProto{new ProtoType(className{std::forward<Args>(args)...})};                          \
     }                                                                                                                  \
     /** @brief make proto by copying other */                                                                          \
-    inline static IProto makeProto(const className& other) NEKO_NOEXCEPT {                                             \
+    inline static NEKO_NAMESPACE::IProto makeProto(const className& other) NEKO_NOEXCEPT {                             \
         static_assert(std::is_copy_constructible<className>::value, "class " #className " must be copable");           \
-        return IProto{new ProtoType(other)};                                                                           \
+        return NEKO_NAMESPACE::IProto{new ProtoType(other)};                                                           \
     }
 
 NEKO_END_NAMESPACE
