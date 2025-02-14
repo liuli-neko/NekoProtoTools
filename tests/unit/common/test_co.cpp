@@ -53,22 +53,22 @@ struct TaskBase {
 public:
     TaskBase() { CTXTRACER }
     ~TaskBase() { CTXTRACER }
-    virtual void resume() = 0;
-    virtual bool isReady() const = 0;
-    virtual bool isFinished() const = 0;
-    virtual void destroy() = 0;
-    virtual int getRefCount() const = 0;
-    virtual void increaseRefCount() = 0;
-    virtual void decreaseRefCount() = 0;
-    virtual void cancel() = 0;
-    virtual bool isCancel() const = 0;
+    virtual void resume()                                              = 0;
+    virtual bool isReady() const                                       = 0;
+    virtual bool isFinished() const                                    = 0;
+    virtual void destroy()                                             = 0;
+    virtual int getRefCount() const                                    = 0;
+    virtual void increaseRefCount()                                    = 0;
+    virtual void decreaseRefCount()                                    = 0;
+    virtual void cancel()                                              = 0;
+    virtual bool isCancel() const                                      = 0;
     virtual void setNotifyWaiter(std::function<void()> callback) const = 0;
 };
 
 class Scheduler {
     TRACER_CONTEXT(Scheduler)
 public:
-    Scheduler(const Scheduler&) = delete;
+    Scheduler(const Scheduler&)            = delete;
     Scheduler& operator=(const Scheduler&) = delete;
     ~Scheduler() {
         CTXTRACER
@@ -185,7 +185,7 @@ public:
     }
     static Scheduler* getScheduler(const std::thread::id& id) {
         TRACER
-        for (auto *scheduler : gSchedulers) {
+        for (auto* scheduler : gSchedulers) {
             if (scheduler->mThreadId == id) {
                 return scheduler;
             }
@@ -221,9 +221,9 @@ struct PromiseBase {
     void increaseRefCount() { refCounter++; }
     void decreaseRefCount() { refCounter--; }
     int getRefCount() { return refCounter.load(); }
-    void setName(const std::string& name) { this->name = name; }
+    void setName(const std::string& name_) { name = name_; }
     const std::string& getName() const { return name; }
-    void setNotifyWaiter(std::function<void()> notifyWaiter) { this->notifyWaiter = notifyWaiter; }
+    void setNotifyWaiter(std::function<void()> notifyWaiter_) { notifyWaiter = notifyWaiter_; }
     void cancel() { cancelled = true; }
     bool isCancel() const { return cancelled.load(); }
 };
@@ -247,7 +247,7 @@ public:
     }
 
     void unhandled_exception() { CTXTRACER } // NOLINT(readability-identifier-naming)
-    void return_value(T&& value) { // NOLINT
+    void return_value(T&& value) {           // NOLINT
         CTXTRACER
         mValue = std::forward<T>(value);
         if (notifyWaiter) {
@@ -282,9 +282,10 @@ template <typename T>
 struct Task : public TaskBase {
     TRACER_CONTEXT(Task<T>)
     using promise_type = Promise<T>;
-    using handle_type = std::coroutine_handle<promise_type>;
+    using handle_type  = std::coroutine_handle<promise_type>;
 
-    Task(const handle_type& handle) : handle(handle){CTXTRACER} Task(const handle_type& handle, std::string name) : handle(handle) {
+    Task(const handle_type& handle)
+        : handle(handle){CTXTRACER} Task(const handle_type& handle, std::string name) : handle(handle) {
         CTXTRACER
         promise().setName(name);
     }
@@ -378,7 +379,7 @@ struct Promise<void> : public PromiseBase {
         return {};
     }
     void unhandled_exception() { CTXTRACER } // NOLINT(readability-identifier-naming)
-    void return_void() { // NOLINT(readability-identifier-naming)
+    void return_void() {                     // NOLINT(readability-identifier-naming)
         if (notifyWaiter) {
             notifyWaiter();
         }
@@ -403,7 +404,7 @@ struct Awaitable<int, Task<T>> {
         return true;
     }
     void await_suspend(std::coroutine_handle<> /*unused*/) { CTXTRACER } // NOLINT(readability-identifier-naming)
-    int await_resume() { // NOLINT(readability-identifier-naming)
+    int await_resume() {                                                 // NOLINT(readability-identifier-naming)
         CTXTRACER
         return mValue;
     }
@@ -418,15 +419,15 @@ struct Awaitable<Task<T>, Task<U>> {
     TRACER_CONTEXT(Awaitable_Task)
 
     Awaitable(Task<T>&& task, const Task<U>& waiter)
-        : task(task), waiter(waiter){CTXTRACER} Awaitable(const Task<T>& task, const Task<U>& waiter)
-        : task(task), waiter(waiter) {
+        : task(task),
+          waiter(waiter){CTXTRACER} Awaitable(const Task<T>& task, const Task<U>& waiter) : task(task), waiter(waiter) {
         CTXTRACER
     }
     bool await_ready() { // NOLINT(readability-identifier-naming)
         CTXTRACER
         return static_cast<bool>(waiter.isCancel());
     }
-    void await_suspend(std::coroutine_handle<> handle) { // NOLINT(readability-identifier-naming)
+    void await_suspend(std::coroutine_handle<> /*unused*/) { // NOLINT(readability-identifier-naming)
         CTXTRACER
         waiter.increaseRefCount();
         task.setNotifyWaiter([this]() {
@@ -497,7 +498,7 @@ NEKO_USE_NAMESPACE
 
 int main() {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
-    auto *scheduler = Scheduler::current();
+    auto* scheduler = Scheduler::current();
 
     auto testHandle = go test();
     auto exitHandle = go exit(scheduler);

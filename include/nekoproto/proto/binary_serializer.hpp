@@ -145,14 +145,20 @@ public:
     bool saveValue(SizeTag<T> const& size) NEKO_NOEXCEPT {
         return saveValue(size.size);
     }
-    template <typename T, traits::enable_if_t<std::is_integral<T>::value, sizeof(T) <= sizeof(int64_t),
+    template <typename T, traits::enable_if_t<std::is_unsigned<T>::value, sizeof(T) <= sizeof(int64_t),
+                                              !std::is_enum<T>::value> = traits::default_value_for_enable>
+    bool saveValue(const T value) NEKO_NOEXCEPT {
+        mBuffer.push_back(0x00U);
+        return detail::IntegerEncoder::encode(value, mBuffer, 1) == 0;
+    }
+    template <typename T, traits::enable_if_t<std::is_signed<T>::value, sizeof(T) <= sizeof(int64_t),
                                               !std::is_enum<T>::value> = traits::default_value_for_enable>
     bool saveValue(const T value) NEKO_NOEXCEPT {
         if (value < 0) {
-            mBuffer.push_back(0x80);
+            mBuffer.push_back(0x80U);
             return detail::IntegerEncoder::encode(-value, mBuffer, 1) == 0;
         }
-        mBuffer.push_back(0x00);
+        mBuffer.push_back(0x00U);
         return detail::IntegerEncoder::encode(value, mBuffer, 1) == 0;
     }
     inline bool saveValue(const float value) NEKO_NOEXCEPT {
@@ -176,7 +182,7 @@ public:
     }
     inline bool saveValue(const char* value) NEKO_NOEXCEPT {
         NEKO_LOG_INFO("BinarySerializer", "save string({})", value);
-        uint32_t size = strlen(value);
+        size_t size = strlen(value);
         mBuffer.insert(mBuffer.end(), value, value + size);
         return true;
     }
@@ -244,7 +250,7 @@ public:
     }
 
     inline bool loadValue(std::string& value) NEKO_NOEXCEPT {
-        uint32_t size = value.size();
+        size_t size = value.size();
         if (!loadValue(make_size_tag(size))) {
             return false;
         }
@@ -258,15 +264,15 @@ public:
         return true;
     }
 
-    template <typename T, traits::enable_if_t<std::is_integral<T>::value, sizeof(T) <= sizeof(int64_t),
+    template <typename T, traits::enable_if_t<std::is_signed<T>::value, sizeof(T) <= sizeof(int64_t),
                                               !std::is_enum<T>::value> = traits::default_value_for_enable>
     bool loadValue(T& value) NEKO_NOEXCEPT {
         if (mOffset >= mSize) {
             return false;
         }
         auto flags = mBuffer[mOffset] & 0x80;
-        int ret = detail::IntegerDecoder::decode(reinterpret_cast<const uint8_t*>(mBuffer + mOffset), mSize - mOffset,
-                                                 value, 1);
+        int ret    = detail::IntegerDecoder::decode(reinterpret_cast<const uint8_t*>(mBuffer + mOffset),
+                                                    (int)(mSize - mOffset), value, 1);
         if (ret <= 0) {
             return false;
         }
@@ -274,6 +280,24 @@ public:
         if (flags) {
             value = -value;
         }
+        return true;
+    }
+    template <typename T, traits::enable_if_t<std::is_unsigned<T>::value, sizeof(T) <= sizeof(int64_t),
+                                              !std::is_enum<T>::value> = traits::default_value_for_enable>
+    bool loadValue(T& value) NEKO_NOEXCEPT {
+        if (mOffset >= mSize) {
+            return false;
+        }
+        auto flags = mBuffer[mOffset] & 0x80;
+        if (flags) {
+            return false;
+        }
+        auto ret = detail::IntegerDecoder::decode(reinterpret_cast<const uint8_t*>(mBuffer + mOffset),
+                                                  (int)(mSize - mOffset), value, 1);
+        if (ret <= 0) {
+            return false;
+        }
+        mOffset += ret;
         return true;
     }
 
@@ -387,7 +411,7 @@ struct BinarySerializer {
 
 template <typename T, size_t Size>
 inline bool FixedLengthField<T, Size>::save(BinaryOutputSerializer& serializer) const {
-    if (Size != sizeof(T)) {
+    NEKO_CONSTEXPR_IF(Size != sizeof(T)) {
         auto size = serializer.size();
         auto ret  = serializer.saveValue(value);
         while (ret && serializer.size() - size < Size) {
@@ -395,24 +419,26 @@ inline bool FixedLengthField<T, Size>::save(BinaryOutputSerializer& serializer) 
         }
         return ret;
     }
-    char buffer[Size];
-    if (std::is_integral<typename std::remove_reference<typename std::remove_const<T>::type>::type>::value) {
-        auto tmp = htobe(value);
-        memcpy(buffer, &tmp, Size);
-    } else {
-        memcpy(buffer, &value, Size);
-    }
-    for (auto& ch : buffer) {
-        if (!serializer.push(ch)) {
-            return false;
+    else {
+        char buffer[Size];
+        if (std::is_integral<typename std::remove_reference<typename std::remove_const<T>::type>::type>::value) {
+            auto tmp = htobe(value);
+            memcpy(buffer, &tmp, Size);
+        } else {
+            memcpy(buffer, &value, Size);
         }
+        for (auto& ch : buffer) {
+            if (!serializer.push(ch)) {
+                return false;
+            }
+        }
+        return true;
     }
-    return true;
 }
 
 template <typename T, size_t Size>
 inline bool FixedLengthField<T, Size>::load(BinaryInputSerializer& serializer) {
-    if (Size != sizeof(T)) {
+    NEKO_CONSTEXPR_IF(Size != sizeof(T)) {
         auto size = serializer.offset();
         auto ret  = serializer.loadValue(value);
         char tmp;
@@ -421,17 +447,19 @@ inline bool FixedLengthField<T, Size>::load(BinaryInputSerializer& serializer) {
         }
         return ret;
     }
-    char buffer[Size];
-    for (auto& ch : buffer) {
-        if (!serializer.pop(ch)) {
-            return false;
+    else {
+        char buffer[Size];
+        for (auto& ch : buffer) {
+            if (!serializer.pop(ch)) {
+                return false;
+            }
         }
+        memcpy(&value, buffer, Size);
+        if (std::is_integral<typename std::remove_reference<typename std::remove_const<T>::type>::type>::value) {
+            value = betoh(value);
+        }
+        return true;
     }
-    memcpy(&value, buffer, Size);
-    if (std::is_integral<typename std::remove_reference<typename std::remove_const<T>::type>::type>::value) {
-        value = betoh(value);
-    }
-    return true;
 }
 
 // #######################################################
@@ -441,60 +469,60 @@ inline bool FixedLengthField<T, Size>::load(BinaryInputSerializer& serializer) {
 // #######################################################
 // name value pair
 template <typename T>
-inline bool prologue(BinaryInputSerializer& sa, const NameValuePair<T>& value) NEKO_NOEXCEPT {
+inline bool prologue(BinaryInputSerializer& /*unused*/, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T>
-inline bool epilogue(BinaryInputSerializer& sa, const NameValuePair<T>& value) NEKO_NOEXCEPT {
+inline bool epilogue(BinaryInputSerializer& /*unused*/, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename T>
-inline bool prologue(BinaryOutputSerializer& sa, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
+inline bool prologue(BinaryOutputSerializer& /*unused*/, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T>
-inline bool epilogue(BinaryOutputSerializer& sa, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
+inline bool epilogue(BinaryOutputSerializer& /*unused*/, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 // #########################################################
 //  size tag
 template <typename T>
-inline bool prologue(BinaryInputSerializer& sa, const SizeTag<T>& value) NEKO_NOEXCEPT {
+inline bool prologue(BinaryInputSerializer& /*unused*/, const SizeTag<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T>
-inline bool epilogue(BinaryInputSerializer& sa, const SizeTag<T>& value) NEKO_NOEXCEPT {
+inline bool epilogue(BinaryInputSerializer& /*unused*/, const SizeTag<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename T>
-inline bool prologue(BinaryOutputSerializer& sa, const SizeTag<T>& value) NEKO_NOEXCEPT {
+inline bool prologue(BinaryOutputSerializer& /*unused*/, const SizeTag<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T>
-inline bool epilogue(BinaryOutputSerializer& sa, const SizeTag<T>& value) NEKO_NOEXCEPT {
+inline bool epilogue(BinaryOutputSerializer& /*unused*/, const SizeTag<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 // #########################################################
 //  FixedSizeTag
 template <typename T>
-inline bool prologue(BinaryInputSerializer& sa, const FixedLengthField<T>& value) NEKO_NOEXCEPT {
+inline bool prologue(BinaryInputSerializer& /*unused*/, const FixedLengthField<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T>
-inline bool epilogue(BinaryInputSerializer& sa, const FixedLengthField<T>& value) NEKO_NOEXCEPT {
+inline bool epilogue(BinaryInputSerializer& /*unused*/, const FixedLengthField<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename T>
-inline bool prologue(BinaryOutputSerializer& sa, const FixedLengthField<T>& value) NEKO_NOEXCEPT {
+inline bool prologue(BinaryOutputSerializer& /*unused*/, const FixedLengthField<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T>
-inline bool epilogue(BinaryOutputSerializer& sa, const FixedLengthField<T>& value) NEKO_NOEXCEPT {
+inline bool epilogue(BinaryOutputSerializer& /*unused*/, const FixedLengthField<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
@@ -531,57 +559,59 @@ inline bool epilogue(BinaryOutputSerializer& sa, const T& /*unused*/) NEKO_NOEXC
 template <typename T, traits::enable_if_t<traits::has_method_const_serialize<T, BinaryOutputSerializer>::value ||
                                           traits::has_method_serialize<T, BinaryOutputSerializer>::value> =
                           traits::default_value_for_enable>
-inline bool prologue(BinaryOutputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool prologue(BinaryOutputSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, traits::enable_if_t<traits::has_method_const_serialize<T, BinaryOutputSerializer>::value ||
                                           traits::has_method_serialize<T, BinaryOutputSerializer>::value> =
                           traits::default_value_for_enable>
-inline bool epilogue(BinaryOutputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool epilogue(BinaryOutputSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename T, traits::enable_if_t<traits::has_method_const_serialize<T, BinaryInputSerializer>::value ||
                                           traits::has_method_serialize<T, BinaryInputSerializer>::value> =
                           traits::default_value_for_enable>
-inline bool prologue(BinaryInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool prologue(BinaryInputSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, traits::enable_if_t<traits::has_method_const_serialize<T, BinaryInputSerializer>::value ||
                                           traits::has_method_serialize<T, BinaryInputSerializer>::value> =
                           traits::default_value_for_enable>
-inline bool epilogue(BinaryInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool epilogue(BinaryInputSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 // #########################################################
 // # arithmetic types
 template <typename T, traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool prologue(BinaryInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool prologue(BinaryInputSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(BinaryInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool epilogue(BinaryInputSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename T, traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool prologue(BinaryOutputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool prologue(BinaryOutputSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(BinaryOutputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool epilogue(BinaryOutputSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 // #####################################################
 // # std::string
 template <typename CharT, typename Traits, typename Alloc>
-inline bool prologue(BinaryInputSerializer& sa, const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
+inline bool prologue(BinaryInputSerializer& sa,
+                     const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return sa.startNode();
 }
 template <typename CharT, typename Traits, typename Alloc>
-inline bool epilogue(BinaryInputSerializer& sa, const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
+inline bool epilogue(BinaryInputSerializer& sa,
+                     const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return sa.finishNode();
 }
 
@@ -590,7 +620,8 @@ inline bool prologue(BinaryOutputSerializer& sa, const std::basic_string<CharT, 
     return sa.startObject(str.size());
 }
 template <typename CharT, typename Traits, typename Alloc>
-inline bool epilogue(BinaryOutputSerializer& sa, const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
+inline bool epilogue(BinaryOutputSerializer& sa,
+                     const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return sa.endObject();
 }
 
@@ -600,7 +631,8 @@ inline bool prologue(BinaryOutputSerializer& sa, const std::basic_string_view<Ch
     return sa.startObject(str.size());
 }
 template <typename CharT, typename Traits>
-inline bool epilogue(BinaryOutputSerializer& sa, const std::basic_string_view<CharT, Traits>& /*unused*/) NEKO_NOEXCEPT {
+inline bool epilogue(BinaryOutputSerializer& sa,
+                     const std::basic_string_view<CharT, Traits>& /*unused*/) NEKO_NOEXCEPT {
     return sa.endObject();
 }
 #endif

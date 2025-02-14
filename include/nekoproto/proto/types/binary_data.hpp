@@ -26,11 +26,10 @@ struct Base64Covert {
 #endif
     static inline uint8_t QueryTable(uint8_t ch) noexcept {
         // search on table
-        return strchr(Table, ch) - Table;
+        return (uint8_t)(strchr(Table, ch) - Table);
     }
     static std::vector<char> Encode(const std::vector<char>& str) {
         // encode string to base64
-        auto s = (str.data());
         return Encode(str.data(), str.size());
     }
     static std::vector<char> Encode(const char* str) { return Encode(str, strlen(str)); }
@@ -93,8 +92,8 @@ struct Base64Covert {
             return false;
         }
 
-        int len   = (datalen / 4) * 3;
-        auto cptr = data;
+        int len   = (int)(datalen / 4) * 3;
+        const auto *cptr = data;
         while (data[datalen - 1] == '=') {
             --datalen; // remove '='
             --len;
@@ -102,7 +101,7 @@ struct Base64Covert {
         buf.resize(len, '=');
 
         uint8_t array[4];
-        auto bufptr = buf.data();
+        auto *bufptr = buf.data();
         while (datalen > 3) {
             array[0]  = QueryTable(cptr[0]);
             array[1]  = QueryTable(cptr[1]);

@@ -225,30 +225,30 @@ TEST_F(ProtoTest, JsonProtoRef) {
                       "\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
                       "\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"l\":23}";
     auto proto      = mFactory->create("TestP");
-    proto->fromData(str.data(), str.length());
-    auto *rawp = proto->cast<TestP>(); // success cast
+    proto.fromData(str.data(), str.length());
+    auto* rawp = proto.cast<TestP>(); // success cast
 
-    EXPECT_TRUE(proto->cast<BinaryProto>() == nullptr); // failed cast
+    EXPECT_TRUE(proto.cast<BinaryProto>() == nullptr); // failed cast
     // get field test
     int num = {};
-    EXPECT_TRUE(proto->getField("a", &num));                                      // success get field
-    EXPECT_FALSE(proto->getField("b", &num));                                     // get field by wrong type
-    EXPECT_FALSE(proto->getField("unexist field", &num));                         // get unexist field
-    EXPECT_STREQ(proto->getField<std::string>("b", "").c_str(), "Struct test"); // success get field
-    EXPECT_TRUE(proto->getField<bool>("c", false));                             // success get field
-    EXPECT_FALSE(proto->getField<bool>("b", false));                            // get field by wrong type
-    EXPECT_FALSE(proto->getField<bool>("unexist field", false));                // get unexist field
-    EXPECT_STREQ(proto->getField<std::string>("", "false").c_str(), "false");   // get unexist field
-    EXPECT_FALSE(proto->getField<bool>("", false));                             // get unexist field
+    EXPECT_TRUE(proto.getField("a", &num));                                    // success get field
+    EXPECT_FALSE(proto.getField("b", &num));                                   // get field by wrong type
+    EXPECT_FALSE(proto.getField("unexist field", &num));                       // get unexist field
+    EXPECT_STREQ(proto.getField<std::string>("b", "").c_str(), "Struct test"); // success get field
+    EXPECT_TRUE(proto.getField<bool>("c", false));                             // success get field
+    EXPECT_FALSE(proto.getField<bool>("b", false));                            // get field by wrong type
+    EXPECT_FALSE(proto.getField<bool>("unexist field", false));                // get unexist field
+    EXPECT_STREQ(proto.getField<std::string>("", "false").c_str(), "false");   // get unexist field
+    EXPECT_FALSE(proto.getField<bool>("", false));                             // get unexist field
     EXPECT_EQ(num, 3);
 
     // set field test
-    EXPECT_TRUE(proto->setField("a", 14));                            // success set field
-    EXPECT_TRUE(proto->setField("b", std::string("field set test"))); // success set field
-    EXPECT_TRUE(proto->setField("c", false));                         // success set field
-    EXPECT_FALSE(proto->setField("a", 3.1234));                       // set field by wrong type
-    EXPECT_FALSE(proto->setField("unexist field", 3.1234));           // set unexist field
-    EXPECT_FALSE(proto->setField("", 3.1234));                        // set unexist field
+    EXPECT_TRUE(proto.setField("a", 14));                            // success set field
+    EXPECT_TRUE(proto.setField("b", std::string("field set test"))); // success set field
+    EXPECT_TRUE(proto.setField("c", false));                         // success set field
+    EXPECT_FALSE(proto.setField("a", 3.1234));                       // set field by wrong type
+    EXPECT_FALSE(proto.setField("unexist field", 3.1234));           // set unexist field
+    EXPECT_FALSE(proto.setField("", 3.1234));                        // set unexist field
     EXPECT_EQ(rawp->a, 14);
     EXPECT_STREQ(rawp->b.c_str(), "field set test");
     EXPECT_FALSE(rawp->c);
@@ -308,10 +308,10 @@ TEST_F(ProtoTest, InvalidParams) {
 
 TEST_F(ProtoTest, BinaryProto) {
     BinaryProto proto;
-    proto.a        = 24;
-    proto.b        = "hello Neko Proto";
-    proto.c        = 0x3f3f3f;
-    auto data      = proto.makeProto().toData();
+    proto.a   = 24;
+    proto.b   = "hello Neko Proto";
+    proto.c   = 0x3f3f3f;
+    auto data = proto.makeProto().toData();
     NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(proto));
 
     BinaryProto proto2;
@@ -407,6 +407,8 @@ int main(int argc, char** argv) {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
+
+    NEKO_LOG_DEBUG("test", "{}", detail::make_enum_string<TEnum>("{enum}:{num},"));
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

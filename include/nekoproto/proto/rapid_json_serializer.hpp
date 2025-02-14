@@ -117,8 +117,8 @@ public:
     inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null) {};
     inline ConstJsonIterator(MemberIterator begin, MemberIterator end) NEKO_NOEXCEPT : mMemberItBegin(begin),
                                                                                        mMemberItEnd(end),
-                                                                                       mIndex(0),
                                                                                        mMemberIt(begin),
+                                                                                       mIndex(0),
                                                                                        mSize(0),
                                                                                        mType(Member) {
         for (auto member = mMemberItBegin; member != mMemberItEnd; ++member) {
@@ -131,9 +131,9 @@ public:
         }
     }
 
-    inline ConstJsonIterator(ValueIterator begin, ValueIterator end) NEKO_NOEXCEPT : mValueItBegin(begin),
+    inline ConstJsonIterator(ValueIterator begin, ValueIterator end) NEKO_NOEXCEPT : mMemberIt(),
+                                                                                     mValueItBegin(begin),
                                                                                      mIndex(0),
-                                                                                     mMemberIt(),
                                                                                      mSize(std::distance(begin, end)),
                                                                                      mType(Value) {
         if (mSize == 0) {
@@ -311,10 +311,10 @@ public:
             if (value.value.has_value()) {
                 return mWriter.Key(value.name, value.nameLen) && (*this)(value.value.value());
             }
+            return true;
         } else {
             return mWriter.Key(value.name, value.nameLen) && (*this)(value.value);
         }
-        return true;
     }
 #else
     template <typename T>
@@ -651,40 +651,40 @@ private:
 // #######################################################
 // name value pair
 template <typename T, typename BufferT>
-inline bool prologue(RapidJsonInputSerializer<BufferT>& sa, const NameValuePair<T>& value) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonInputSerializer<BufferT>& /*unused*/, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, typename BufferT>
-inline bool epilogue(RapidJsonInputSerializer<BufferT>& sa, const NameValuePair<T>& value) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonInputSerializer<BufferT>& /*unused*/, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename T, typename WriterT>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& /*unused*/, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, typename WriterT>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& /*unused*/, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 // #########################################################
 //  size tag
 template <typename T, typename BufferT>
-inline bool prologue(RapidJsonInputSerializer<BufferT>& sa, const SizeTag<T>& value) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonInputSerializer<BufferT>& /*unused*/, const SizeTag<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, typename BufferT>
-inline bool epilogue(RapidJsonInputSerializer<BufferT>& sa, const SizeTag<T>& value) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonInputSerializer<BufferT>& /*unused*/, const SizeTag<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename T, typename WriterT>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const SizeTag<T>& value) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& /*unused*/, const SizeTag<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, typename WriterT>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const SizeTag<T>& value) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& /*unused*/, const SizeTag<T>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
@@ -708,7 +708,7 @@ template <class T, typename WriterT,
                               !is_minimal_serializable<T>::valueT,
                               !traits::has_method_const_serialize<T, RapidJsonOutputSerializer<WriterT>>::value> =
               traits::default_value_for_enable>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
@@ -716,7 +716,7 @@ template <typename T, typename WriterT,
           traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::valueT,
                               !traits::has_method_const_serialize<T, RapidJsonOutputSerializer<WriterT>>::value> =
               traits::default_value_for_enable>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
@@ -725,7 +725,7 @@ template <typename T, typename WriterT,
                               traits::has_method_serialize<T, RapidJsonOutputSerializer<WriterT>>::value> =
               traits::default_value_for_enable>
 inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
-    return sa.startObject(-1);
+    return sa.startObject((std::size_t)-1);
 }
 template <typename T, typename WriterT,
           traits::enable_if_t<traits::has_method_const_serialize<T, RapidJsonOutputSerializer<WriterT>>::value ||
@@ -739,58 +739,58 @@ inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/
 // # arithmetic types
 template <typename T, typename BufferT,
           traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool prologue(RapidJsonInputSerializer<BufferT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonInputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, typename BufferT,
           traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(RapidJsonInputSerializer<BufferT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonInputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename T, typename WriterT,
           traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, typename WriterT,
           traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 // #####################################################
 // # std::string
 template <typename BufferT, typename CharT, typename Traits, typename Alloc>
-inline bool prologue(RapidJsonInputSerializer<BufferT>& sa,
+inline bool prologue(RapidJsonInputSerializer<BufferT>& /*unused*/,
                      const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename BufferT, typename CharT, typename Traits, typename Alloc>
-inline bool epilogue(RapidJsonInputSerializer<BufferT>& sa,
+inline bool epilogue(RapidJsonInputSerializer<BufferT>& /*unused*/,
                      const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename CharT, typename Traits, typename Alloc, typename WriterT>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa,
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& /*unused*/,
                      const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename CharT, typename Traits, typename Alloc, typename WriterT>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa,
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& /*unused*/,
                      const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 #if NEKO_CPP_PLUS >= 17
 template <typename CharT, typename Traits, typename WriterT>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa,
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& /*unused*/,
                      const std::basic_string_view<CharT, Traits>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename CharT, typename Traits, typename WriterT>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa,
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& /*unused*/,
                      const std::basic_string_view<CharT, Traits>& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
@@ -799,43 +799,43 @@ inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa,
 // #####################################################
 // # std::nullptr_t
 template <typename BufferT>
-inline bool prologue(RapidJsonInputSerializer<BufferT>& sa, const std::nullptr_t) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonInputSerializer<BufferT>& /*unused*/, const std::nullptr_t) NEKO_NOEXCEPT {
     return true;
 }
 template <typename BufferT>
-inline bool epilogue(RapidJsonInputSerializer<BufferT>& sa, const std::nullptr_t) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonInputSerializer<BufferT>& /*unused*/, const std::nullptr_t) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename WriterT>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const std::nullptr_t) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& /*unused*/, const std::nullptr_t) NEKO_NOEXCEPT {
     return true;
 }
 template <typename WriterT>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const std::nullptr_t) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& /*unused*/, const std::nullptr_t) NEKO_NOEXCEPT {
     return true;
 }
 // #####################################################
 // # minimal serializable
 template <typename T, typename BufferT,
           traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
-inline bool prologue(RapidJsonInputSerializer<BufferT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonInputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, typename BufferT,
           traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(RapidJsonInputSerializer<BufferT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonInputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
 template <typename T, typename WriterT,
           traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
-inline bool prologue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool prologue(RapidJsonOutputSerializer<WriterT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 template <typename T, typename WriterT,
           traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
-inline bool epilogue(RapidJsonOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
+inline bool epilogue(RapidJsonOutputSerializer<WriterT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 

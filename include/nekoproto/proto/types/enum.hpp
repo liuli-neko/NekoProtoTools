@@ -109,7 +109,7 @@ constexpr bool _Neko_IsValidEnum() noexcept {
     return !_Neko_GetEnumName<T, Value>().empty();
 }
 template <typename T, size_t... N>
-constexpr size_t _Neko_GetValidEnumCount(std::index_sequence<N...> seq) noexcept {
+constexpr size_t _Neko_GetValidEnumCount(std::index_sequence<N...> /*unused*/) noexcept {
     return (... + _Neko_IsValidEnum<T, T(N)>());
 }
 template <typename T, size_t... N>
@@ -150,7 +150,21 @@ std::string enum_to_string(const T& value) {
     }
     return ret;
 }
-}   // namespace detail
+template <typename T>
+std::string make_enum_string(const std::string& fmt) {
+    constexpr static auto KEnumArr = _Neko_GetValidEnumNames<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
+    std::string ret;
+    for (int i = 0; i < KEnumArr.size(); ++i) {
+        if (KEnumArr[i].second.size() > 0) {
+            std::string tfmt = fmt;
+            tfmt.replace(tfmt.find("{enum}"), 6, KEnumArr[i].second);
+            tfmt.replace(tfmt.find("{num}"), 5, std::to_string(i));
+            ret += tfmt;
+        }
+    }
+    return ret;
+}
+} // namespace detail
 /// ====================== end enum string =====================
 
 template <typename SerializerT, typename T,

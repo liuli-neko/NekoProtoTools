@@ -10,7 +10,7 @@
 NEKO_BEGIN_NAMESPACE
 
 template <class T>
-class NameValuePair : traits::detail::NameValuePairCore {
+struct NameValuePair : traits::detail::NameValuePairCore {
 private:
     // If we get passed an array, keep the type as is, otherwise store
     // a reference if we were passed an left value reference, else copy the value
@@ -37,8 +37,8 @@ public:
           value(std::forward<T>(value)) {}
 #if NEKO_CPP_PLUS >= 17
     NameValuePair(std::string_view name, T&& value) NEKO_NOEXCEPT : name(name.data()),
-                                                                           nameLen(name.size()),
-                                                                           value(std::forward<T>(value)) {}
+                                                                    nameLen(name.size()),
+                                                                    value(std::forward<T>(value)) {}
 #endif
     const char* name;
     std::size_t nameLen;

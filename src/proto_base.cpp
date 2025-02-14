@@ -16,13 +16,7 @@
 #include <vector>
 
 NEKO_BEGIN_NAMESPACE
-
-void ProtoFactory::_setVersion(int major, int minor, int patch) NEKO_NOEXCEPT {
-    mVersion = ((major & 0xFF) << 16 | (minor & 0xFF) << 8 | (patch & 0xFF));
-}
-
-uint32_t ProtoFactory::version() const NEKO_NOEXCEPT { return mVersion; }
-
+namespace detail {
 NEKO_PROTO_API
 std::map<NEKO_STRING_VIEW, std::function<void(ProtoFactory*)>>&
 static_init_funcs(const NEKO_STRING_VIEW& name = "", std::function<void(ProtoFactory*)> func = nullptr) {
@@ -36,9 +30,16 @@ static_init_funcs(const NEKO_STRING_VIEW& name = "", std::function<void(ProtoFac
     }
     return kFuncs;
 }
+} // namespace detail
+
+void ProtoFactory::_setVersion(int major, int minor, int patch) NEKO_NOEXCEPT {
+    mVersion = ((major & 0xFF) << 16 | (minor & 0xFF) << 8 | (patch & 0xFF));
+}
+
+uint32_t ProtoFactory::version() const NEKO_NOEXCEPT { return mVersion; }
 
 void ProtoFactory::_init() NEKO_NOEXCEPT {
-    const auto& funcs = static_init_funcs();
+    const auto& funcs = detail::static_init_funcs();
     mCreaterList.resize(funcs.size() + NEKO_RESERVED_PROTO_TYPE_SIZE + 1);
     for (const auto& item : funcs) {
         item.second(this);
@@ -50,7 +51,7 @@ ProtoFactory::ProtoFactory(int major, int minor, int patch) {
     _setVersion(major, minor, patch);
 }
 
-void ProtoFactory::regist(const NEKO_STRING_VIEW& name, std::function<IProto*()> creator) NEKO_NOEXCEPT {
+void ProtoFactory::regist(const NEKO_STRING_VIEW& name, std::function<IProto()> creator) NEKO_NOEXCEPT {
     auto type = _protoType(name, true);
     if (type < mCreaterList.size()) {
         mCreaterList[type] = creator;
@@ -72,10 +73,10 @@ int ProtoFactory::_protoType(const NEKO_STRING_VIEW& name, const bool isDeclared
     auto item = protoNameMap.find(name);
     if (protoNameMap.end() == item) {
         if (specifyType != -1 && isDeclared) {
-            for (const auto& item : protoNameMap) {
-                if (item.second == specifyType) {
+            for (const auto& item1 : protoNameMap) {
+                if (item1.second == specifyType) {
                     NEKO_LOG_ERROR("proto", "proto type {} has been declared as {}, please use another type",
-                                   item.first, item.second);
+                                   item1.first, item1.second);
                     return -1;
                 }
             }
@@ -102,22 +103,20 @@ int ProtoFactory::_protoType(const NEKO_STRING_VIEW& name, const bool isDeclared
     return item->second;
 }
 
-std::unique_ptr<IProto> ProtoFactory::create(int type) const NEKO_NOEXCEPT {
+IProto ProtoFactory::create(int type) const NEKO_NOEXCEPT {
     if (type > 0 && type < mCreaterList.size() && nullptr != mCreaterList[type]) {
-        return std::unique_ptr<IProto>(mCreaterList[type]());
+        return mCreaterList[type]();
     }
     if (type >= mCreaterList.size()) {
         auto it = mDynamicCreaterMap.find(type);
         if (it != mDynamicCreaterMap.end()) {
-            return std::unique_ptr<IProto>(it->second());
+            return it->second();
         }
     }
-    return nullptr;
+    return {};
 }
 
-std::unique_ptr<IProto> ProtoFactory::create(const char* name) const NEKO_NOEXCEPT {
-    return create(_protoType(name, false));
-}
+IProto ProtoFactory::create(const char* name) const NEKO_NOEXCEPT { return create(_protoType(name, false)); }
 
 const std::map<NEKO_STRING_VIEW, int>& ProtoFactory::protoTypeMap() NEKO_NOEXCEPT { return _staticProtoTypeMap(); }
 
