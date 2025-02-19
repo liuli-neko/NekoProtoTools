@@ -178,7 +178,7 @@ inline StreamFlag operator^(StreamFlag flag1, StreamFlag flag2) {
 inline bool operator!(StreamFlag flag1) { return static_cast<uint32_t>(flag1) == 0; }
 
 template <ILIAS_NAMESPACE::StreamClient T = ILIAS_NAMESPACE::IStreamClient>
-class NEKO_PROTO_API ProtoStreamClient {
+class ProtoStreamClient {
     using ClientType = T;
     using IoContext  = ILIAS_NAMESPACE::IoContext;
     template <typename U>
@@ -192,7 +192,7 @@ class NEKO_PROTO_API ProtoStreamClient {
 
 public:
     ProtoStreamClient() = default;
-    ProtoStreamClient(ProtoFactory& factory, IoContext& ioContext, T&& streamClient);
+    ProtoStreamClient(ProtoFactory& factory, T&& streamClient);
     ProtoStreamClient(const ProtoStreamClient&) = delete;
     ProtoStreamClient(ProtoStreamClient&& /*othre*/);
     ~ProtoStreamClient() noexcept;
@@ -214,7 +214,6 @@ private:
 
 private:
     ProtoFactory* mFactory               = nullptr;
-    IoContext* mIoContext                = nullptr;
     ClientType mStreamClient             = {};
     std::vector<std::byte> mBuffer       = {};
     MessageHeader mHeader                = {};
@@ -225,14 +224,13 @@ private:
 };
 
 template <ILIAS_NAMESPACE::StreamClient T>
-inline ProtoStreamClient<T>::ProtoStreamClient(ProtoFactory& factory, IoContext& ioContext, T&& streamClient)
-    : mFactory(&factory), mIoContext(&ioContext), mStreamClient(std::move(streamClient)) {}
+inline ProtoStreamClient<T>::ProtoStreamClient(ProtoFactory& factory, T&& streamClient)
+    : mFactory(&factory), mStreamClient(std::move(streamClient)) {}
 
 template <ILIAS_NAMESPACE::StreamClient T>
 inline ProtoStreamClient<T>::ProtoStreamClient(ProtoStreamClient&& othre)
-    : mFactory(othre.mFactory), mIoContext(othre.mIoContext), mStreamClient(std::move(othre.mStreamClient)),
-      mBuffer(std::move(othre.mBuffer)), mHeader(std::move(othre.mHeader)), mMessage(std::move(othre.mMessage)),
-      mSliceSizeCount(othre.mSliceSizeCount) {}
+    : mFactory(othre.mFactory), mStreamClient(std::move(othre.mStreamClient)), mBuffer(std::move(othre.mBuffer)),
+      mHeader(std::move(othre.mHeader)), mMessage(std::move(othre.mMessage)), mSliceSizeCount(othre.mSliceSizeCount) {}
 
 template <ILIAS_NAMESPACE::StreamClient T>
 inline ProtoStreamClient<T>::~ProtoStreamClient() noexcept {}
@@ -250,6 +248,10 @@ inline auto ProtoStreamClient<T>::setStreamClient(T&& streamClient, bool reconne
 
 template <ILIAS_NAMESPACE::StreamClient T>
 inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -> IoTask<void> {
+    if (!mStreamClient) {
+        NEKO_LOG_ERROR("Communication", "no stream client");
+        co_return Unexpected<Error>(ErrorCode::UnsupportOperator);
+    }
     bool isVerify = static_cast<int>(flag & StreamFlag::VersionVerification) != 0;
     bool isThread = static_cast<int>(flag & StreamFlag::SerializerInThread) != 0;
     bool isSlice  = static_cast<int>(flag & StreamFlag::SliceData) != 0;
@@ -328,6 +330,10 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
 
 template <ILIAS_NAMESPACE::StreamClient T>
 inline auto ProtoStreamClient<T>::recv(StreamFlag flag) -> IoTask<IProto> {
+    if (!mStreamClient) {
+        NEKO_LOG_ERROR("Communication", "no stream client");
+        co_return Unexpected<Error>(ErrorCode::UnsupportOperator);
+    }
     if (static_cast<int>(flag & StreamFlag::SliceData) != 0) {
         NEKO_LOG_WARN("Communication", "recv function can't set StreamFlag::SliceData, ignore it, if you want to recv "
                                        "slice data, please set it in send function.");
@@ -576,6 +582,9 @@ inline auto ProtoStreamClient<T>::_createProto(const uint32_t type) -> IProto {
 
 template <ILIAS_NAMESPACE::StreamClient T>
 inline auto ProtoStreamClient<T>::close() -> IoTask<void> {
+    if (!mStreamClient) {
+        co_return;
+    }
     co_return co_await mStreamClient.shutdown();
 }
 
@@ -619,7 +628,7 @@ inline auto ProtoStreamClient<T>::_sendRaw(std::span<std::byte> data) -> IoTask<
 }
 
 template <typename T = ILIAS_NAMESPACE::UdpClient>
-class NEKO_PROTO_API ProtoDatagramClient {
+class ProtoDatagramClient {
     using ClientType = T;
     using IoContext  = ILIAS_NAMESPACE::IoContext;
     template <typename U>
@@ -634,7 +643,7 @@ class NEKO_PROTO_API ProtoDatagramClient {
 
 public:
     ProtoDatagramClient() = default;
-    ProtoDatagramClient(ProtoFactory& factory, IoContext& ioContext, ClientType&& streamClient);
+    ProtoDatagramClient(ProtoFactory& factory, ClientType&& streamClient);
     ProtoDatagramClient(const ProtoDatagramClient&) = delete;
     ProtoDatagramClient(ProtoDatagramClient&& /*other*/);
     ~ProtoDatagramClient() noexcept;
@@ -651,30 +660,27 @@ private:
     auto _createProto(uint32_t type) -> IProto;
 
 private:
-    ProtoFactory* mFactory                 = nullptr;
-    ILIAS_NAMESPACE::IoContext* mIoContext = nullptr;
-    ClientType mDatagramClient             = {};
-    std::vector<std::byte> mBuffer         = {};
-    MessageHeader mHeader                  = {};
-    IProto mMessage                        = {};
-    std::set<uint32_t> mSliceIdCount       = {};
-    uint32_t mSliceSizeCount               = 0;
-    ProtocolTable mProtocolTable           = {};
-    static constexpr uint32_t gSliceSize   = 1200;
-    static constexpr uint32_t gUdpMaxSize  = 65535;
+    ProtoFactory* mFactory                = nullptr;
+    ClientType mDatagramClient            = {};
+    std::vector<std::byte> mBuffer        = {};
+    MessageHeader mHeader                 = {};
+    IProto mMessage                       = {};
+    std::set<uint32_t> mSliceIdCount      = {};
+    uint32_t mSliceSizeCount              = 0;
+    ProtocolTable mProtocolTable          = {};
+    static constexpr uint32_t gSliceSize  = 1200;
+    static constexpr uint32_t gUdpMaxSize = 65535;
 };
 
 template <typename T>
-inline ProtoDatagramClient<T>::ProtoDatagramClient(ProtoFactory& factory, ILIAS_NAMESPACE::IoContext& ioContext,
-                                                   ClientType&& client)
-    : mFactory(&factory), mIoContext(&ioContext), mDatagramClient(std::move(client)) {
+inline ProtoDatagramClient<T>::ProtoDatagramClient(ProtoFactory& factory, ClientType&& client)
+    : mFactory(&factory), mDatagramClient(std::move(client)) {
     mBuffer.reserve(gUdpMaxSize);
 }
 
 template <typename T>
 inline ProtoDatagramClient<T>::ProtoDatagramClient(ProtoDatagramClient<T>&& other) {
     mFactory        = other.mFactory;
-    mIoContext      = other.mIoContext;
     mDatagramClient = std::move(other.mDatagramClient);
     mBuffer         = std::move(other.mBuffer);
     mHeader         = std::move(other.mHeader);
@@ -699,6 +705,10 @@ inline auto ProtoDatagramClient<T>::setStreamClient(ClientType&& streamClient, c
 template <typename T>
 inline auto ProtoDatagramClient<T>::send(const IProto& message, const IPEndpoint& endpoint, StreamFlag flag)
     -> IoTask<void> {
+    if (!mDatagramClient) {
+        NEKO_LOG_ERROR("Communication", "no datagram client");
+        co_return Unexpected<Error>(ErrorCode::UnsupportOperator);
+    }
     bool isVerify = static_cast<int>(flag & StreamFlag::VersionVerification) != 0;
     bool isThread = static_cast<int>(flag & StreamFlag::SerializerInThread) != 0;
     bool isSlice  = static_cast<int>(flag & StreamFlag::SliceData) != 0;
@@ -755,6 +765,10 @@ inline auto ProtoDatagramClient<T>::send(const IProto& message, const IPEndpoint
 
 template <typename T>
 inline auto ProtoDatagramClient<T>::recv(StreamFlag flag) -> IoTask<std::pair<IProto, IPEndpoint>> {
+    if (!mDatagramClient) {
+        NEKO_LOG_ERROR("Communication", "no datagram client");
+        co_return Unexpected<Error>(ErrorCode::UnsupportOperator);
+    }
     if (static_cast<int>(flag & StreamFlag::SliceData) != 0) {
         NEKO_LOG_WARN("Communication", "recv function can't set StreamFlag::SliceData, ignore it, if you want to recv "
                                        "slice data, please set it in send function.");
@@ -852,6 +866,9 @@ inline auto ProtoDatagramClient<T>::recv(StreamFlag flag) -> IoTask<std::pair<IP
 
 template <typename T>
 inline auto ProtoDatagramClient<T>::close() -> IoTask<void> {
+    if (!mDatagramClient) {
+        co_return;
+    }
     mDatagramClient.close();
     co_return Result<void>{};
 }

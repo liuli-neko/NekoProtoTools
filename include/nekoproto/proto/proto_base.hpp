@@ -83,7 +83,7 @@ class NEKO_PROTO_API IProto {
 public:
     IProto() = default;
     explicit IProto(detail::AbstractProto* proto);
-    explicit IProto(IProto&& proto);
+    IProto(IProto&& proto);
     ~IProto() = default;
     /**
      * @brief serializer self
