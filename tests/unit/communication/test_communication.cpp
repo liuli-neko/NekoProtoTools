@@ -70,7 +70,7 @@ client_loop(ILIAS_NAMESPACE::IoContext& ioContext,
         co_return Unexpected(ret.error());
     }
     tcpClient.setOption(TcpNoDelay(1));
-    ProtoStreamClient<TcpClient> client(protoFactory, ioContext, std::move(tcpClient));
+    ProtoStreamClient<TcpClient> client(protoFactory, std::move(tcpClient));
     NEKO_LOG_DEBUG("unit test", "Client loop started");
     const size_t desiredSize = 10 * 1024; // 1MB
     int count                = 10;
@@ -163,8 +163,8 @@ ILIAS_NAMESPACE::IoTask<void> server_loop(IoContext& ioContext, ProtoFactory& pr
     }
     NEKO_LOG_DEBUG("unit test", "accept successed");
     ret.value().first.setOption(TcpNoDelay(1));
-    auto ret1 = co_await handle_loop(
-        ProtoStreamClient<ilias::TcpClient>(protoFactor, ioContext, std::move(ret.value().first)), sendFlag, recvFlag);
+    auto ret1 = co_await handle_loop(ProtoStreamClient<ilias::TcpClient>(protoFactor, std::move(ret.value().first)),
+                                     sendFlag, recvFlag);
     if (!ret1 && ret1.error() != ILIAS_NAMESPACE::Error::ConnectionReset) {
         co_return Unexpected(ret1.error());
     }
@@ -204,7 +204,7 @@ ILIAS_NAMESPACE::IoTask<void> udp_client(IoContext& ioContext, ProtoFactory& pro
         NEKO_LOG_DEBUG("unit test", "udp bind failed: {}", ret.error().message());
         co_return Unexpected(ret.error());
     }
-    ProtoDatagramClient<UdpClient> client(protoFactory, ioContext, std::move(udpclient));
+    ProtoDatagramClient<UdpClient> client(protoFactory, std::move(udpclient));
     int count = 10;
     while ((count--) != 0) {
         NEKO_LOG_DEBUG("unit test", "{}th testing...", count);
@@ -265,7 +265,7 @@ ILIAS_NAMESPACE::IoTask<void> udp_client_peer(IoContext& ioContext, ProtoFactory
         NEKO_LOG_DEBUG("unit test", "udp bind failed: {}", ret.error().message());
         co_return Unexpected(ret.error());
     }
-    ProtoDatagramClient<UdpClient> client(protoFactory, ioContext, std::move(udpclient));
+    ProtoDatagramClient<UdpClient> client(protoFactory, std::move(udpclient));
     int count = 10;
     while ((count--) != 0) {
         NEKO_LOG_DEBUG("unit test", "{}th testing...", count);
