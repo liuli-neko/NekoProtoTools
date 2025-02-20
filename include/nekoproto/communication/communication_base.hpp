@@ -583,7 +583,7 @@ inline auto ProtoStreamClient<T>::_createProto(const uint32_t type) -> IProto {
 template <ILIAS_NAMESPACE::StreamClient T>
 inline auto ProtoStreamClient<T>::close() -> IoTask<void> {
     if (!mStreamClient) {
-        co_return;
+        co_return {};
     }
     co_return co_await mStreamClient.shutdown();
 }
@@ -867,7 +867,7 @@ inline auto ProtoDatagramClient<T>::recv(StreamFlag flag) -> IoTask<std::pair<IP
 template <typename T>
 inline auto ProtoDatagramClient<T>::close() -> IoTask<void> {
     if (!mDatagramClient) {
-        co_return;
+        co_return {};
     }
     mDatagramClient.close();
     co_return Result<void>{};
