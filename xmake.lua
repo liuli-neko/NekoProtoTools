@@ -121,6 +121,7 @@ end
 if is_mode("debug") then
     add_defines("NEKO_PROTO_LOG_CONTEXT")
 end 
+add_defines("NEKO_PROTO_NLOG")
 
 if is_plat("linux") then
     add_cxxflags("-fcoroutines")
