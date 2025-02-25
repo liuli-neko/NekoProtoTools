@@ -20,6 +20,7 @@
 #include <ilias/net.hpp>
 #include <ilias/platform.hpp>
 #include <ilias/task.hpp>
+#include <set>
 
 #include "detail/thread_await.hpp"
 #include "nekoproto/proto/binary_serializer.hpp"
