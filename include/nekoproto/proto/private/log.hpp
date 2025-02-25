@@ -17,7 +17,7 @@
 #define NEKO_PROTO_DEBUG
 #endif
 
-#if !defined(NEKO_PROTO_NLOG)
+#if !defined(NEKO_PROTO_NLOG) && !defined(NDEBUG)
 #define NEKO_PROTO_LOG
 #endif
 
