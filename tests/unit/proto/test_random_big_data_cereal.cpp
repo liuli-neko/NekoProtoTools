@@ -27,8 +27,7 @@ inline void load(Archive& ar, std::map<C, A>& map) {
     while (true) {
         const auto namePtr = ar.getNodeName();
 
-        if (!namePtr)
-            break;
+        if (!namePtr) break;
 
         C key = namePtr;
         A value;
@@ -307,7 +306,7 @@ struct CTestStruct4 {
 #include "big_data_test_data_1.cpp"
 #include "big_data_test_data_2.cpp"
 
-std::string makeData(const char* data, size_t size) { return std::string(data, size); }
+std::string makeData(const char* data, std::size_t size) { return std::string(data, size); }
 
 TEST(BigProtoTest, Serializer) {
     NEKO_LOG_INFO("unit test", "Proto1 size {}", sizeof(CTestStruct1));
@@ -328,9 +327,10 @@ TEST(BigProtoTest, Serializer) {
         cereal::JSONInputArchive ia(is);
         proto1.serialize(ia);
     }
-    NEKO_LOG_INFO("unit test", "Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-                                              std::chrono::high_resolution_clock::now() - end)
-                                              .count());
+    NEKO_LOG_INFO(
+        "unit test", "Serializer time: {}s",
+        std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::high_resolution_clock::now() - end)
+            .count());
     NEKO_LOG_INFO("unit test", "Serializer data: {}", proto1.f0.size());
     data = makeData(data_2, sizeof(data_2));
     end  = std::chrono::high_resolution_clock::now();
@@ -340,13 +340,15 @@ TEST(BigProtoTest, Serializer) {
         cereal::JSONInputArchive ia(is);
         proto2.serialize(ia);
     }
-    NEKO_LOG_INFO("unit test", "Serializer time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(
-                                              std::chrono::high_resolution_clock::now() - end)
-                                              .count());
+    NEKO_LOG_INFO(
+        "unit test", "Serializer time: {}s",
+        std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::high_resolution_clock::now() - end)
+            .count());
     NEKO_LOG_INFO("unit test", "Serializer data: {}", proto2.f0.size());
-    end  = std::chrono::high_resolution_clock::now();
+    end = std::chrono::high_resolution_clock::now();
 
-    NEKO_LOG_INFO("unit test", "total time: {}s", std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count());
+    NEKO_LOG_INFO("unit test", "total time: {}s",
+                  std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count());
 }
 
 int main(int argc, char** argv) {

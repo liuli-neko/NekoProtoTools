@@ -40,7 +40,7 @@ struct ZTypeTest {
     NEKO_DECLARE_PROTOCOL(ZTypeTest, JsonSerializer)
 };
 
-extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, std::size_t size) {
     ZTypeTest proto;
-    return static_cast<int>(proto.makeProto().fromData(reinterpret_cast<const char *>(data), size));
+    return static_cast<int>(proto.makeProto().fromData(reinterpret_cast<const char*>(data), size));
 }

@@ -451,7 +451,7 @@ template <ILIAS_NAMESPACE::StreamClient T>
 inline auto ProtoStreamClient<T>::_recvRaw(std::span<std::byte> buf) -> ILIAS_NAMESPACE::IoTask<void> {
     int readsize = 0;
     while (readsize < buf.size()) {
-        Result<size_t> ret = co_await mStreamClient.read({buf.data() + readsize, buf.size() - readsize});
+        Result<std::size_t> ret = co_await mStreamClient.read({buf.data() + readsize, buf.size() - readsize});
         if (ret) {
             if (ret.value() == 0) {
                 co_return Unexpected<Error>(Error::ConnectionReset);
@@ -604,7 +604,7 @@ template <ILIAS_NAMESPACE::StreamClient T>
 inline auto ProtoStreamClient<T>::_sendRaw(std::span<std::byte> data) -> IoTask<void> {
     int sended = 0;
     while (sended < data.size()) {
-        Result<size_t> ret = co_await mStreamClient.write({data.data() + sended, data.size() - sended});
+        Result<std::size_t> ret = co_await mStreamClient.write({data.data() + sended, data.size() - sended});
         if (ret) {
             if (ret.value() == 0) {
                 co_return Unexpected<Error>(Error::ConnectionReset);
