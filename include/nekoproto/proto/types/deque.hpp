@@ -33,7 +33,7 @@ inline bool load(Serializer& sa, std::deque<T>& value) {
         return false;
     }
     value.resize(size);
-    for (size_t i = 0; i < size; ++i) {
+    for (std::size_t i = 0; i < size; ++i) {
         ret = sa(value[i]) && ret;
     }
     return ret;

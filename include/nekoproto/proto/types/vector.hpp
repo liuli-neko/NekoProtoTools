@@ -33,7 +33,7 @@ inline bool load(Serializer& sa, std::vector<T>& values) {
         return false;
     }
     values.resize(size);
-    for (size_t i = 0; i < size; ++i) {
+    for (std::size_t i = 0; i < size; ++i) {
         ret = sa(values[i]) && ret;
     }
     return ret;

@@ -182,7 +182,7 @@ public:
     }
     inline bool saveValue(const char* value) NEKO_NOEXCEPT {
         NEKO_LOG_INFO("BinarySerializer", "save string({})", value);
-        size_t size = strlen(value);
+        std::size_t size = strlen(value);
         mBuffer.insert(mBuffer.end(), value, value + size);
         return true;
     }
@@ -250,7 +250,7 @@ public:
     }
 
     inline bool loadValue(std::string& value) NEKO_NOEXCEPT {
-        size_t size = value.size();
+        std::size_t size = value.size();
         if (!loadValue(make_size_tag(size))) {
             return false;
         }
@@ -387,7 +387,7 @@ private:
     std::size_t mOffset = 0;
 };
 
-template <typename T, size_t Size = sizeof(T)>
+template <typename T, std::size_t Size = sizeof(T)>
 struct FixedLengthField {
 private:
     using Type = typename std::conditional<std::is_lvalue_reference<T>::value, T, typename std::decay<T>::type>::type;
@@ -409,7 +409,7 @@ struct BinarySerializer {
     using InputSerializer  = BinaryInputSerializer;
 };
 
-template <typename T, size_t Size>
+template <typename T, std::size_t Size>
 inline bool FixedLengthField<T, Size>::save(BinaryOutputSerializer& serializer) const {
     NEKO_CONSTEXPR_IF(Size != sizeof(T)) {
         auto size = serializer.size();
@@ -436,7 +436,7 @@ inline bool FixedLengthField<T, Size>::save(BinaryOutputSerializer& serializer) 
     }
 }
 
-template <typename T, size_t Size>
+template <typename T, std::size_t Size>
 inline bool FixedLengthField<T, Size>::load(BinaryInputSerializer& serializer) {
     NEKO_CONSTEXPR_IF(Size != sizeof(T)) {
         auto size = serializer.offset();

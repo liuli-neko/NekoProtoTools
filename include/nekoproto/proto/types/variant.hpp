@@ -19,7 +19,7 @@ NEKO_BEGIN_NAMESPACE
 
 template <typename Serializer, typename... Ts>
 struct unfold_variant_helper { // NOLINT(readability-identifier-naming)
-    template <typename T, size_t N>
+    template <typename T, std::size_t N>
     static bool unfoldValueImp1(Serializer& sa, std::variant<Ts...>& value) {
         T tvalue = {};
         if (sa(tvalue)) {
@@ -29,11 +29,11 @@ struct unfold_variant_helper { // NOLINT(readability-identifier-naming)
         return false;
     }
 
-    template <size_t... Ns>
+    template <std::size_t... Ns>
     static bool unfoldValue(Serializer& sa, std::variant<Ts...>& value, std::index_sequence<Ns...> /*unused*/) {
         return (unfoldValueImp1<std::variant_alternative_t<Ns, std::variant<Ts...>>, Ns>(sa, value) || ...);
     }
-    template <typename T, size_t N>
+    template <typename T, std::size_t N>
     static bool unfoldValueImp2(Serializer& sa, const std::variant<Ts...>& value) {
         if (value.index() != N) {
             return false;
@@ -41,7 +41,7 @@ struct unfold_variant_helper { // NOLINT(readability-identifier-naming)
         return sa(std::get<N>(value));
     }
 
-    template <size_t... Ns>
+    template <std::size_t... Ns>
     static bool unfoldValue(Serializer& sa, const std::variant<Ts...>& value, std::index_sequence<Ns...> /*unused*/) {
         return (unfoldValueImp2<std::variant_alternative_t<Ns, std::variant<Ts...>>, Ns>(sa, value) || ...);
     }

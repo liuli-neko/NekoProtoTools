@@ -122,13 +122,13 @@ namespace {
 template <class T>
 NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() NEKO_NOEXCEPT { // NOLINT(readability-identifier-naming)
     NEKO_CONSTEXPR_VAR NEKO_STRING_VIEW PrettyFunction = __PRETTY_FUNCTION__;
-    size_t start                                       = PrettyFunction.find_last_of('[');
-    size_t end                                         = start;
+    std::size_t start                                  = PrettyFunction.find_last_of('[');
+    std::size_t end                                    = start;
     while (end < PrettyFunction.size() && (PrettyFunction[end] != ';')) {
         end++;
     }
-    auto sstring  = PrettyFunction.substr(start, end - start);
-    size_t nstart = sstring.find_first_of('<');
+    auto sstring       = PrettyFunction.substr(start, end - start);
+    std::size_t nstart = sstring.find_first_of('<');
     if (nstart != NEKO_STRING_VIEW::npos) {
         sstring = sstring.substr(0, nstart);
     }
@@ -154,12 +154,12 @@ namespace {
 template <class T>
 NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() NEKO_NOEXCEPT {
     NEKO_STRING_VIEW string(__FUNCSIG__);
-    size_t start = string.find("_class_name<") + 15;
-    size_t d     = string.find_first_of(' ', start);
+    std::size_t start = string.find("_class_name<") + 15;
+    std::size_t d     = string.find_first_of(' ', start);
     if (d != NEKO_STRING_VIEW::npos) start = d + 1;
-    size_t end   = string.find('<', start);
-    auto sstring = string.substr(start, end - start);
-    d            = sstring.find_last_of(':');
+    std::size_t end = string.find('<', start);
+    auto sstring    = string.substr(start, end - start);
+    d               = sstring.find_last_of(':');
     if (d != NEKO_STRING_VIEW::npos)
         start = d;
     else
