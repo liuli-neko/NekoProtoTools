@@ -33,7 +33,7 @@ public:
     NEKO_DECLARE_PROTOCOL(Message, JsonSerializer)
 };
 
-std::string generate_random_string(size_t length) {
+std::string generate_random_string(std::size_t length) {
     static const char kAlphanum[] = "0123456789"
                                     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
                                     "abcdefghijklmnopqrstuvwxyz";
@@ -43,7 +43,7 @@ std::string generate_random_string(size_t length) {
     std::random_device rd;        // 获取随机数种子
     std::mt19937 generator(rd()); // 采用梅森旋转算法
     std::uniform_int_distribution<> distribution(0, sizeof(kAlphanum) - 2);
-    for (size_t i = 0; i < length; ++i) {
+    for (std::size_t i = 0; i < length; ++i) {
         str += kAlphanum[distribution(generator)];
     }
     return str;
@@ -72,8 +72,8 @@ client_loop(ILIAS_NAMESPACE::IoContext& ioContext,
     tcpClient.setOption(TcpNoDelay(1));
     ProtoStreamClient<TcpClient> client(protoFactory, std::move(tcpClient));
     NEKO_LOG_DEBUG("unit test", "Client loop started");
-    const size_t desiredSize = 10 * 1024; // 1MB
-    int count                = 10;
+    const std::size_t desiredSize = 10 * 1024; // 1MB
+    int count                     = 10;
     while (count-- > 0) {
         NEKO_LOG_DEBUG("unit test", "start {}th send test", count);
         Message msg;
@@ -114,7 +114,7 @@ ILIAS_NAMESPACE::IoTask<void> handle_loop(ProtoStreamClient<TcpClient>&& pClient
                                           StreamFlag sendFlag, // NOLINT(readability-function-cognitive-complexity)
                                           StreamFlag recvFlag) {
     ProtoStreamClient<TcpClient> client(std::move(pClient));
-    const size_t desiredSize = 10 * 1024; // 1MB
+    const std::size_t desiredSize = 10 * 1024; // 1MB
     while (true) {
         NEKO_LOG_DEBUG("unit test", "HandleLoop");
         auto ret = co_await client.recv(recvFlag);

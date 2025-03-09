@@ -29,15 +29,15 @@ auto static_init_funcs(const NEKO_STRING_VIEW&, std::function<void(ProtoFactory*
 namespace detail {
 class NEKO_PROTO_API AbstractProto {
 public:
-    virtual ~AbstractProto()                                              = default;
-    virtual std::vector<char> toData() const NEKO_NOEXCEPT                = 0;
-    virtual bool toData(std::vector<char>& buffer) const NEKO_NOEXCEPT    = 0;
-    virtual bool fromData(const char* data, size_t size) NEKO_NOEXCEPT    = 0;
-    virtual int type() const NEKO_NOEXCEPT                                = 0;
-    virtual NEKO_STRING_VIEW protoName() const NEKO_NOEXCEPT              = 0;
-    virtual AbstractProto* clone() const                                  = 0;
-    virtual detail::ReflectionObject* getReflectionObject() NEKO_NOEXCEPT = 0;
-    virtual void* data() NEKO_NOEXCEPT                                    = 0;
+    virtual ~AbstractProto()                                                = default;
+    virtual std::vector<char> toData() const NEKO_NOEXCEPT                  = 0;
+    virtual bool toData(std::vector<char>& buffer) const NEKO_NOEXCEPT      = 0;
+    virtual bool fromData(const char* data, std::size_t size) NEKO_NOEXCEPT = 0;
+    virtual int type() const NEKO_NOEXCEPT                                  = 0;
+    virtual NEKO_STRING_VIEW protoName() const NEKO_NOEXCEPT                = 0;
+    virtual AbstractProto* clone() const                                    = 0;
+    virtual detail::ReflectionObject* getReflectionObject() NEKO_NOEXCEPT   = 0;
+    virtual void* data() NEKO_NOEXCEPT                                      = 0;
 };
 
 template <typename ProtoT, typename SerializerT>
@@ -68,12 +68,12 @@ public:
     bool toData(std::vector<char>& buffer) const NEKO_NOEXCEPT override;
     std::vector<char> toData() const NEKO_NOEXCEPT override;
     int type() const NEKO_NOEXCEPT override;
-    bool fromData(const char* data, size_t size) NEKO_NOEXCEPT override;
+    bool fromData(const char* data, std::size_t size) NEKO_NOEXCEPT override;
     NEKO_STRING_VIEW protoName() const NEKO_NOEXCEPT override;
     static NEKO_STRING_VIEW name() NEKO_NOEXCEPT;
-    static std::vector<char> Serialize(const ProtoT& proto);               // NOLINT(readability-identifier-naming)
-    static bool Serialize(const ProtoT& proto, std::vector<char>& buffer); // NOLINT(readability-identifier-naming)
-    static bool Deserialize(const char* data, size_t size, ProtoT& proto); // NOLINT(readability-identifier-naming)
+    static std::vector<char> Serialize(const ProtoT& proto);                    // NOLINT(readability-identifier-naming)
+    static bool Serialize(const ProtoT& proto, std::vector<char>& buffer);      // NOLINT(readability-identifier-naming)
+    static bool Deserialize(const char* data, std::size_t size, ProtoT& proto); // NOLINT(readability-identifier-naming)
     ReflectionObject* getReflectionObject() NEKO_NOEXCEPT override;
     virtual void* data() NEKO_NOEXCEPT override;
 
@@ -212,7 +212,7 @@ std::vector<char> ProtoBase<ProtoT, SerializerT>::Serialize(const ProtoT& proto)
 }
 
 template <typename ProtoT, typename SerializerT>
-bool ProtoBase<ProtoT, SerializerT>::Deserialize(const char* data, size_t size, ProtoT& proto) {
+bool ProtoBase<ProtoT, SerializerT>::Deserialize(const char* data, std::size_t size, ProtoT& proto) {
     typename SerializerT::InputSerializer serializer(data, size);
     if (!serializer) {
 #if defined(NEKO_VERBOSE_LOGS)
@@ -240,7 +240,7 @@ std::vector<char> ProtoBase<T, SerializerT>::toData() const NEKO_NOEXCEPT {
 }
 
 template <typename T, typename SerializerT>
-bool ProtoBase<T, SerializerT>::fromData(const char* data, size_t size) NEKO_NOEXCEPT {
+bool ProtoBase<T, SerializerT>::fromData(const char* data, std::size_t size) NEKO_NOEXCEPT {
     NEKO_ASSERT(mData != nullptr, "ReflectionSerializer", "mData is nullptr");
     return Deserialize(data, size, *mData.get());
 }

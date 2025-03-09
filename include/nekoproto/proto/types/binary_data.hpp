@@ -33,12 +33,12 @@ struct Base64Covert {
         return Encode(str.data(), str.size());
     }
     static std::vector<char> Encode(const char* str) { return Encode(str, strlen(str)); }
-    static std::vector<char> Encode(const char* str, size_t datalen) {
+    static std::vector<char> Encode(const char* str, std::size_t datalen) {
         std::vector<uint8_t> buf;
         Encode(reinterpret_cast<const uint8_t*>(str), datalen, buf);
         return std::vector<char>((char*)(buf.data()), (char*)(buf.data()) + buf.size());
     }
-    static void Encode(const uint8_t* data, size_t datalen, std::vector<uint8_t>& buf) {
+    static void Encode(const uint8_t* data, std::size_t datalen, std::vector<uint8_t>& buf) {
         auto cptr  = data;
         auto table = Table;
         buf.resize(((datalen + 2) / 3) * 4, '=');
@@ -80,20 +80,20 @@ struct Base64Covert {
     }
     static std::vector<char> Decode(const std::vector<char>& str) { return Decode(str.data(), str.size()); }
     static std::vector<char> Decode(const char* str) { return Decode(str, strlen(str)); }
-    static std::vector<char> Decode(const char* str, size_t datalen) {
+    static std::vector<char> Decode(const char* str, std::size_t datalen) {
         std::vector<uint8_t> buf;
         Decode(reinterpret_cast<const uint8_t*>(str), datalen, buf);
         return std::vector<char>((char*)(buf.data()), (char*)(buf.data()) + buf.size());
     }
-    static bool Decode(const uint8_t* data, size_t datalen, std::vector<uint8_t>& buf) {
+    static bool Decode(const uint8_t* data, std::size_t datalen, std::vector<uint8_t>& buf) {
         if ((datalen % 4) != 0) {
             NEKO_LOG_ERROR("proto", "Bad Base64 String len({}), data({:.{}s})", datalen,
                            reinterpret_cast<const char*>(data), datalen);
             return false;
         }
 
-        int len   = (int)(datalen / 4) * 3;
-        const auto *cptr = data;
+        int len          = (int)(datalen / 4) * 3;
+        const auto* cptr = data;
         while (data[datalen - 1] == '=') {
             --datalen; // remove '='
             --len;
@@ -101,7 +101,7 @@ struct Base64Covert {
         buf.resize(len, '=');
 
         uint8_t array[4];
-        auto *bufptr = buf.data();
+        auto* bufptr = buf.data();
         while (datalen > 3) {
             array[0]  = QueryTable(cptr[0]);
             array[1]  = QueryTable(cptr[1]);

@@ -107,8 +107,8 @@ _parse_names(std::string_view names) NEKO_NOEXCEPT { // NOLINT(readability-ident
 #else
 struct neko_string_view {
     const char* mData;
-    size_t mSize;
-    size_t size() const { return mSize; }
+    std::size_t mSize;
+    std::size_t size() const { return mSize; }
     const char* data() const { return mData; }
 };
 inline std::vector<neko_string_view> _parse_names(const char* names) NEKO_NOEXCEPT {

@@ -42,8 +42,8 @@ constexpr auto _Neko_GetEnumName() noexcept {
     // constexpr auto _Neko_GetEnumName() [with T = MyEnum; T Value =
     // (MyEnum)114514]"
     std::string_view name(__PRETTY_FUNCTION__);
-    size_t eqBegin        = name.find_last_of(' ');
-    size_t end            = name.find_last_of(']');
+    std::size_t eqBegin   = name.find_last_of(' ');
+    std::size_t end       = name.find_last_of(']');
     std::string_view body = name.substr(eqBegin + 1, end - eqBegin - 1);
     if (body[0] == '(') {
         // Failed
@@ -86,8 +86,8 @@ constexpr auto _Neko_GetEnumName() noexcept {
     // main::MyEnum)0x2>(void) auto __cdecl _Neko_GetEnumName<enum
     // main::MyEnum,main::MyEnum::Wtf>(void)
     std::string_view name(__FUNCSIG__);
-    size_t dotBegin       = name.find_first_of(',');
-    size_t end            = name.find_last_of('>');
+    std::size_t dotBegin  = name.find_first_of(',');
+    std::size_t end       = name.find_last_of('>');
     std::string_view body = name.substr(dotBegin + 1, end - dotBegin - 1);
     if (body[0] == '(') {
         // Failed
@@ -108,20 +108,20 @@ template <typename T, T Value>
 constexpr bool _Neko_IsValidEnum() noexcept {
     return !_Neko_GetEnumName<T, Value>().empty();
 }
-template <typename T, size_t... N>
-constexpr size_t _Neko_GetValidEnumCount(std::index_sequence<N...> /*unused*/) noexcept {
+template <typename T, std::size_t... N>
+constexpr std::size_t _Neko_GetValidEnumCount(std::index_sequence<N...> /*unused*/) noexcept {
     return (... + _Neko_IsValidEnum<T, T(N)>());
 }
-template <typename T, size_t... N>
+template <typename T, std::size_t... N>
 constexpr auto _Neko_GetValidEnumNames(std::index_sequence<N...> seq) noexcept {
     constexpr auto validCount = _Neko_GetValidEnumCount<T>(seq);
 
     std::array<std::pair<T, std::string_view>, validCount> arr;
     std::string_view vstr[sizeof...(N)]{_Neko_GetEnumName<T, T(N)>()...};
 
-    size_t n    = 0;
-    size_t left = validCount;
-    auto iter   = arr.begin();
+    std::size_t n    = 0;
+    std::size_t left = validCount;
+    auto iter        = arr.begin();
 
     for (auto i : vstr) {
         if (!i.empty()) {
@@ -187,10 +187,10 @@ inline bool load(SerializerT& sa, T& value) {
     std::string enum_str;
     int enum_int = 0;
     if (sa(enum_str)) {
-        size_t left  = enum_str.find_last_of(')');
-        size_t right = enum_str.find_last_of('(');
-        int32_t v    = std::stoi(enum_str.substr(right + 1, left - right - 1));
-        value        = static_cast<T>(v);
+        std::size_t left  = enum_str.find_last_of(')');
+        std::size_t right = enum_str.find_last_of('(');
+        int32_t v         = std::stoi(enum_str.substr(right + 1, left - right - 1));
+        value             = static_cast<T>(v);
     } else if (sa(enum_int)) {
         value = static_cast<T>(enum_int);
     } else {
