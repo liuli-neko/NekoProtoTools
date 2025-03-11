@@ -136,10 +136,12 @@ public:
     bool setField(const NEKO_STRING_VIEW& name, const T& value) NEKO_NOEXCEPT;
     template <typename T>
     T* cast() NEKO_NOEXCEPT;
+    template <typename T>
+    const T* cast() const NEKO_NOEXCEPT;
 
     bool operator==(std::nullptr_t) const;
     template <typename T>
-    bool operator==(T* ptr);
+    bool operator==(T* ptr) const;
     template <typename T, typename std::enable_if<!std::is_same<T, IProto>::value, char>::type = '0'>
     IProto& operator=(const T& proto);
     IProto& operator=(IProto&& proto);
@@ -298,7 +300,7 @@ bool IProto::setField(const NEKO_STRING_VIEW& name, const T& value) NEKO_NOEXCEP
 
 inline bool IProto::operator==(std::nullptr_t) const { return mImp == nullptr; }
 template <typename T>
-bool IProto::operator==(T* ptr) {
+bool IProto::operator==(T* ptr) const {
     if (mImp == nullptr && mImp->data() == ptr) {
         return true;
     }
@@ -328,6 +330,14 @@ template <typename T>
 inline T* IProto::cast() NEKO_NOEXCEPT {
     if (mImp && type() == ProtoFactory::protoType<T>()) {
         return reinterpret_cast<T*>(mImp->data());
+    }
+    return nullptr;
+}
+
+template <typename T>
+const T* IProto::cast() const NEKO_NOEXCEPT {
+    if (mImp && type() == ProtoFactory::protoType<T>()) {
+        return reinterpret_cast<const T*>(mImp->data());
     }
     return nullptr;
 }
