@@ -152,6 +152,10 @@ inline bool _unfold_function(SerializerT& serializer, const NamesT& namesVec, //
     int index = 0;
     return unfold_function_imp<SerializerT>(serializer, namesVec, index, args...);
 }
+template <typename... Ts>
+constexpr int count_parameter_size(Ts...) {
+    return sizeof...(Ts);
+}
 } // namespace detail
 
 NEKO_END_NAMESPACE
@@ -224,17 +228,25 @@ private:                                                                        
 public:                                                                                                                \
     template <typename SerializerT>                                                                                    \
     bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {                                                      \
-        constexpr uint32_t _kSize_ = NEKO_NAMESPACE::detail::_members_size(#__VA_ARGS__);                              \
-        constexpr std::array<std::string_view, _kSize_> _kNames_ =                                                     \
-            NEKO_NAMESPACE::detail::_parse_names<_kSize_>(#__VA_ARGS__);                                               \
-        return NEKO_NAMESPACE::detail::_unfold_function<SerializerT>(serializer, _kNames_, __VA_ARGS__);               \
+        if constexpr (NEKO_NAMESPACE::detail::count_parameter_size(#__VA_ARGS__)) {                                    \
+            constexpr uint32_t _kSize_ = NEKO_NAMESPACE::detail::_members_size(#__VA_ARGS__);                          \
+            constexpr std::array<std::string_view, _kSize_> _kNames_ =                                                 \
+                NEKO_NAMESPACE::detail::_parse_names<_kSize_>(#__VA_ARGS__);                                           \
+            return NEKO_NAMESPACE::detail::_unfold_function<SerializerT>(serializer, _kNames_, __VA_ARGS__);           \
+        } else {                                                                                                       \
+            return true;                                                                                               \
+        }                                                                                                              \
     }                                                                                                                  \
     template <typename SerializerT>                                                                                    \
     bool serialize(SerializerT& serializer) NEKO_NOEXCEPT {                                                            \
-        constexpr uint32_t _kSize_ = NEKO_NAMESPACE::detail::_members_size(#__VA_ARGS__);                              \
-        constexpr std::array<std::string_view, _kSize_> _kNames_ =                                                     \
-            NEKO_NAMESPACE::detail::_parse_names<_kSize_>(#__VA_ARGS__);                                               \
-        return NEKO_NAMESPACE::detail::_unfold_function<SerializerT>(serializer, _kNames_, __VA_ARGS__);               \
+        if constexpr (NEKO_NAMESPACE::detail::count_parameter_size(#__VA_ARGS__)) {                                    \
+            constexpr uint32_t _kSize_ = NEKO_NAMESPACE::detail::_members_size(#__VA_ARGS__);                          \
+            constexpr std::array<std::string_view, _kSize_> _kNames_ =                                                 \
+                NEKO_NAMESPACE::detail::_parse_names<_kSize_>(#__VA_ARGS__);                                           \
+            return NEKO_NAMESPACE::detail::_unfold_function<SerializerT>(serializer, _kNames_, __VA_ARGS__);           \
+        } else {                                                                                                       \
+            return true;                                                                                               \
+        }                                                                                                              \
     }
 
 #endif
