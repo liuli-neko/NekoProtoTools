@@ -586,7 +586,8 @@ inline auto ProtoStreamClient<T>::close() -> IoTask<void> {
     if (!mStreamClient) {
         co_return {};
     }
-    co_return co_await mStreamClient.shutdown();
+    mStreamClient.close();
+    co_return {};
 }
 
 template <ILIAS_NAMESPACE::StreamClient T>
