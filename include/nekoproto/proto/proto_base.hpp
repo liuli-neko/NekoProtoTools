@@ -208,7 +208,10 @@ int ProtoFactory::specifyProtoType(const int type) NEKO_NOEXCEPT {
 
 template <typename T>
 int ProtoFactory::protoType() NEKO_NOEXCEPT {
-    static int kType = _protoType(protoName<T>(), false);
+    static int kType = -1;
+    if (kType == -1) NEKO_IF_UNLIKELY {
+            kType = _protoType(protoName<T>(), false);
+        }
     return kType;
 }
 
