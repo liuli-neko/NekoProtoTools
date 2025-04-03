@@ -803,7 +803,7 @@ private:
 
 ## 9. Development History (Selected Milestones)
 
-*   **V0.2.1 - alpha (Current Main)**
+*   **(Current Main)**
     *   Unified most serialization calls to parenthesis expression `serializer(variable)`.
     *   Special structures like `NameValuePair`, `SizeTag` no longer trigger node expansion; other objects without the `minimal_serializable` attribute trigger node expansion (like JSON nesting).
     *   Supported SIMDJson as JSON input serialization backend (`simdjson::dom`).
