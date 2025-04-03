@@ -772,7 +772,7 @@ private:
 
 ## 9. 开发历史 (部分里程碑)
 
-*   **V0.2.1 - alpha**
+*   **当前主线**
     *   统一大部分序列化调用为括号表达式 `serializer(variable)`。
     *   `NameValuePair`, `SizeTag` 等特殊结构不再触发节点展开，其他无 `minimal_serializable` 属性的对象触发节点展开（类似 JSON 嵌套）。
     *   支持 SIMDJson 作为 JSON 输入序列化后端 (`simdjson::dom`)。
