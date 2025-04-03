@@ -151,6 +151,14 @@ public:
         }
         return *this;
     }
+    inline ConstJsonIterator& operator--() NEKO_NOEXCEPT {
+        if (mType == Member) {
+            --mMemberIt;
+        } else {
+            --mIndex;
+        }
+        return *this;
+    }
     inline bool eof() const NEKO_NOEXCEPT {
         return mType == Null || (mType == Value && mIndex >= mSize) || (mType == Member && mMemberIt == mMemberItEnd);
     }
@@ -635,6 +643,12 @@ public:
             return false;
         }
         return true;
+    }
+
+    void rollbackItem() {
+        if (mCurrentItem != nullptr) {
+            --(*mCurrentItem);
+        }
     }
 
 private:
