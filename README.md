@@ -1,394 +1,814 @@
-# A PROTO FOR CPP 
+# NekoProtoTools: 一个 C++ 协议辅助库
 
-### language
+[![中文](https://img.shields.io/badge/语言-中文-blue.svg)](./README.md)
+[![English](https://img.shields.io/badge/language-English-blue.svg)](./README_en.md)
 
-[中文](./README_zh.md) 
+### CI 状态
 
-[English](./README.md)
+| 构建平台 | 状态| 代码覆盖率|
+| :------- | :------------ | :------------ |
+| Linux    | [![Build Status](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-linux.yml/badge.svg?branch=main)](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-linux.yml) | [![codecov](https://codecov.io/gh/liuli-neko/NekoProtoTools/graph/badge.svg?token=F5OR647TV7)](https://codecov.io/gh/liuli-neko/NekoProtoTools) |
+| Windows  | [![Build Status](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-windows.yml/badge.svg?branch=main)](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-windows.yml) |                                                                                                                                                                       |
 
-### 1. Introduction
+---
 
-This repository is a pure C++ proto auxiliary library. The library provides abstract template class with common functions of proto Message. It also provides very convenient and easy-to-extend serialization and deserialization support by macros, which are used to generate large and repetitive proto. code.
-Through the macros provided by this library, you only need to add a small number of macros to the original data class. A base class can register it as the message type of proto, implement serialization and deserialization, and automatically use the protocol factory. generate.
+## 1. 简介
 
-#### 1.2 CI status
+NekoProtoTools 是一个纯 C++ 实现的协议辅助库，旨在**简化 C++ 中消息（协议）的定义、序列化/反序列化以及 RPC 通信**。
 
-|name|status|
-|:---:|:---:|
-|Linux|[![Build Status](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-linux.yml/badge.svg?branch=main)](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-linux.yml)|
-|Windows|[![Build Status](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-windows.yml/badge.svg?branch=main)](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-windows.yml)|
-|Codecov|[![codecov](https://codecov.io/gh/liuli-neko/NekoProtoTools/graph/badge.svg?token=F5OR647TV7)](https://codecov.io/gh/liuli-neko/NekoProtoTools)|
+本库的核心特性：
 
-### 2. Usage
-> for serializer, it depends the Popular libraries, Since it is not necessarily required, it is not included directly in this library. you can select by yourself. 
-> for json serializer can use simdjson or rapidjson.
+*   **简化消息定义**：通过模板和宏，您只需定义消息的字段，并声明需要处理的成员，即可将任意自定义 C++ 类型用作协议消息。
+*   **开箱即用的序列化/反序列化**：内置支持 JSON (RapidJSON/SIMDJson)、二进制等多种常用序列化格式，并允许轻松扩展自定义序列化器。
+*   **基础反射能力**：提供简单的反射机制，允许通过名称信息在运行时处理协议。
+*   **轻量级 JSON-RPC 2.0 实现**：基于模板和简洁接口，可以方便地定义和实现 RPC 服务。
+*   **类型安全**：利用 C++ 模板元编程，在编译期进行类型检查。
 
-If you only need to use the serialization and deserialization support of the library, you will only need headers :
-```C++
-#include "nekoproto/proto/serializer_base.hpp"
+**为什么需要这个库**：开发者应将精力聚焦于业务逻辑本身，而非繁琐、易错的协议构造和维护。本库致力于提供一个稳定、可测试的基础设施，降低协议处理的复杂度。
+
+---
+
+## 2. 依赖项
+
+*   **序列化后端**：
+    *   JSON：[RapidJSON](https://rapidjson.org/) 或 [SIMDJson](https://simdjson.org/) (可选，按需包含)
+    *   *注意：为了保持库的轻量化，这些序列化库**并未直接捆绑**在本库中，您需要通过选项自行管理这些依赖。*
+*   **通信与 RPC (可选)**：
+    *   [Ilias](https://github.com/BusyStudent/ilias) (用于网络通信和异步任务)
+
+---
+
+## 3. 安装与集成 (示例)
+
+本库推荐使用 [xmake](https://xmake.io/) 进行构建和集成。
+
+在您的 `xmake.lua` 中添加依赖：
+
+```lua
+-- xmake.lua
+add_requires("neko-proto-tools", {
+    configs = {
+         enable_simdjson = false, 
+         enable_rapidjson = true, 
+         enable_fmt = true, 
+         enable_communication = true,
+         enable_jsonrpc = true
+    }
+}) -- 可能需要指定 git repo 或其他来源(https://github.com/Btk-Project/xmake-repo.git)
+
+target("your_project")
+    set_kind("binary")
+    add_files("src/*.cpp")
+    add_packages("neko-proto-tools")
 ```
-and use macro `NEKO_SERIALIZER` pack your class members you want to serialize and deserialize.
-```C++
-class SerializerAble {
-    int a;
-    std::string b;
-    NEKO_SERIALIZER(a, b);
-}
+
+---
+
+## 4. 快速开始
+
+### 4.1. 基本序列化/反序列化
+
+只需要包含基础头文件，并使用 `NEKO_SERIALIZER` 宏标记需要序列化的成员。
+
+```cpp
+#include <nekoproto/proto/serializer_base.hpp>
+#include <nekoproto/proto/json_serializer.hpp> // 使用 JSON 序列化器
+#include <nekoproto/proto/types/string.hpp>    // 支持 std::string
+#include <nekoproto/proto/types/vector.hpp>    // 支持 std::vector
+// #include <nekoproto/proto/types/types.hpp>  // 所有支持的类型
+#include <iostream>
+#include <string>
+#include <vector>
+
+// 定义你的数据结构
+struct MyData {
+    int         id;
+    std::string name;
+    double      score;
+
+    // 声明需要序列化的成员
+    NEKO_SERIALIZER(id, name, score);
+};
 
 int main() {
-    SerializerAble sa;
-    sa.a = 1;
-    sa.b = "hello";
-    std::vector<char> data;
-    JsonSerializer::OutputSerializer out(data); // you can implement your own serializer, of course this repository provides a json serializer in header json_serializer.hpp and more details while introducing later.
-    out(sa);
-    out.end(); // or make out destory by RAII
-    std::string str(data.begin(), data.size());
-    std::cout << str << std::endl;
+    using namespace NekoProto; // 引入命名空间
+
+    MyData data_out;
+    data_out.id = 101;
+    data_out.name = "Neko";
+    data_out.score = 99.5;
+
+    // --- 序列化 ---
+    std::vector<char> buffer;
+    JsonSerializer::OutputSerializer serializer(buffer); // 创建 JSON 输出序列化器
+    serializer(data_out); // 对 data_out 对象进行序列化
+    serializer.end();     // 结束序列化，刷新缓冲区 (也可通过析构自动完成)
+
+    std::string json_str(buffer.begin(), buffer.end());
+    std::cout << "Serialized JSON: " << json_str << std::endl;
+    // 输出: Serialized JSON: {"id":101,"name":"Neko","score":99.5}
+
+    // --- 反序列化 ---
+    MyData data_in;
+    JsonSerializer::InputSerializer deserializer(buffer.data(), buffer.size()); // 创建 JSON 输入序列化器
+    // 将 buffer 中的 JSON 数据反序列化到 data_in
+    if (deserializer(data_in)) { // 检查反序列化是否成功
+        std::cout << "Deserialized Data: id=" << data_in.id
+                  << ", name=" << data_in.name
+                  << ", score=" << data_in.score << std::endl;
+        // 输出: Deserialized Data: id=101, name=Neko, score=99.5
+    } else {
+        std::cerr << "Deserialization failed!" << std::endl;
+    }
+
     return 0;
 }
 ```
 
-If you want to use the protocol factory to generate the message type of proto, you will need to add the following headers :
-```C++
-#include "nekoproto/proto/proto_base.hpp"
-#include "nekoproto/proto/serializer_base.hpp" // it is needed to use the protocol factory
-#include "nekoproto/proto/json_serializer.hpp" // it is default serializer for proto message, if you want to use your own serializer, you need provided template parameters, can remove this header if not use default serializer.
-```
-and a cpp file `src/proto_base.cpp`
+### 4.2. 定义协议消息 (带反射和多态)
 
-and use macro `NEKO_DECLARE_PROTOCOL` to declare your class you want to register as the message type of proto.
-```C++
-// SelfT is the type of your class, SerializerT is the type of serializer you want to use. default is JsonSerializer.
-struct SerializerAble {
-    int a;
-    std::string b;
-    NEKO_SERIALIZER(a, b);
-    NEKO_DECLARE_PROTOCOL(SerializerAble, JsonSerializer)
-}
+如果需要协议管理、反射和多态支持，需要包含 `proto_base.hpp` 并使用 `NEKO_DECLARE_PROTOCOL` 宏。
+
+```cpp
+#include <nekoproto/proto/proto_base.hpp>
+#include <nekoproto/proto/serializer_base.hpp>
+#include <nekoproto/proto/json_serializer.hpp> // 指定默认序列化器
+#include <nekoproto/proto/types/string.hpp>
+#include <iostream>
+#include <string>
+#include <vector>
+
+// 定义协议消息结构体
+struct UserProfile {
+    int         userId;
+    std::string username;
+
+    // 1. 声明序列化成员
+    NEKO_SERIALIZER(userId, username);
+    // 2. 声明为协议，并指定默认序列化器
+    NEKO_DECLARE_PROTOCOL(UserProfile, JsonSerializer);
+};
+
+struct LoginRequest {
+    std::string username;
+    std::string password_hash;
+
+    NEKO_SERIALIZER(username, password_hash);
+    NEKO_DECLARE_PROTOCOL(LoginRequest, JsonSerializer);
+};
+
 
 int main() {
-    auto sa = SerializerAble::emplaceProto({1, "hello"});
-    auto data = sa.toData(); // for proto message, you can serialize it by toData() and deserialize it by fromData(data)
+    using namespace NekoProto;
 
-    ProtoFactory factory(1, 0, 0); // you can generate the factory. and proto message while auto regist to this factory.
-    auto proto = factory.create("SerializerAble"); // you can create the proto message by the name or type value.
-    proto.fromData(data);
-    return 0;
-}
-```
-
-
-### 3. support
-
-#### 3.1. serializer
-
-##### 3.1.1. json serializer
-
-This repository provides a default json serializer. support most of commonly type in standard c++[^1].
-
-| type | support | json type| header |
-| ---- | -------- | ---- | ---- |
-| bool | yes | BOOL | json_serializer.hpp |
-| int8_t | yes | INT | json_serializer.hpp |
-| int32_t | yes | INT | json_serializer.hpp |
-| int64_t | yes | INT | json_serializer.hpp |
-| uint8_t | yes | INT | json_serializer.hpp |
-| uint32_t | yes | INT | json_serializer.hpp |
-| uint64_t | yes | INT | json_serializer.hpp |
-| float | yes | FLOAT | json_serializer.hpp |
-| double | yes | FLOAT | json_serializer.hpp |
-| std::string | yes | STRING | json_serializer.hpp |
-| std::u8string | yes | STRING | types/u8string.hpp |
-| std::vector\<T\> | yes | ARRAY | types/vector.hpp |
-| class public PorotoBase<T, JsonSerializer> | yes | OBJECT | types/binary_data.hpp |
-| std::array\<T, N\> | yes | ARRAY | types/array.hpp |
-| std::set\<T\> | yes | ARRAY | types/set.hpp |
-| std::list\<T\> | yes | ARRAY | types/list.hpp |
-| std::map\<std::string, T\> std::map\<T, T\> | yes | OBJECT | types/map.hpp |
-| std::tuple\<T...\> | yes | ARRAY | types/tuple.hpp |
-| custom struct type | yes | ARRAY | types/struct_unwrap.hpp |
-| enum | yes | STRING [ INT ] | types/enum.hpp |
-| std::optional\<T\> | yes | OBJECT | json_serializer.hpp |
-| std::variant\<T...\> | yes | OBJECT | types/variant.hpp |
-| std::pair\<T, T\> | yes | OBJECT | types/pair.hpp |
-| std::bitset\<N\> | yes | STRING | types/bitset.hpp |
-| std::shared_ptr\<T\> | yes | Depends on T | types/shared_ptr.hpp |
-| std::unique_ptr\<T\> | yes | Depends on T | types/unique_ptr.hpp |
-| std::atomic\<T\> | yes | Depends on T | types/atomic.hpp |
-| std::unordered_set\<T\>| yes | OBJECT | types/unordered_set.hpp |
-| std::unordered_map\<std::string, T\> std::unordered_map\<T, T\> | yes | OBJECT ARRAY | types/unordered_map.hpp |
-| std::multiset\<T\> | yse | ARRAY | types/multiset.hpp |
-| std::multimap\<T, T\> | yse | ARRAY | types/multimap.hpp |
-| std::unordered_multiset\<T\>| yse | ARRAY | types/unordered_multiset.hpp |
-| std::unordered_multimap\<T, T\> | yse | ARRAY | types/unordered_multimap.hpp |
-| std::deque\<T\> | yse | ARRAY | types/deque.hpp |
-| std::any | no | - | - |
-
-[^1]: https://en.cppreference.com/w/cpp/language/types
-
-[*T]: T refers to all supported types
-
-##### 3.1.2. binary serializer
-
-This repository provides a default binary serializer.
-
-| type | support | binary len | header |
-| ---- | -------- | ---- | ---- |
-| bool | yes | 1 | binary_serializer.hpp |
-| int8_t | yes | 1 | binary_serializer.hpp |
-| int32_t | yes | 4 | binary_serializer.hpp |
-| int64_t | yes | 8 | binary_serializer.hpp |
-| uint8_t | yes | 1 | binary_serializer.hpp |
-| uint32_t | yes | 4 | binary_serializer.hpp |
-| uint64_t | yes | 8 | binary_serializer.hpp |
-| float | yes | 4 | binary_serializer.hpp |
-| double | yes | 8 | binary_serializer.hpp |
-| std::string | yes | 4 + len | binary_serializer.hpp |
-| NamePairValue\<std::string, T\> | yes | name len + value len | binary_serializer.hpp |
-
-**Note:**
-container types are supported like json, more info can see in json support which in folder "types", the binary len is 4 + value len * container size.
-
-##### 3.1.3. xml serializer
-
-type support same as binary serializer. all objects will be converted to string.
-
-##### 3.1.4. custom serializer
-
-If you want to use your own serializer. you need implement interface as:
-
-```C++
-class CustomOutputSerializer : public detail::OutputSerializer<CustomOutputSerializer> {
-public:
-    using BufferType =;
-public:
-    CustomOutputSerializer(BufferType& out);
-    template <typename T>
-    inline bool saveValue(SizeTag<T> const& size);
-    inline bool saveValue(const int8_t value);
-    inline bool saveValue(const uint8_t value);
-    inline bool saveValue(const int16_t value);
-    inline bool saveValue(const uint16_t value);
-    inline bool saveValue(const int32_t value);
-    inline bool saveValue(const uint32_t value);
-    inline bool saveValue(const int64_t value);
-    inline bool saveValue(const uint64_t value);
-    inline bool saveValue(const float value);
-    inline bool saveValue(const double value);
-    inline bool saveValue(const bool value);
-    inline bool saveValue(const std::string& value);
-    inline bool saveValue(const char* value);
-    inline bool saveValue(const std::string_view value); // if c++17 or later
-    inline bool saveValue(const NameValuePair<T>& value); // T while is std::option and has no value, if you want to support ,you maust resolve it in here
-    inline bool startArray(const std::size_t size); // it is for json, maybe you need more block, or less, you can do it by other states, or make your self class to tag it.
-    inline bool endArray();
-    inline bool startObject(const std::size_t size); // size whill not always corrent, maybe -1.
-    inline bool endObject();
-    inline bool end(); // construction start, destructuring stop, it is a good ideal, but some times I want end() by self. because a block {} in function is not beautiful.
-
-private:
-    CustomOutputSerializer& operator=(const CustomOutputSerializer&) = delete;
-    CustomOutputSerializer& operator=(CustomOutputSerializer&&)      = delete;
-};
-
-class CustomInputSerializer : public detail::InputSerializer<CustomInputSerializer> {
-public:
-    using BufferType;
-
-public:
-    inline CustomInputSerializer(const BufferType& buf);
-    inline operator bool() const;
-    inline bool loadValue(std::string& value);
-    inline bool loadValue(int8_t& value);
-    inline bool loadValue(int16_t& value);
-    inline bool loadValue(int32_t& value);
-    inline bool loadValue(int64_t& value);
-    inline bool loadValue(uint8_t& value);
-    inline bool loadValue(uint16_t& value);
-    inline bool loadValue(uint32_t& value);
-    inline bool loadValue(uint64_t& value);
-    inline bool loadValue(float& value);
-    inline bool loadValue(double& value);
-    inline bool loadValue(bool& value);
-    template <typename T>
-    inline bool loadValue(const SizeTag<T>& value);
-    template <typename T>
-    inline bool loadValue(const NameValuePair<T>& value);
-
-private:
-    CustomInputSerializer& operator=(const CustomInputSerializer&) = delete;
-    CustomInputSerializer& operator=(CustomInputSerializer&&)      = delete;
-};
-
-```
-make sure this class can structure by default.
-
-#### 3.2. protocol message manager
-
-protoFactory support create & version. is a manager of proto message. the interface is:
-
-```C++
-class NEKO_PROTO_API ProtoFactory {
-public:
-    template <typename T>
-    static int proto_type();
-    template <typename T>
-    static const char* proto_name();
-    /**
-     * @brief create a proto object by type
-     *  this object is a pointer, you need to delete it by yourself
-     * @param type
-     * @return IProto
-     */
-    IProto create(int type) const;
-    /**
-     * @brief create a proto object by name
-     *  this object is a pointer, you need to delete it by yourself
-     * @param name
-     * @return IProto
-     */
-    inline IProto create(const char* name) const;
-    uint32_t version() const;
-};
-```
-
-you can define a proto message by inheritance from ProtoBase, it while atuo register to protoFactory when you create protoFactory instance.
-
-```C++
-struct ProtoMessage {
-    int a;
-    std::string b;
-
-    NEKO_SERIALIZE(a, b)
-    NEKO_DECLARE_PROTOCOL(ProtoMessage, JsonSerializer)
-}
-
-int main() {
+    // --- 使用工厂创建和管理协议 ---
+    // 创建工厂时可指定协议版本 (主版本, 次版本, 补丁版本)
     ProtoFactory factory(1, 0, 0);
-    auto msg = factory.create("ProtoMessage");
-    auto* raw = msg.cast<ProtoMessage>();
-    raw->a = 1;
-    raw->b = "hello";
-    std::vector<char> data;
-    data = msg.toData();
-    // do something
+
+    // 1. 创建 UserProfile 实例 (通过协议基类接口)
+    // emplaceProto 返回一个包装了具体协议对象的 IProto 接口指针
+    auto user_iproto = UserProfile::emplaceProto(123, "Alice");
+
+    // 序列化为二进制数据 (使用协议指定的默认序列化器 JsonSerializer)
+    std::vector<char> user_data = user_iproto.toData();
+    std::cout << "UserProfile Serialized Size: " << user_data.size() << " bytes" << std::endl;
+
+    // 2. 通过工厂按名称创建协议实例
+    IProto login_iproto = factory.create("LoginRequest"); // 返回 IProto 接口
+    if (!login_iproto) {
+         std::cerr << "Failed to create LoginRequest instance!" << std::endl;
+         return 1;
+    }
+
+    // 使用 cast<T>() 安全地转换为具体类型指针 (如果类型不匹配会返回 nullptr)
+    auto login_req = login_iproto.cast<LoginRequest>();
+    if (login_req) {
+        login_req->username = "Bob";
+        login_req->password_hash = "some_hash_value";
+    }
+
+    std::vector<char> login_data = login_iproto.toData();
+    std::cout << "LoginRequest Serialized Size: " << login_data.size() << " bytes" << std::endl;
+
+
+    // 3. 从数据反序列化 (假设我们收到了 UserProfile 的数据)
+    IProto received_proto = factory.create("UserProfile"); // 先创建对应类型的空实例
+    if (received_proto.fromData(user_data)) { // 从数据填充
+        std::cout << "Successfully deserialized data into " << received_proto.name() << std::endl;
+        auto received_user = received_proto.cast<UserProfile>();
+        if (received_user) {
+            std::cout << "Received User ID: " << received_user->userId << std::endl;
+            // 输出: Received User ID: 123
+        }
+    } else {
+        std::cerr << "Failed to deserialize user data." << std::endl;
+    }
+
     return 0;
 }
 ```
 
-#### 3.3 Communication
-example:
+---
 
-> full code in:
-> tests\unit\communication\test_communication.cpp
+## 5. 核心概念说明
 
-```C++
-#include <sstream>
+### 5.1. 序列化器 (`Serializer`)
 
-#include "nekoproto/communication/communication_base.hpp"
-#include "nekoproto/proto/json_serializer.hpp"
-#include "nekoproto/proto/types/vector.hpp"
+序列化器负责将 C++ 对象转换为字节流（序列化）以及将字节流转换回 C++ 对象（反序列化）。
 
-#include <ilias/net.hpp>
+*   **内置序列化器**：
+    *   `JsonSerializer`: 使用 RapidJSON 或 SIMDJson 进行 JSON 序列化/反序列化。
+    *   `BinarySerializer`: 提供一种紧凑的二进制序列化格式。
+    *   `XmlSerializer`: 提供 XML 反序列化支持 (目前仅反序列化)。
+*   **选择序列化器**：
+    *   对于基本序列化，直接实例化所需的 `OutputSerializer` / `InputSerializer`。
+    *   对于协议消息 (`NEKO_DECLARE_PROTOCOL`)，在声明时指定默认序列化器。
+*   **自定义序列化器**：可以实现 `detail::OutputSerializer<YourSerializer>` 和 `detail::InputSerializer<YourSerializer>` 接口来支持自定义格式。详见 [7. 自定义序列化器](#7-自定义序列化器)。
+
+### 5.2. 协议管理 (`ProtoFactory`, `IProto`)
+
+当需要管理不同类型的协议、进行多态处理或需要运行时类型信息时，使用协议管理机制。
+
+*   **`NEKO_DECLARE_PROTOCOL(ClassName, DefaultSerializer)`**：
+    *   将一个类注册为协议。
+    *   使其可以使用 `IProto` 的接口。
+    *   在 `ProtoFactory` 中自动注册，可通过名称或类型 ID 创建。
+    *   指定该协议默认使用的序列化器。
+*   **`ProtoFactory`**：
+    *   协议工厂类，负责根据协议名称或类型 ID 创建协议实例 (`IProto`)。
+    *   管理协议的版本信息。
+    *   自动注册所有使用 `NEKO_DECLARE_PROTOCOL` 声明的协议（按字典序）。
+*   **`IProto`**：
+    *   协议的抽象基类接口。
+    *   提供 `toData()` (序列化), `fromData()` (反序列化), `name()`, `type()` 等通用方法。
+    *   使用 `emplaceProto()` 创建实例，返回 `IProto`。
+    *   使用 `cast<T>()` 安全地将 `IProto` 转换回具体的协议类型指针。
+
+### 5.3. 通信 (`Communication`)
+
+本库提供了基于 [Ilias](https://github.com/BusyStudent/ilias) 的协程通信抽象层，用于方便地在网络连接上传输协议消息。
+
+*   **需要头文件**: `#include <nekoproto/communication/communication_base.hpp>`
+*   **核心类**: `ProtoStreamClient<UnderlyingStream>` (例如 `ProtoStreamClient<TcpClient>`)
+*   **功能**: 封装了底层的网络流（如 TCP, UDP），自动处理协议消息的打包（添加类型信息和长度）、发送、接收和解包。
+
+**示例 (TCP 通信)**:
+
+> 完整示例代码: `tests/unit/communication/test_communication.cpp`
+
+```cpp
+#include <nekoproto/communication/communication_base.hpp>
+#include <nekoproto/proto/proto_base.hpp>
+#include <nekoproto/proto/json_serializer.hpp>
+#include <nekoproto/proto/types/string.hpp>
+#include <nekoproto/proto/types/vector.hpp> // 需要包含所有用到的类型支持头文件
+
+#include <ilias/net.hpp>         // Ilias 网络库
+#include <ilias/platform.hpp>  // Ilias 平台上下文
+#include <ilias/task.hpp>        // Ilias 协程/任务
+
+#include <iostream>
+#include <vector>
+#include <string>
+#include <chrono> // 用于时间戳
+
+NEKO_USE_NAMESPACE // 使用 nekoproto 命名空间
+using namespace ILIAS_NAMESPACE; // 使用 ilias 命名空间
+
+// 定义要传输的消息协议
+class ChatMessage {
+public:
+    uint64_t    timestamp;
+    std::string sender;
+    std::string content;
+
+    NEKO_SERIALIZER(timestamp, sender, content);
+    NEKO_DECLARE_PROTOCOL(ChatMessage, JsonSerializer); // 声明为协议
+};
+
+// 简单的服务器协程
+ilias::Task<> server_task(PlatformContext& ioContext, ProtoFactory& protoFactory) {
+    TcpListener listener(ioContext, AF_INET);
+    listener.bind(IPEndpoint("127.0.0.1", 12345));
+    std::cout << "Server listening on 127.0.0.1:12345" << std::endl;
+
+    auto client_conn = co_await listener.accept(); // 等待连接
+    std::cout << "Client connected." << std::endl;
+
+    // 将 TCP 连接包装成协议流客户端 (服务器端视角)
+    ProtoStreamClient<TcpClient> proto_stream(protoFactory, ioContext, std::move(client_conn.value().first));
+
+    // 接收消息
+    auto recv_result = co_await proto_stream.recv();
+    if (recv_result) {
+        IProto received_proto = std::move(recv_result.value());
+        std::cout << "Server received protocol: " << received_proto.name() << std::endl;
+        auto msg = received_proto.cast<ChatMessage>();
+        if (msg) {
+            std::cout << "  Timestamp: " << msg->timestamp << std::endl;
+            std::cout << "  Sender: " << msg->sender << std::endl;
+            std::cout << "  Content: " << msg->content << std::endl;
+
+            // 回复一条消息
+            ChatMessage reply_msg;
+            reply_msg.timestamp = std::chrono::system_clock::now().time_since_epoch().count();
+            reply_msg.sender = "Server";
+            reply_msg.content = "Message received!";
+            co_await proto_stream.send(reply_msg.makeProto()); // 发送协议
+            std::cout << "Server sent reply." << std::endl;
+        }
+    } else {
+        std::cerr << "Server failed to receive message: " << recv_result.error().message() << std::endl;
+    }
+
+    proto_stream.close(); // 关闭连接
+    listener.close();
+    std::cout << "Server task finished." << std::endl;
+}
+
+// 简单的客户端协程
+ilias::Task<> client_task(PlatformContext& ioContext, ProtoFactory& protoFactory) {
+    TcpClient tcpClient(ioContext, AF_INET);
+    auto conn_result = co_await tcpClient.connect(IPEndpoint("127.0.0.1", 12345)); // 连接服务器
+    if (!conn_result) {
+        std::cerr << "Client failed to connect: " << conn_result.error().message() << std::endl;
+        co_return;
+    }
+    std::cout << "Client connected to server." << std::endl;
+
+    // 将 TCP 连接包装成协议流客户端
+    ProtoStreamClient<TcpClient> proto_stream(protoFactory, ioContext, std::move(tcpClient));
+
+    // 准备发送的消息
+    ChatMessage msg_to_send;
+    msg_to_send.timestamp = std::chrono::system_clock::now().time_since_epoch().count();
+    msg_to_send.sender = "Client";
+    msg_to_send.content = "Hello from client!";
+
+    // 发送消息 (makeProto() 创建 IProto 实例)
+    // SerializerInThread 选项表示序列化在其他线程进行
+    auto send_result = co_await proto_stream.send(msg_to_send.makeProto(), ProtoStreamClient<TcpClient>::SerializerInThread);
+    if (!send_result) {
+         std::cerr << "Client failed to send message: " << send_result.error().message() << std::endl;
+         co_await proto_stream.close();
+         co_return;
+    }
+     std::cout << "Client sent message." << std::endl;
+
+    // 接收回复
+    auto recv_result = co_await proto_stream.recv();
+    if (recv_result) {
+        IProto received_proto = std::move(recv_result.value());
+        std::cout << "Client received protocol: " << received_proto.name() << std::endl;
+        auto reply_msg = received_proto.cast<ChatMessage>();
+        if (reply_msg) {
+             std::cout << "  Reply Content: " << reply_msg->content << std::endl;
+        }
+    } else {
+         std::cerr << "Client failed to receive reply: " << recv_result.error().message() << std::endl;
+    }
+
+    co_await proto_stream.close(); // 关闭连接
+    std::cout << "Client task finished." << std::endl;
+}
+
+int main() {
+    PlatformContext ioContext;    // Ilias 协程上下文
+    ProtoFactory protoFactory(1, 0, 0); // 协议工厂
+
+    // 运行服务器和客户端任务
+    ilias_go server_task(ioContext, protoFactory);
+    ilias_go client_task(ioContext, protoFactory);
+
+    ioContext.run(); // 运行 Ilias 事件循环直到所有任务完成
+
+    return 0;
+}
+```
+
+### 5.4. JSON-RPC 2.0
+
+本库提供了一个基于 Ilias 的轻量级 JSON-RPC 2.0 实现，可以方便地定义和调用远程过程。
+
+*   **需要头文件**: `#include <nekoproto/jsonrpc/jsonrpc.hpp>`
+*   **核心概念**:
+    *   **RPC 模块定义**: 使用 `struct` 定义一个包含所有 RPC 方法的模块。
+    *   **`RpcMethod<Signature, "method_name">`**: 在模块中声明一个 RPC 方法，指定其函数签名 (`Signature`) 和在 JSON-RPC 协议中的方法名 (`method_name`)。支持所有可序列化的类型作为参数和返回值。
+    *   **`JsonRpcServer<ModuleType>`**: RPC 服务器类，用于托管 RPC 模块并处理客户端请求。
+    *   **`JsonRpcClient<ModuleType>`**: RPC 客户端类，用于连接服务器并调用远程方法。
+    *   **异步支持**: 方法实现可以返回 `ilias::Task<ResultType>` 以支持异步操作。
+
+**示例**:
+
+```cpp
+#include <nekoproto/jsonrpc/jsonrpc.hpp>
+#include <nekoproto/proto/types/vector.hpp>   // 支持 vector
+#include <nekoproto/proto/types/string.hpp>  // 支持 string
 #include <ilias/platform.hpp>
 #include <ilias/task.hpp>
-#include <ilias/task/when_all.hpp>
+#include <numeric> // for std::accumulate
+#include <iostream>
+#include <vector>
+#include <string>
+
 NEKO_USE_NAMESPACE
 using namespace ILIAS_NAMESPACE;
 
-class Message {
-public:
-    uint64_t timestamp;
-    std::string msg;
-    std::vector<int> numbers;
-
-    NEKO_SERIALIZER(timestamp, msg, numbers);
-    NEKO_DECLARE_PROTOCOL(Message, JsonSerializer)
+// 1. 定义 RPC 服务模块及方法
+struct CalculatorModule {
+    // 方法名 "add", 接受两个 int, 返回 int
+    RpcMethod<int(int, int), "add"> add;
+    // 方法名 "subtract", 接受两个 int, 返回 int
+    RpcMethod<int(int, int), "subtract"> subtract;
+    // 方法名 "sum", 接受 vector<int>, 返回 int (异步实现)
+    RpcMethod<int(std::vector<int>), "sum"> sum;
+    // 方法名 "greet", 接受 string, 返回 string
+    RpcMethod<std::string(std::string), "greet"> greet;
 };
+
+// 2. 实现服务器逻辑
+ilias::Task<> run_server(PlatformContext& context) {
+    JsonRpcServer<CalculatorModule> rpc_server; // 创建服务器实例
+
+    // --- 绑定方法实现 ---
+    // 可以使用 lambda, 函数指针, std::function 等
+    rpc_server->add = [](int a, int b) -> int {
+        std::cout << "Server: add(" << a << ", " << b << ") called." << std::endl;
+        return a + b;
+    };
+
+    rpc_server->subtract = [](int a, int b) {
+         std::cout << "Server: subtract(" << a << ", " << b << ") called." << std::endl;
+        return a - b;
+    };
+
+    // 协程方法绑定，返回 ilias::IoTask<>
+    rpc_server->sum = [](std::vector<int> vec) -> ilias::IoTask<int> {
+        std::cout << "Server: sum(...) called asynchronously." << std::endl;
+        int result = std::accumulate(vec.begin(), vec.end(), 0);
+        // 可以通过co_await 来执行协程函数
+        co_return result; // 使用 co_return 返回结果
+    };
+
+     rpc_server->greet = [](std::string name) -> std::string {
+         std::cout << "Server: greet(" << name << ") called." << std::endl;
+         return "Hello, " + name + "!";
+     };
+
+    // 启动服务器，监听指定地址和端口
+    std::string listen_address = "tcp://127.0.0.1:12335";
+    auto start_result = co_await rpc_server.start(listen_address);
+    if (!start_result) {
+        std::cerr << "Server failed to start: " << start_result.error().message() << std::endl;
+        co_return;
+    }
+    std::cout << "RPC Server listening on " << listen_address << std::endl;
+
+    // 等待服务器停止信号 (例如 Ctrl+C)
+    co_await rpc_server.wait();
+    std::cout << "RPC Server stopped." << std::endl;
+}
+
+// 3. 实现客户端逻辑
+ilias::Task<> run_client(PlatformContext& context) {
+    JsonRpcClient<CalculatorModule> rpc_client; // 创建客户端实例
+
+    // 连接到服务器
+    std::string server_address = "tcp://127.0.0.1:12335";
+    auto connect_result = co_await rpc_client.connect(server_address);
+    if (!connect_result) {
+        std::cerr << "Client failed to connect: " << connect_result.error().message() << std::endl;
+        co_return;
+    }
+    std::cout << "Client connected to " << server_address << std::endl;
+
+    // --- 调用远程方法 ---
+    // 调用 add 方法
+    auto add_result = co_await rpc_client->add(10, 5);
+    if (add_result) {
+        std::cout << "Client: add(10, 5) = " << add_result.value() << std::endl; // 输出: 15
+    } else {
+        std::cerr << "Client: add call failed: " << add_result.error().message() << std::endl;
+    }
+
+    // 调用 sum 方法 (异步)
+    std::vector<int> nums = {1, 2, 3, 4, 5};
+    auto sum_result = co_await rpc_client->sum(nums);
+    if (sum_result) {
+        std::cout << "Client: sum({1,2,3,4,5}) = " << sum_result.value() << std::endl; // 输出: 15
+    } else {
+         std::cerr << "Client: sum call failed: " << sum_result.error().message() << std::endl;
+    }
+
+    // 调用 greet 方法
+    auto greet_result = co_await rpc_client->greet("Neko");
+    if (greet_result) {
+        std::cout << "Client: greet(\"Neko\") = " << greet_result.value() << std::endl; // 输出: Hello, Neko!
+    } else {
+         std::cerr << "Client: greet call failed: " << greet_result.error().message() << std::endl;
+    }
+
+    // 调用一个不存在的方法 (预期失败)
+    // 注意：直接调用未在 CalculatorModule 中定义的 rpc_client->multiply(2, 3) 会导致编译错误。
+    // 若要模拟调用不存在的方法，需要手动构造 JSON-RPC 请求，这里不演示。
+
+    rpc_client.close(); // 断开连接
+    std::cout << "Client disconnected." << std::endl;
+}
+
 int main() {
-    PlatformContext ioContext;
-    ProtoFactory protoFactory;
-    TcpListener listener(ioContext, AF_INET);
-    listener.bind(IPEndpoint("127.0.0.1", 12345));
-    ilias_go listener.accept();
-    TcpClient tcpClient(ioContext, AF_INET);
-    auto ret = tcpClient.connect(IPEndpoint("127.0.0.1", 12345)).wait();
-    if (!ret) {
-        return -1;
-    }
-    ProtoStreamClient<TcpClient> client(protoFactory, ioContext, std::move(tcpClient));
-    Message msg;
-    msg.msg       = "this is a message from client";
-    msg.timestamp = time(NULL);
-    msg.numbers   = (std::vector<int>{1, 2, 3, 5});
-    auto ret1 = ilias_go client.send(msg.makeProto(),
-      ProtoStreamClient<TcpClient>::SerializerInThread);
-    if (!ret1) {
-        return -1;
-    }
-    auto ret = client.recv().wait();
-    if (!ret) {
-        return -1;
-    }
-    auto msg1   = ret->cast<Message>();
-    client.close().wait();
+    PlatformContext context;
+
+    // 启动服务器和客户端任务
+    ilias_go run_server(context);
+    // 启动客户端
+    ilias_go run_client(context);
+
+    context.run(); // 运行事件循环
+
+    // 在客户端任务完成后，可以停止服务器 (例如通过发送信号或设置标志)
     return 0;
 }
+
 ```
 
-### 4. the end
+---
 
-why I want to do this?
+## 6. 支持的类型
 
-I think I should not spend too much time designing and maintaining protocol libraries, especially for a large number of protocols, we need to try our best to avoid increasing maintenance costs caused by duplication of code.
+本库通过专门的头文件为众多 C++ 标准库类型提供了序列化支持。
 
-### 5. todo list:
+### 6.1. JSON 序列化器 (`JsonSerializer`)
 
-**serializer**
-- [x] support visit fields by name
-- [x] using simdjson for json serialization
-    - [x] support simdjson input serializer in simdjson::dom (this is old API?)
-    - [ ] support serializer interface in simdjson::ondemand (What are the differences between the APIs in the dom and ondemand namespaces?)
-    - [x] output serializer (support by self)
-- [x] support more cpp stl types
+| C++ 类型 | 支持 | JSON 类型 | 包含头文件 | 备注 |
+| :--- | :--- | :---- | :---- | :----- |
+| `bool`                               | ✅   | boolean            | `json_serializer.hpp`               |                                    |
+| `int8_t`, `int16_t`, `int32_t`, `int64_t` | ✅   | number (integer)   | `json_serializer.hpp`               |                                    |
+| `uint8_t`, `uint16_t`, `uint32_t`, `uint64_t` | ✅   | number (integer)   | `json_serializer.hpp`               |                                    |
+| `float`, `double`                    | ✅   | number (float)     | `json_serializer.hpp`               |                                    |
+| `std::string`                        | ✅   | string             | `types/string.hpp`                  |                                    |
+| `std::u8string` (C++20)              | ✅   | string             | `types/u8string.hpp`                | 需要 C++20                         |
+| `std::vector<T>`                     | ✅   | array              | `types/vector.hpp`                  | `T` 必须是已支持的类型             |
+| `class : IProto`                     | ✅   | object             | `types/binary_data.hpp`             | 作为嵌套协议对象                   |
+| `std::array<T, N>`                   | ✅   | array              | `types/array.hpp`                   | `T` 必须是已支持的类型             |
+| `std::set<T>`                        | ✅   | array              | `types/set.hpp`                     | `T` 必须是已支持的类型             |
+| `std::list<T>`                       | ✅   | array              | `types/list.hpp`                    | `T` 必须是已支持的类型             |
+| `std::map<std::string, T>`           | ✅   | object             | `types/map.hpp`                     | `T` 必须是已支持的类型             |
+| `std::map<K, V>`                     | ✅   | array of [K, V]    | `types/map.hpp`                     | `K` 非 `std::string`, K, V 需支持 |
+| `std::tuple<T...>`                   | ✅   | array              | `types/tuple.hpp`                   | 所有 `T` 必须是已支持的类型        |
+| 自定义 `struct`/`class`              | ✅   | object             | *(通过 `NEKO_SERIALIZER` 自动支持)* | 成员需是已支持的类型               |
+| `enum class`/`enum`                  | ✅   | string 或 int      | `types/enum.hpp`                    | 默认序列化为字符串，可配置为整数     |
+| `std::optional<T>`                   | ✅   | T 或 null          | `json_serializer.hpp`               | `T` 必须是已支持的类型             |
+| `std::variant<T...>`                 | ✅   | object (`{idx:?, val:?}`) | `types/variant.hpp`             | 所有 `T` 必须是已支持的类型        |
+| `std::pair<T1, T2>`                  | ✅   | object (`{key:?, val:?}`) | `types/pair.hpp`                  | `T1`, `T2` 必须是已支持的类型      |
+| `std::bitset<N>`                     | ✅   | string             | `types/bitset.hpp`                  | 序列化为 "01..." 字符串          |
+| `std::shared_ptr<T>`                 | ✅   | T 或 null          | `types/shared_ptr.hpp`              | `T` 必须是已支持的类型             |
+| `std::unique_ptr<T>`                 | ✅   | T 或 null          | `types/unique_ptr.hpp`              | `T` 必须是已支持的类型             |
+| `std::atomic<T>`                     | ✅   | T                  | `types/atomic.hpp`                  | 序列化其包含的值 `T`              |
+| `std::unordered_set<T>`              | ✅   | array              | `types/unordered_set.hpp`           | `T` 必须是已支持的类型             |
+| `std::unordered_map<std::string, T>` | ✅   | object             | `types/unordered_map.hpp`           | `T` 必须是已支持的类型             |
+| `std::unordered_map<K, V>`           | ✅   | array of [K, V]    | `types/unordered_map.hpp`           | `K` 非 `std::string`, K, V 需支持 |
+| `std::multiset<T>`                   | ✅   | array              | `types/multiset.hpp`                | `T` 必须是已支持的类型             |
+| `std::multimap<K, V>`                | ✅   | array of [K, V]    | `types/multimap.hpp`                | K, V 需支持                       |
+| `std::unordered_multiset<T>`         | ✅   | array              | `types/unordered_multiset.hpp`      | `T` 必须是已支持的类型             |
+| `std::unordered_multimap<K, V>`      | ✅   | array of [K, V]    | `types/unordered_multimap.hpp`      | K, V 需支持                       |
+| `std::deque<T>`                      | ✅   | array              | `types/deque.hpp`                   | `T` 必须是已支持的类型             |
+| `std::any`                           | ❌   | -                  | -                                   | 不支持 (类型擦除)                  |
 
-**communication**
-- [x] support udp protocol in communication channel
-- [ ] support more protocol in communication channel
+*   `T`, `K`, `V` 表示任意已受支持的类型。
+*   对于 `map` 和 `unordered_map`，如果键不是 `std::string`，则序列化为 `[[key1, value1], [key2, value2], ...]` 形式的数组。
 
-### 6. the future
-#### Latest
-- Make almost all call is serializer(variable)
-    - NameValuePair, SizeTag, etc while are special struct unable to auto enter the object. because they are not a real object. Other class whitout minimal_serializable trait will be auto enter 1 level before process it.
-    - support simdjson backend (now noly under simdjson::dom namespace), it only support input serializer, Slightly faster than rapidjson backend.
-- support almost all stl types
-- add std::optional support
-- add simdjson output serializer support
-- refactory communication interface, make it more easy to use.
-- serializer in communication can be processed in other thread easyly.
-- more options to control feature enable and log output
-- support udp protocol in communication channel
-- support syncronize protocol table (should be compatible with the same name protocol)
-- reserved 1-64 protocol type for control information transmission
-- fix some serialization problems in binary protocol
-- support more flags for protocol transmission
-    - support send protocol table before send data
-    - The receiver is allowed to continue to receive data as a binary packet when it receives a protocol that it cannot process
-    - Streaming supports sliced transfers and cancels in the middle of the process
-- support xml serialization by rapidxml
+### 6.2. 二进制序列化器 (`BinarySerializer`)
 
-#### v0.2.0 - alpha
-- Modify serializer interface
-    - Make serialize function to operator()
-    - Make JsonConvert struct to load function and save function
-    - Split standard library types into more granular support
-- Initial optimizations have been made to performance
-- ProtoBase need less space, but all proto class while created static object for every thread
-- support tcp protocol in communication channel
+| C++ 类型 | 支持 | 占用长度 (字节) | 头文件 | 备注 |
+| :----- | :--- | :----- | :---- | :----- |
+| `bool`                           | ✅   | 1                      | `binary_serializer.hpp` |                                          |
+| `int8_t`, `uint8_t`              | ✅   | 1                      | `binary_serializer.hpp` |                                          |
+| `int16_t`, `uint16_t`            | ✅   | 2                      | `binary_serializer.hpp` | 网络字节序 (Big Endian)                    |
+| `int32_t`, `uint32_t`            | ✅   | 4                      | `binary_serializer.hpp` | 网络字节序 (Big Endian)                    |
+| `int64_t`, `uint64_t`            | ✅   | 8                      | `binary_serializer.hpp` | 网络字节序 (Big Endian)                    |
+| `float`                          | ✅   | 4                      | `binary_serializer.hpp` | IEEE 754, 网络字节序 (Big Endian)        |
+| `double`                         | ✅   | 8                      | `binary_serializer.hpp` | IEEE 754, 网络字节序 (Big Endian)        |
+| `std::string`                    | ✅   | 4 (长度) + N (内容)   | `types/string.hpp`      | 长度使用 `uint32_t`, 网络字节序          |
+| `enum class`/`enum`              | ✅   | 取决于底层类型         | `types/enum.hpp`        | 序列化为底层整数类型                     |
+| 容器 (vector, list, map 等)     | ✅   | 4 (大小) + N * sizeof(T) | `types/*.hpp`         | 大小使用 `uint32_t`, 网络字节序          |
+| `std::optional<T>`               | ✅   | 1 (存在标志) + [sizeof(T)] | `binary_serializer.hpp` | 存在时额外存储 T 的数据                  |
+| `struct`/`class`                 | ✅   | 各成员占用长度之和     | *自动支持*            | 按 `NEKO_SERIALIZER` 声明顺序序列化 |
+| `NamePairValue<std::string, T>` | ✅   | 4+len(name) + len(T)   | `binary_serializer.hpp` | 特殊结构，用于某些场景                   |
 
-#### v0.1.0
-- Make protoBase as a helper class, not a base class
-- Add support for reflection fields
-- Add support for optional, variant
+**注意**:
+
+*   容器类型支持同 JSON 序列化器，头文件类似 (`types/vector.hpp`, `types/map.hpp` 等)。
+*   二进制序列化器默认使用**网络字节序 (Big Endian)**。
+
+### 6.3. XML 序列化器 (`XmlSerializer`)
+
+*   目前**仅支持反序列化**。
+*   类型支持基本同二进制序列化器。
+
+---
+
+## 7. 自定义序列化器
+
+如果需要支持本库未内置的序列化格式，可以实现自定义序列化器。你需要继承 `detail::OutputSerializer<CustomOutputSerializer>` 和 `detail::InputSerializer<CustomInputSerializer>` 并实现其接口。
+
+**输出序列化器接口**:
+
+```cpp
+#include <nekoproto/proto/serializer_base.hpp>
+#include <vector>
+#include <string>
+#include <cstddef> // for std::size_t
+
+using namespace nekoproto; // or nekoproto::detail
+
+class CustomOutputSerializer : public detail::OutputSerializer<CustomOutputSerializer> {
+public:
+    // 构造函数，通常接收输出缓冲区
+    CustomOutputSerializer(std::vector<char>& out_buffer);
+
+    // --- 核心保存函数 ---
+    // 保存各种基础类型
+    bool saveValue(const int8_t value);
+    bool saveValue(const uint8_t value);
+    // ... 其他整数类型 (int16, uint16, int32, uint32, int64, uint64)
+    bool saveValue(const float value);
+    bool saveValue(const double value);
+    bool saveValue(const bool value);
+    bool saveValue(const std::string& value);
+    // bool saveValue(const char* value); // 可选
+    // bool saveValue(const std::string_view value); // 可选 (C++17+)
+
+    // 保存带名称的值 (用于对象/struct成员)
+    // 需要处理 T 为 std::optional 且无值的情况 (通常不输出该成员)
+    template <typename T>
+    bool saveValue(const NameValuePair<T>& value);
+
+    // --- 容器/结构控制 ---
+    // 开始数组/列表，size 为元素数量
+    bool startArray(std::size_t size);
+    // 结束数组/列表
+    bool endArray();
+    // 开始对象/结构体，size 为成员数量 (可能为 -1 如果无法预知)
+    bool startObject(std::size_t size);
+    // 结束对象/结构体
+    bool endObject();
+
+    // --- 特殊标记处理 ---
+    // 保存容器大小标记 (通常在数组序列化时使用，和startArray时输入的数组长度一致)
+    template <typename T>
+    bool saveValue(SizeTag<T> const& size);
+
+    // 结束整个序列化过程，确保所有缓冲都已写入
+    // 析构函数也应确保调用 end() 或完成写入
+    bool end();
+
+private:
+    // 禁止拷贝和移动构造/赋值
+    CustomOutputSerializer(const CustomOutputSerializer&) = delete;
+    CustomOutputSerializer& operator=(const CustomOutputSerializer&) = delete;
+    CustomOutputSerializer(CustomOutputSerializer&&) = delete;
+    CustomOutputSerializer& operator=(CustomOutputSerializer&&) = delete;
+};
+```
+
+**输入序列化器接口**:
+
+```cpp
+#include <nekoproto/proto/serializer_base.hpp>
+#include <vector>
+#include <string>
+#include <cstddef> // for std::size_t
+
+using namespace nekoproto; // or nekoproto::detail
+
+class CustomInputSerializer : public detail::InputSerializer<CustomInputSerializer> {
+public:
+    // 构造函数，通常接收输入缓冲区
+    CustomInputSerializer(const char* input_buffer, std::size_t size);
+    // 或使用 string_view 等其他输入源
+    // CustomInputSerializer(std::string_view input_data) : m_data(input_data) {}
+
+    // --- 状态检查 ---
+    // 返回序列化器是否处于有效状态 (例如，json解析失败了)
+    explicit operator bool() const;
+
+    // --- 核心加载函数 ---
+    // 加载各种基础类型
+    bool loadValue(int8_t& value);
+    bool loadValue(uint8_t& value);
+    // ... 其他整数类型 (int16, uint16, int32, uint32, int64, uint64)
+    bool loadValue(float& value);
+    bool loadValue(double& value);
+    bool loadValue(bool& value);
+    bool loadValue(std::string& value);
+
+    // 加载带名称的值 (用于对象/struct成员)
+    // 需要能根据名称查找并加载对应的值到 value.value 中
+    template <typename T>
+    bool loadValue(const NameValuePair<T>& value);
+
+    // --- 容器/结构控制 ---
+    // 进入一个节点/元素 (例如，进入数组)
+    bool startNode();
+    // 完成当前节点/元素的处理 (例如，数组已完整读取，退出当前数据并返回上一级)
+    bool finishNode();
+
+    // --- 特殊标记处理 (可选) ---
+    // 加载容器大小标记 (通常在开始处理数组前调用)
+    template <typename T>
+    bool loadValue(const SizeTag<T>& value); // value.size 将被填充
+
+private:
+    const std::vector<char>& m_buffer; // 输入缓冲区引用
+    std::size_t m_pos;                // 当前读取位置
+    // 或使用其他输入源，如 std::string_view m_data;
+    // 可以在这里添加特定格式的状态变量，例如解析栈、当前 JSON 节点等
+
+    // 禁止拷贝和移动构造/赋值
+    CustomInputSerializer(const CustomInputSerializer&) = delete;
+    CustomInputSerializer& operator=(const CustomInputSerializer&) = delete;
+    CustomInputSerializer(CustomInputSerializer&&) = delete;
+    CustomInputSerializer& operator=(CustomInputSerializer&&) = delete;
+};
+```
+
+---
+
+## 8. TODO
+
+**序列化器 (Serializer)**
+
+[x] 支持通过字符串名称访问协议字段 (基础反射)
+
+[x] 使用 SIMDJson 作为 JSON 输入序列化器后端 (`simdjson::dom`)
+
+[ ] 支持 `simdjson::ondemand` 接口 (探索其与 `dom` 接口的性能和使用场景差异)
+
+[x] 实现基于 SIMDJson 的 JSON 输出序列化器 (目前为手动实现，性能待优化)
+
+[x] 支持更多 C++ STL 容器
+
+
+**通信 (Communication)**
+
+[x] 支持 UDP 通信通道 (`ProtoDatagramClient`)
+
+[ ] 支持更多底层传输协议 (如 WebSocket, QUIC - 可能通过 Ilias 或其他库集成)
+
+[ ] 优化通信层原子性：确保数据帧的完整处理，即使在取消操作时也能保证数据流状态一致。可能需要调整为小帧发送机制。
+
+
+**JSON-RPC**
+
+[x] 支持 JSON-RPC 2.0 协议规范。
+
+[ ] 兼容 JSON-RPC 1.0 协议。
+
+[ ] JSON-RPC 扩展。
+
+
+---
+
+## 9. 开发历史 (部分里程碑)
+
+*   **V0.2.1 - alpha**
+    *   统一大部分序列化调用为括号表达式 `serializer(variable)`。
+    *   `NameValuePair`, `SizeTag` 等特殊结构不再触发节点展开，其他无 `minimal_serializable` 属性的对象触发节点展开（类似 JSON 嵌套）。
+    *   支持 SIMDJson 作为 JSON 输入序列化后端 (`simdjson::dom`)。
+    *   几乎支持所有常用 STL 容器。
+    *   增加 `std::optional` 的通用支持。
+    *   修改通信接口，使其成为传输协议的包装层，底层连接管理分离。
+    *   新增将通信过程中的序列化/反序列化推到其他线程执行的选项。
+    *   新增编译选项以控制功能启用和日志输出。
+    *   新增 UDP 通信支持。
+    *   新增协议表同步支持 (发送端可分享协议表，接收端据此反序列化)。
+    *   预留内部协议类型 ID (1-64) 用于控制信息。
+    *   完善二进制协议，修复部分类型的序列化问题。
+    *   协议传输中增加更多标志位 (Flag)，支持协议表交换、未知协议作为二进制包处理、流式切片传输与中断。
+    *   支持 XML 反序列化。
+    *   新增 JSON-RPC 2.0 支持。
+
+*   **v0.2.0 - alpha**
+    *   修改序列化器接口，统一为重载的括号表达式，替换 `Convert` 类为 `save`/`load` 函数。
+    *   初步优化反序列化性能。
+    *   减少协议基类空间开销。
+    *   支持 TCP 通信通道。
+
+*   **v0.1.0**
+    *   协议基类改为组合方式。
+    *   增加字段反射支持。
+    *   增加 `std::optional`, `std::variant` 支持。
+
+---
+
+## 10. 贡献
+
+欢迎提交 Pull Requests 或 Issues 来改进本库！
+
+---
+
+## 11. 许可证
+
+![GitHub License](https://img.shields.io/github/license/liuli-neko/NekoProtoTools)
 

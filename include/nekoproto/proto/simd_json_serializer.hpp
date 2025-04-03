@@ -55,9 +55,9 @@ public:
 
 public:
     inline ConstJsonIterator() NEKO_NOEXCEPT : mType(Null) {};
-    inline ConstJsonIterator(const JsonObject& object) NEKO_NOEXCEPT : mSize(object.size()),
-                                                                       mType(Member),
-                                                                       mMemberIndex(0) {
+    inline ConstJsonIterator(const JsonObject& object) NEKO_NOEXCEPT : mMemberIndex(0),
+                                                                       mSize(object.size()),
+                                                                       mType(Member) {
         if (mSize == 0) {
             mType = Null;
             return;
@@ -68,13 +68,13 @@ public:
         }
     }
 
-    inline ConstJsonIterator(const JsonArray& array) NEKO_NOEXCEPT : mValueItBegin(array.begin()),
-                                                                     mValueItEnd(array.end()),
-                                                                     mValueIt(array.begin()),
-                                                                     mSize(array.size()),
-                                                                     mType(Value) {
+    inline ConstJsonIterator(const JsonArray& array) NEKO_NOEXCEPT : mValueIndex(0), mSize(array.size()), mType(Value) {
         if (mSize == 0) {
             mType = Null;
+            return;
+        }
+        for (auto iter = array.begin(); iter != array.end(); ++iter) {
+            mValues.push_back(iter);
         }
     }
 
@@ -84,20 +84,30 @@ public:
         if (mType == Member) {
             ++mMemberIndex;
         } else {
-            ++mValueIt;
+            ++mValueIndex;
         }
         return *this;
     }
+
+    inline ConstJsonIterator& operator--() NEKO_NOEXCEPT {
+        if (mType == Member) {
+            --mMemberIndex;
+        } else {
+            --mValueIndex;
+        }
+        return *this;
+    }
+
     inline bool eof() const NEKO_NOEXCEPT {
-        return mType == Null || (mType == Value && mValueIt == mValueItEnd) ||
-               (mType == Member && mMemberIndex >= mMembers.size());
+        return mType == Null || (mType == Value && mValueIndex == (int)mValues.size()) ||
+               (mType == Member && mMemberIndex >= (int)mMembers.size());
     }
     inline std::size_t size() const NEKO_NOEXCEPT { return mSize; }
     inline JsonValue value() NEKO_NOEXCEPT {
         NEKO_ASSERT(!eof(), "JsonSerializer", "JsonInputSerializer get next value called on end of this json object");
         switch (mType) {
         case Value:
-            return *mValueIt;
+            return *mValues[mValueIndex];
         case Member:
             return mMembers[mMemberIndex].value();
         default:
@@ -106,7 +116,7 @@ public:
         }
     }
     inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
-        if (mType == Member && mMemberIndex < mMembers.size()) {
+        if (mType == Member && mMemberIndex < (int)mMembers.size()) {
             return mMembers[mMemberIndex].key();
         }
         return {};
@@ -115,7 +125,7 @@ public:
         if (mType != Member) {
             return JsonValue(simdjson::error_code::NO_SUCH_FIELD);
         }
-        if (mMemberIndex < mMembers.size() && mMembers[mMemberIndex].key() == name) {
+        if (mMemberIndex < (int)mMembers.size() && mMembers[mMemberIndex].key() == name) {
             return mMembers[mMemberIndex].value();
         }
         auto it = mMemberMap.find(name);
@@ -129,8 +139,9 @@ public:
 private:
     std::unordered_map<NEKO_STRING_VIEW, int> mMemberMap;
     std::vector<MemberIterator> mMembers;
+    std::vector<ValueIterator> mValues;
     int mMemberIndex = 0;
-    ValueIterator mValueItBegin, mValueItEnd, mValueIt;
+    int mValueIndex  = 0;
     std::size_t mSize;
     enum Type { Value, Member, Null } mType;
 };
@@ -672,6 +683,12 @@ public:
             return true;
         }
         return false;
+    }
+
+    void rollbackItem() {
+        if (mCurrentItem != nullptr) {
+            --(*mCurrentItem);
+        }
     }
 
 private:

@@ -1,6 +1,6 @@
-set_project("neko-proto")
+set_project("neko-proto-tools")
 add_rules("mode.debug", "mode.release", "mode.coverage")
-set_version("0.1.0", {build = "%Y%m%d%H%M"})
+set_version("0.2.1", {build = "%Y%m%d%H%M"})
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 set_warnings("allextra")
 
@@ -85,6 +85,14 @@ option("enable_communication")
     set_category("modules")
 option_end()
 
+option("enable_jsonrpc")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable jsonrpc support, need ilias and proto module")
+    set_category("modules")
+option_end()
+
+
 if has_config("enable_simdjson") then
     add_requires("simdjson v3.9.3", {configs = { shared = is_kind("shared")}})
     add_packages("simdjson")
@@ -110,7 +118,7 @@ if has_config("enable_fmt") then
     add_packages("fmt")
 end
 
-if has_config("enable_communication") then
+if has_config("enable_communication") or has_config("enable_jsonrpc") then
     add_requires("ilias", {configs = { shared = is_kind("shared")}})
 end
 
@@ -121,7 +129,6 @@ end
 if is_mode("debug") then
     add_defines("NEKO_PROTO_LOG_CONTEXT")
 end 
-add_defines("NEKO_PROTO_NLOG")
 
 if is_plat("linux") then
     add_cxxflags("-fcoroutines")
