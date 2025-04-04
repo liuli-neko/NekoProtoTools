@@ -3,6 +3,7 @@ add_rules("mode.debug", "mode.release", "mode.coverage")
 set_version("0.2.1", {build = "%Y%m%d%H%M"})
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 set_warnings("allextra")
+set_policy("package.cmake_generator.ninja", true)
 
 add_configfiles("include/nekoproto/proto/private/config.h.in")
 set_configdir("include/nekoproto/proto/private")
