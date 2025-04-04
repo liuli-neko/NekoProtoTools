@@ -116,7 +116,13 @@
 #endif
 
 NEKO_BEGIN_NAMESPACE
-#if defined(__GNUC__) || defined(__MINGW__)
+namespace {
+NEKO_CONSTEXPR_FUNC bool
+_is_legal_variable_name_char(char name) NEKO_NOEXCEPT { // NOLINT(readability-identifier-naming)
+    return (name >= 'a' && name <= 'z') || (name >= 'A' && name <= 'Z') || (name >= '0' && name <= '9') || name == '_';
+}
+} // namespace
+#if defined(__GNUC__) || defined(__MINGW__) || defined(__clang__)
 #define NEKO_PRETTY_FUNCTION_NAME __PRETTY_FUNCTION__
 namespace {
 template <class T>
@@ -124,28 +130,19 @@ NEKO_CONSTEXPR_FUNC NEKO_STRING_VIEW _class_name() NEKO_NOEXCEPT { // NOLINT(rea
     NEKO_CONSTEXPR_VAR NEKO_STRING_VIEW PrettyFunction = __PRETTY_FUNCTION__;
     std::size_t start                                  = PrettyFunction.find_last_of('[');
     std::size_t end                                    = start;
-    while (end < PrettyFunction.size() && (PrettyFunction[end] != ';')) {
+    while (end < PrettyFunction.size() && PrettyFunction[end] != ';') {
         end++;
     }
-    auto sstring       = PrettyFunction.substr(start, end - start);
-    std::size_t nstart = sstring.find_first_of('<');
-    if (nstart != NEKO_STRING_VIEW::npos) {
-        sstring = sstring.substr(0, nstart);
+    while (end > start && !_is_legal_variable_name_char(PrettyFunction[end])) {
+        end--;
     }
-    nstart = sstring.find_last_of(':');
-    if (nstart != NEKO_STRING_VIEW::npos) {
-        start = nstart;
-    } else {
-        start = 0;
+    start = end;
+    end++;
+    while (start > 0 && _is_legal_variable_name_char(PrettyFunction[start])) {
+        start--;
     }
-    nstart = sstring.find_last_of(' ');
-    if (nstart != NEKO_STRING_VIEW::npos) {
-        start = start > nstart ? start : nstart;
-    }
-    while (start < sstring.size() && (sstring[start] == ' ' || sstring[start] == '>' || sstring[start] == ':')) {
-        ++start;
-    }
-    return sstring.substr(start, end - start);
+    start++;
+    return PrettyFunction.substr(start, end - start);
 }
 } // namespace
 #elif defined(_WIN32)

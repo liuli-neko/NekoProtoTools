@@ -9,6 +9,8 @@
  *
  */
 #pragma once
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wenum-constexpr-conversion"
 
 #include <cstring>
 #include <string>
@@ -31,8 +33,7 @@ NEKO_BEGIN_NAMESPACE
 #define NEKO_ENUM_SEARCH_DEPTH 60
 #endif
 
-#ifdef __GNUC__
-#define NEKO_STRINGIFY_TYPE_RAW(x) NEKO_STRINGIFY_TYPEINFO(typeid(x))
+#if defined(__GNUC__) || defined(__MINGW__) || defined(__clang__)
 #define NEKO_FUNCTION              __PRETTY_FUNCTION__
 
 namespace detail {
@@ -51,35 +52,10 @@ constexpr auto _Neko_GetEnumName() noexcept {
     }
     return body;
 }
-inline std::string NEKO_STRINGIFY_TYPEINFO(const std::type_info& info) {
-    int status;
-    auto str = ::abi::__cxa_demangle(info.name(), nullptr, nullptr, &status);
-    if (str) {
-        std::string ret(str);
-        ::free(str);
-        return ret;
-    }
-    return info.name();
-}
 #elif defined(_MSC_VER)
-#define NEKO_STRINGIFY_TYPE_RAW(type) NEKO_STRINGIFY_TYPEINFO(typeid(type))
 #define NEKO_ENUM_TO_NAME(enumType)
 #define NEKO_FUNCTION __FUNCTION__
 namespace detail {
-inline const char* NEKO_STRINGIFY_TYPEINFO(const std::type_info& info) {
-    // Skip struct class prefix
-    auto name = info.name();
-    if (::strncmp(name, "class ", 6) == 0) {
-        return name + 6;
-    }
-    if (::strncmp(name, "struct ", 7) == 0) {
-        return name + 7;
-    }
-    if (::strncmp(name, "enum ", 5) == 0) {
-        return name + 5;
-    }
-    return name;
-}
 template <typename T, T Value>
 constexpr auto _Neko_GetEnumName() noexcept {
     // auto __cdecl _Neko_GetEnumName<enum main::MyEnum,(enum
@@ -97,7 +73,6 @@ constexpr auto _Neko_GetEnumName() noexcept {
 }
 #else
 namespace detail {
-#define NEKO_STRINGIFY_TYPE_RAW(type) typeid(type).name()
 template <typename T, T Value>
 constexpr auto _Neko_GetEnumName() noexcept {
     // Unsupported
@@ -200,3 +175,4 @@ inline bool load(SerializerT& sa, T& value) {
 }
 
 NEKO_END_NAMESPACE
+#pragma clang diagnostic pop
