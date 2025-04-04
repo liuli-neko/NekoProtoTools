@@ -763,7 +763,7 @@ private:
 
 [x] 支持 JSON-RPC 2.0 协议规范。
 
-[ ] 兼容 JSON-RPC 1.0 协议。
+[x] 兼容 JSON-RPC 1.0 协议。
 
 [ ] JSON-RPC 扩展。
 

@@ -38,6 +38,7 @@ enum class JsonRpcError {
     MethodNotBind      = -32000,
     ClientNotInit      = -32001,
     ResponseIdNotMatch = -32002,
+    MessageToolLarge   = -32003, // Request too large The JSON sent is too big.
     ServerErrorEnd     = -32099, // Server error end
 
     ParseError = -32700, // Parse error Invalid JSON was received by the server. An error
@@ -172,6 +173,9 @@ public:
     auto send(std::span<const std::byte> data) -> ILIAS_NAMESPACE::IoTask<void> override {
         if (!client) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
+        }
+        if (data.size() >= 1500) {
+            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MessageToolLarge);
         }
         auto ret  = co_await (client.sendto(data, endpoint) | ILIAS_NAMESPACE::ignoreCancellation);
         auto send = ret.value_or(0);
@@ -388,12 +392,13 @@ template <>
 struct IsSerializable<void> : std::true_type {};
 
 template <typename T, class enable = void>
-struct RpcMethodTraits;
+class RpcMethodTraits;
 
 template <typename RetT, typename... Args>
     requires IsSerializable<std::tuple<std::remove_cvref_t<Args>...>>::value &&
              IsSerializable<std::remove_cvref_t<RetT>>::value
-struct RpcMethodTraits<RetT(Args...), void> {
+class RpcMethodTraits<RetT(Args...), void> {
+public:
     using ParamsTupleType = std::tuple<std::remove_cvref_t<Args>...>;
     using ReturnType =
         std::optional<std::conditional_t<std::is_void_v<RetT>, std::nullptr_t, std::remove_cvref_t<RetT>>>;
@@ -402,19 +407,33 @@ struct RpcMethodTraits<RetT(Args...), void> {
     using RawParamsType      = std::tuple<Args...>;
     using CoroutinesFuncType = std::function<ILIAS_NAMESPACE::IoTask<RawReturnType>(Args...)>;
 
-    CoroutinesFuncType coFunction;
-
-    auto operator()(Args... args) const noexcept -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
-        if (coFunction) {
-            co_return co_await coFunction(std::forward<Args>(args)...);
+    auto operator()(Args... args) const -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
+        if (mCoFunction) {
+            co_return co_await mCoFunction(std::forward<Args>(args)...);
         }
         co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MethodNotBind);
     }
+
+    auto notification(Args... args) const -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
+        mIsNotification = true;
+        if (mCoFunction) {
+            co_await mCoFunction(std::forward<Args>(args)...);
+        }
+        mIsNotification = false;
+        co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MethodNotBind);
+    }
+
+    auto isNotification() const -> bool { return mIsNotification; }
+
+protected:
+    CoroutinesFuncType mCoFunction;
+    mutable bool mIsNotification = false;
 };
 
 template <typename RetT>
     requires IsSerializable<std::remove_cvref_t<RetT>>::value
-struct RpcMethodTraits<RetT(void), void> {
+class RpcMethodTraits<RetT(void), void> {
+public:
     using ParamsTupleType = std::optional<std::array<int, 0>>;
     using ReturnType =
         std::optional<std::conditional_t<std::is_void_v<RetT>, std::nullptr_t, std::remove_cvref_t<RetT>>>;
@@ -423,14 +442,29 @@ struct RpcMethodTraits<RetT(void), void> {
     using RawParamsType      = std::tuple<>;
     using CoroutinesFuncType = std::function<ILIAS_NAMESPACE::IoTask<RawReturnType>()>;
 
-    CoroutinesFuncType coFunction;
-
     auto operator()() const noexcept -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
-        if (coFunction) {
-            co_return co_await coFunction();
+        if (mCoFunction) {
+            co_return co_await mCoFunction();
         }
         co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MethodNotBind);
     }
+
+    auto notification() const -> ILIAS_NAMESPACE::IoTask<> {
+        std::unique_ptr<bool, std::function<void(bool*)>> raii((bool*)(mIsNotification = true),
+                                                               [this](bool*) { mIsNotification = false; });
+        if (mCoFunction) {
+            if (auto ret = co_await mCoFunction(); !ret) {
+                co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+            }
+        }
+        co_return {};
+    }
+
+    auto isNotification() const -> bool { return mIsNotification; }
+
+protected:
+    CoroutinesFuncType mCoFunction;
+    mutable bool mIsNotification = false;
 };
 
 template <typename T>
@@ -533,18 +567,19 @@ template <typename T>
 struct JsonRpcRequest2;
 template <typename... Args>
 struct JsonRpcRequest2<traits::RpcMethodTraits<Args...>> {
-    std::string jsonrpc = "2.0";
+    std::optional<std::string> jsonrpc = "2.0";
     std::string method;
     traits::RpcMethodTraits<Args...>::ParamsTupleType params;
-    JsonRpcIdType id;
+    std::optional<JsonRpcIdType> id;
 
     NEKO_SERIALIZER(jsonrpc, method, params, id)
 };
 
 struct JsonRpcRequestMethod {
+    std::optional<std::string> jsonrpc;
     std::string method;
-    JsonRpcIdType id;
-    NEKO_SERIALIZER(method, id)
+    std::optional<JsonRpcIdType> id;
+    NEKO_SERIALIZER(jsonrpc, method, id)
 };
 
 struct JsonRpcErrorResponse {
@@ -569,6 +604,15 @@ struct JsonRpcResponse<traits::RpcMethodTraits<Args...>> {
     NEKO_SERIALIZER(jsonrpc, result, error, id)
 };
 
+template <>
+struct JsonRpcResponse<void> {
+    std::string jsonrpc = "2.0";
+    std::optional<JsonRpcErrorResponse> error;
+    JsonRpcIdType id;
+
+    NEKO_SERIALIZER(jsonrpc, error, id)
+};
+
 class JsonRpcServerImp {
 public:
     JsonRpcServerImp() {}
@@ -588,7 +632,6 @@ public:
 
     auto processRequest(const char* data, std::size_t size, DatagramClientBase* client)
         -> ILIAS_NAMESPACE::Task<std::vector<char>> {
-        NEKO_LOG_INFO("jsonrpc", "jsonrpc request: {}", std::string_view{data, size});
         std::vector<char> buffer;
         NekoProto::JsonSerializer::OutputSerializer out(buffer);
         NekoProto::JsonSerializer::InputSerializer in(data, size);
@@ -598,26 +641,13 @@ public:
         }
         bool batchRequest     = false;
         std::size_t batchSize = 1;
-        if (data[0] == '[') {
+        if (data[0] == '[') { // batch request
             batchRequest = true;
             in.startNode();
             in(make_size_tag(batchSize));
             out.startArray(batchSize);
-            NEKO_LOG_INFO("jsonrpc", "batch request: {}", batchSize);
         }
-        std::vector<ILIAS_NAMESPACE::Task<>> tasks;
-        for (int ix = 0; ix < (int)batchSize; ++ix) {
-            JsonRpcRequestMethod method;
-            if (!in(method)) {
-                break;
-            }
-            in.rollbackItem();
-            if (auto it = mHandlers.find(method.method); it != mHandlers.end()) {
-                NEKO_LOG_INFO("jsonrpc", "call method: {} with {}", method.method, std::get<uint64_t>(method.id));
-                tasks.emplace_back(it->second(in, out, method));
-            }
-        }
-        co_await ILIAS_NAMESPACE::whenAll(std::move(tasks));
+        co_await _makeBatch(in, out, batchSize);
         if (batchRequest) {
             in.finishNode();
             out.endArray();
@@ -626,7 +656,10 @@ public:
             out.end();
         }
         if (client != nullptr) {
-            co_await client->send({reinterpret_cast<std::byte*>(buffer.data()), buffer.size()});
+            auto ret = co_await client->send({reinterpret_cast<std::byte*>(buffer.data()), buffer.size()});
+            if (ret.error_or(ILIAS_NAMESPACE::Error::Unknown) == JsonRpcError::MessageToolLarge) {
+                NEKO_LOG_ERROR("jsonrpc", "message too large!");
+            }
         }
         co_return buffer;
     }
@@ -644,20 +677,44 @@ public:
     }
 
 private:
+    auto _makeBatch(NekoProto::JsonSerializer::InputSerializer& in, NekoProto::JsonSerializer::OutputSerializer& out,
+                    int batchSize) -> ILIAS_NAMESPACE::Task<void> {
+        std::vector<ILIAS_NAMESPACE::Task<>> tasks;
+        for (int ix = 0; ix < batchSize; ++ix) {
+            JsonRpcRequestMethod method;
+            if (!in(method)) {
+                break;
+            }
+            if (method.jsonrpc.has_value() && method.jsonrpc.value() != "2.0") {
+                NEKO_LOG_ERROR("jsonrpc", "unsupport jsonrpc version! {}", method.jsonrpc.value());
+                break;
+            }
+            in.rollbackItem();
+            if (auto it = mHandlers.find(method.method); it != mHandlers.end()) {
+                tasks.emplace_back(it->second(in, out, method));
+            }
+        }
+        co_await ILIAS_NAMESPACE::whenAll(std::move(tasks));
+        co_return;
+    }
+
     template <typename T, typename RetT>
     auto _handleSuccess(NekoProto::JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method, RetT&& ret)
         -> ILIAS_NAMESPACE::Task<void> {
-        if (method.id.index() == 0) {
+        if (!method.id.has_value()) { // notification
+            co_return;
+        }
+        if (!method.jsonrpc.has_value() && method.id.value().index() == 0) { // notification in jsonrpc 1.0
             co_return;
         }
         std::vector<char> buffer;
         if constexpr (std::is_void_v<typename T::RawReturnType>) {
-            if (!out(T::response(method.id, nullptr))) {
+            if (!out(T::response(method.id.value(), nullptr))) {
                 NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
                 co_return;
             }
         } else {
-            if (!out(T::response(method.id, std::forward<RetT>(ret)))) {
+            if (!out(T::response(method.id.value(), std::forward<RetT>(ret)))) {
                 NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
                 co_return;
             }
@@ -667,10 +724,13 @@ private:
     template <typename T>
     auto _handleError(NekoProto::JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method,
                       JsonRpcErrorResponse&& error) -> ILIAS_NAMESPACE::Task<void> {
-        if (method.id.index() == 0) {
+        if (!method.id.has_value()) { // notification
             co_return;
         }
-        if (!out(T::response(method.id, error))) {
+        if (!method.jsonrpc.has_value() && method.id.value().index() == 0) { // notification in jsonrpc 1.0
+            co_return;
+        }
+        if (!out(T::response(method.id.value(), error))) {
             NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
             co_return;
         }
@@ -741,7 +801,8 @@ private:
 } // namespace traits
 
 template <traits::RpcMethod T, traits::MethodNameString MethodName>
-struct RpcMethod : traits::RpcMethodTraits<T> {
+class RpcMethod : public traits::RpcMethodTraits<T> {
+public:
     using MethodType   = T;
     using MethodTraits = traits::RpcMethodTraits<T>;
     using typename MethodTraits::CoroutinesFuncType;
@@ -755,24 +816,20 @@ struct RpcMethod : traits::RpcMethodTraits<T> {
 
     static constexpr std::string_view Name = MethodName.view();
 
-    static traits::JsonRpcRequest2<MethodTraits> request(const traits::JsonRpcIdType& id,
-                                                         ParamsTupleType&& params = {}) {
-        return traits::JsonRpcRequest2<MethodTraits>{
-            .method = MethodName.c_str(), .params = std::forward<ParamsTupleType>(params), .id = id};
+    static RequestType request(const traits::JsonRpcIdType& id, ParamsTupleType&& params = {}) {
+        return RequestType{.method = MethodName.c_str(), .params = std::forward<ParamsTupleType>(params), .id = id};
     }
 
-    static traits::JsonRpcResponse<MethodTraits> response(const traits::JsonRpcIdType& id,
-                                                          const MethodTraits::ReturnType& result) {
-        return traits::JsonRpcResponse<MethodTraits>{.result = result, .error = {}, .id = id};
+    static ResponseType response(const traits::JsonRpcIdType& id, const MethodTraits::ReturnType& result) {
+        return ResponseType{.result = result, .error = {}, .id = id};
     }
 
-    static traits::JsonRpcResponse<MethodTraits> response(const traits::JsonRpcIdType& id,
-                                                          const traits::JsonRpcErrorResponse& error) {
-        return traits::JsonRpcResponse<MethodTraits>{.result = {}, .error = error, .id = id};
+    static ResponseType response(const traits::JsonRpcIdType& id, const traits::JsonRpcErrorResponse& error) {
+        return ResponseType{.result = {}, .error = error, .id = id};
     }
 
     RpcMethod operator=(const FunctionType& func) {
-        this->coFunction = [func](auto... args) -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
+        this->mCoFunction = [func](auto... args) -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
             if constexpr (std::is_void_v<RawReturnType>) {
                 func(args...);
                 co_return {};
@@ -782,8 +839,9 @@ struct RpcMethod : traits::RpcMethodTraits<T> {
         };
         return *this;
     }
+
     RpcMethod operator=(const CoroutinesFuncType& func) {
-        this->coFunction = func;
+        this->mCoFunction = func;
         return *this;
     }
 };
@@ -921,32 +979,35 @@ public:
 private:
     template <typename T>
     void _registerRpcMethod(T&& metadata) {
-        metadata = (typename std::decay_t<T>::CoroutinesFuncType)[this](auto... args)
+        metadata = (typename std::decay_t<T>::CoroutinesFuncType)[this, &metadata](auto... args)
                        ->ILIAS_NAMESPACE::IoTask<typename std::decay_t<T>::RawReturnType> {
-            auto waithandle = mScop.spawn(_callRemote<T, decltype(args)...>(args...));
+            auto waithandle = mScop.spawn(_callRemote<T, decltype(args)...>(metadata, args...));
             co_return co_await std::move(waithandle);
         };
     }
 
     template <typename T, typename... Args>
-    auto _callRemote(Args... args) -> ILIAS_NAMESPACE::IoTask<typename std::decay_t<T>::RawReturnType> {
+    auto _callRemote(T& metadata, Args... args) -> ILIAS_NAMESPACE::IoTask<typename std::decay_t<T>::RawReturnType> {
         if (mClient == nullptr) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
         }
         if (auto grid = co_await mMutex.uniqueLock(); grid) {
             typename std::decay_t<T>::RequestType request;
-            if (auto ret = co_await _sendRequest<T, Args...>(request, std::forward<Args>(args)...); !ret) {
+            if (auto ret =
+                    co_await _sendRequest<T, Args...>(metadata.isNotification(), request, std::forward<Args>(args)...);
+                !ret) {
                 co_return ILIAS_NAMESPACE::Unexpected(ret.error());
             }
-
-            typename std::decay_t<T>::ResponseType respone;
-            if (auto ret = co_await _recvResponse<T>(respone, request.id); !ret) {
-                co_return ILIAS_NAMESPACE::Unexpected(ret.error());
-            } else {
-                if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
-                    co_return {};
+            if (!metadata.isNotification()) {
+                typename std::decay_t<T>::ResponseType respone;
+                if (auto ret = co_await _recvResponse<T>(respone, request.id.value()); !ret) {
+                    co_return ILIAS_NAMESPACE::Unexpected(ret.error());
                 } else {
-                    co_return ret.value();
+                    if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
+                        co_return {};
+                    } else {
+                        co_return ret.value();
+                    }
                 }
             }
         } else {
@@ -957,15 +1018,27 @@ private:
     }
 
     template <typename T, typename... Args>
-    auto _sendRequest(typename std::decay_t<T>::RequestType& request, Args... args) -> ILIAS_NAMESPACE::IoTask<void> {
+    auto _sendRequest(bool notification, typename std::decay_t<T>::RequestType& request, Args... args)
+        -> ILIAS_NAMESPACE::IoTask<void> {
         if constexpr (NekoProto::traits::is_optional<typename std::decay_t<T>::ParamsTupleType>::value) {
-            request = std::decay_t<T>::request(mId++);
+            if (notification) {
+                request    = std::decay_t<T>::request(nullptr);
+                request.id = std::nullopt;
+            } else {
+                request = std::decay_t<T>::request(mId++);
+            }
         } else {
-            request = std::decay_t<T>::request(mId++, std::forward_as_tuple(args...));
+            if (notification) {
+                request    = std::decay_t<T>::request(nullptr, std::forward_as_tuple(args...));
+                request.id = std::nullopt;
+            } else {
+                request = std::decay_t<T>::request(mId++, std::forward_as_tuple(args...));
+            }
         }
         mBuffer.clear();
         if (auto out = NekoProto::JsonSerializer::OutputSerializer(mBuffer); out(request)) {
-            NEKO_LOG_INFO("jsonrpc", "send request: {}", std::string_view{mBuffer.data(), mBuffer.size()});
+            NEKO_LOG_INFO("jsonrpc", "send {}: {}", notification ? "notification" : "request",
+                          std::string_view{mBuffer.data(), mBuffer.size()});
             if (auto ret = co_await mClient->send({reinterpret_cast<std::byte*>(mBuffer.data()), mBuffer.size()});
                 !ret) {
                 NEKO_LOG_ERROR("jsonrpc", "send {} request failed", request.method);
