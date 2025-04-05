@@ -97,6 +97,7 @@ option_end()
 if has_config("enable_simdjson") then
     add_requires("simdjson v3.9.3", {configs = { shared = is_kind("shared")}})
     add_packages("simdjson")
+    add_defines("SIMDJSON_EXCEPTIONS=1")
 end
 
 if has_config("enable_rapidjson") then
@@ -149,20 +150,22 @@ target("NekoProtoBase")
                 "enable_rapidjson", 
                 "enable_simdjson", 
                 "enable_rapidxml", 
-                "enable_communication")
+                "enable_communication",
+                "enable_jsonrpc")
     add_headerfiles("include/(nekoproto/proto/**.hpp)")
     add_headerfiles("include/(nekoproto/proto/**.h)")
     add_includedirs("include")
-    add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
     add_files("src/proto_base.cpp")
     if has_config("enable_communication") then
         add_headerfiles("include/(nekoproto/communication/**.hpp)")
-        add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
         add_packages("ilias")
         add_files("src/communication_base.cpp")
         set_languages("c++20")
-    else
-        set_languages("c++17")
+    end
+    if has_config("enable_jsonrpc") then
+        add_headerfiles("include/(nekoproto/jsonrpc/**.hpp)")
+        add_packages("ilias")
+        set_languages("c++20")
     end
 target_end()
 
