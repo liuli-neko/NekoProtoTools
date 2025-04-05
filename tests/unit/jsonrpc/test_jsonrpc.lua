@@ -1,3 +1,4 @@
+if has_config("enable_jsonrpc") then
     target("test_jsonrpc")
         set_kind("binary")
         set_languages("c++20")
@@ -5,8 +6,6 @@
         add_includedirs("$(projectdir)/include")
         add_packages("ilias", "gtest")
         add_defines("NEKO_PROTO_STATIC", "ILIAS_USE_FMT", "ILIAS_ENABLE_LOG")
-        add_defines("SIMDJSON_EXCEPTIONS=1")
-        add_defines("ILIAS_COROUTINE_LIFETIME_CHECK")
         add_tests("cpp20", {run_timeout = 5000})
         set_group("jsonrpc")
         add_files("test_jsonrpc.cpp")
@@ -19,3 +18,4 @@
             end)
         end
     target_end()
+end

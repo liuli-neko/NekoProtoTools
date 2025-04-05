@@ -1,3 +1,4 @@
+if has_config("enable_tests") then
 add_requires("gtest")
 
 option("fuzzer_test")
@@ -68,4 +69,5 @@ for _, file in ipairs(os.files("./**/test_*.cpp")) do
     target_end()
 
     ::continue::
+end
 end
