@@ -110,7 +110,8 @@ public:
      * @brief close this connect
      *
      */
-    virtual auto close() -> void = 0;
+    virtual auto close() -> void  = 0;
+    virtual auto cancel() -> void = 0;
 };
 
 class DatagramClientBase {
@@ -161,6 +162,9 @@ public:
         if (!client) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
         }
+        if (mIsCancel) {
+            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
+        }
         auto ret =
             co_await (client.recvfrom({buffer.data(), buffer.size()}, endpoint) | ILIAS_NAMESPACE::ignoreCancellation);
         if (ret) {
@@ -173,6 +177,9 @@ public:
     auto send(std::span<const std::byte> data) -> ILIAS_NAMESPACE::IoTask<void> override {
         if (!client) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
+        }
+        if (mIsCancel) {
+            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
         }
         if (data.size() >= 1500) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MessageToolLarge);
@@ -198,6 +205,14 @@ public:
         if (client) {
             client.close();
         }
+        mIsCancel = false;
+    }
+
+    auto cancel() -> void override {
+        mIsCancel = true;
+        if (client) {
+            client.cancel();
+        }
     }
 
     // like udp://127.0.0.1:12345-127.0.0.1:12346
@@ -206,6 +221,7 @@ public:
     }
 
     auto start(std::string_view url) -> ILIAS_NAMESPACE::IoTask<void> override {
+        mIsCancel         = false;
         auto bindRemoteIp = url.substr(6);
         auto pos          = bindRemoteIp.find('-');
         if (pos == std::string_view::npos) {
@@ -235,6 +251,7 @@ public:
     ILIAS_NAMESPACE::UdpClient client;
     ILIAS_NAMESPACE::IPEndpoint endpoint;
     std::array<std::byte, 1500> buffer;
+    bool mIsCancel = false;
 };
 
 /**
@@ -252,6 +269,9 @@ public:
     auto recv() -> ILIAS_NAMESPACE::IoTask<std::span<std::byte>> override {
         if (!client) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
+        }
+        if (mIsCancel) {
+            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
         }
         uint32_t size = 0;
         if (auto ret = co_await (client.readAll({reinterpret_cast<std::byte*>(&size), sizeof(size)}) |
@@ -276,6 +296,9 @@ public:
         if (!client) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
         }
+        if (mIsCancel) {
+            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
+        }
         auto size = ILIAS_NAMESPACE::hostToNetwork((uint32_t)data.size());
         if (auto ret = co_await (client.writeAll({reinterpret_cast<std::byte*>(&size), sizeof(size)}) |
                                  ILIAS_NAMESPACE::ignoreCancellation);
@@ -294,6 +317,14 @@ public:
         if (client) {
             client.close();
         }
+        mIsCancel = false;
+    }
+
+    auto cancel() -> void override {
+        mIsCancel = true;
+        if (client) {
+            client.cancel();
+        }
     }
 
     auto checkProtocol([[maybe_unused]] Type type, std::string_view url) -> bool override {
@@ -301,6 +332,7 @@ public:
     }
 
     auto start(std::string_view url) -> ILIAS_NAMESPACE::IoTask<void> override {
+        mIsCancel       = false;
         auto ipendpoint = ILIAS_NAMESPACE::IPEndpoint::fromString(url.substr(6));
         if (!ipendpoint) {
             NEKO_LOG_ERROR("jsonrpc", "invalid endpoint: {}", url);
@@ -323,6 +355,7 @@ public:
 
     ILIAS_NAMESPACE::TcpClient client;
     std::vector<std::byte> buffer;
+    bool mIsCancel = false;
 };
 
 template <>
@@ -334,6 +367,14 @@ public:
         if (listener) {
             listener.close();
         }
+        mIsCancel = false;
+    }
+
+    auto cancel() -> void override {
+        mIsCancel = true;
+        if (listener) {
+            listener.cancel();
+        }
     }
 
     auto checkProtocol(Type type, std::string_view url) -> bool override {
@@ -341,6 +382,7 @@ public:
     }
 
     auto start(std::string_view url) -> ILIAS_NAMESPACE::IoTask<void> override {
+        mIsCancel       = false;
         auto ipendpoint = ILIAS_NAMESPACE::IPEndpoint::fromString(url.substr(6));
         if (!ipendpoint) {
             NEKO_LOG_ERROR("jsonrpc", "invalid endpoint: {}", url);
@@ -366,6 +408,9 @@ public:
         if (!listener) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
         }
+        if (mIsCancel) {
+            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
+        }
         if (auto ret = co_await listener.accept(); ret) {
             co_return std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>(
                 new DatagramClient<ILIAS_NAMESPACE::TcpClient>(std::move(ret.value().first)),
@@ -377,6 +422,7 @@ public:
 
     ILIAS_NAMESPACE::TcpListener listener;
     std::vector<std::byte> buffer;
+    bool mIsCancel = false;
 };
 
 namespace traits {
@@ -860,10 +906,16 @@ public:
     auto operator->() const { return &mProtocol; }
     auto close() -> void {
         for (auto& client : mClients) {
-            dynamic_cast<DatagramBase*>(client.get())->close();
+            dynamic_cast<DatagramBase*>(client.get())->cancel();
+        }
+        if (mServer != nullptr) {
+            dynamic_cast<DatagramBase*>(mServer.get())->cancel();
         }
         mScop.cancel();
         mScop.wait();
+        for (auto& client : mClients) {
+            dynamic_cast<DatagramBase*>(client.get())->close();
+        }
         if (mServer != nullptr) {
             dynamic_cast<DatagramBase*>(mServer.get())->close();
         }
@@ -916,7 +968,7 @@ private:
                     mClients.erase(item);
                 });
             } else {
-                NEKO_LOG_WARN("jsonrpc", "accepting exit wit: {}", ret.error());
+                NEKO_LOG_WARN("jsonrpc", "accepting exit wit: {}", ret.error().message());
                 break;
             }
         }
@@ -943,10 +995,13 @@ public:
     auto operator->() const { return &mProtocol; }
     auto close() -> void {
         if (mClient != nullptr) {
-            dynamic_cast<DatagramBase*>(mClient.get())->close();
+            dynamic_cast<DatagramBase*>(mClient.get())->cancel();
         }
         mScop.cancel();
         mScop.wait();
+        if (mClient != nullptr) {
+            dynamic_cast<DatagramBase*>(mClient.get())->close();
+        }
     }
 
     template <typename StreamType>

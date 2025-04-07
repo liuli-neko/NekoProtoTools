@@ -235,12 +235,16 @@ TEST_F(JsonRpcTest, Notification) {
     ilias_wait client->test2.notification(1, 2);
     ilias_wait client->test3.notification();
     ilias_wait client->test4.notification();
+
+    client.close();
+    server.close();
 }
 
 ILIAS_NAMESPACE::PlatformContext* JsonRpcTest::gContext = nullptr;
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
+    // NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
+    // ILIAS_LOG_SET_LEVEL(ILIAS_TRACE_LEVEL);
     ILIAS_NAMESPACE::PlatformContext context;
     JsonRpcTest::gContext = &context;
 

@@ -201,6 +201,7 @@ public:
     auto send(const IProto& message, StreamFlag flag = StreamFlag::None) -> IoTask<void>;
     auto recv(StreamFlag flag = StreamFlag::None) -> IoTask<IProto>;
     auto close() -> IoTask<void>;
+    auto cancel() -> void;
     auto setProtoTable(uint32_t version, const std::map<uint32_t, std::string>& protoTable) -> void;
     auto getProtoTable() const -> const ProtocolTable&;
 
@@ -582,6 +583,11 @@ inline auto ProtoStreamClient<T>::_createProto(const uint32_t type) -> IProto {
 }
 
 template <ILIAS_NAMESPACE::StreamClient T>
+inline auto ProtoStreamClient<T>::cancel() -> void {
+    mStreamClient.cancel();
+}
+
+template <ILIAS_NAMESPACE::StreamClient T>
 inline auto ProtoStreamClient<T>::close() -> IoTask<void> {
     if (!mStreamClient) {
         co_return {};
@@ -653,6 +659,7 @@ public:
     auto send(const IProto& message, const IPEndpoint& endpoint, StreamFlag flag = StreamFlag::None) -> IoTask<void>;
     auto recv(StreamFlag flag = StreamFlag::None) -> IoTask<std::pair<IProto, IPEndpoint>>;
     auto close() -> IoTask<void>;
+    auto cancel() -> void;
     auto setProtoTable(uint32_t version, const std::map<uint32_t, std::string>& protoTable) -> void;
     auto getProtoTable() const -> const ProtocolTable&;
 
@@ -864,6 +871,11 @@ inline auto ProtoDatagramClient<T>::recv(StreamFlag flag) -> IoTask<std::pair<IP
         }
     }
     co_return std::make_pair(std::move(mMessage), endpoint);
+}
+
+template <typename T>
+inline auto ProtoDatagramClient<T>::cancel() -> void {
+    mDatagramClient.cancel();
 }
 
 template <typename T>
