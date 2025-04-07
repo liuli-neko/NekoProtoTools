@@ -5,7 +5,7 @@ if has_config("enable_communication") then
         set_default(false)
         add_includedirs("$(projectdir)/include")
         add_packages("ilias")
-        add_defines("NEKO_PROTO_STATIC", "ILIAS_USE_FMT", "ILIAS_ENABLE_LOG")
+        add_defines("NEKO_PROTO_STATIC")
         add_packages("gtest")
         add_tests("cpp20", {run_timeout = 5000})
         set_group("communication")

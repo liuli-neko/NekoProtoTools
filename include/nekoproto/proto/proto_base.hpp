@@ -64,6 +64,7 @@
 #include <functional>
 #include <map>
 #include <vector>
+#include <unordered_map>
 
 #include "private/global.hpp"
 #include "private/proto_base_private.hpp"
