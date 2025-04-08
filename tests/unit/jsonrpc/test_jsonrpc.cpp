@@ -80,6 +80,7 @@ TEST_F(JsonRpcTest, BindAndCall) {
         return res;
     };
     server->test10 = [](int tt) -> Copytest { return Copytest{tt + 114514}; };
+    server.bindMethod("test11", std::function([](int aa) -> std::string { return std::to_string(aa); }));
 
     {
         auto res = (ilias_wait client->test1(1, 2));
@@ -121,6 +122,11 @@ TEST_F(JsonRpcTest, BindAndCall) {
         Copytest tt;
         tt.a = 114514;
         EXPECT_EQ((ilias_wait client->test10(1)).value().a, 114515);
+    }
+    {
+        auto res = (ilias_wait client.callRemote<std::string>("test11", 114514));
+        EXPECT_TRUE(res.has_value());
+        EXPECT_EQ(res.value(), "114514");
     }
     client.close();
     server.close();
@@ -152,6 +158,8 @@ TEST_F(JsonRpcTest, BindAndCallUdp) {
         return res;
     };
     server->test10 = [](int tt) -> Copytest { return Copytest{tt + 114514}; };
+    server.bindMethod("test11",
+                      std::function([](int aa) -> ilias::IoTask<std::string> { co_return std::to_string(aa); }));
 
     {
         auto res = (ilias_wait client->test1(1, 2));
@@ -193,6 +201,11 @@ TEST_F(JsonRpcTest, BindAndCallUdp) {
         Copytest tt;
         tt.a = 114514;
         EXPECT_EQ((ilias_wait client->test10(1)).value().a, 114515);
+    }
+    {
+        auto res = (ilias_wait client.callRemote<std::string>("test11", 114514));
+        EXPECT_TRUE(res.has_value());
+        EXPECT_EQ(res.value(), "114514");
     }
     client.close();
     server.close();
@@ -230,11 +243,16 @@ TEST_F(JsonRpcTest, Notification) {
         std::cout << "this is test4!" << std::endl;
         return 0;
     };
+    server.bindMethod("test11",
+                      std::function([](int aa) -> void { std::cout << "test11 called with " << aa << std::endl; }));
 
     ilias_wait client->test1.notification(1, 2);
     ilias_wait client->test2.notification(1, 2);
     ilias_wait client->test3.notification();
     ilias_wait client->test4.notification();
+    ilias_wait client.notifyRemote<void>("test11", 114514);
+
+    ilias_wait ilias::sleep(std::chrono::milliseconds(100));
 
     client.close();
     server.close();
@@ -243,7 +261,7 @@ TEST_F(JsonRpcTest, Notification) {
 ILIAS_NAMESPACE::PlatformContext* JsonRpcTest::gContext = nullptr;
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
-    // NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
     // ILIAS_LOG_SET_LEVEL(ILIAS_TRACE_LEVEL);
     ILIAS_NAMESPACE::PlatformContext context;
     JsonRpcTest::gContext = &context;
