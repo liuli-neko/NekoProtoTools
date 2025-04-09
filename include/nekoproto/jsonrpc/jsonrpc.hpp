@@ -130,6 +130,13 @@ public:
      * @return ILIAS_NAMESPACE::IoTask<void>
      */
     virtual auto send(std::span<const std::byte> buffer) -> ILIAS_NAMESPACE::IoTask<void> = 0;
+    /**
+     * @brief check if the connect is connected
+     *
+     * @return true
+     * @return false
+     */
+    virtual auto isConnected() -> bool = 0;
 };
 
 class DatagramServerBase {
@@ -142,6 +149,7 @@ public:
      */
     virtual auto accept()
         -> ILIAS_NAMESPACE::IoTask<std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>> = 0;
+    virtual auto isListening() -> bool                                                                 = 0;
 };
 
 template <typename T, std::size_t N = 1500>
@@ -238,10 +246,16 @@ public:
             co_return ILIAS_NAMESPACE::Unexpected(ret.error());
         }
         client.setOption(ILIAS_NAMESPACE::sockopt::ReuseAddress(1));
-        client.bind(bindIpendpoint.value());
+        if (auto ret = client.bind(bindIpendpoint.value()); !ret) {
+            client.close();
+            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+        }
         endpoint = remoteIpendpoint.value();
         co_return {};
     }
+
+    auto isConnected() -> bool override { return (bool)client; }
+    auto isListening() -> bool override { return (bool)client; }
 
     auto accept()
         -> ILIAS_NAMESPACE::IoTask<std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>> override {
@@ -280,6 +294,9 @@ public:
             co_return ILIAS_NAMESPACE::Unexpected(ret.error());
         } else if (ret.value() == sizeof(size)) {
             size = ILIAS_NAMESPACE::networkToHost(size);
+        } else {
+            client.close();
+            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Unknown);
         }
         if (buffer.size() < size) {
             buffer.resize(size);
@@ -288,6 +305,7 @@ public:
         if (ret && ret.value() == size) {
             co_return std::span<std::byte>{reinterpret_cast<std::byte*>(buffer.data()), size};
         } else {
+            client.close();
             co_return ILIAS_NAMESPACE::Unexpected(ret.error_or(ILIAS_NAMESPACE::Error::Unknown));
         }
     }
@@ -303,12 +321,15 @@ public:
         if (auto ret = co_await (client.writeAll({reinterpret_cast<std::byte*>(&size), sizeof(size)}) |
                                  ILIAS_NAMESPACE::ignoreCancellation);
             !ret) {
+            client.close();
             co_return ILIAS_NAMESPACE::Unexpected(ret.error());
         } else if (ret.value() != sizeof(size)) {
+            client.close();
             co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Unknown);
         }
         auto ret = co_await (client.writeAll(data) | ILIAS_NAMESPACE::ignoreCancellation);
         if (!ret || ret.value() != data.size()) {
+            client.close();
             co_return ILIAS_NAMESPACE::Unexpected(ret.error_or(ILIAS_NAMESPACE::Error::Unknown));
         }
         co_return {};
@@ -344,7 +365,7 @@ public:
                 co_return {};
             } else {
                 NEKO_LOG_ERROR("jsonrpc", "tcpclient start failed, {}", ret1.error().message());
-                co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+                co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
             }
         } else {
             NEKO_LOG_ERROR("jsonrpc", "tcpclient start failed, {}", ret.error().message());
@@ -352,6 +373,8 @@ public:
         }
         co_return {};
     }
+
+    auto isConnected() -> bool override { return (bool)client; }
 
     ILIAS_NAMESPACE::TcpClient client;
     std::vector<std::byte> buffer;
@@ -376,6 +399,8 @@ public:
             listener.cancel();
         }
     }
+
+    auto isListening() -> bool override { return (bool)listener; }
 
     auto checkProtocol(Type type, std::string_view url) -> bool override {
         return !(url.substr(0, 6) != "tcp://") && type == Type::Server;
@@ -1014,32 +1039,33 @@ public:
             dynamic_cast<DatagramBase*>(mServer.get())->close();
         }
     }
+    auto isListening() const -> bool { return mServer != nullptr && mServer->isListening(); }
 
     auto wait() -> ILIAS_NAMESPACE::Task<void> { co_await mScop.wait(); }
 
     template <typename StreamType>
-    auto start(std::string_view url) -> ILIAS_NAMESPACE::Task<bool> {
+    auto start(std::string_view url) -> ILIAS_NAMESPACE::IoTask<ILIAS_NAMESPACE::Error> {
         auto server = std::make_unique<DatagramClient<StreamType>>();
         if (server->checkProtocol(DatagramClient<StreamType>::Type::Server, url)) {
             if (auto ret = co_await server->start(url); ret) {
                 mServer = std::move(server);
                 mScop.spawn(_acceptLoop());
-                co_return true;
+                co_return ILIAS_NAMESPACE::Error::Ok;
             } else {
                 NEKO_LOG_ERROR("jsonrpc", "client start failed, {}", ret.error().message());
-                co_return false;
+                co_return ret.error();
             }
         } else {
-            co_return false;
+            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::InvalidArgument);
         }
     }
 
     auto start(std::string_view url) -> ILIAS_NAMESPACE::Task<bool> {
         if (auto ret = co_await start<ILIAS_NAMESPACE::TcpListener>(url); ret) {
-            co_return true;
+            co_return ret.value() == ILIAS_NAMESPACE::Error::Ok;
         }
         if (auto ret = co_await start<ILIAS_NAMESPACE::UdpClient>(url); ret) {
-            co_return true;
+            co_return ret.value() == ILIAS_NAMESPACE::Error::Ok;
         }
         NEKO_LOG_ERROR("jsonrpc", "Unsupported protocol: {}", url);
         co_return false;
@@ -1063,7 +1089,7 @@ private:
     auto _acceptLoop() -> ILIAS_NAMESPACE::Task<> {
         while (mServer != nullptr) {
             if (auto ret = co_await mServer->accept(); ret) {
-                if (mClients.back() == ret.value()) {
+                if (mClients.size() > 0 && mClients.back() == ret.value()) {
                     break;
                 }
                 auto item = mClients.emplace(mClients.end(), std::move(ret.value()));
@@ -1108,28 +1134,30 @@ public:
         }
     }
 
+    auto isConnected() const -> bool { return mClient != nullptr && mClient->isConnected(); }
+
     template <typename StreamType>
-    auto connect(std::string_view url) -> ILIAS_NAMESPACE::Task<bool> {
+    auto connect(std::string_view url) -> ILIAS_NAMESPACE::IoTask<ILIAS_NAMESPACE::Error> {
         auto client = std::make_unique<DatagramClient<StreamType>>();
         if (client->checkProtocol(DatagramClient<StreamType>::Type::Client, url)) {
             if (auto ret = co_await client->start(url); ret) {
                 mClient = std::move(client);
-                co_return true;
+                co_return ILIAS_NAMESPACE::Error::Ok;
             } else {
                 NEKO_LOG_ERROR("jsonrpc", "client start failed, {}", ret.error().message());
-                co_return false;
+                co_return ret.error();
             }
         } else {
-            co_return false;
+            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::InvalidArgument);
         }
     }
 
     auto connect(std::string_view url) -> ILIAS_NAMESPACE::Task<bool> {
         if (auto ret = co_await connect<ILIAS_NAMESPACE::TcpClient>(url); ret) {
-            co_return true;
+            co_return ret == ILIAS_NAMESPACE::Error::Ok;
         }
         if (auto ret = co_await connect<ILIAS_NAMESPACE::UdpClient>(url); ret) {
-            co_return true;
+            co_return ret == ILIAS_NAMESPACE::Error::Ok;
         }
         NEKO_LOG_ERROR("jsonrpc", "Unsupported protocol: {}", url);
         co_return false;
