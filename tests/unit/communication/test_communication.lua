@@ -1,17 +1,18 @@
 if has_config("enable_communication") then
     target("test_communication")
         set_kind("binary")
-        set_languages("c++20")
         set_default(false)
         add_includedirs("$(projectdir)/include")
-        add_packages("ilias")
         add_defines("NEKO_PROTO_STATIC")
-        add_packages("gtest")
-        add_tests("cpp20", {run_timeout = 5000})
+        add_tests("cpp20", {run_timeout = 5000, languages = "c++20"})
         set_group("communication")
         add_files("$(projectdir)/src/communication_base.cpp")
         add_files("$(projectdir)/src/proto_base.cpp")
         add_files("test_communication.cpp")
+        on_load(function (target) 
+            import("lua.auto", {rootdir = os.projectdir()})
+            auto().auto_add_packages(target)
+        end)
         if has_config("memcheck") then
             on_run(function (target)
                 local argv = {}

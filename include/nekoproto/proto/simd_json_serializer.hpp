@@ -420,7 +420,7 @@ public:
         } else if (mStateStack.back() == State::InArray || mStateStack.back() == State::ArrayStart) {
             mStream << "]";
         }
-        if (mStateStack.back() == State::Null) {
+        if (mStateStack.size() > 0 && mStateStack.back() == State::Null) {
             mStateStack.pop_back();
         }
         if (mStateStack.size() != 0) {
@@ -500,6 +500,14 @@ public:
     inline explicit SimdJsonInputSerializer(const char* buf, std::size_t size) NEKO_NOEXCEPT
         : detail::InputSerializer<SimdJsonInputSerializer>(this),
           mItemStack() {
+        while (size > 0 && buf[size - 1] == '\0') {
+            size--;
+        }
+        if (size == 0) {
+            NEKO_LOG_INFO("JsonSerializer", "simdjson parser error: empty buffer");
+            mParserError = true;
+            return;
+        }
         auto error = mParser.parse(buf, size).get(mRoot);
         if (error != 0U) {
             NEKO_LOG_INFO("JsonSerializer", "simdjson parser error: {}", simdjson::error_message(error));

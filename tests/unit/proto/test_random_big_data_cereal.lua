@@ -3,9 +3,11 @@ if has_config("cereal_test") then
     target("test_cbproto")
         set_kind("binary")
         add_includedirs("$(projectdir)/include")
-        set_languages("c++17")
-        add_packages("gtest", "cereal")
         add_files("test_random_big_data_cereal.cpp")
+        on_load(function (target) 
+            import("lua.auto", {rootdir = os.projectdir()})
+            auto().auto_add_packages(target)
+        end)
         if has_config("memcheck") then
             on_run(function (target)
                 local argv = {}

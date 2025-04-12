@@ -1,5 +1,4 @@
 if has_config("enable_tests") then
-add_requires("gtest")
 
 option("fuzzer_test")
     set_default(false)
@@ -21,6 +20,10 @@ option("cereal_test")
     set_category("enable test")
     set_description("Enable cereal test, should install cereal, to contrast with this")
 option_end()
+
+if has_config("ui_test") then 
+    add_requires("qtbase")
+end
 
 if is_plat("linux") then 
     option("memcheck")
@@ -50,8 +53,6 @@ for _, file in ipairs(os.files("./**/test_*.cpp")) do
         set_encodings("utf-8")
         add_defines("SIMDJSON_EXCEPTIONS=1")
         add_defines("NEKO_PROTO_STATIC")
-        add_packages("gtest")
-        set_languages("c++17")
         add_files(file, "../src/proto_base.cpp")
         -- set test in different cpp versions
         local cpp_versions = {"c++17", "c++20"}
@@ -65,7 +66,11 @@ for _, file in ipairs(os.files("./**/test_*.cpp")) do
                 table.insert(argv, target:targetfile())
                 os.execv("valgrind", argv)
             end)
-        end 
+        end
+        on_load(function (target) 
+            import("lua.auto", {rootdir = os.projectdir()})
+            auto().auto_add_packages(target)
+        end)
     target_end()
 
     ::continue::
