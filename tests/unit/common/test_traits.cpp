@@ -17,7 +17,7 @@ struct TestStruct {
 };
 
 TEST(TraitsTest, test) {
-    EXPECT_EQ(NEKO_CPP_PLUS, 17);
+    EXPECT_EQ(NEKO_CPP_PLUS, 20);
     EXPECT_FALSE(traits::is_optional<int>::value);
     EXPECT_TRUE(traits::is_optional<std::optional<int>&>::value);
     EXPECT_TRUE(traits::is_optional<const std::optional<int>&>::value);

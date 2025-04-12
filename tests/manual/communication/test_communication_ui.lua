@@ -1,11 +1,7 @@
 if has_config("ui_test") and has_config("enable_communication") then 
-    add_requires("qtbase")
-    
     target("test_communication_ui")
         add_rules("qt.widgetapp")
         set_default(false)
-        set_languages("c++20")
-        add_packages("ilias")
         add_includedirs("$(projectdir)/include")
         add_files("test_communication_ui.cpp")
         add_files("test_communication_ui.hpp")
@@ -14,5 +10,9 @@ if has_config("ui_test") and has_config("enable_communication") then
         add_files("$(projectdir)/src/communication_base.cpp")
         add_defines("NEKO_PROTO_STATIC")
         add_frameworks("QtCore", "QtNetwork", "QtWidgets", "QtGui")
+        on_load(function (target) 
+            import("lua.auto", {rootdir = os.projectdir()})
+            auto().auto_add_packages(target)
+        end)
     target_end()
 end 

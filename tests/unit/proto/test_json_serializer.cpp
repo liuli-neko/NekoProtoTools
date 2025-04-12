@@ -103,8 +103,10 @@ struct TestP {
 
 class JsonSerializerTest : public testing::Test {
 public:
-    using WriterType       = detail::JsonWriter<>;
-    using ValueType        = detail::JsonValue;
+#if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
+    using WriterType = detail::JsonWriter<>;
+    using ValueType  = detail::JsonValue;
+#endif
     using InputSerializer  = JsonSerializer::InputSerializer;
     using OutputSerializer = JsonSerializer::OutputSerializer;
     JsonSerializerTest() : mBuffer(), mOutput(mBuffer) {}
@@ -891,6 +893,7 @@ TEST_F(JsonSerializerTest, Struct) {
     EXPECT_TRUE(mOutput.end());
 #if NEKO_CPP_PLUS >= 17
     const char* answer =
+#if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
         "{\"a\":{\"a\":3,\"b\":\"Struct "
         "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_"
         "A(1)"
@@ -902,7 +905,20 @@ TEST_F(JsonSerializerTest, Struct) {
         "\"a\":"
         "12.9,\"b\":[1.0,2.0,3.0,4.0,5.0]}]}]}}}";
 #else
+        "{\"a\":{\"a\":3,\"b\":\"Struct "
+        "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_"
+        "A(1)"
+        "\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,"
+        "\"hello\"],\"k\":[1,2,3,4,5],\"l\":{\"a\":[{\"a\":1,\"b\":\"dsadfsd\"},{\"a\":12.9,\"b\":[1,2,3,4,"
+        "5]"
+        ",\"c\":{\"a\":1221,\"b\":\"this is a test for "
+        "optional\"}},{\"a\":[{\"a\":12.9,\"b\":[1,2,3,4,5]},{\"a\":12.9,\"b\":[1,2,3,4,5]},{"
+        "\"a\":"
+        "12.9,\"b\":[1,2,3,4,5]}]}]}}}";
+#endif
+#else
     const char* answer =
+#if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
         "{\"a\":{\"a\":3,\"b\":\"Struct "
         "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":1,\"i\":"
         "[1,"
@@ -911,6 +927,16 @@ TEST_F(JsonSerializerTest, Struct) {
         "\"b\":["
         "1.0,2.0,3.0,4.0,5.0]},{\"a\":12.9,\"b\":[1.0,2.0,3.0,4.0,5.0]},{\"a\":12.9,\"b\":[1.0,2.0,3.0,4.0,5.0]}]}]"
         "}}}";
+#else
+        "{\"a\":{\"a\":3,\"b\":\"Struct "
+        "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":1,\"i\":"
+        "[1,"
+        "\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],1],\"j\":[1,\"hello\"],\"k\":[1,2,3,4,5],"
+        "\"l\":{\"a\":[{\"a\":1,\"b\":\"dsadfsd\"},{\"a\":12.9,\"b\":[1,2,3,4,5]},{\"a\":[{\"a\":12.9,"
+        "\"b\":["
+        "1,2,3,4,5]},{\"a\":12.9,\"b\":[1,2,3,4,5]},{\"a\":12.9,\"b\":[1,2,3,4,5]}]}]"
+        "}}}";
+#endif
 #endif
     mBuffer.push_back('\0');
     const char* str = mBuffer.data();
@@ -932,6 +958,7 @@ TEST_F(JsonSerializerTest, Struct) {
     EXPECT_EQ(testp.h, testp2.h);
     EXPECT_EQ(testp.k, testp2.k);
     NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(testp));
+#if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
     {
         std::vector<char> buffer;
         RapidJsonOutputSerializer<detail::PrettyJsonWriter<>> output(buffer, JsonOutputFormatOptions::Default());
@@ -942,6 +969,7 @@ TEST_F(JsonSerializerTest, Struct) {
         const char* str = buffer.data();
         NEKO_LOG_DEBUG("unit test", "{}", str);
     }
+#endif
 }
 
 TEST_F(JsonSerializerTest, IOStreamTest) {
@@ -965,7 +993,11 @@ TEST_F(JsonSerializerTest, IOStreamTest) {
 #endif
 
     {
+#if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
         RapidJsonOutputSerializer<detail::PrettyJsonWriter<std::ofstream>> output(ofs);
+#elif defined(NEKO_PROTO_ENABLE_SIMDJSON)
+        SimdJsonOutputSerializer<std::ofstream> output(ofs);
+#endif
         output(testp);
     }
     ofs.close();
@@ -973,7 +1005,12 @@ TEST_F(JsonSerializerTest, IOStreamTest) {
     std::ifstream ifs(filepath);
     TestP testp2;
     {
+#if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
         RapidJsonInputSerializer<std::ifstream> input(ifs);
+#elif defined(NEKO_PROTO_ENABLE_SIMDJSON)
+        std::string str((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+        SimdJsonInputSerializer input(str.data(), str.size());
+#endif
         input(testp2);
     }
     ifs.close();

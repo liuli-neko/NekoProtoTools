@@ -13,5 +13,9 @@ if has_config("fuzzer_test") then
         add_links("Fuzzer")
         add_files("../../../src/proto_base.cpp")
         add_files("test_json_proto.cpp")
+        on_load(function (target) 
+            import("lua.auto", {rootdir = os.projectdir()})
+            auto().auto_add_packages(target)
+        end)
     target_end()
 end 

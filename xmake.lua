@@ -1,5 +1,5 @@
 set_project("neko-proto-tools")
-add_rules("mode.debug", "mode.release", "mode.coverage")
+add_rules("mode.debug", "mode.release")
 set_version("0.2.1", {build = "%Y%m%d%H%M"})
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 set_warnings("allextra")
@@ -7,6 +7,8 @@ set_policy("package.cmake_generator.ninja", true)
 
 add_configfiles("include/nekoproto/proto/private/config.h.in")
 set_configdir("include/nekoproto/proto/private")
+
+includes("lua/hidetargets.lua")
 
 option("enable_simdjson")
     set_default(false)
@@ -96,28 +98,22 @@ option_end()
 
 if has_config("enable_simdjson") then
     add_requires("simdjson v3.9.3", {configs = { shared = is_kind("shared")}})
-    add_packages("simdjson")
-    add_defines("SIMDJSON_EXCEPTIONS=1")
 end
 
 if has_config("enable_rapidjson") then
     add_requires("rapidjson", {configs = { shared = is_kind("shared")}})
-    add_packages("rapidjson")
 end
 
 if has_config("enable_rapidxml") then
     add_requires("rapidxml", {configs = { shared = is_kind("shared")}})
-    add_packages("rapidxml")
 end
 
 if has_config("enable_spdlog") then
     add_requires("spdlog", {configs = { shared = is_kind("shared")}})
-    add_packages("spdlog")
 end
 
 if has_config("enable_fmt") then
     add_requires("fmt", {configs = { shared = is_kind("shared")}})
-    add_packages("fmt")
 end
 
 if has_config("enable_communication") or has_config("enable_jsonrpc") then
@@ -125,6 +121,7 @@ if has_config("enable_communication") or has_config("enable_jsonrpc") then
 end
 
 if has_config("enable_tests") then
+    add_requires("gtest")
     includes("tests")
 end
 
@@ -158,37 +155,13 @@ target("NekoProtoBase")
     add_files("src/proto_base.cpp")
     if has_config("enable_communication") then
         add_headerfiles("include/(nekoproto/communication/**.hpp)")
-        add_packages("ilias")
         add_files("src/communication_base.cpp")
-        set_languages("c++20")
     end
     if has_config("enable_jsonrpc") then
         add_headerfiles("include/(nekoproto/jsonrpc/**.hpp)")
-        add_packages("ilias")
-        set_languages("c++20")
     end
+    on_load(function (target) 
+        import("lua.auto", {rootdir = os.projectdir()})
+        auto().auto_add_packages(target)
+    end)
 target_end()
-
-if is_mode("coverage") and is_plat("linux") then 
-    target("coverage-report")
-        set_kind("phony")
-        -- 执行脚本命令
-        on_run(function (target)
-            print("Generating coverage report...")
-            -- 在这里编写您想要执行的脚本命令
-            os.execv("lcov ", {"--capture", 
-                "--directory", os.projectdir() .. "/build/.objs/", 
-                "--output-file", os.projectdir() .. "/build/coverage.info",
-                "--exclude", "/usr/include/*",
-                "--exclude", "/usr/local/include/*",
-                "--exclude", "*.xmake/packages/*",
-                "--exclude", "*modules/Ilias/*",
-                "--exclude", "*/tests/test_*",
-                "--directory", os.projectdir()})
-            os.execv("genhtml ", {
-                "--output-directory", os.projectdir() .. "/build/coverage-report",
-                "--title", "'Coverage Report'", 
-                os.projectdir() .. "/build/coverage.info"})
-        end)
-    target_end()
-end 
