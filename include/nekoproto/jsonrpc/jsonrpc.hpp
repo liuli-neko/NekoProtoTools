@@ -485,13 +485,15 @@ public:
         co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MethodNotBind);
     }
 
-    auto notification(Args... args) const -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
-        mIsNotification = true;
+    auto notification(Args... args) const -> ILIAS_NAMESPACE::IoTask<void> {
+        std::unique_ptr<bool, std::function<void(bool*)>> raii((bool*)(mIsNotification = true),
+                                                               [this](bool*) { mIsNotification = false; });
         if (mCoFunction) {
-            co_await mCoFunction(std::forward<Args>(args)...);
+            if (auto ret = co_await mCoFunction(std::forward<Args>(args)...); !ret) {
+                co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+            }
         }
-        mIsNotification = false;
-        co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MethodNotBind);
+        co_return {};
     }
 
     auto isNotification() const -> bool { return mIsNotification; }
@@ -1133,6 +1135,8 @@ public:
             dynamic_cast<DatagramBase*>(mClient.get())->close();
         }
     }
+
+    auto wait() -> ILIAS_NAMESPACE::Task<void> { co_await mScop.wait(); }
 
     auto isConnected() const -> bool { return mClient != nullptr && mClient->isConnected(); }
 
