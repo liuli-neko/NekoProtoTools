@@ -356,7 +356,6 @@ public:
         mIsCancel       = false;
         auto ipendpoint = ILIAS_NAMESPACE::IPEndpoint::fromString(url.substr(6));
         if (!ipendpoint) {
-            NEKO_LOG_ERROR("jsonrpc", "invalid endpoint: {}", url);
             co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::InvalidArgument);
         }
         if (auto ret = co_await ILIAS_NAMESPACE::TcpClient::make(ipendpoint->family()); ret) {
@@ -364,14 +363,11 @@ public:
                 client = std::move(ret.value());
                 co_return {};
             } else {
-                NEKO_LOG_ERROR("jsonrpc", "tcpclient start failed, {}", ret1.error().message());
                 co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
             }
         } else {
-            NEKO_LOG_ERROR("jsonrpc", "tcpclient start failed, {}", ret.error().message());
             co_return ILIAS_NAMESPACE::Unexpected(ret.error());
         }
-        co_return {};
     }
 
     auto isConnected() -> bool override { return (bool)client; }
@@ -410,7 +406,6 @@ public:
         mIsCancel       = false;
         auto ipendpoint = ILIAS_NAMESPACE::IPEndpoint::fromString(url.substr(6));
         if (!ipendpoint) {
-            NEKO_LOG_ERROR("jsonrpc", "invalid endpoint: {}", url);
             co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::InvalidArgument);
         }
         if (auto ret = co_await ILIAS_NAMESPACE::TcpListener::make(ipendpoint->family()); ret) {
@@ -419,7 +414,6 @@ public:
                 listener = std::move(ret.value());
                 co_return {};
             } else {
-                NEKO_LOG_ERROR("jsonrpc", "tcpclient start failed, {}", ret1.error().message());
                 co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
             }
         } else {
@@ -805,6 +799,13 @@ private:
 template <traits::RpcMethodT T>
 std::string RpcMethodDynamic<T>::gName;
 
+struct RpcMethodErrorHelper {
+    using ResponseType = traits::JsonRpcResponse<traits::RpcMethodTraits<void(void)>>;
+    static ResponseType response(const traits::JsonRpcIdType& id, const traits::JsonRpcErrorResponse& error) {
+        return ResponseType{.result = {}, .error = error, .id = id};
+    }
+};
+
 class JsonRpcServerImp {
 public:
     JsonRpcServerImp() {}
@@ -859,7 +860,7 @@ public:
             in(make_size_tag(batchSize));
             out.startArray(batchSize);
         }
-        co_await _makeBatch(in, out, batchSize);
+        co_await _makeBatch(in, out, (int)batchSize);
         if (batchRequest) {
             in.finishNode();
             out.endArray();
@@ -881,8 +882,10 @@ public:
             if (auto buffer = co_await client->recv(); buffer && buffer->size() > 0) {
                 co_await processRequest(reinterpret_cast<const char*>(buffer->data()), buffer->size(), client);
             } else {
-                NEKO_LOG_WARN("jsonrpc", "client disconnected, {}",
-                              buffer.error_or(ILIAS_NAMESPACE::Error::ConnectionReset).message());
+                if (buffer.error_or(ILIAS_NAMESPACE::Error::Unknown) != ILIAS_NAMESPACE::Error::Canceled) {
+                    NEKO_LOG_WARN("jsonrpc", "client disconnected, {}",
+                                  buffer.error_or(ILIAS_NAMESPACE::Error::ConnectionReset).message());
+                }
                 break;
             }
         }
@@ -904,6 +907,12 @@ private:
             in.rollbackItem();
             if (auto it = mHandlers.find(method.method); it != mHandlers.end()) {
                 tasks.emplace_back(it->second(in, out, method));
+            } else {
+                NEKO_LOG_ERROR("jsonrpc", "method {} not found!", method.method);
+                JsonRpcErrorResponse error{(int)JsonRpcError::MethodNotFound,
+                                           JsonRpcErrorCategory::instance().message((int)JsonRpcError::MethodNotFound),
+                                           {}};
+                tasks.emplace_back(_handleError<RpcMethodErrorHelper>(out, std::move(method), std::move(error)));
             }
         }
         co_await ILIAS_NAMESPACE::whenAll(std::move(tasks));
@@ -1100,7 +1109,9 @@ private:
                     mClients.erase(item);
                 });
             } else {
-                NEKO_LOG_WARN("jsonrpc", "accepting exit wit: {}", ret.error().message());
+                if (ret.error() != ILIAS_NAMESPACE::Error::Canceled) {
+                    NEKO_LOG_WARN("jsonrpc", "accepting exit wit: {}", ret.error().message());
+                }
                 break;
             }
         }

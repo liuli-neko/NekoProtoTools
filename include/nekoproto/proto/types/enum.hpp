@@ -9,8 +9,10 @@
  *
  */
 #pragma once
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wenum-constexpr-conversion"
+#endif
 
 #include <cstring>
 #include <string>
@@ -175,4 +177,6 @@ inline bool load(SerializerT& sa, T& value) {
 }
 
 NEKO_END_NAMESPACE
+#ifdef __clang__
 #pragma clang diagnostic pop
+#endif
