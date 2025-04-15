@@ -128,6 +128,10 @@ TEST_F(JsonRpcTest, BindAndCall) {
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), "114514");
     }
+    {
+        auto res = (ilias_wait client.callRemote<std::string>("test12", 114514, 114514));
+        EXPECT_EQ(res.error().value(), (int)JsonRpcError::MethodNotFound);
+    }
     client.close();
     server.close();
 }

@@ -600,7 +600,7 @@ struct can_aggregate : can_aggregate_impl<T, void, Args...> {};
  * @return the size of the
  */
 template <typename T, typename... Args>
-constexpr auto tuple_size(Args&&... args) noexcept {
+constexpr auto tuple_size([[maybe_unused]] Args&&... args) noexcept {
     if constexpr (!can_aggregate<T, Args...>::value) {
         return sizeof...(args) - 1;
     } else {
