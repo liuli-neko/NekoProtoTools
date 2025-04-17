@@ -33,9 +33,15 @@ NekoProtoTools 是一个纯 C++ 实现的协议辅助库，旨在**简化 C++ �
 
 *   **序列化后端**：
     *   JSON：[RapidJSON](https://rapidjson.org/) 或 [SIMDJson](https://simdjson.org/) (可选，按需包含)
+    *   XML: [RapidXML](https://github.com/dwd/rapidxml) (可选，按需包含)
     *   *注意：为了保持库的轻量化，这些序列化库**并未直接捆绑**在本库中，您需要通过选项自行管理这些依赖。*
 *   **通信与 RPC (可选)**：
     *   [Ilias](https://github.com/BusyStudent/ilias) (用于网络通信和异步任务)
+*   **日志 (可选)**:
+    *   [format](https://en.cppreference.com/w/cpp/utility/format/format) (如果编译环境中std::format可用，可以直接开启日志)
+    *   [fmt](https://fmt.dev/) (使用fmt库作为日志后端)
+    *   [spdlog](https://github.com/gabime/spdlog) (使用spdlog作为日志后端)
+
 
 ---
 

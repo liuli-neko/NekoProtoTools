@@ -33,9 +33,14 @@ Core features of this library:
 
 *   **Serialization Backends**:
     *   JSON: [RapidJSON](https://rapidjson.org/) or [SIMDJson](https://simdjson.org/) (Optional, enable via build options)
+    *   XML: [RapidXML](https://github.com/dwd/rapidxml) (Optional, enable via build options)
     *   *Note: To keep the library lightweight, these serialization libraries are **not directly bundled**. You need to manage these dependencies yourself through options.*
 *   **Communication & RPC (Optional)**:
     *   [Ilias](https://github.com/BusyStudent/ilias) (Used for network communication and asynchronous tasks/coroutines)
+*   **log (Optional)**:
+    *   [format](https://en.cppreference.com/w/cpp/utility/format/format) (If std::format is available in the compilation environment, you can enable logging directly)
+    *   [fmt](https://fmt.dev/) (Use fmt as the logging backend)
+    *   [spdlog](https://github.com/gabime/spdlog) (Use spdlog as the logging backend)
 
 ---
 
