@@ -234,9 +234,10 @@ public:
     operator bool() const { return this->mCoFunction != nullptr; }
 
     std::string description = []() {
-        return fmt::format(
-            "{} {}({})", traits::TypeName<RawReturnType>::name(), Name,
-            traits::parameter_to_string<RawParamsType>(std::make_index_sequence<std::tuple_size_v<RawParamsType>>{}));
+        return traits::TypeName<RawReturnType>::name() + " " + std::string(Name) + "(" +
+               traits::parameter_to_string<RawParamsType>(
+                   std::make_index_sequence<std::tuple_size_v<RawParamsType>>{}) +
+               ")";
     }();
 };
 
@@ -420,7 +421,7 @@ private:
             if (auto it = mHandlers.find(method.method); it != mHandlers.end()) {
                 tasks.emplace_back(it->second(in, out, method));
             } else {
-                NEKO_LOG_ERROR("jsonrpc", "method {} not found!", method.method);
+                NEKO_LOG_WARN("jsonrpc", "method {} not found!", method.method);
                 JsonRpcErrorResponse error{(int)JsonRpcError::MethodNotFound,
                                            JsonRpcErrorCategory::instance().message((int)JsonRpcError::MethodNotFound),
                                            {}};
@@ -496,7 +497,7 @@ private:
                     co_return co_await _handleSuccess<T, typename T::RawReturnType>(out, std::move(method),
                                                                                     std::move(ret.value()));
                 } else {
-                    NEKO_LOG_ERROR("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
+                    NEKO_LOG_WARN("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
                     co_return co_await _handleError<T>(
                         out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message()});
                 }
@@ -505,7 +506,7 @@ private:
                     co_return co_await _handleSuccess<T, typename T::RawReturnType>(out, std::move(method),
                                                                                     std::move(ret.value()));
                 } else {
-                    NEKO_LOG_ERROR("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
+                    NEKO_LOG_WARN("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
                     co_return co_await _handleError<T>(
                         out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message()});
                 }
@@ -615,8 +616,8 @@ public:
         };
         auto metadata = std::make_unique<MethodMetadata>();
         metadata->descript =
-            fmt::format("{} {}({})", traits::TypeName<RetT>::name(), name,
-                        traits::parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}));
+            traits::TypeName<RetT>::name() + " " + std::string(name) + "(" +
+            traits::parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}) + ")";
         mMethodMetadatas[name] = std::move(metadata);
     }
 
@@ -630,8 +631,8 @@ public:
         };
         auto metadata = std::make_unique<MethodMetadata>();
         metadata->descript =
-            fmt::format("{} {}({})", traits::TypeName<RetT>::name(), name,
-                        traits::parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}));
+            traits::TypeName<RetT>::name() + " " + std::string(name) + "(" +
+            traits::parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}) + ")";
         mMethodMetadatas[name] = std::move(metadata);
     }
 
@@ -881,7 +882,7 @@ private:
                 }
                 if (response.error.has_value()) {
                     detail::JsonRpcErrorResponse err = response.error.value();
-                    NEKO_LOG_ERROR("jsonrpc", "Error({}): {}", err.code, err.message);
+                    NEKO_LOG_WARN("jsonrpc", "Error({}): {}", err.code, err.message);
                     co_return ILIAS_NAMESPACE::Unexpected(
                         err.code > 0 ? ILIAS_NAMESPACE::Error(ILIAS_NAMESPACE::Error::Code(err.code))
                                      : ILIAS_NAMESPACE::Error(JsonRpcError(err.code)));
