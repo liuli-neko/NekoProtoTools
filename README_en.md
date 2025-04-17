@@ -426,6 +426,12 @@ This library provides a lightweight JSON-RPC 2.0 implementation based on Ilias, 
     *   **`JsonRpcServer<ModuleType>`**: RPC server class used to host the RPC module and handle client requests.
     *   **`JsonRpcClient<ModuleType>`**: RPC client class used to connect to the server and invoke remote methods.
     *   **Async Support**: Method implementations can return `ilias::Task<ResultType>` or `ilias::IoTask<ResultType>` to support asynchronous operations.
+*  **Server built-in methods**: 
+    * rpc.get_method_list:      Get a list of all methods on the current server
+    * rpc.get_bind_method_list: Get a list of all bound methods on the current server
+    * rpc.get_method_info:      Get a description of a specified method
+    * rpc.get_method_info_list: Get descriptions of all methods
+
 
 **Example**:
 

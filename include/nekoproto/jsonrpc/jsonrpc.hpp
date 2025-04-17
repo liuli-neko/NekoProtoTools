@@ -16,452 +16,18 @@
 #include <type_traits>
 #include <utility> // std::index_sequence, std::make_index_sequence
 
-#include <nekoproto/proto/json_serializer.hpp>
-#include <nekoproto/proto/serializer_base.hpp>
-#include <nekoproto/proto/types/types.hpp>
-
-#include <ilias/error.hpp>
-#include <ilias/net/sockopt.hpp>
-#include <ilias/net/system.hpp>
-#include <ilias/net/tcp.hpp>
-#include <ilias/net/udp.hpp>
-#include <ilias/sync/event.hpp>
-#include <ilias/sync/mutex.hpp>
-#include <ilias/sync/scope.hpp>
-#include <ilias/task.hpp>
+#include "nekoproto/jsonrpc/datagram_wapper.hpp"
+#include "nekoproto/jsonrpc/jsonrpc_error.hpp"
+#include "nekoproto/jsonrpc/jsonrpc_traits.hpp"
 
 NEKO_BEGIN_NAMESPACE
-enum class JsonRpcError {
-    Ok = 0,
-    // Server error Reserved for implementation-defined server-errors.
-    ServerErrorStart   = -32000,
-    MethodNotBind      = -32000,
-    ClientNotInit      = -32001,
-    ResponseIdNotMatch = -32002,
-    MessageToolLarge   = -32003, // Request too large The JSON sent is too big.
-    ServerErrorEnd     = -32099, // Server error end
-
-    ParseError = -32700, // Parse error Invalid JSON was received by the server. An error
-    // occurred on the server while parsing the JSON text.
-    InvalidRequest = -32600, // Invalid Request The JSON sent is not a valid Request object.
-    MethodNotFound = -32601, // Method not found The method does not exist / is not available.
-    InvalidParams  = -32602, // Invalid params Invalid method parameter(s).
-    InternalError  = -32603, // Internal error Internal JSON-RPC error.
-};
-
-class JsonRpcErrorCategory : public ILIAS_NAMESPACE::ErrorCategory {
-public:
-    static JsonRpcErrorCategory& instance();
-    auto message(int64_t value) const -> std::string override;
-    auto name() const -> std::string_view override { return "jsonrpc"; }
-};
-
-inline JsonRpcErrorCategory& JsonRpcErrorCategory::instance() {
-    static JsonRpcErrorCategory kInstance;
-    return kInstance;
-}
-
-inline auto JsonRpcErrorCategory::message(int64_t value) const -> std::string {
-    switch ((JsonRpcError)value) {
-    case JsonRpcError::Ok:
-        return "Ok";
-    case JsonRpcError::MethodNotBind:
-        return "Method not Bind";
-    case JsonRpcError::ParseError:
-        return "Parse Eror";
-    case JsonRpcError::InvalidRequest:
-        return "InvalidRequest";
-    case JsonRpcError::MethodNotFound:
-        return "Method ot Found";
-    case JsonRpcError::InvalidParams:
-        return "InvalidParams";
-    case JsonRpcError::InternalError:
-        return "Internal Error";
-    case JsonRpcError::ClientNotInit:
-        return "Client Not Init";
-    case JsonRpcError::ResponseIdNotMatch:
-        return "Response Id Not Match";
-    default:
-        return "Unknow Error";
-    }
-}
-
-ILIAS_DECLARE_ERROR(JsonRpcError, JsonRpcErrorCategory);
-
-class DatagramBase {
-public:
-    enum class Type { Server, Client };
-    /**
-     * @brief check if the url is valid
-     * if return true, whill use this DatagramClient to connect
-     * @param url url like "tcp://127.0.0.1:8080", Can be customized, but the protocol must be put first to prevent
-     * overlap
-     * @return true
-     * @return false
-     */
-    virtual auto checkProtocol(Type type, std::string_view url) -> bool = 0;
-    /**
-     * @brief start the client or server
-     *
-     * @return ILIAS_NAMESPACE::IoTask<void>
-     */
-    virtual auto start(std::string_view url) -> ILIAS_NAMESPACE::IoTask<void> = 0;
-    /**
-     * @brief close this connect
-     *
-     */
-    virtual auto close() -> void  = 0;
-    virtual auto cancel() -> void = 0;
-};
-
-class DatagramClientBase {
-public:
-    virtual ~DatagramClientBase() = default;
-    /**
-     * @brief recv data from remote
-     * must a valid jsonrpc request or response
-     * @return ILIAS_NAMESPACE::IoTask<std::span<std::byte>>
-     */
-    virtual auto recv() -> ILIAS_NAMESPACE::IoTask<std::span<std::byte>> = 0;
-    /**
-     * @brief send jsonrpc request or response data to remote
-     * must send all or this connect will be closed
-     * @param buffer
-     * @return ILIAS_NAMESPACE::IoTask<void>
-     */
-    virtual auto send(std::span<const std::byte> buffer) -> ILIAS_NAMESPACE::IoTask<void> = 0;
-    /**
-     * @brief check if the connect is connected
-     *
-     * @return true
-     * @return false
-     */
-    virtual auto isConnected() -> bool = 0;
-};
-
-class DatagramServerBase {
-public:
-    virtual ~DatagramServerBase() = default;
-    /**
-     * @brief listen loop
-     * you must make sure it return when the server is closed.
-     * @return ILIAS_NAMESPACE::IoTask<std::unique_ptr<DatagramClientBase, void(DatagramClientBase*)>>
-     */
-    virtual auto accept()
-        -> ILIAS_NAMESPACE::IoTask<std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>> = 0;
-    virtual auto isListening() -> bool                                                                 = 0;
-};
-
-template <typename T, std::size_t N = 1500>
-class DatagramClient;
-/**
- * @brief 数据包接收，负责拆包，默认为最大长度1500的UDP包
- *
- * @tparam T
- * @tparam N
- */
-template <>
-class DatagramClient<ILIAS_NAMESPACE::UdpClient, 1500>
-    : public DatagramBase, public DatagramClientBase, public DatagramServerBase {
-public:
-    DatagramClient() { memset(buffer.data(), 0, 1500); }
-
-    auto recv() -> ILIAS_NAMESPACE::IoTask<std::span<std::byte>> override {
-        if (!client) {
-            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
-        }
-        if (mIsCancel) {
-            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
-        }
-        auto ret =
-            co_await (client.recvfrom({buffer.data(), buffer.size()}, endpoint) | ILIAS_NAMESPACE::ignoreCancellation);
-        if (ret) {
-            co_return std::span<std::byte>{buffer.data(), ret.value()};
-        } else {
-            co_return ILIAS_NAMESPACE::Unexpected<ILIAS_NAMESPACE::Error>(ret.error());
-        }
-    }
-
-    auto send(std::span<const std::byte> data) -> ILIAS_NAMESPACE::IoTask<void> override {
-        if (!client) {
-            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
-        }
-        if (mIsCancel) {
-            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
-        }
-        if (data.size() >= 1500) {
-            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MessageToolLarge);
-        }
-        auto ret  = co_await (client.sendto(data, endpoint) | ILIAS_NAMESPACE::ignoreCancellation);
-        auto send = ret.value_or(0);
-        while (ret && send < data.size()) {
-            ret = co_await (client.sendto({data.data() + send, data.size() - send}, endpoint) |
-                            ILIAS_NAMESPACE::ignoreCancellation);
-            if (ret && ret.value() > 0) {
-                send += ret.value();
-            } else {
-                break;
-            }
-        }
-        if (!ret) {
-            co_return ILIAS_NAMESPACE::Unexpected<ILIAS_NAMESPACE::Error>(ret.error());
-        }
-        co_return {};
-    }
-
-    auto close() -> void override {
-        if (client) {
-            client.close();
-        }
-        mIsCancel = false;
-    }
-
-    auto cancel() -> void override {
-        mIsCancel = true;
-        if (client) {
-            client.cancel();
-        }
-    }
-
-    // like udp://127.0.0.1:12345-127.0.0.1:12346
-    auto checkProtocol([[maybe_unused]] Type type, std::string_view url) -> bool override {
-        return !(url.substr(0, 6) != "udp://");
-    }
-
-    auto start(std::string_view url) -> ILIAS_NAMESPACE::IoTask<void> override {
-        mIsCancel         = false;
-        auto bindRemoteIp = url.substr(6);
-        auto pos          = bindRemoteIp.find('-');
-        if (pos == std::string_view::npos) {
-            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::InvalidArgument);
-        }
-        auto bindIpendpoint   = ILIAS_NAMESPACE::IPEndpoint::fromString(bindRemoteIp.substr(0, pos));
-        auto remoteIpendpoint = ILIAS_NAMESPACE::IPEndpoint::fromString(bindRemoteIp.substr(pos + 1));
-        if (!bindIpendpoint || !remoteIpendpoint) {
-            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::InvalidArgument);
-        }
-        if (auto ret = co_await ILIAS_NAMESPACE::UdpClient::make(bindIpendpoint->family()); ret) {
-            client = std::move(ret.value());
-        } else {
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
-        }
-        client.setOption(ILIAS_NAMESPACE::sockopt::ReuseAddress(1));
-        if (auto ret = client.bind(bindIpendpoint.value()); !ret) {
-            client.close();
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
-        }
-        endpoint = remoteIpendpoint.value();
-        co_return {};
-    }
-
-    auto isConnected() -> bool override { return (bool)client; }
-    auto isListening() -> bool override { return (bool)client; }
-
-    auto accept()
-        -> ILIAS_NAMESPACE::IoTask<std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>> override {
-        co_return std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>(this, [](DatagramClientBase*) {});
-    }
-
-    ILIAS_NAMESPACE::UdpClient client;
-    ILIAS_NAMESPACE::IPEndpoint endpoint;
-    std::array<std::byte, 1500> buffer;
-    bool mIsCancel = false;
-};
-
-/**
- * @brief 数据包接收，负责拆包
- *
- * @tparam T
- * @tparam N
- */
-template <>
-class DatagramClient<ILIAS_NAMESPACE::TcpClient, 1500> : public DatagramBase, public DatagramClientBase {
-public:
-    DatagramClient() = default;
-    DatagramClient(ILIAS_NAMESPACE::TcpClient&& client) : client(std::move(client)) {}
-
-    auto recv() -> ILIAS_NAMESPACE::IoTask<std::span<std::byte>> override {
-        if (!client) {
-            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
-        }
-        if (mIsCancel) {
-            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
-        }
-        uint32_t size = 0;
-        if (auto ret = co_await (client.readAll({reinterpret_cast<std::byte*>(&size), sizeof(size)}) |
-                                 ILIAS_NAMESPACE::ignoreCancellation);
-            !ret) {
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
-        } else if (ret.value() == sizeof(size)) {
-            size = ILIAS_NAMESPACE::networkToHost(size);
-        } else {
-            client.close();
-            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Unknown);
-        }
-        if (buffer.size() < size) {
-            buffer.resize(size);
-        }
-        auto ret = co_await (client.readAll({buffer.data(), size}) | ILIAS_NAMESPACE::ignoreCancellation);
-        if (ret && ret.value() == size) {
-            co_return std::span<std::byte>{reinterpret_cast<std::byte*>(buffer.data()), size};
-        } else {
-            client.close();
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error_or(ILIAS_NAMESPACE::Error::Unknown));
-        }
-    }
-
-    auto send(std::span<const std::byte> data) -> ILIAS_NAMESPACE::IoTask<void> override {
-        if (!client) {
-            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
-        }
-        if (mIsCancel) {
-            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
-        }
-        auto size = ILIAS_NAMESPACE::hostToNetwork((uint32_t)data.size());
-        if (auto ret = co_await (client.writeAll({reinterpret_cast<std::byte*>(&size), sizeof(size)}) |
-                                 ILIAS_NAMESPACE::ignoreCancellation);
-            !ret) {
-            client.close();
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
-        } else if (ret.value() != sizeof(size)) {
-            client.close();
-            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Unknown);
-        }
-        auto ret = co_await (client.writeAll(data) | ILIAS_NAMESPACE::ignoreCancellation);
-        if (!ret || ret.value() != data.size()) {
-            client.close();
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error_or(ILIAS_NAMESPACE::Error::Unknown));
-        }
-        co_return {};
-    }
-    auto close() -> void override {
-        if (client) {
-            client.close();
-        }
-        mIsCancel = false;
-    }
-
-    auto cancel() -> void override {
-        mIsCancel = true;
-        if (client) {
-            client.cancel();
-        }
-    }
-
-    auto checkProtocol([[maybe_unused]] Type type, std::string_view url) -> bool override {
-        return !(url.substr(0, 6) != "tcp://") && type == Type::Client;
-    }
-
-    auto start(std::string_view url) -> ILIAS_NAMESPACE::IoTask<void> override {
-        mIsCancel       = false;
-        auto ipendpoint = ILIAS_NAMESPACE::IPEndpoint::fromString(url.substr(6));
-        if (!ipendpoint) {
-            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::InvalidArgument);
-        }
-        if (auto ret = co_await ILIAS_NAMESPACE::TcpClient::make(ipendpoint->family()); ret) {
-            if (auto ret1 = co_await ret.value().connect(ipendpoint.value()); ret1) {
-                client = std::move(ret.value());
-                co_return {};
-            } else {
-                co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
-            }
-        } else {
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
-        }
-    }
-
-    auto isConnected() -> bool override { return (bool)client; }
-
-    ILIAS_NAMESPACE::TcpClient client;
-    std::vector<std::byte> buffer;
-    bool mIsCancel = false;
-};
-
-template <>
-class DatagramClient<ILIAS_NAMESPACE::TcpListener, 1500> : public DatagramBase, public DatagramServerBase {
-public:
-    DatagramClient() {}
-
-    auto close() -> void override {
-        if (listener) {
-            listener.close();
-        }
-        mIsCancel = false;
-    }
-
-    auto cancel() -> void override {
-        mIsCancel = true;
-        if (listener) {
-            listener.cancel();
-        }
-    }
-
-    auto isListening() -> bool override { return (bool)listener; }
-
-    auto checkProtocol(Type type, std::string_view url) -> bool override {
-        return !(url.substr(0, 6) != "tcp://") && type == Type::Server;
-    }
-
-    auto start(std::string_view url) -> ILIAS_NAMESPACE::IoTask<void> override {
-        mIsCancel       = false;
-        auto ipendpoint = ILIAS_NAMESPACE::IPEndpoint::fromString(url.substr(6));
-        if (!ipendpoint) {
-            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::InvalidArgument);
-        }
-        if (auto ret = co_await ILIAS_NAMESPACE::TcpListener::make(ipendpoint->family()); ret) {
-            ret.value().setOption(ILIAS_NAMESPACE::sockopt::ReuseAddress(1));
-            if (auto ret1 = ret.value().bind(ipendpoint.value()); ret1) {
-                listener = std::move(ret.value());
-                co_return {};
-            } else {
-                co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
-            }
-        } else {
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
-        }
-        co_return {};
-    }
-
-    auto accept()
-        -> ILIAS_NAMESPACE::IoTask<std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>> override {
-        if (!listener) {
-            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
-        }
-        if (mIsCancel) {
-            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
-        }
-        if (auto ret = co_await listener.accept(); ret) {
-            co_return std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>(
-                new DatagramClient<ILIAS_NAMESPACE::TcpClient>(std::move(ret.value().first)),
-                +[](DatagramClientBase* ptr) { delete ptr; });
-        } else {
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
-        }
-    }
-
-    ILIAS_NAMESPACE::TcpListener listener;
-    std::vector<std::byte> buffer;
-    bool mIsCancel = false;
-};
-
-namespace traits {
-template <typename T>
-concept Serializable = requires(NekoProto::JsonSerializer::OutputSerializer serializer, T value) {
-    { serializer(value) };
-};
-template <typename T, class enable = void>
-struct IsSerializable : std::false_type {};
-template <Serializable T>
-struct IsSerializable<T, void> : std::true_type {};
-template <>
-struct IsSerializable<void> : std::true_type {};
-
+namespace detail {
 template <typename T, class enable = void>
 class RpcMethodTraits;
 
 template <typename RetT, typename... Args>
-    requires IsSerializable<std::tuple<std::remove_cvref_t<Args>...>>::value &&
-             IsSerializable<std::remove_cvref_t<RetT>>::value
+    requires traits::IsSerializable<std::tuple<std::remove_cvref_t<Args>...>>::value &&
+             traits::IsSerializable<std::remove_cvref_t<RetT>>::value
 class RpcMethodTraits<RetT(Args...), void> {
 public:
     using ParamsTupleType = std::tuple<std::remove_cvref_t<Args>...>;
@@ -498,7 +64,7 @@ protected:
 };
 
 template <typename RetT>
-    requires IsSerializable<std::remove_cvref_t<RetT>>::value
+    requires traits::IsSerializable<std::remove_cvref_t<RetT>>::value
 class RpcMethodTraits<RetT(void), void> {
 public:
     using ParamsTupleType = std::optional<std::array<int, 0>>;
@@ -537,68 +103,6 @@ protected:
 template <typename T>
 concept RpcMethodT = requires() { std::is_constructible_v<typename RpcMethodTraits<T>::FunctionType, T>; };
 
-// Helper to apply a function `func` to each element of a tuple `t`
-// `func` should be a generic callable (like a template lambda)
-template <typename Tuple, typename Func>
-constexpr void for_each_tuple_element(Tuple&& tuple, Func&& func) {
-    // Get tuple size at compile time
-    constexpr std::size_t Ns = std::tuple_size_v<std::remove_cvref_t<Tuple>>;
-
-    // Generate index sequence 0, 1, ..., Ns-1
-    // Use an immediately-invoked lambda to capture the index pack Is...
-    [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-        // Use a fold expression over the comma operator
-        // For each index I in Is..., call func(std::get<I>(tuple))
-        ((void)std::forward<Func>(func)(std::get<Is>(std::forward<Tuple>(tuple))), ...);
-        // The (void) cast suppresses potential warnings about unused result of comma operator
-        // std::forward preserves value category of tuple and func
-    }(std::make_index_sequence<Ns>{});
-}
-
-// --- MethodNameString Implementation (C++20 NTTP) ---
-template <std::size_t N>
-struct MethodNameString {
-    std::array<char, N + 1> data{};
-
-    // consteval 构造函数，确保编译时创建
-    consteval MethodNameString(const char* str) noexcept {
-        std::size_t actualLen = 0;
-        // 复制直到 null 或达到 N
-        while (str[actualLen] != '\0' && actualLen < N) {
-            data[actualLen] = str[actualLen];
-            actualLen++;
-        }
-        // 如果有空间，添加 null 终止符 (string_view 不需要，但 c_str 可能需要)
-        if (actualLen <= N) {
-            data[actualLen] = '\0';
-        }
-        // C++20 要求 NTTP 类型的所有基类和非静态数据成员都是 public 的
-        // 并且类型是结构性相等的 (structural equality) - 默认即可
-    }
-
-    // 比较运算符对 NTTP 至关重要
-    constexpr auto operator<=>(const MethodNameString&) const = default;
-    constexpr bool operator==(const MethodNameString&) const  = default;
-
-    // 访问器
-    [[nodiscard]]
-    constexpr std::size_t size() const noexcept {
-        return N;
-    }
-    [[nodiscard]]
-    constexpr std::string_view view() const noexcept {
-        return std::string_view(data.data(), N);
-    }
-    [[nodiscard]]
-    constexpr const char* c_str() const noexcept { // NOLINT
-        return data.data();
-    }
-};
-
-// CTAD 推导指引，方便从字面量创建 MethodNameString (去掉末尾 '\0')
-template <std::size_t N>
-MethodNameString(const char (&)[N]) -> MethodNameString<N - 1>;
-
 // The Client is defined as the origin of Request objects and the handler of Response objects.
 /**
  * @brief JsonRpc Request or Notification
@@ -633,10 +137,10 @@ using JsonRpcIdType = std::variant<std::nullptr_t, uint64_t, std::string>;
 template <typename T>
 struct JsonRpcRequest2;
 template <typename... Args>
-struct JsonRpcRequest2<traits::RpcMethodTraits<Args...>> {
+struct JsonRpcRequest2<RpcMethodTraits<Args...>> {
     std::optional<std::string> jsonrpc = "2.0";
     std::string method;
-    traits::RpcMethodTraits<Args...>::ParamsTupleType params;
+    RpcMethodTraits<Args...>::ParamsTupleType params;
     std::optional<JsonRpcIdType> id;
 
     NEKO_SERIALIZER(jsonrpc, method, params, id)
@@ -660,8 +164,8 @@ struct JsonRpcErrorResponse {
 template <typename T>
 struct JsonRpcResponse;
 template <typename... Args>
-struct JsonRpcResponse<traits::RpcMethodTraits<Args...>> {
-    using ReturnType = typename traits::RpcMethodTraits<Args...>::ReturnType;
+struct JsonRpcResponse<RpcMethodTraits<Args...>> {
+    using ReturnType = typename RpcMethodTraits<Args...>::ReturnType;
 
     std::string jsonrpc = "2.0";
     ReturnType result;
@@ -680,31 +184,31 @@ struct JsonRpcResponse<void> {
     NEKO_SERIALIZER(jsonrpc, error, id)
 };
 
-template <traits::RpcMethodT T, traits::MethodNameString MethodName>
-class RpcMethod : public traits::RpcMethodTraits<T> {
+template <RpcMethodT T, traits::MethodNameString MethodName>
+class RpcMethod : public RpcMethodTraits<T> {
 public:
     using MethodType   = T;
-    using MethodTraits = traits::RpcMethodTraits<T>;
+    using MethodTraits = RpcMethodTraits<T>;
     using typename MethodTraits::CoroutinesFuncType;
     using typename MethodTraits::FunctionType;
     using typename MethodTraits::ParamsTupleType;
     using typename MethodTraits::RawParamsType;
     using typename MethodTraits::RawReturnType;
     using typename MethodTraits::ReturnType;
-    using RequestType  = traits::JsonRpcRequest2<MethodTraits>;
-    using ResponseType = traits::JsonRpcResponse<MethodTraits>;
+    using RequestType  = JsonRpcRequest2<MethodTraits>;
+    using ResponseType = JsonRpcResponse<MethodTraits>;
 
     static constexpr std::string_view Name = MethodName.view();
 
-    static RequestType request(const traits::JsonRpcIdType& id, ParamsTupleType&& params = {}) {
+    static RequestType request(const JsonRpcIdType& id, ParamsTupleType&& params = {}) {
         return RequestType{.method = MethodName.c_str(), .params = std::forward<ParamsTupleType>(params), .id = id};
     }
 
-    static ResponseType response(const traits::JsonRpcIdType& id, const MethodTraits::ReturnType& result) {
+    static ResponseType response(const JsonRpcIdType& id, const MethodTraits::ReturnType& result) {
         return ResponseType{.result = result, .error = {}, .id = id};
     }
 
-    static ResponseType response(const traits::JsonRpcIdType& id, const traits::JsonRpcErrorResponse& error) {
+    static ResponseType response(const JsonRpcIdType& id, const JsonRpcErrorResponse& error) {
         return ResponseType{.result = {}, .error = error, .id = id};
     }
 
@@ -726,21 +230,29 @@ public:
     }
 
     void clear() { this->mCoFunction = nullptr; }
+
+    operator bool() const { return this->mCoFunction != nullptr; }
+
+    std::string description = []() {
+        return fmt::format(
+            "{} {}({})", traits::TypeName<RawReturnType>::name(), Name,
+            traits::parameter_to_string<RawParamsType>(std::make_index_sequence<std::tuple_size_v<RawParamsType>>{}));
+    }();
 };
 
-template <traits::RpcMethodT T>
-class RpcMethodDynamic : public traits::RpcMethodTraits<T> {
+template <RpcMethodT T>
+class RpcMethodDynamic : public RpcMethodTraits<T> {
 public:
     using MethodType   = T;
-    using MethodTraits = traits::RpcMethodTraits<T>;
+    using MethodTraits = RpcMethodTraits<T>;
     using typename MethodTraits::CoroutinesFuncType;
     using typename MethodTraits::FunctionType;
     using typename MethodTraits::ParamsTupleType;
     using typename MethodTraits::RawParamsType;
     using typename MethodTraits::RawReturnType;
     using typename MethodTraits::ReturnType;
-    using RequestType  = traits::JsonRpcRequest2<MethodTraits>;
-    using ResponseType = traits::JsonRpcResponse<MethodTraits>;
+    using RequestType  = JsonRpcRequest2<MethodTraits>;
+    using ResponseType = JsonRpcResponse<MethodTraits>;
 
     RpcMethodDynamic(std::string_view name, FunctionType func, bool isNotification = false) {
         gName             = name;
@@ -761,15 +273,15 @@ public:
         this->mIsNotification = isNotification;
     }
 
-    static RequestType request(const traits::JsonRpcIdType& id, ParamsTupleType&& params = {}) {
+    static RequestType request(const JsonRpcIdType& id, ParamsTupleType&& params = {}) {
         return RequestType{.method = gName.c_str(), .params = std::forward<ParamsTupleType>(params), .id = id};
     }
 
-    static ResponseType response(const traits::JsonRpcIdType& id, const MethodTraits::ReturnType& result) {
+    static ResponseType response(const JsonRpcIdType& id, const MethodTraits::ReturnType& result) {
         return ResponseType{.result = result, .error = {}, .id = id};
     }
 
-    static ResponseType response(const traits::JsonRpcIdType& id, const traits::JsonRpcErrorResponse& error) {
+    static ResponseType response(const JsonRpcIdType& id, const JsonRpcErrorResponse& error) {
         return ResponseType{.result = {}, .error = error, .id = id};
     }
 
@@ -796,12 +308,12 @@ private:
     static std::string gName;
 };
 
-template <traits::RpcMethodT T>
+template <RpcMethodT T>
 std::string RpcMethodDynamic<T>::gName;
 
 struct RpcMethodErrorHelper {
-    using ResponseType = traits::JsonRpcResponse<traits::RpcMethodTraits<void(void)>>;
-    static ResponseType response(const traits::JsonRpcIdType& id, const traits::JsonRpcErrorResponse& error) {
+    using ResponseType = JsonRpcResponse<RpcMethodTraits<void(void)>>;
+    static ResponseType response(const JsonRpcIdType& id, const JsonRpcErrorResponse& error) {
         return ResponseType{.result = {}, .error = error, .id = id};
     }
 };
@@ -1019,17 +531,28 @@ private:
         mHandlers;
 };
 
-} // namespace traits
+} // namespace detail
 
-using traits::RpcMethod;
+using detail::RpcMethod;
 template <typename ProtocolT>
 class JsonRpcServer {
+private:
+    struct MethodMetadataBase {
+        virtual ~MethodMetadataBase()          = default;
+        virtual std::string_view description() = 0;
+        virtual bool isBinded() const { return true; }
+    };
+    struct {
+        RpcMethod<std::vector<std::string>(), "rpc.get_method_list"> getMethodList;
+        RpcMethod<std::vector<std::string>(), "rpc.get_method_info_list"> getMethodInfoList;
+        RpcMethod<std::string(std::string), "rpc.get_method_info"> getMethodInfo;
+        RpcMethod<std::vector<std::string>(), "rpc.get_bind_method_list"> getBindedMethodList;
+    } mRpc;
+
 public:
     JsonRpcServer(ILIAS_NAMESPACE::IoContext& ctx) : mScop(ctx) {
-        auto rpcMethodMetadatas = detail::unwrap_struct(mProtocol);
-        for_each_tuple_element(rpcMethodMetadatas,
-                               [this](auto&& rpcMethodMetadata) { mImp.registerRpcMethod(rpcMethodMetadata); });
         mScop.setAutoCancel(true);
+        _init();
     }
     ~JsonRpcServer() { close(); }
     auto operator->() { return &mProtocol; }
@@ -1085,15 +608,39 @@ public:
     template <typename RetT, typename... Args>
     auto bindMethod(std::string_view name, std::function<RetT(Args...)> func) -> void {
         mImp.bindRpcMethod(name, func);
+        class MethodMetadata : public MethodMetadataBase {
+        public:
+            std::string_view description() override { return descript; }
+            std::string descript;
+        };
+        auto metadata = std::make_unique<MethodMetadata>();
+        metadata->descript =
+            fmt::format("{} {}({})", traits::TypeName<RetT>::name(), name,
+                        traits::parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}));
+        mMethodMetadatas[name] = std::move(metadata);
     }
 
     template <typename RetT, typename... Args>
     auto bindMethod(std::string_view name, std::function<ILIAS_NAMESPACE::IoTask<RetT>(Args...)> func) -> void {
         mImp.bindRpcMethod(name, func);
+        class MethodMetadata : public MethodMetadataBase {
+        public:
+            std::string_view description() override { return descript; }
+            std::string descript;
+        };
+        auto metadata = std::make_unique<MethodMetadata>();
+        metadata->descript =
+            fmt::format("{} {}({})", traits::TypeName<RetT>::name(), name,
+                        traits::parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}));
+        mMethodMetadatas[name] = std::move(metadata);
     }
 
     auto callMethod(std::string_view json) -> ILIAS_NAMESPACE::Task<std::vector<char>> {
         co_return co_await mImp.processRequest(json.data(), json.size(), nullptr);
+    }
+
+    auto methodMetadatas() -> std::map<std::string_view, std::unique_ptr<MethodMetadataBase>>& {
+        return mMethodMetadatas;
     }
 
 private:
@@ -1117,11 +664,59 @@ private:
         }
     }
 
+    auto _init() {
+        auto rpcMethodMetadatas = detail::unwrap_struct(mProtocol);
+        auto registerRpcMethod  = [this]<typename T>(T& rpcMethodMetadata) {
+            struct MethodMetadata : public MethodMetadataBase {
+                std::string_view description() override { return rawData->description; }
+                bool isBinded() const { return static_cast<bool>(*rawData); }
+                T* rawData;
+            };
+            auto metadata                            = std::make_unique<MethodMetadata>();
+            metadata->rawData                        = std::addressof(rpcMethodMetadata);
+            mMethodMetadatas[rpcMethodMetadata.Name] = std::move(metadata);
+            mImp.registerRpcMethod(rpcMethodMetadata);
+        };
+        traits::for_each_tuple_element(rpcMethodMetadatas, registerRpcMethod);
+        auto rpcMethoddatas = detail::unwrap_struct(mRpc);
+        traits::for_each_tuple_element(rpcMethoddatas, registerRpcMethod);
+        mRpc.getMethodInfo = [this](std::string methodName) -> std::string {
+            if (auto it = methodMetadatas().find(methodName); it != methodMetadatas().end()) {
+                return std::string(it->second->description());
+            }
+            return std::string("Method not found!");
+        };
+        mRpc.getMethodInfoList = [this]() -> std::vector<std::string> {
+            std::vector<std::string> methodDesList;
+            for (auto& item : methodMetadatas()) {
+                methodDesList.emplace_back(item.second->description());
+            }
+            return methodDesList;
+        };
+        mRpc.getMethodList = [this]() -> std::vector<std::string> {
+            std::vector<std::string> methodList;
+            for (auto& item : methodMetadatas()) {
+                methodList.emplace_back(item.first);
+            }
+            return methodList;
+        };
+        mRpc.getBindedMethodList = [this]() -> std::vector<std::string> {
+            std::vector<std::string> methodList;
+            for (auto& item : methodMetadatas()) {
+                if (item.second->isBinded()) {
+                    methodList.emplace_back(item.first);
+                }
+            }
+            return methodList;
+        };
+    }
+
 private:
     ProtocolT mProtocol;
-    traits::JsonRpcServerImp mImp;
+    detail::JsonRpcServerImp mImp;
     std::unique_ptr<DatagramServerBase> mServer;
     std::list<std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>> mClients;
+    std::map<std::string_view, std::unique_ptr<MethodMetadataBase>> mMethodMetadatas;
     ILIAS_NAMESPACE::TaskScope mScop;
 };
 
@@ -1130,8 +725,8 @@ class JsonRpcClient {
 public:
     JsonRpcClient(ILIAS_NAMESPACE::IoContext& ctx) : mScop(ctx) {
         auto rpcMethodMetadatas = detail::unwrap_struct(mProtocol);
-        for_each_tuple_element(rpcMethodMetadatas,
-                               [this](auto&& rpcMethodMetadata) { _registerRpcMethod(rpcMethodMetadata); });
+        traits::for_each_tuple_element(rpcMethodMetadatas,
+                                       [this](auto&& rpcMethodMetadata) { _registerRpcMethod(rpcMethodMetadata); });
         mScop.setAutoCancel(true);
     }
     ~JsonRpcClient() { close(); }
@@ -1180,15 +775,15 @@ public:
 
     template <typename RetT, typename... Args>
     auto callRemote(std::string_view name, Args... args) -> ILIAS_NAMESPACE::IoTask<RetT> {
-        using CoroutinesFuncType = typename traits::RpcMethodDynamic<RetT(Args...)>::CoroutinesFuncType;
-        traits::RpcMethodDynamic<RetT(Args...)> metadata(name, (CoroutinesFuncType)(nullptr), false);
+        using CoroutinesFuncType = typename detail::RpcMethodDynamic<RetT(Args...)>::CoroutinesFuncType;
+        detail::RpcMethodDynamic<RetT(Args...)> metadata(name, (CoroutinesFuncType)(nullptr), false);
         co_return co_await _callRemote(metadata, std::forward<Args>(args)...);
     }
 
     template <typename RetT, typename... Args>
     auto notifyRemote(std::string_view name, Args... args) -> ILIAS_NAMESPACE::IoTask<RetT> {
-        using CoroutinesFuncType = typename traits::RpcMethodDynamic<RetT(Args...)>::CoroutinesFuncType;
-        traits::RpcMethodDynamic<RetT(Args...)> metadata(name, (CoroutinesFuncType)(nullptr), true);
+        using CoroutinesFuncType = typename detail::RpcMethodDynamic<RetT(Args...)>::CoroutinesFuncType;
+        detail::RpcMethodDynamic<RetT(Args...)> metadata(name, (CoroutinesFuncType)(nullptr), true);
         co_return co_await _callRemote(metadata, std::forward<Args>(args)...);
     }
 
@@ -1270,7 +865,7 @@ private:
     }
 
     template <typename T>
-    auto _recvResponse(typename std::decay_t<T>::ResponseType& response, traits::JsonRpcIdType& id)
+    auto _recvResponse(typename std::decay_t<T>::ResponseType& response, detail::JsonRpcIdType& id)
         -> ILIAS_NAMESPACE::IoTask<typename std::decay_t<T>::RawReturnType> {
         if (auto ret = co_await mClient->recv(); ret) {
             auto buffer = ret.value();
@@ -1285,7 +880,7 @@ private:
                     co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ResponseIdNotMatch);
                 }
                 if (response.error.has_value()) {
-                    traits::JsonRpcErrorResponse err = response.error.value();
+                    detail::JsonRpcErrorResponse err = response.error.value();
                     NEKO_LOG_ERROR("jsonrpc", "Error({}): {}", err.code, err.message);
                     co_return ILIAS_NAMESPACE::Unexpected(
                         err.code > 0 ? ILIAS_NAMESPACE::Error(ILIAS_NAMESPACE::Error::Code(err.code))

@@ -398,6 +398,11 @@ int main() {
     *   **`JsonRpcServer<ModuleType>`**: RPC 服务器类，用于托管 RPC 模块并处理客户端请求。
     *   **`JsonRpcClient<ModuleType>`**: RPC 客户端类，用于连接服务器并调用远程方法。
     *   **异步支持**: 方法实现可以返回 `ilias::Task<ResultType>` 以支持异步操作。
+*  **服务端内建方法**: 
+    * rpc.get_method_list:      获取当前服务端所有方法列表
+    * rpc.get_bind_method_list: 获取当前服务端所有绑定方法列表
+    * rpc.get_method_info:      获取指定方法的描述
+    * rpc.get_method_info_list: 获取所有方法的描述
 
 **示例**:
 
