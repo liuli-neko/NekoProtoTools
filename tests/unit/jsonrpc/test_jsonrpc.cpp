@@ -262,6 +262,92 @@ TEST_F(JsonRpcTest, Notification) {
     server.close();
 }
 
+TEST_F(JsonRpcTest, Basic) {
+    JsonRpcServer<Protocol> server{*gContext};
+    JsonRpcClient<Protocol> client{*gContext};
+
+    ilias_wait server.start("udp://127.0.0.1:12335-127.0.0.1:12336");
+    ilias_wait client.connect("udp://127.0.0.1:12336-127.0.0.1:12335");
+
+    server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
+
+    auto methods = ilias_wait client.callRemote<std::vector<std::string>>("rpc.get_method_list");
+    ASSERT_TRUE(methods.has_value());
+    EXPECT_EQ(methods.value().size(), 14);
+    int idx = 0;
+    EXPECT_EQ(methods.value()[idx++], "rpc.get_bind_method_list");
+    EXPECT_EQ(methods.value()[idx++], "rpc.get_method_info");
+    EXPECT_EQ(methods.value()[idx++], "rpc.get_method_info_list");
+    EXPECT_EQ(methods.value()[idx++], "rpc.get_method_list");
+    EXPECT_EQ(methods.value()[idx++], "test1");
+    EXPECT_EQ(methods.value()[idx++], "test10");
+    EXPECT_EQ(methods.value()[idx++], "test2");
+    EXPECT_EQ(methods.value()[idx++], "test3");
+    EXPECT_EQ(methods.value()[idx++], "test4");
+    EXPECT_EQ(methods.value()[idx++], "test5");
+    EXPECT_EQ(methods.value()[idx++], "test6");
+    EXPECT_EQ(methods.value()[idx++], "test7");
+    EXPECT_EQ(methods.value()[idx++], "test8");
+    EXPECT_EQ(methods.value()[idx++], "test9");
+
+    idx     = 0;
+    methods = ilias_wait client.callRemote<std::vector<std::string>>("rpc.get_bind_method_list");
+    ASSERT_TRUE(methods.has_value());
+    EXPECT_EQ(methods.value().size(), 5);
+    EXPECT_EQ(methods.value()[idx++], "rpc.get_bind_method_list");
+    EXPECT_EQ(methods.value()[idx++], "rpc.get_method_info");
+    EXPECT_EQ(methods.value()[idx++], "rpc.get_method_info_list");
+    EXPECT_EQ(methods.value()[idx++], "rpc.get_method_list");
+    EXPECT_EQ(methods.value()[idx++], "test1");
+
+    auto methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test1");
+    ASSERT_TRUE(methodInfo.has_value());
+    EXPECT_EQ(methodInfo.value(), "int test1(int, int)");
+
+    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test2");
+    ASSERT_TRUE(methodInfo.has_value());
+    EXPECT_EQ(methodInfo.value(), "void test2(int, int)");
+
+    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test3");
+    ASSERT_TRUE(methodInfo.has_value());
+    EXPECT_EQ(methodInfo.value(), "void test3()");
+
+    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test4");
+    ASSERT_TRUE(methodInfo.has_value());
+    EXPECT_EQ(methodInfo.value(), "int test4()");
+
+    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test5");
+    ASSERT_TRUE(methodInfo.has_value());
+    EXPECT_EQ(methodInfo.value(), "std::string test5(std::string, double)");
+
+    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test6");
+    ASSERT_TRUE(methodInfo.has_value());
+    EXPECT_EQ(methodInfo.value(), "std::string test6(std::tuple<int, double, bool>)");
+
+    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test7");
+    ASSERT_TRUE(methodInfo.has_value());
+    EXPECT_EQ(methodInfo.value(), "std::string test7()");
+
+    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test8");
+    ASSERT_TRUE(methodInfo.has_value());
+    EXPECT_EQ(methodInfo.value(), "int test8(std::nullptr_t)");
+
+    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test9");
+    ASSERT_TRUE(methodInfo.has_value());
+    EXPECT_EQ(methodInfo.value(), "std::vector<int> test9(std::vector<bool>)");
+
+    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test10");
+    ASSERT_TRUE(methodInfo.has_value());
+    EXPECT_EQ(methodInfo.value(), "Copytest test10(int)");
+
+    auto methodInfoList = ilias_wait client.callRemote<std::vector<std::string>>("rpc.get_method_info_list");
+    ASSERT_TRUE(methodInfoList.has_value());
+    EXPECT_EQ(methodInfoList.value().size(), 14);
+
+    client.close();
+    server.close();
+}
+
 ILIAS_NAMESPACE::PlatformContext* JsonRpcTest::gContext = nullptr;
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
