@@ -33,10 +33,11 @@ public:
     using ParamsTupleType = std::tuple<std::remove_cvref_t<Args>...>;
     using ReturnType =
         std::optional<std::conditional_t<std::is_void_v<RetT>, std::nullptr_t, std::remove_cvref_t<RetT>>>;
-    using FunctionType       = std::function<RetT(Args...)>;
-    using RawReturnType      = RetT;
-    using RawParamsType      = std::tuple<Args...>;
-    using CoroutinesFuncType = std::function<ILIAS_NAMESPACE::IoTask<RawReturnType>(Args...)>;
+    using FunctionType             = std::function<RetT(Args...)>;
+    using RawReturnType            = RetT;
+    using RawParamsType            = std::tuple<Args...>;
+    using CoroutinesFuncType       = std::function<ILIAS_NAMESPACE::IoTask<RawReturnType>(Args...)>;
+    constexpr static int NumParams = sizeof...(Args);
 
     auto operator()(Args... args) const -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
         if (mCoFunction) {
@@ -70,10 +71,11 @@ public:
     using ParamsTupleType = std::optional<std::array<int, 0>>;
     using ReturnType =
         std::optional<std::conditional_t<std::is_void_v<RetT>, std::nullptr_t, std::remove_cvref_t<RetT>>>;
-    using FunctionType       = std::function<RetT()>;
-    using RawReturnType      = RetT;
-    using RawParamsType      = std::tuple<>;
-    using CoroutinesFuncType = std::function<ILIAS_NAMESPACE::IoTask<RawReturnType>()>;
+    using FunctionType             = std::function<RetT()>;
+    using RawReturnType            = RetT;
+    using RawParamsType            = std::tuple<>;
+    using CoroutinesFuncType       = std::function<ILIAS_NAMESPACE::IoTask<RawReturnType>()>;
+    constexpr static int NumParams = 0;
 
     auto operator()() const noexcept -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
         if (mCoFunction) {
@@ -134,16 +136,32 @@ concept RpcMethodT = requires() { std::is_constructible_v<typename RpcMethodTrai
  *
  */
 using JsonRpcIdType = std::variant<std::nullptr_t, uint64_t, std::string>;
-template <typename T>
+template <typename T, traits::ConstexprString... ArgNames>
 struct JsonRpcRequest2;
-template <typename... Args>
-struct JsonRpcRequest2<RpcMethodTraits<Args...>> {
+template <typename... Args, traits::ConstexprString... ArgNames>
+struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
+    using ParamsTupleType = typename RpcMethodTraits<Args...>::ParamsTupleType;
+    static_assert(sizeof...(ArgNames) == 0 || RpcMethodTraits<Args...>::NumParams == sizeof...(ArgNames),
+                  "JsonRpcRequest2: The number of parameters and names do not match.");
+
     std::optional<std::string> jsonrpc = "2.0";
     std::string method;
-    RpcMethodTraits<Args...>::ParamsTupleType params;
+    ParamsTupleType params;
     std::optional<JsonRpcIdType> id;
 
-    NEKO_SERIALIZER(jsonrpc, method, params, id)
+    template <typename SerializerT>
+    bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {
+        traits::SerializerHelperObject<const ParamsTupleType, ArgNames...> mParamsHelper{params};
+        return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
+                          make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id));
+    }
+
+    template <typename SerializerT>
+    bool serialize(SerializerT& serializer) NEKO_NOEXCEPT {
+        traits::SerializerHelperObject<ParamsTupleType, ArgNames...> mParamsHelper{params};
+        return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
+                          make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id));
+    }
 };
 
 struct JsonRpcRequestMethod {
@@ -184,8 +202,11 @@ struct JsonRpcResponse<void> {
     NEKO_SERIALIZER(jsonrpc, error, id)
 };
 
-template <RpcMethodT T, traits::MethodNameString MethodName>
+template <RpcMethodT T, traits::ConstexprString MethodName, traits::ConstexprString... ArgNames>
 class RpcMethod : public RpcMethodTraits<T> {
+    static_assert(sizeof...(ArgNames) == 0 || RpcMethodTraits<T>::NumParams == sizeof...(ArgNames),
+                  "RpcMethodTraits: The number of parameters and names do not match.");
+
 public:
     using MethodType   = T;
     using MethodTraits = RpcMethodTraits<T>;
@@ -195,7 +216,7 @@ public:
     using typename MethodTraits::RawParamsType;
     using typename MethodTraits::RawReturnType;
     using typename MethodTraits::ReturnType;
-    using RequestType  = JsonRpcRequest2<MethodTraits>;
+    using RequestType  = JsonRpcRequest2<MethodTraits, ArgNames...>;
     using ResponseType = JsonRpcResponse<MethodTraits>;
 
     static constexpr std::string_view Name = MethodName.view();
@@ -235,14 +256,17 @@ public:
 
     std::string description = []() {
         return traits::TypeName<RawReturnType>::name() + " " + std::string(Name) + "(" +
-               traits::parameter_to_string<RawParamsType>(
-                   std::make_index_sequence<std::tuple_size_v<RawParamsType>>{}) +
+               traits::parameter_to_string<RawParamsType>(std::make_index_sequence<std::tuple_size_v<RawParamsType>>{},
+                                                          traits::ArgNamesHelper<ArgNames...>{}) +
                ")";
     }();
 };
 
-template <RpcMethodT T>
+template <RpcMethodT T, traits::ConstexprString... ArgNames>
 class RpcMethodDynamic : public RpcMethodTraits<T> {
+    static_assert(sizeof...(ArgNames) == 0 || RpcMethodTraits<T>::NumParams == sizeof...(ArgNames),
+                  "RpcMethodDynamic: The number of parameters and names do not match.");
+
 public:
     using MethodType   = T;
     using MethodTraits = RpcMethodTraits<T>;
@@ -252,7 +276,7 @@ public:
     using typename MethodTraits::RawParamsType;
     using typename MethodTraits::RawReturnType;
     using typename MethodTraits::ReturnType;
-    using RequestType  = JsonRpcRequest2<MethodTraits>;
+    using RequestType  = JsonRpcRequest2<MethodTraits, ArgNames...>;
     using ResponseType = JsonRpcResponse<MethodTraits>;
 
     RpcMethodDynamic(std::string_view name, FunctionType func, bool isNotification = false) {
@@ -309,8 +333,8 @@ private:
     static std::string gName;
 };
 
-template <RpcMethodT T>
-std::string RpcMethodDynamic<T>::gName;
+template <RpcMethodT T, traits::ConstexprString... ArgNames>
+std::string RpcMethodDynamic<T, ArgNames...>::gName;
 
 struct RpcMethodErrorHelper {
     using ResponseType = JsonRpcResponse<RpcMethodTraits<void(void)>>;
@@ -336,9 +360,10 @@ public:
         };
     }
 
-    template <typename RetT, typename... Args>
-    auto bindRpcMethod(std::string_view name, std::function<RetT(Args...)> func) -> void {
-        mHandlers[name] = [metadata = RpcMethodDynamic<RetT(Args...)>(name, func),
+    template <typename RetT, typename... Args, traits::ConstexprString... ArgNames>
+    auto bindRpcMethod(std::string_view name, std::function<RetT(Args...)> func,
+                       traits::ArgNamesHelper<ArgNames...> /*unused*/ = {}) -> void {
+        mHandlers[name] = [metadata = RpcMethodDynamic<RetT(Args...), ArgNames...>(name, func),
                            this](NekoProto::JsonSerializer::InputSerializer& in,
                                  NekoProto::JsonSerializer::OutputSerializer& out,
                                  JsonRpcRequestMethod& method) -> ILIAS_NAMESPACE::Task<void> {
@@ -346,9 +371,10 @@ public:
         };
     }
 
-    template <typename RetT, typename... Args>
-    auto bindRpcMethod(std::string_view name, std::function<ILIAS_NAMESPACE::IoTask<RetT>(Args...)> func) -> void {
-        mHandlers[name] = [metadata = RpcMethodDynamic<RetT(Args...)>(name, func),
+    template <typename RetT, typename... Args, traits::ConstexprString... ArgNames>
+    auto bindRpcMethod(std::string_view name, std::function<ILIAS_NAMESPACE::IoTask<RetT>(Args...)> func,
+                       traits::ArgNamesHelper<ArgNames...> /*unused*/ = {}) -> void {
+        mHandlers[name] = [metadata = RpcMethodDynamic<RetT(Args...), ArgNames...>(name, func),
                            this](NekoProto::JsonSerializer::InputSerializer& in,
                                  NekoProto::JsonSerializer::OutputSerializer& out,
                                  JsonRpcRequestMethod& method) -> ILIAS_NAMESPACE::Task<void> {
@@ -457,7 +483,7 @@ private:
 
     template <typename T>
     auto _handleError(NekoProto::JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method,
-                      JsonRpcErrorResponse&& error) -> ILIAS_NAMESPACE::Task<void> {
+                      JsonRpcErrorResponse error) -> ILIAS_NAMESPACE::Task<void> {
         if (!method.id.has_value()) { // notification
             co_return;
         }
@@ -546,7 +572,7 @@ private:
     struct {
         RpcMethod<std::vector<std::string>(), "rpc.get_method_list"> getMethodList;
         RpcMethod<std::vector<std::string>(), "rpc.get_method_info_list"> getMethodInfoList;
-        RpcMethod<std::string(std::string), "rpc.get_method_info"> getMethodInfo;
+        RpcMethod<std::string(std::string), "rpc.get_method_info", "method_name"> getMethodInfo;
         RpcMethod<std::vector<std::string>(), "rpc.get_bind_method_list"> getBindedMethodList;
     } mRpc;
 
@@ -606,33 +632,39 @@ public:
         co_return false;
     }
 
-    template <typename RetT, typename... Args>
+    template <traits::ConstexprString... ArgNames, typename RetT, typename... Args>
     auto bindMethod(std::string_view name, std::function<RetT(Args...)> func) -> void {
-        mImp.bindRpcMethod(name, func);
+        static_assert(sizeof...(ArgNames) == 0 || sizeof...(ArgNames) == sizeof...(Args),
+                      "bindMethod: The number of parameters and names do not match.");
+        mImp.bindRpcMethod(name, func, traits::ArgNamesHelper<ArgNames...>{});
         class MethodMetadata : public MethodMetadataBase {
         public:
             std::string_view description() override { return descript; }
             std::string descript;
         };
-        auto metadata = std::make_unique<MethodMetadata>();
-        metadata->descript =
-            traits::TypeName<RetT>::name() + " " + std::string(name) + "(" +
-            traits::parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}) + ")";
+        auto metadata      = std::make_unique<MethodMetadata>();
+        metadata->descript = traits::TypeName<RetT>::name() + " " + std::string(name) + "(" +
+                             traits::parameter_to_string<std::tuple<Args...>>(
+                                 std::make_index_sequence<sizeof...(Args)>{}, traits::ArgNamesHelper<ArgNames...>{}) +
+                             ")";
         mMethodMetadatas[name] = std::move(metadata);
     }
 
-    template <typename RetT, typename... Args>
+    template <traits::ConstexprString... ArgNames, typename RetT, typename... Args>
     auto bindMethod(std::string_view name, std::function<ILIAS_NAMESPACE::IoTask<RetT>(Args...)> func) -> void {
-        mImp.bindRpcMethod(name, func);
+        static_assert(sizeof...(ArgNames) == 0 || sizeof...(ArgNames) == sizeof...(Args),
+                      "bindMethod: The number of parameters and names do not match.");
+        mImp.bindRpcMethod(name, func, traits::ArgNamesHelper<ArgNames...>{});
         class MethodMetadata : public MethodMetadataBase {
         public:
             std::string_view description() override { return descript; }
             std::string descript;
         };
-        auto metadata = std::make_unique<MethodMetadata>();
-        metadata->descript =
-            traits::TypeName<RetT>::name() + " " + std::string(name) + "(" +
-            traits::parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}) + ")";
+        auto metadata      = std::make_unique<MethodMetadata>();
+        metadata->descript = traits::TypeName<RetT>::name() + " " + std::string(name) + "(" +
+                             traits::parameter_to_string<std::tuple<Args...>>(
+                                 std::make_index_sequence<sizeof...(Args)>{}, traits::ArgNamesHelper<ArgNames...>{}) +
+                             ")";
         mMethodMetadatas[name] = std::move(metadata);
     }
 
@@ -774,17 +806,17 @@ public:
         co_return false;
     }
 
-    template <typename RetT, typename... Args>
+    template <typename RetT, traits::ConstexprString... ArgNames, typename... Args>
     auto callRemote(std::string_view name, Args... args) -> ILIAS_NAMESPACE::IoTask<RetT> {
-        using CoroutinesFuncType = typename detail::RpcMethodDynamic<RetT(Args...)>::CoroutinesFuncType;
-        detail::RpcMethodDynamic<RetT(Args...)> metadata(name, (CoroutinesFuncType)(nullptr), false);
+        using CoroutinesFuncType = typename detail::RpcMethodDynamic<RetT(Args...), ArgNames...>::CoroutinesFuncType;
+        detail::RpcMethodDynamic<RetT(Args...), ArgNames...> metadata(name, (CoroutinesFuncType)(nullptr), false);
         co_return co_await _callRemote(metadata, std::forward<Args>(args)...);
     }
 
-    template <typename RetT, typename... Args>
+    template <typename RetT, traits::ConstexprString... ArgNames, typename... Args>
     auto notifyRemote(std::string_view name, Args... args) -> ILIAS_NAMESPACE::IoTask<RetT> {
-        using CoroutinesFuncType = typename detail::RpcMethodDynamic<RetT(Args...)>::CoroutinesFuncType;
-        detail::RpcMethodDynamic<RetT(Args...)> metadata(name, (CoroutinesFuncType)(nullptr), true);
+        using CoroutinesFuncType = typename detail::RpcMethodDynamic<RetT(Args...), ArgNames...>::CoroutinesFuncType;
+        detail::RpcMethodDynamic<RetT(Args...), ArgNames...> metadata(name, (CoroutinesFuncType)(nullptr), true);
         co_return co_await _callRemote(metadata, std::forward<Args>(args)...);
     }
 

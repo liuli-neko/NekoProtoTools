@@ -315,11 +315,11 @@ public:
                 _writeKey({value.name, value.nameLen});
                 return (*this)(value.value.value());
             }
+            return true;
         } else {
             _writeKey({value.name, value.nameLen});
             return (*this)(value.value);
         }
-        return true;
     }
 #else
     template <typename T>
@@ -562,7 +562,7 @@ public:
     inline bool loadValue(float& value) NEKO_NOEXCEPT {
         double ret;
         if ((*mCurrentItem).value().get_double().get(ret) == 0U) {
-            value = ret;
+            value = static_cast<float>(ret);
             ++(*mCurrentItem);
             return true;
         }
@@ -595,7 +595,7 @@ public:
 
     template <typename T>
     inline bool loadValue(const SizeTag<T>& value) NEKO_NOEXCEPT {
-        value.size = (*mCurrentItem).size();
+        value.size = static_cast<uint32_t>((*mCurrentItem).size());
         return true;
     }
 
@@ -699,6 +699,26 @@ public:
         }
     }
 
+    bool isArray() {
+        if (mItemStack.empty()) {
+            return mRoot.is_array();
+        }
+        if (mCurrentItem == nullptr) {
+            return false;
+        }
+        return (*mCurrentItem).value().is_array();
+    }
+
+    bool isObject() {
+        if (mItemStack.empty()) {
+            return mRoot.is_object();
+        }
+        if (mCurrentItem == nullptr) {
+            return false;
+        }
+        return (*mCurrentItem).value().is_object();
+    }
+
 private:
     SimdJsonInputSerializer& operator=(const SimdJsonInputSerializer&) = delete;
     SimdJsonInputSerializer& operator=(SimdJsonInputSerializer&&)      = delete;
@@ -789,7 +809,7 @@ template <typename T, typename BufferT,
           traits::enable_if_t<traits::has_method_const_serialize<T, SimdJsonOutputSerializer<BufferT>>::value> =
               traits::default_value_for_enable>
 inline bool prologue(SimdJsonOutputSerializer<BufferT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
-    return sa.startObject(-1);
+    return sa.startObject((std::size_t)-1);
 }
 template <typename T, typename BufferT,
           traits::enable_if_t<traits::has_method_const_serialize<T, SimdJsonOutputSerializer<BufferT>>::value> =

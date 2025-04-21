@@ -162,7 +162,14 @@ inline void neko_proto_private_log_out(const char* level, const char* message, c
     }
     time_t time  = std::chrono::system_clock::to_time_t(context.time);
     char buf[64] = {0};
-    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", localtime(&time));
+#ifdef _MSVC_LANG
+#pragma warning(push)
+#pragma warning(disable : 4996) // disable deprecated warning
+#endif
+    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&time));
+#ifdef _MSVC_LANG
+#pragma warning(pop)
+#endif
     uint64_t disMillseconds =
         std::chrono::duration_cast<std::chrono::milliseconds>(context.time.time_since_epoch()).count() -
         (std::chrono::duration_cast<std::chrono::seconds>(context.time.time_since_epoch()).count() * 1000);

@@ -963,7 +963,7 @@ TEST(RandomProtoTest, EnumTest) {
     TestEnumBG8AC proto = TestEnumBG8AC::TestEnumBG8AC0;
     std::vector<char> buffer;
     JsonSerializer::OutputSerializer out(buffer);
-    out.startObject(-1);
+    out.startObject((std::size_t)-1);
     out(make_name_value_pair<const TestEnumBG8AC&>("a", proto));
     out(make_name_value_pair<const TestEnumBG8AC&>("b", TestEnumBG8AC::TestEnumBG8AC10));
     out(make_name_value_pair<const TestEnumBG8AC&>("c", TestEnumBG8AC::TestEnumBG8AC20));

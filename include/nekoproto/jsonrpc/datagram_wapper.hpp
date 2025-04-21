@@ -356,7 +356,6 @@ public:
         } else {
             co_return ILIAS_NAMESPACE::Unexpected(ret.error());
         }
-        co_return {};
     }
 
     auto accept()

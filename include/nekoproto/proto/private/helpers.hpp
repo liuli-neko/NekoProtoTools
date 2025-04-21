@@ -69,6 +69,8 @@ inline NameValuePair<T> make_name_value_pair(const std::string_view& name, T&& v
 }
 #endif
 
+#define NEKO_PROTO_NAME_VALUE_PAIR(value) make_name_value_pair(#value, value)
+
 template <class T>
 class SizeTag : public traits::detail::SizeTagCore {
 private:
@@ -119,8 +121,8 @@ private:
     // process a single value
     template <class T>
     bool _process(T&& head) NEKO_NOEXCEPT {
-        prologue(*mSelf, head);
-        auto ret = mSelf->_processImpl(head);
+        auto ret = prologue(*mSelf, head);
+        ret = ret && mSelf->_processImpl(head);
         epilogue(*mSelf, head);
         return ret;
     }
@@ -129,7 +131,7 @@ private:
     template <class T, class... Other>
     bool _process(T&& head, Other&&... tail) NEKO_NOEXCEPT {
         auto ret = _process(std::forward<T>(head));
-        ret      = _process(std::forward<Other>(tail)...) && ret;
+        ret      = ret && _process(std::forward<Other>(tail)...);
         return ret;
     }
     template <class T, traits::enable_if_t<traits::has_method_const_serialize<T, SerializerType>::value,

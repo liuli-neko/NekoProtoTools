@@ -307,25 +307,25 @@ public:
     bool saveValue(const bool value) NEKO_NOEXCEPT { return mWriter.Bool(value); }
     template <typename CharT, typename Traits, typename Alloc>
     bool saveValue(const std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
-        return mWriter.String(value.c_str(), value.size());
+        return mWriter.String(value.c_str(), (int)value.size());
     }
     bool saveValue(const char* value) NEKO_NOEXCEPT { return mWriter.String(value); }
     bool saveValue(const std::nullptr_t) NEKO_NOEXCEPT { return mWriter.Null(); }
 #if NEKO_CPP_PLUS >= 17
     template <typename CharT, typename Traits>
     bool saveValue(const std::basic_string_view<CharT, Traits> value) NEKO_NOEXCEPT {
-        return mWriter.String(value.data(), value.size());
+        return mWriter.String(value.data(), (int)value.size());
     }
 
     template <typename T>
     bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
         if constexpr (traits::is_optional<T>::value) {
             if (value.value.has_value()) {
-                return mWriter.Key(value.name, value.nameLen) && (*this)(value.value.value());
+                return mWriter.Key(value.name, (int)value.nameLen) && (*this)(value.value.value());
             }
             return true;
         } else {
-            return mWriter.Key(value.name, value.nameLen) && (*this)(value.value);
+            return mWriter.Key(value.name, (int)value.nameLen) && (*this)(value.value);
         }
     }
 #else
@@ -487,7 +487,7 @@ public:
         if (!(*mCurrentItem).value().IsNumber()) {
             return false;
         }
-        value = (*mCurrentItem).value().GetDouble();
+        value = static_cast<float>((*mCurrentItem).value().GetDouble());
         ++(*mCurrentItem);
         return true;
     }
@@ -524,7 +524,7 @@ public:
     template <typename T>
     bool loadValue(const SizeTag<T>& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        value.size = (*mCurrentItem).size();
+        value.size = static_cast<uint32_t>((*mCurrentItem).size());
         return true;
     }
 
@@ -649,6 +649,26 @@ public:
         if (mCurrentItem != nullptr) {
             --(*mCurrentItem);
         }
+    }
+
+    bool isArray() {
+        if (mItemStack.empty()) {
+            return mDocument.IsArray();
+        }
+        if (mCurrentItem == nullptr) {
+            return false;
+        }
+        return (*mCurrentItem).value().IsArray();
+    }
+
+    bool isObject() {
+        if (mItemStack.empty()) {
+            return mDocument.IsObject();
+        }
+        if (mCurrentItem == nullptr) {
+            return false;
+        }
+        return (*mCurrentItem).value().IsObject();
     }
 
 private:
