@@ -966,8 +966,8 @@ TEST_F(JsonSerializerTest, Struct) {
         EXPECT_TRUE(output(make_name_value_pair("a", testp)));
         EXPECT_TRUE(output.end());
         buffer.push_back('\0');
-        const char* str = buffer.data();
-        NEKO_LOG_DEBUG("unit test", "{}", str);
+        const char* str1 = buffer.data();
+        NEKO_LOG_DEBUG("unit test", "{}", str1);
     }
 #endif
 }
