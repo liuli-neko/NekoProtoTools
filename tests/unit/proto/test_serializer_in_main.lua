@@ -1,3 +1,4 @@
+if has_config("enable_protocol") then
 target("test_serializer_in_main")
     set_kind("binary")
     set_default(false)
@@ -20,3 +21,4 @@ target("test_serializer_in_main")
         end)
     end
 target_end()
+end
