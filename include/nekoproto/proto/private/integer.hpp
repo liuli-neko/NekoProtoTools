@@ -122,7 +122,7 @@ inline int IntegerDecoder::decode(const uint8_t* buffer, int size, T& value, uin
     while (current < size && (buffer[current] & 0b10000000U)) {
         value |= static_cast<T>(buffer[current] & 0b01111111U) << valueBitsOffset;
         valueBitsOffset += 7;
-        if (valueBitsOffset + 7 > sizeof(T) * 8) {
+        if (valueBitsOffset + 7 > (int)sizeof(T) * 8) {
             return -1;
         }
         ++current;

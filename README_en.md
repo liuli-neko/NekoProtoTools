@@ -808,8 +808,14 @@ private:
 **JSON-RPC**
 
 *   [x] Support JSON-RPC 2.0 protocol specification.
-*   [ ] Compatibility with JSON-RPC 1.0 protocol (Optional).
+*   [x] Compatibility with JSON-RPC 1.0 protocol (Optional).
 *   [ ] Support for JSON-RPC extensions (e.g., custom error codes, metadata).
+*   [x] add built-in methods to the server:
+    - `rpc.get_method_list`: Get a list of all methods on the current server
+    - `rpc.get_bind_method_list`: Get a list of all bound methods on the current server
+    - `rpc.get_method_info`: Get a description of a specified method
+    - `rpc.get_method_info_list`: Get descriptions of all methods
+*   [x] Support named parameters, allowing method declarations or bindings to specify parameter names. Methods with specified names will pass parameters as `JsonObject`, while others will pass them as `JsonArray` by position.
 
 ---
 

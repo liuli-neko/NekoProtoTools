@@ -243,9 +243,10 @@ struct SerializerHelperObject {
 template <typename Serializer, typename T, traits::ConstexprString... ArgNames>
 inline bool save(Serializer& sa, const traits::SerializerHelperObject<T, ArgNames...>& value) {
     if constexpr (sizeof...(ArgNames) > 0) {
-        bool ret = sa.startObject(sizeof...(ArgNames));
-        ret      = [&sa, &value]<std::size_t... Is>(std::index_sequence<Is...>) {
-            return ((sa(make_name_value_pair(ArgNames.view(), std::get<Is>(value.mTuple)))) && ...);
+        bool ret                                                        = sa.startObject(sizeof...(ArgNames));
+        std::array<std::string_view, sizeof...(ArgNames)> argNamesArray = {ArgNames.view()...};
+        ret = [&sa, &value, &argNamesArray]<std::size_t... Is>(std::index_sequence<Is...>) {
+            return ((sa(make_name_value_pair(argNamesArray[Is], std::get<Is>(value.mTuple)))) && ...);
         }(std::make_index_sequence<sizeof...(ArgNames)>{});
         return ret && sa.endObject();
     } else {
@@ -259,8 +260,9 @@ inline bool load(Serializer& sa, traits::SerializerHelperObject<T, ArgNames...>&
         if constexpr (sizeof...(ArgNames) > 0) {
             bool ret = sa.startNode();
             if (ret) {
-                ret = [&sa, &value]<std::size_t... Is>(std::index_sequence<Is...>) {
-                    return ((sa(make_name_value_pair(ArgNames.view(), std::get<Is>(value.mTuple)))) && ...);
+                std::array<std::string_view, sizeof...(ArgNames)> argNamesArray = {ArgNames.view()...};
+                ret = [&sa, &value, &argNamesArray]<std::size_t... Is>(std::index_sequence<Is...>) {
+                    return ((sa(make_name_value_pair(argNamesArray[Is], std::get<Is>(value.mTuple)))) && ...);
                 }(std::make_index_sequence<sizeof...(ArgNames)>{});
             }
             if (sa.finishNode() && ret) {
