@@ -158,7 +158,9 @@ target("NekoSerializer")
                 "enable_jsonrpc")
 
     on_load(function (target)
-        assert(has_config("enable_protocol"), "enable_protocol must be enabled when enable_communication is enabled")
+        if has_config("enable_communication") then
+            assert(has_config("enable_protocol"), "enable_protocol must be enabled when enable_communication is enabled")
+        end
         import("lua.auto", {rootdir = os.projectdir()})
         auto().auto_add_packages(target)
     end)
