@@ -9,7 +9,7 @@
  *
  */
 #pragma once
-#include "../private/global.hpp"
+#include "nekoproto/global/global.hpp"
 
 #if NEKO_CPP_PLUS >= 17
 #include <variant>

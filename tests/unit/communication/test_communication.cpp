@@ -4,8 +4,8 @@
 #include <sstream>
 
 #include "nekoproto/communication/communication_base.hpp"
-#include "nekoproto/proto/json_serializer.hpp"
-#include "nekoproto/proto/types/vector.hpp"
+#include "nekoproto/serialization/json_serializer.hpp"
+#include "nekoproto/serialization/types/vector.hpp"
 
 #include <ilias/error.hpp>
 #include <ilias/net.hpp>

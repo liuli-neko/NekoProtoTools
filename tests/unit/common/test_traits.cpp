@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
 
-#include "nekoproto/proto/serializer_base.hpp"
-#include "nekoproto/proto/simd_json_serializer.hpp"
-#include "nekoproto/proto/types/optional.hpp"
-#include "nekoproto/proto/types/struct_unwrap.hpp"
-#include "nekoproto/proto/types/vector.hpp"
+#include "nekoproto/serialization/serializer_base.hpp"
+#include "nekoproto/serialization/simd_json_serializer.hpp"
+#include "nekoproto/serialization/types/optional.hpp"
+#include "nekoproto/serialization/types/struct_unwrap.hpp"
+#include "nekoproto/serialization/types/vector.hpp"
 
 NEKO_USE_NAMESPACE
 struct TestStruct {

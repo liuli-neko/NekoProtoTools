@@ -9,10 +9,10 @@
  *
  */
 #pragma once
-#include "private/global.hpp"
+#include "nekoproto/global/global.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
-#include "private/log.hpp"
+#include "nekoproto/global/log.hpp"
 
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>

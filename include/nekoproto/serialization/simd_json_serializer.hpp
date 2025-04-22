@@ -9,7 +9,7 @@
  *
  */
 #pragma once
-#include "private/global.hpp"
+#include "nekoproto/global/global.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_SIMDJSON)
 #include <iomanip>
@@ -19,7 +19,7 @@
 #include <vector>
 
 #include "private/helpers.hpp"
-#include "private/log.hpp"
+#include "nekoproto/global/log.hpp"
 #include "types/enum.hpp"
 
 #ifdef _WIN32

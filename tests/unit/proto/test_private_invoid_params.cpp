@@ -3,21 +3,21 @@
 // #define protected public // for test private member
 // #define private   public // for test private member
 
-#include "nekoproto/proto/binary_serializer.hpp"
-#include "nekoproto/proto/json_serializer.hpp"
+#include "nekoproto/serialization/binary_serializer.hpp"
+#include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/proto/proto_base.hpp"
-#include "nekoproto/proto/serializer_base.hpp"
-#include "nekoproto/proto/to_string.hpp"
-#include "nekoproto/proto/types/array.hpp"
-#include "nekoproto/proto/types/binary_data.hpp"
-#include "nekoproto/proto/types/enum.hpp"
-#include "nekoproto/proto/types/list.hpp"
-#include "nekoproto/proto/types/map.hpp"
-#include "nekoproto/proto/types/set.hpp"
-#include "nekoproto/proto/types/struct_unwrap.hpp"
-#include "nekoproto/proto/types/tuple.hpp"
-#include "nekoproto/proto/types/variant.hpp"
-#include "nekoproto/proto/types/vector.hpp"
+#include "nekoproto/serialization/serializer_base.hpp"
+#include "nekoproto/serialization/to_string.hpp"
+#include "nekoproto/serialization/types/array.hpp"
+#include "nekoproto/serialization/types/binary_data.hpp"
+#include "nekoproto/serialization/types/enum.hpp"
+#include "nekoproto/serialization/types/list.hpp"
+#include "nekoproto/serialization/types/map.hpp"
+#include "nekoproto/serialization/types/set.hpp"
+#include "nekoproto/serialization/types/struct_unwrap.hpp"
+#include "nekoproto/serialization/types/tuple.hpp"
+#include "nekoproto/serialization/types/variant.hpp"
+#include "nekoproto/serialization/types/vector.hpp"
 
 NEKO_USE_NAMESPACE
 

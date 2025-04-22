@@ -9,10 +9,10 @@
  *
  */
 #pragma once
-#include "private/global.hpp"
+#include "nekoproto/global/global.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_RAPIDXML)
-#include "private/log.hpp"
+#include "nekoproto/global/log.hpp"
 
 #include <limits>
 #include <type_traits>

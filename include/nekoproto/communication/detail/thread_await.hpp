@@ -16,7 +16,7 @@
 #include <ilias/ilias.hpp>
 #include <ilias/task.hpp>
 
-#include "nekoproto/proto/private/global.hpp"
+#include "nekoproto/global/global.hpp"
 NEKO_BEGIN_NAMESPACE
 namespace detail {
 

@@ -12,7 +12,7 @@
 #include <type_traits>
 #include <utility>
 
-#include "../private/global.hpp"
+#include "nekoproto/global/global.hpp"
 #include "../private/helpers.hpp"
 
 NEKO_BEGIN_NAMESPACE
