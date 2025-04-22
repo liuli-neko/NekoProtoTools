@@ -66,7 +66,7 @@
 #include <vector>
 #include <unordered_map>
 
-#include "private/global.hpp"
+#include "nekoproto/global/global.hpp"
 #include "private/proto_base_private.hpp"
 
 #define NEKO_RESERVED_PROTO_TYPE_SIZE 64

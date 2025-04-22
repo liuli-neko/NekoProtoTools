@@ -14,7 +14,7 @@
 #include <map>
 #include <vector>
 
-#include "global.hpp"
+#include "nekoproto/global/global.hpp"
 #include "reflection_serializer.hpp"
 
 NEKO_BEGIN_NAMESPACE

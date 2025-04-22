@@ -17,8 +17,8 @@
 #include <string>
 #include <typeinfo>
 
-#include "global.hpp"
-#include "log.hpp"
+#include "nekoproto/global/global.hpp"
+#include "nekoproto/global/log.hpp"
 
 NEKO_BEGIN_NAMESPACE
 

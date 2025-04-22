@@ -1,11 +1,12 @@
 #include <gtest/gtest.h>
 
-#include "nekoproto/proto/binary_serializer.hpp"
-#include "nekoproto/proto/json_serializer.hpp"
+#include "nekoproto/serialization/binary_serializer.hpp"
+#include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/proto/proto_base.hpp"
-#include "nekoproto/proto/serializer_base.hpp"
-#include "nekoproto/proto/to_string.hpp"
-#include "nekoproto/proto/types/types.hpp"
+#include "nekoproto/serialization/serializer_base.hpp"
+#include "nekoproto/serialization/to_string.hpp"
+#include "nekoproto/serialization/types/types.hpp"
+
 
 NEKO_USE_NAMESPACE
 

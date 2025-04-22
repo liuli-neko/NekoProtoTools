@@ -1,10 +1,10 @@
-#include "nekoproto/proto/binary_serializer.hpp"
-#include "nekoproto/proto/serializer_base.hpp"
-#include "nekoproto/proto/types/array.hpp"
-#include "nekoproto/proto/types/list.hpp"
-#include "nekoproto/proto/types/map.hpp"
-#include "nekoproto/proto/types/tuple.hpp"
-#include "nekoproto/proto/types/vector.hpp"
+#include "nekoproto/serialization/binary_serializer.hpp"
+#include "nekoproto/serialization/serializer_base.hpp"
+#include "nekoproto/serialization/types/array.hpp"
+#include "nekoproto/serialization/types/list.hpp"
+#include "nekoproto/serialization/types/map.hpp"
+#include "nekoproto/serialization/types/tuple.hpp"
+#include "nekoproto/serialization/types/vector.hpp"
 
 #include <gtest/gtest.h>
 #include <vector>

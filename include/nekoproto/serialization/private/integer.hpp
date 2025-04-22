@@ -1,7 +1,7 @@
 #pragma once
 
-#include "global.hpp"
-#include "log.hpp"
+#include "nekoproto/global/global.hpp"
+#include "nekoproto/global/log.hpp"
 
 #include <memory>
 #include <vector>

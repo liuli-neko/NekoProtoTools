@@ -23,12 +23,12 @@
 #include <set>
 
 #include "detail/thread_await.hpp"
-#include "nekoproto/proto/binary_serializer.hpp"
+#include "nekoproto/serialization/binary_serializer.hpp"
 #include "nekoproto/proto/proto_base.hpp"
-#include "nekoproto/proto/serializer_base.hpp"
-#include "nekoproto/proto/types/byte.hpp"
-#include "nekoproto/proto/types/map.hpp"
-#include "nekoproto/proto/types/vector.hpp"
+#include "nekoproto/serialization/serializer_base.hpp"
+#include "nekoproto/serialization/types/byte.hpp"
+#include "nekoproto/serialization/types/map.hpp"
+#include "nekoproto/serialization/types/vector.hpp"
 
 NEKO_BEGIN_NAMESPACE
 

@@ -5,8 +5,8 @@ add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 set_warnings("allextra")
 set_policy("package.cmake_generator.ninja", true)
 
-add_configfiles("include/nekoproto/proto/private/config.h.in")
-set_configdir("include/nekoproto/proto/private")
+add_configfiles("include/nekoproto/global/config.h.in")
+set_configdir("include/nekoproto/global")
 
 includes("lua/hidetargets.lua")
 
@@ -81,17 +81,24 @@ option("enable_stdformat")
     end)
 option_end()
 
+option("enable_protocol")
+    set_default(true)
+    set_showmenu(true)
+    set_description("Enable protocol module")
+    set_category("modules")
+option_end()
+
 option("enable_communication")
     set_default(false)
     set_showmenu(true)
-    set_description("Enable communication support, need ilias and proto module")
+    set_description("Enable communication module, need ilias and protocol module")
     set_category("modules")
 option_end()
 
 option("enable_jsonrpc")
     set_default(false)
     set_showmenu(true)
-    set_description("Enable jsonrpc support, need ilias and proto module")
+    set_description("Enable jsonrpc support, need ilias module")
     set_category("modules")
 option_end()
 
@@ -133,35 +140,64 @@ if is_plat("linux") then
     add_cxxflags("-fcoroutines")
 end
 
-target("NekoProtoBase")
-    if is_kind("shared") then
-        set_kind("shared")
-        add_defines("NEKO_PROTO_LIBRARY")
-    else
-        set_kind("static")
-        set_configvar("NEKO_PROTO_STATIC", true)
-    end
+target("NekoSerializer")
+    set_kind("headeronly")
+    add_headerfiles("include/(nekoproto/global/**.hpp)")
+    add_headerfiles("include/(nekoproto/global/**.h)")
+    add_headerfiles("include/(nekoproto/serialization/**.hpp)")
+    add_includedirs("include")
+
     add_options("enable_spdlog", 
                 "enable_fmt", 
                 "enable_stdformat", 
                 "enable_rapidjson", 
                 "enable_simdjson", 
                 "enable_rapidxml", 
+                "enable_protocol",
                 "enable_communication",
                 "enable_jsonrpc")
-    add_headerfiles("include/(nekoproto/proto/**.hpp)")
-    add_headerfiles("include/(nekoproto/proto/**.h)")
-    add_includedirs("include")
-    add_files("src/proto_base.cpp")
-    if has_config("enable_communication") then
-        add_headerfiles("include/(nekoproto/communication/**.hpp)")
-        add_files("src/communication_base.cpp")
-    end
-    if has_config("enable_jsonrpc") then
-        add_headerfiles("include/(nekoproto/jsonrpc/**.hpp)")
-    end
-    on_load(function (target) 
+
+    on_load(function (target)
+        assert(has_config("enable_protocol"), "enable_protocol must be enabled when enable_communication is enabled")
         import("lua.auto", {rootdir = os.projectdir()})
         auto().auto_add_packages(target)
     end)
 target_end()
+
+if has_config("enable_jsonrpc") then
+    target("NekoJsonRpc")
+        set_kind("headeronly")
+        add_headerfiles("include/(nekoproto/jsonrpc/**.hpp)")
+        add_includedirs("include")
+
+        on_load(function (target) 
+            import("lua.auto", {rootdir = os.projectdir()})
+            auto().auto_add_packages(target)
+        end)
+    target_end()
+end
+
+if has_config("enable_protocol") then
+    target("NekoProtoBase")
+        if is_kind("shared") then
+            set_kind("shared")
+            add_defines("NEKO_PROTO_LIBRARY")
+        else
+            set_kind("static")
+            set_configvar("NEKO_PROTO_STATIC", true)
+        end
+        
+        add_headerfiles("include/(nekoproto/proto/**.hpp)")
+        add_includedirs("include")
+        add_files("src/proto_base.cpp")
+        if has_config("enable_communication") then
+            add_headerfiles("include/(nekoproto/communication/**.hpp)")
+            add_files("src/communication_base.cpp")
+        end
+
+        on_load(function (target) 
+            import("lua.auto", {rootdir = os.projectdir()})
+            auto().auto_add_packages(target)
+        end)
+    target_end()
+end

@@ -12,10 +12,9 @@
 
 #include <ilias/task.hpp>
 
-#include "nekoproto/proto/json_serializer.hpp"
-#include "nekoproto/proto/serializer_base.hpp"
-#include "nekoproto/proto/types/types.hpp"
-
+#include "nekoproto/serialization/json_serializer.hpp"
+#include "nekoproto/serialization/serializer_base.hpp"
+#include "nekoproto/serialization/types/types.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_error.hpp"
 
 NEKO_BEGIN_NAMESPACE

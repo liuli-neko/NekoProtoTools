@@ -59,9 +59,9 @@
 #include <string>
 #include <vector>
 
-#include "private/global.hpp"
+#include "nekoproto/global/global.hpp"
+#include "nekoproto/global/log.hpp"
 #include "private/helpers.hpp"
-#include "private/log.hpp"
 
 NEKO_BEGIN_NAMESPACE
 // NOLINTBEGIN

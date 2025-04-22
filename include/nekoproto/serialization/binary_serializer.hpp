@@ -17,7 +17,7 @@
 #include <arpa/inet.h>
 #endif
 
-#include "private/global.hpp"
+#include "nekoproto/global/global.hpp"
 #include "private/helpers.hpp"
 #include "private/integer.hpp"
 

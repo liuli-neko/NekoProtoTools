@@ -1,6 +1,6 @@
 #pragma once
 
-#include "global.hpp"
+#include "nekoproto/global/global.hpp"
 #include "traits.hpp"
 
 #include <cstring>

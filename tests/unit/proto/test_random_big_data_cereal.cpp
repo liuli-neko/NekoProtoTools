@@ -9,7 +9,7 @@
 #include <gtest/gtest.h>
 #include <iostream>
 
-#include "nekoproto/proto/private/log.hpp"
+#include "nekoproto/global/log.hpp"
 namespace cereal {
 //! Saving for std::map<std::string, std::string>
 template <class Archive, class C, class A>

@@ -20,7 +20,7 @@
 #include <ilias/sync/scope.hpp>
 #include <ilias/task.hpp>
 
-#include "nekoproto/proto/private/global.hpp"
+#include "nekoproto/global/global.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_error.hpp"
 
 NEKO_BEGIN_NAMESPACE

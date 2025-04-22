@@ -1,4 +1,4 @@
-#include "../private/global.hpp"
+#include "nekoproto/global/global.hpp"
 
 #include "array.hpp"
 #include "atomic.hpp"

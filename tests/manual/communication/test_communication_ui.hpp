@@ -3,9 +3,9 @@
 #include <QMainWindow>
 
 #include "nekoproto/communication/communication_base.hpp"
-#include "nekoproto/proto/json_serializer.hpp"
-#include "nekoproto/proto/serializer_base.hpp"
-#include "nekoproto/proto/types/vector.hpp"
+#include "nekoproto/serialization/json_serializer.hpp"
+#include "nekoproto/serialization/serializer_base.hpp"
+#include "nekoproto/serialization/types/vector.hpp"
 #include "ui_test_communication_ui.h"
 
 #include <variant>

@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
 #include <rapidxml/rapidxml.hpp>
 
-#include "nekoproto/proto/types/enum.hpp"
-#include "nekoproto/proto/types/vector.hpp"
-#include "nekoproto/proto/xml_serializer.hpp"
+#include "nekoproto/serialization/types/enum.hpp"
+#include "nekoproto/serialization/types/vector.hpp"
+#include "nekoproto/serialization/xml_serializer.hpp"
 
 const char* gXmlData = R"(<breakfast_menu>
     <food>

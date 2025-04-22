@@ -23,7 +23,7 @@
 #include <vector>
 #endif
 
-#include "../private/global.hpp"
+#include "nekoproto/global/global.hpp"
 #include "../private/helpers.hpp"
 #include "../serializer_base.hpp"
 
