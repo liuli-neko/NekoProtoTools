@@ -365,9 +365,9 @@ private:
     RapidJsonOutputSerializer& operator=(RapidJsonOutputSerializer&&)      = delete;
 
 private:
+    typename detail::json_output_buffer_type<BufferT>::wrapper_type mStream;
     WriterType mWriter;
     int mCurrentLevel = 0;
-    typename detail::json_output_buffer_type<BufferT>::wrapper_type mStream;
 };
 
 /**

@@ -122,7 +122,7 @@ private:
     template <class T>
     bool _process(T&& head) NEKO_NOEXCEPT {
         auto ret = prologue(*mSelf, head);
-        ret = ret && mSelf->_processImpl(head);
+        ret      = ret && mSelf->_processImpl(head);
         epilogue(*mSelf, head);
         return ret;
     }
@@ -179,7 +179,7 @@ private:
                                            !traits::has_method_const_serialize<T, SerializerType>::value,
                                            !traits::has_method_serialize<T, SerializerType>::value> =
                            traits::default_value_for_enable>
-    bool _processImpl(const T& value) NEKO_NOEXCEPT {
+    bool _processImpl(const T& /*unused*/) NEKO_NOEXCEPT {
         static_assert(traits::has_method_const_serialize<T, SerializerType>::value != 0,
                       "can not find any function to serialize this Type, must have a serialize method or save method"
                       "or save function.");
@@ -253,7 +253,7 @@ private:
                                            !traits::has_method_deserialize<T, SerializerType>::value,
                                            !traits::has_method_serialize<T, SerializerType>::value> =
                            traits::default_value_for_enable>
-    bool _processImpl(T& value) NEKO_NOEXCEPT {
+    bool _processImpl(T& /*unused*/) NEKO_NOEXCEPT {
         static_assert(traits::has_method_deserialize<T, SerializerType>::value != 0,
                       "can not find any function to serialize this Type, must have a serialize method or save method"
                       "or save function.");

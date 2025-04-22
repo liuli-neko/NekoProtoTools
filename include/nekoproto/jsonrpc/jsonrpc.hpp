@@ -506,7 +506,7 @@ private:
                 } else {
                     NEKO_LOG_ERROR("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
                     co_return co_await _handleError<T>(
-                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message()});
+                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message(), {}});
                 }
             } else {
                 if (auto ret = co_await std::apply(metadata, request.params); ret) {
@@ -514,7 +514,7 @@ private:
                 } else {
                     NEKO_LOG_ERROR("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
                     co_return co_await _handleError<T>(
-                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message()});
+                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message(), {}});
                 }
             }
         } else {
@@ -525,7 +525,7 @@ private:
                 } else {
                     NEKO_LOG_WARN("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
                     co_return co_await _handleError<T>(
-                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message()});
+                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message(), {}});
                 }
             } else {
                 if (auto ret = co_await std::apply(metadata, request.params); ret) {
@@ -534,7 +534,7 @@ private:
                 } else {
                     NEKO_LOG_WARN("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
                     co_return co_await _handleError<T>(
-                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message()});
+                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message(), {}});
                 }
             }
         }
@@ -702,7 +702,7 @@ private:
         auto registerRpcMethod  = [this]<typename T>(T& rpcMethodMetadata) {
             struct MethodMetadata : public MethodMetadataBase {
                 std::string_view description() override { return rawData->description; }
-                bool isBinded() const { return static_cast<bool>(*rawData); }
+                bool isBinded() const override { return static_cast<bool>(*rawData); }
                 T* rawData;
             };
             auto metadata                            = std::make_unique<MethodMetadata>();
@@ -758,8 +758,8 @@ class JsonRpcClient {
 public:
     JsonRpcClient(ILIAS_NAMESPACE::IoContext& ctx) : mScop(ctx) {
         auto rpcMethodMetadatas = detail::unwrap_struct(mProtocol);
-        traits::for_each_tuple_element(rpcMethodMetadatas,
-                                       [this](auto&& rpcMethodMetadata) { _registerRpcMethod(rpcMethodMetadata); });
+        traits::for_each_tuple_element(
+            rpcMethodMetadatas, [this](auto&& rpcMethodMetadata) { this->_registerRpcMethod(rpcMethodMetadata); });
         mScop.setAutoCancel(true);
     }
     ~JsonRpcClient() { close(); }

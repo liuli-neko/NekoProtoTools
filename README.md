@@ -779,6 +779,13 @@ private:
 
 [ ] JSON-RPC 扩展。
 
+[x] 新增服务器内置方法：
+    - `rpc.get_method_list`: 获取当前服务端所有方法列表
+    - `rpc.get_bind_method_list`: 获取当前服务端所有绑定方法列表
+    - `rpc.get_method_info`: 获取指定方法信息
+    - `rpc.get_method_info_list`: 获取所有方法信息列表
+
+[x] 新增命名参数支持, 允许在声明或绑定方法时显示指定参数名称, 指定了名称的方法在调用时会以JsonObject的方式传递参数, 否则使用JsonArray的方式按位置传递。
 
 ---
 

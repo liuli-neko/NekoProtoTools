@@ -66,17 +66,17 @@ inline bool load(Serializer& sa, std::map<K, V>& value) {
 template <typename Serializer, typename V>
 inline bool load(Serializer& sa, std::map<std::string, V>& value) {
     bool ret = true;
-    V v;
-    std::size_t s;
-    ret = sa(make_size_tag(s));
+    V val;
+    std::size_t sz;
+    ret = sa(make_size_tag(sz));
     value.clear();
-    for(int i = 0; i < s; ++i) {
+    for (int i = 0; i < (int)sz; ++i) {
         const auto& name = sa.name();
         if (name == "") {
             break;
         }
-        if (sa(v)) {
-            value.emplace(std::move(name), std::move(v));
+        if (sa(val)) {
+            value.emplace(std::move(name), std::move(val));
         } else {
             ret = false;
             break;
