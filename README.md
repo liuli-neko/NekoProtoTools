@@ -668,6 +668,12 @@ public:
 ## 9. 开发历史 (部分里程碑)
 
 *   **当前主线**
+    *   分离序列化和协议管理，序列化作为核心必要模块，协议管理作为可选模块。
+    *   完善 JSON-RPC 2.0 协议支持。
+        *   支持命名参数传递。
+        *   支持内置方法：`rpc.get_method_list`, `rpc.get_bind_method_list`, `rpc.get_method_info`, `rpc.get_method_info_list`。
+
+*   **v0.2.3**
     *   统一大部分序列化调用为括号表达式 `serializer(variable)`。
     *   `NameValuePair`, `SizeTag` 等特殊结构不再触发节点展开，其他无 `minimal_serializable` 属性的对象触发节点展开（类似 JSON 嵌套）。
     *   支持 SIMDJson 作为 JSON 输入序列化后端 (`simdjson::dom`)。
