@@ -56,10 +56,13 @@ NekoProtoTools 是一个纯 C++ 实现的协议辅助库，旨在**简化 C++ �
 add_requires("neko-proto-tools", {
     configs = {
          enable_simdjson = false, 
-         enable_rapidjson = true, 
+         enable_rapidjson = true,
+         enable_rapidxml = false, 
          enable_fmt = true, 
+         enable_spdlog = false,
          enable_communication = true,
-         enable_jsonrpc = true
+         enable_jsonrpc = true,
+         enable_protocol = true,
     }
 }) -- 可能需要指定 git repo 或其他来源(https://github.com/Btk-Project/xmake-repo.git)
 
@@ -78,11 +81,11 @@ target("your_project")
 只需要包含基础头文件，并使用 `NEKO_SERIALIZER` 宏标记需要序列化的成员。
 
 ```cpp
-#include <nekoproto/proto/serializer_base.hpp>
-#include <nekoproto/proto/json_serializer.hpp> // 使用 JSON 序列化器
-#include <nekoproto/proto/types/string.hpp>    // 支持 std::string
-#include <nekoproto/proto/types/vector.hpp>    // 支持 std::vector
-// #include <nekoproto/proto/types/types.hpp>  // 所有支持的类型
+#include <nekoproto/serialization/serializer_base.hpp>
+#include <nekoproto/serialization/json_serializer.hpp> // 使用 JSON 序列化器
+#include <nekoproto/serialization/types/string.hpp>    // 支持 std::string
+#include <nekoproto/serialization/types/vector.hpp>    // 支持 std::vector
+// #include <nekoproto/serialization/types/types.hpp>  // 所有支持的类型
 #include <iostream>
 #include <string>
 #include <vector>
@@ -138,9 +141,9 @@ int main() {
 
 ```cpp
 #include <nekoproto/proto/proto_base.hpp>
-#include <nekoproto/proto/serializer_base.hpp>
-#include <nekoproto/proto/json_serializer.hpp> // 指定默认序列化器
-#include <nekoproto/proto/types/string.hpp>
+#include <nekoproto/serialization/serializer_base.hpp>
+#include <nekoproto/serialization/json_serializer.hpp> // 指定默认序列化器
+#include <nekoproto/serialization/types/string.hpp>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -266,9 +269,9 @@ int main() {
 ```cpp
 #include <nekoproto/communication/communication_base.hpp>
 #include <nekoproto/proto/proto_base.hpp>
-#include <nekoproto/proto/json_serializer.hpp>
-#include <nekoproto/proto/types/string.hpp>
-#include <nekoproto/proto/types/vector.hpp> // 需要包含所有用到的类型支持头文件
+#include <nekoproto/serialization/json_serializer.hpp>
+#include <nekoproto/serialization/types/string.hpp>
+#include <nekoproto/serialization/types/vector.hpp> // 需要包含所有用到的类型支持头文件
 
 #include <ilias/net.hpp>         // Ilias 网络库
 #include <ilias/platform.hpp>  // Ilias 平台上下文
@@ -414,8 +417,6 @@ int main() {
 
 ```cpp
 #include <nekoproto/jsonrpc/jsonrpc.hpp>
-#include <nekoproto/proto/types/vector.hpp>   // 支持 vector
-#include <nekoproto/proto/types/string.hpp>  // 支持 string
 #include <ilias/platform.hpp>
 #include <ilias/task.hpp>
 #include <numeric> // for std::accumulate
@@ -430,12 +431,8 @@ using namespace ILIAS_NAMESPACE;
 struct CalculatorModule {
     // 方法名 "add", 接受两个 int, 返回 int
     RpcMethod<int(int, int), "add"> add;
-    // 方法名 "subtract", 接受两个 int, 返回 int
-    RpcMethod<int(int, int), "subtract"> subtract;
-    // 方法名 "sum", 接受 vector<int>, 返回 int (异步实现)
+    // 方法名 "sum", 接受 vector<int>, 返回 int
     RpcMethod<int(std::vector<int>), "sum"> sum;
-    // 方法名 "greet", 接受 string, 返回 string
-    RpcMethod<std::string(std::string), "greet"> greet;
 };
 
 // 2. 实现服务器逻辑
@@ -449,11 +446,6 @@ ilias::Task<> run_server(PlatformContext& context) {
         return a + b;
     };
 
-    rpc_server->subtract = [](int a, int b) {
-         std::cout << "Server: subtract(" << a << ", " << b << ") called." << std::endl;
-        return a - b;
-    };
-
     // 协程方法绑定，返回 ilias::IoTask<>
     rpc_server->sum = [](std::vector<int> vec) -> ilias::IoTask<int> {
         std::cout << "Server: sum(...) called asynchronously." << std::endl;
@@ -461,11 +453,6 @@ ilias::Task<> run_server(PlatformContext& context) {
         // 可以通过co_await 来执行协程函数
         co_return result; // 使用 co_return 返回结果
     };
-
-     rpc_server->greet = [](std::string name) -> std::string {
-         std::cout << "Server: greet(" << name << ") called." << std::endl;
-         return "Hello, " + name + "!";
-     };
 
     // 启动服务器，监听指定地址和端口
     std::string listen_address = "tcp://127.0.0.1:12335";
@@ -512,14 +499,6 @@ ilias::Task<> run_client(PlatformContext& context) {
          std::cerr << "Client: sum call failed: " << sum_result.error().message() << std::endl;
     }
 
-    // 调用 greet 方法
-    auto greet_result = co_await rpc_client->greet("Neko");
-    if (greet_result) {
-        std::cout << "Client: greet(\"Neko\") = " << greet_result.value() << std::endl; // 输出: Hello, Neko!
-    } else {
-         std::cerr << "Client: greet call failed: " << greet_result.error().message() << std::endl;
-    }
-
     // 调用一个不存在的方法 (预期失败)
     // 注意：直接调用未在 CalculatorModule 中定义的 rpc_client->multiply(2, 3) 会导致编译错误。
     // 若要模拟调用不存在的方法，需要手动构造 JSON-RPC 请求，这里不演示。
@@ -549,88 +528,18 @@ int main() {
 ## 6. 支持的类型
 
 本库通过专门的头文件为众多 C++ 标准库类型提供了序列化支持。
-
-### 6.1. JSON 序列化器 (`JsonSerializer`)
-
-| C++ 类型 | 支持 | JSON 类型 | 包含头文件 | 备注 |
-| :--- | :--- | :---- | :---- | :----- |
-| `bool`                               | ✅   | boolean            | `json_serializer.hpp`               |                                    |
-| `int8_t`, `int16_t`, `int32_t`, `int64_t` | ✅   | number (integer)   | `json_serializer.hpp`               |                                    |
-| `uint8_t`, `uint16_t`, `uint32_t`, `uint64_t` | ✅   | number (integer)   | `json_serializer.hpp`               |                                    |
-| `float`, `double`                    | ✅   | number (float)     | `json_serializer.hpp`               |                                    |
-| `std::string`                        | ✅   | string             | `types/string.hpp`                  |                                    |
-| `std::u8string` (C++20)              | ✅   | string             | `types/u8string.hpp`                | 需要 C++20                         |
-| `std::vector<T>`                     | ✅   | array              | `types/vector.hpp`                  | `T` 必须是已支持的类型             |
-| `class : IProto`                     | ✅   | object             | `types/binary_data.hpp`             | 作为嵌套协议对象                   |
-| `std::array<T, N>`                   | ✅   | array              | `types/array.hpp`                   | `T` 必须是已支持的类型             |
-| `std::set<T>`                        | ✅   | array              | `types/set.hpp`                     | `T` 必须是已支持的类型             |
-| `std::list<T>`                       | ✅   | array              | `types/list.hpp`                    | `T` 必须是已支持的类型             |
-| `std::map<std::string, T>`           | ✅   | object             | `types/map.hpp`                     | `T` 必须是已支持的类型             |
-| `std::map<K, V>`                     | ✅   | array of [K, V]    | `types/map.hpp`                     | `K` 非 `std::string`, K, V 需支持 |
-| `std::tuple<T...>`                   | ✅   | array              | `types/tuple.hpp`                   | 所有 `T` 必须是已支持的类型        |
-| 自定义 `struct`/`class`              | ✅   | object             | *(通过 `NEKO_SERIALIZER` 自动支持)* | 成员需是已支持的类型               |
-| `enum class`/`enum`                  | ✅   | string 或 int      | `types/enum.hpp`                    | 默认序列化为字符串，可配置为整数     |
-| `std::optional<T>`                   | ✅   | T 或 null          | `json_serializer.hpp`               | `T` 必须是已支持的类型             |
-| `std::variant<T...>`                 | ✅   | object (`{idx:?, val:?}`) | `types/variant.hpp`             | 所有 `T` 必须是已支持的类型        |
-| `std::pair<T1, T2>`                  | ✅   | object (`{key:?, val:?}`) | `types/pair.hpp`                  | `T1`, `T2` 必须是已支持的类型      |
-| `std::bitset<N>`                     | ✅   | string             | `types/bitset.hpp`                  | 序列化为 "01..." 字符串          |
-| `std::shared_ptr<T>`                 | ✅   | T 或 null          | `types/shared_ptr.hpp`              | `T` 必须是已支持的类型             |
-| `std::unique_ptr<T>`                 | ✅   | T 或 null          | `types/unique_ptr.hpp`              | `T` 必须是已支持的类型             |
-| `std::atomic<T>`                     | ✅   | T                  | `types/atomic.hpp`                  | 序列化其包含的值 `T`              |
-| `std::unordered_set<T>`              | ✅   | array              | `types/unordered_set.hpp`           | `T` 必须是已支持的类型             |
-| `std::unordered_map<std::string, T>` | ✅   | object             | `types/unordered_map.hpp`           | `T` 必须是已支持的类型             |
-| `std::unordered_map<K, V>`           | ✅   | array of [K, V]    | `types/unordered_map.hpp`           | `K` 非 `std::string`, K, V 需支持 |
-| `std::multiset<T>`                   | ✅   | array              | `types/multiset.hpp`                | `T` 必须是已支持的类型             |
-| `std::multimap<K, V>`                | ✅   | array of [K, V]    | `types/multimap.hpp`                | K, V 需支持                       |
-| `std::unordered_multiset<T>`         | ✅   | array              | `types/unordered_multiset.hpp`      | `T` 必须是已支持的类型             |
-| `std::unordered_multimap<K, V>`      | ✅   | array of [K, V]    | `types/unordered_multimap.hpp`      | K, V 需支持                       |
-| `std::deque<T>`                      | ✅   | array              | `types/deque.hpp`                   | `T` 必须是已支持的类型             |
-| `std::any`                           | ❌   | -                  | -                                   | 不支持 (类型擦除)                  |
-
-*   `T`, `K`, `V` 表示任意已受支持的类型。
-*   对于 `map` 和 `unordered_map`，如果键不是 `std::string`，则序列化为 `[[key1, value1], [key2, value2], ...]` 形式的数组。
-
-### 6.2. 二进制序列化器 (`BinarySerializer`)
-
-| C++ 类型 | 支持 | 占用长度 (字节) | 头文件 | 备注 |
-| :----- | :--- | :----- | :---- | :----- |
-| `bool`                           | ✅   | 1                      | `binary_serializer.hpp` |                                          |
-| `int8_t`, `uint8_t`              | ✅   | 1                      | `binary_serializer.hpp` |                                          |
-| `int16_t`, `uint16_t`            | ✅   | 2                      | `binary_serializer.hpp` | 网络字节序 (Big Endian)                    |
-| `int32_t`, `uint32_t`            | ✅   | 4                      | `binary_serializer.hpp` | 网络字节序 (Big Endian)                    |
-| `int64_t`, `uint64_t`            | ✅   | 8                      | `binary_serializer.hpp` | 网络字节序 (Big Endian)                    |
-| `float`                          | ✅   | 4                      | `binary_serializer.hpp` | IEEE 754, 网络字节序 (Big Endian)        |
-| `double`                         | ✅   | 8                      | `binary_serializer.hpp` | IEEE 754, 网络字节序 (Big Endian)        |
-| `std::string`                    | ✅   | 4 (长度) + N (内容)   | `types/string.hpp`      | 长度使用 `uint32_t`, 网络字节序          |
-| `enum class`/`enum`              | ✅   | 取决于底层类型         | `types/enum.hpp`        | 序列化为底层整数类型                     |
-| 容器 (vector, list, map 等)     | ✅   | 4 (大小) + N * sizeof(T) | `types/*.hpp`         | 大小使用 `uint32_t`, 网络字节序          |
-| `std::optional<T>`               | ✅   | 1 (存在标志) + [sizeof(T)] | `binary_serializer.hpp` | 存在时额外存储 T 的数据                  |
-| `struct`/`class`                 | ✅   | 各成员占用长度之和     | *自动支持*            | 按 `NEKO_SERIALIZER` 声明顺序序列化 |
-| `NamePairValue<std::string, T>` | ✅   | 4+len(name) + len(T)   | `binary_serializer.hpp` | 特殊结构，用于某些场景                   |
-
-**注意**:
-
-*   容器类型支持同 JSON 序列化器，头文件类似 (`types/vector.hpp`, `types/map.hpp` 等)。
-*   二进制序列化器默认使用**网络字节序 (Big Endian)**。
-
-### 6.3. XML 序列化器 (`XmlSerializer`)
-
-*   目前**仅支持反序列化**。
-*   类型支持基本同二进制序列化器。
-
----
+几乎所有的 STL 容器和常用类型都可以直接使用。详细支持请参照[Supported Types Overview](https://github.com/liuli-neko/NekoProtoTools/wiki/Supported-Types-Overview)。
 
 ## 7. 自定义序列化器
 
-如果需要支持本库未内置的序列化格式，可以实现自定义序列化器。你需要继承 `detail::OutputSerializer<CustomOutputSerializer>` 和 `detail::InputSerializer<CustomInputSerializer>` 并实现其接口。
+如果需要支持本库未内置的序列化格式，可以实现自定义序列化器。你需要继承 `detail::OutputSerializer<CustomOutputSerializer>` 和 `detail::InputSerializer<CustomInputSerializer>` 并实现基础类型的保存和加载函数。
+
+实现细节请参考 [Implementing Custom Serializer](https://github.com/liuli-neko/NekoProtoTools/wiki/Implementing-Custom-Serializer)。
 
 **输出序列化器接口**:
 
 ```cpp
-#include <nekoproto/proto/serializer_base.hpp>
-#include <vector>
-#include <string>
-#include <cstddef> // for std::size_t
+#include <nekoproto/serialization/serializer_base.hpp>
 
 using namespace nekoproto; // or nekoproto::detail
 
@@ -674,23 +583,13 @@ public:
     // 结束整个序列化过程，确保所有缓冲都已写入
     // 析构函数也应确保调用 end() 或完成写入
     bool end();
-
-private:
-    // 禁止拷贝和移动构造/赋值
-    CustomOutputSerializer(const CustomOutputSerializer&) = delete;
-    CustomOutputSerializer& operator=(const CustomOutputSerializer&) = delete;
-    CustomOutputSerializer(CustomOutputSerializer&&) = delete;
-    CustomOutputSerializer& operator=(CustomOutputSerializer&&) = delete;
 };
 ```
 
 **输入序列化器接口**:
 
 ```cpp
-#include <nekoproto/proto/serializer_base.hpp>
-#include <vector>
-#include <string>
-#include <cstddef> // for std::size_t
+#include <nekoproto/serialization/serializer_base.hpp>
 
 using namespace nekoproto; // or nekoproto::detail
 
@@ -730,18 +629,6 @@ public:
     // 加载容器大小标记 (通常在开始处理数组前调用)
     template <typename T>
     bool loadValue(const SizeTag<T>& value); // value.size 将被填充
-
-private:
-    const std::vector<char>& m_buffer; // 输入缓冲区引用
-    std::size_t m_pos;                // 当前读取位置
-    // 或使用其他输入源，如 std::string_view m_data;
-    // 可以在这里添加特定格式的状态变量，例如解析栈、当前 JSON 节点等
-
-    // 禁止拷贝和移动构造/赋值
-    CustomInputSerializer(const CustomInputSerializer&) = delete;
-    CustomInputSerializer& operator=(const CustomInputSerializer&) = delete;
-    CustomInputSerializer(CustomInputSerializer&&) = delete;
-    CustomInputSerializer& operator=(CustomInputSerializer&&) = delete;
 };
 ```
 
@@ -751,41 +638,30 @@ private:
 
 **序列化器 (Serializer)**
 
-[x] 支持通过字符串名称访问协议字段 (基础反射)
-
-[x] 使用 SIMDJson 作为 JSON 输入序列化器后端 (`simdjson::dom`)
-
-[ ] 支持 `simdjson::ondemand` 接口 (探索其与 `dom` 接口的性能和使用场景差异)
-
-[x] 实现基于 SIMDJson 的 JSON 输出序列化器 (目前为手动实现，性能待优化)
-
-[x] 支持更多 C++ STL 容器
+*   [x] 支持通过字符串名称访问协议字段 (基础反射)
+*   [x] 使用 SIMDJson 作为 JSON 输入序列化器后端 (`simdjson::dom`)
+*   [ ] 支持 `simdjson::ondemand` 接口 (探索其与 `dom` 接口的性能和使用场景差异)
+*   [x] 实现基于 SIMDJson 的 JSON 输出序列化器 (目前为手动实现，性能待优化)
+*   [x] 支持更多 C++ STL 容器
 
 
 **通信 (Communication)**
 
-[x] 支持 UDP 通信通道 (`ProtoDatagramClient`)
-
-[ ] 支持更多底层传输协议 (如 WebSocket, QUIC - 可能通过 Ilias 或其他库集成)
-
-[ ] 优化通信层原子性：确保数据帧的完整处理，即使在取消操作时也能保证数据流状态一致。可能需要调整为小帧发送机制。
-
+*   [x] 支持 UDP 通信通道 (`ProtoDatagramClient`)
+*   [ ] 支持更多底层传输协议 (如 WebSocket, QUIC - 可能通过 Ilias 或其他库集成)
+*   [ ] 优化通信层原子性：确保数据帧的完整处理，即使在取消操作时也能保证数据流状态一致。可能需要调整为小帧发送机制。
 
 **JSON-RPC**
 
-[x] 支持 JSON-RPC 2.0 协议规范。
-
-[x] 兼容 JSON-RPC 1.0 协议。
-
-[ ] JSON-RPC 扩展。
-
-[x] 新增服务器内置方法：
+*   [x] 支持 JSON-RPC 2.0 协议规范。
+*   [x] 兼容 JSON-RPC 1.0 协议。
+*   [ ] JSON-RPC 扩展。
+*   [x] 新增服务器内置方法：
     - `rpc.get_method_list`: 获取当前服务端所有方法列表
     - `rpc.get_bind_method_list`: 获取当前服务端所有绑定方法列表
     - `rpc.get_method_info`: 获取指定方法信息
     - `rpc.get_method_info_list`: 获取所有方法信息列表
-
-[x] 新增命名参数支持, 允许在声明或绑定方法时显示指定参数名称, 指定了名称的方法在调用时会以JsonObject的方式传递参数, 否则使用JsonArray的方式按位置传递。
+*   [x] 新增命名参数支持, 允许在声明或绑定方法时显示指定参数名称, 指定了名称的方法在调用时会以JsonObject的方式传递参数, 否则使用JsonArray的方式按位置传递。
 
 ---
 

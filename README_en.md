@@ -83,11 +83,11 @@ target("your_project")
 Only include the basic header file and use the `NEKO_SERIALIZER` macro to mark members for serialization.
 
 ```cpp
-#include <nekoproto/proto/serializer_base.hpp>
-#include <nekoproto/proto/json_serializer.hpp> // Use JSON serializer
-#include <nekoproto/proto/types/string.hpp>    // Support for std::string
-#include <nekoproto/proto/types/vector.hpp>    // Support for std::vector
-// #include <nekoproto/proto/types/types.hpp>  // Includes all supported type headers
+#include <nekoproto/serialization/serializer_base.hpp>
+#include <nekoproto/serialization/json_serializer.hpp> // Use JSON serializer
+#include <nekoproto/serialization/types/string.hpp>    // Support for std::string
+#include <nekoproto/serialization/types/vector.hpp>    // Support for std::vector
+// #include <nekoproto/serialization/types/types.hpp>  // Includes all supported type headers
 #include <iostream>
 #include <string>
 #include <vector>
@@ -144,9 +144,9 @@ If you need protocol management, reflection, and polymorphism support, include `
 
 ```cpp
 #include <nekoproto/proto/proto_base.hpp>
-#include <nekoproto/proto/serializer_base.hpp>
-#include <nekoproto/proto/json_serializer.hpp> // Specify default serializer
-#include <nekoproto/proto/types/string.hpp>
+#include <nekoproto/serialization/serializer_base.hpp>
+#include <nekoproto/serialization/json_serializer.hpp> // Specify default serializer
+#include <nekoproto/serialization/types/string.hpp>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -273,9 +273,9 @@ This library provides a coroutine-based communication abstraction layer built up
 ```cpp
 #include <nekoproto/communication/communication_base.hpp>
 #include <nekoproto/proto/proto_base.hpp>
-#include <nekoproto/proto/json_serializer.hpp>
-#include <nekoproto/proto/types/string.hpp>
-#include <nekoproto/proto/types/vector.hpp> // Need to include headers for all used types
+#include <nekoproto/serialization/json_serializer.hpp>
+#include <nekoproto/serialization/types/string.hpp>
+#include <nekoproto/serialization/types/vector.hpp> // Need to include headers for all used types
 
 #include <ilias/net.hpp>         // Ilias network library
 #include <ilias/platform.hpp>  // Ilias platform context
@@ -442,8 +442,6 @@ This library provides a lightweight JSON-RPC 2.0 implementation based on Ilias, 
 
 ```cpp
 #include <nekoproto/jsonrpc/jsonrpc.hpp>
-#include <nekoproto/proto/types/vector.hpp>   // Support for vector
-#include <nekoproto/proto/types/string.hpp>  // Support for string
 #include <ilias/platform.hpp>
 #include <ilias/task.hpp>
 #include <numeric> // for std::accumulate
@@ -458,12 +456,8 @@ using namespace ILIAS_NAMESPACE;
 struct CalculatorModule {
     // Method name "add", accepts two ints, returns int
     RpcMethod<int(int, int), "add"> add;
-    // Method name "subtract", accepts two ints, returns int
-    RpcMethod<int(int, int), "subtract"> subtract;
-    // Method name "sum", accepts vector<int>, returns int (async implementation)
+    // Method name "sum", accepts vector<int>, returns int
     RpcMethod<int(std::vector<int>), "sum"> sum;
-    // Method name "greet", accepts string, returns string
-    RpcMethod<std::string(std::string), "greet"> greet;
 };
 
 // 2. Implement server logic
@@ -477,11 +471,6 @@ ilias::Task<> run_server(PlatformContext& context) {
         return a + b;
     };
 
-    rpc_server->subtract = [](int a, int b) {
-         std::cout << "Server: subtract(" << a << ", " << b << ") called." << std::endl;
-        return a - b;
-    };
-
     // Coroutine method binding, returns ilias::IoTask<> (runs in IO context)
     rpc_server->sum = [](std::vector<int> vec) -> ilias::IoTask<int> {
         std::cout << "Server: sum(...) called asynchronously." << std::endl;
@@ -489,11 +478,6 @@ ilias::Task<> run_server(PlatformContext& context) {
         int result = std::accumulate(vec.begin(), vec.end(), 0);
         co_return result; // Use co_return to return the result
     };
-
-     rpc_server->greet = [](std::string name) -> std::string {
-         std::cout << "Server: greet(\"" << name << "\") called." << std::endl;
-         return "Hello, " + name + "!";
-     };
 
     // Start the server, listening on the specified address and port
     std::string listen_address = "tcp://127.0.0.1:12335";
@@ -542,14 +526,6 @@ ilias::Task<> run_client(PlatformContext& context) {
          std::cerr << "Client: sum call failed: " << sum_result.error().message() << std::endl;
     }
 
-    // Call greet method
-    auto greet_result = co_await rpc_client->greet("Neko");
-    if (greet_result) {
-        std::cout << "Client: greet(\"Neko\") = \"" << greet_result.value() << "\"" << std::endl; // Output: "Hello, Neko!"
-    } else {
-         std::cerr << "Client: greet call failed: " << greet_result.error().message() << std::endl;
-    }
-
     // Calling a non-existent method:
     // Direct call like `rpc_client->multiply(2, 3)` would cause a compile error
     // as `multiply` is not defined in `CalculatorModule`.
@@ -584,75 +560,9 @@ int main() {
 
 ## 6. Supported Types
 
-This library provides serialization support for numerous C++ standard library types through dedicated header files. You typically need to include the header for the specific type(s) you use (e.g., `nekoproto/proto/types/vector.hpp` for `std::vector`) or include `nekoproto/proto/types/types.hpp` to get all of them.
+This library provides serialization support for numerous C++ standard library types through dedicated header files. You typically need to include the header for the specific type(s) you use (e.g., `nekoproto/serialization/types/vector.hpp` for `std::vector`) or include `nekoproto/serialization/types/types.hpp` to get all of them.
 
-### 6.1. JSON Serializer (`JsonSerializer`)
-
-| C++ Type                             | Supported | JSON Type          | Include Header                         | Notes                                      |
-| :----------------------------------- | :-------: | :----------------- | :------------------------------------- | :----------------------------------------- |
-| `bool`                               | ✅        | boolean            | `json_serializer.hpp`                  |                                            |
-| `int8_t`, `int16_t`, `int32_t`, `int64_t` | ✅        | number (integer)   | `json_serializer.hpp`                  |                                            |
-| `uint8_t`, `uint16_t`, `uint32_t`, `uint64_t`| ✅        | number (integer)   | `json_serializer.hpp`                  |                                            |
-| `float`, `double`                    | ✅        | number (float)     | `json_serializer.hpp`                  |                                            |
-| `std::string`                        | ✅        | string             | `types/string.hpp`                     |                                            |
-| `std::u8string` (C++20)              | ✅        | string             | `types/u8string.hpp`                   | Requires C++20                             |
-| `std::vector<T>`                     | ✅        | array              | `types/vector.hpp`                     | `T` must be a supported type             |
-| `class : IProto`                     | ✅        | object             | `types/binary_data.hpp`                | As nested protocol object                  |
-| `std::array<T, N>`                   | ✅        | array              | `types/array.hpp`                      | `T` must be a supported type             |
-| `std::set<T>`                        | ✅        | array              | `types/set.hpp`                        | `T` must be a supported type             |
-| `std::list<T>`                       | ✅        | array              | `types/list.hpp`                       | `T` must be a supported type             |
-| `std::map<std::string, T>`           | ✅        | object             | `types/map.hpp`                        | `T` must be a supported type             |
-| `std::map<K, V>`                     | ✅        | array of `[K, V]`  | `types/map.hpp`                        | `K` not `std::string`, `K`, `V` must be supported |
-| `std::tuple<T...>`                   | ✅        | array              | `types/tuple.hpp`                      | All `T` must be supported types          |
-| Custom `struct`/`class`              | ✅        | object             | *(Auto-supported via `NEKO_SERIALIZER`)* | Members must be supported types            |
-| `enum class`/`enum`                  | ✅        | string or number   | `types/enum.hpp`                       | Serialized as string by default, configurable as integer |
-| `std::optional<T>`                   | ✅        | T or null          | `json_serializer.hpp`                  | `T` must be a supported type             |
-| `std::variant<T...>`                 | ✅        | object (`{idx:I, val:V}`)| `types/variant.hpp`                | All `T` must be supported types          |
-| `std::pair<T1, T2>`                  | ✅        | object (`{key:V1, val:V2}`)| `types/pair.hpp`                   | `T1`, `T2` must be supported types       |
-| `std::bitset<N>`                     | ✅        | string             | `types/bitset.hpp`                     | Serialized as "01..." string             |
-| `std::shared_ptr<T>`                 | ✅        | T or null          | `types/shared_ptr.hpp`                 | `T` must be a supported type             |
-| `std::unique_ptr<T>`                 | ✅        | T or null          | `types/unique_ptr.hpp`                 | `T` must be a supported type             |
-| `std::atomic<T>`                     | ✅        | T                  | `types/atomic.hpp`                     | Serializes its contained value `T`         |
-| `std::unordered_set<T>`              | ✅        | array              | `types/unordered_set.hpp`              | `T` must be a supported type             |
-| `std::unordered_map<std::string, T>` | ✅        | object             | `types/unordered_map.hpp`              | `T` must be a supported type             |
-| `std::unordered_map<K, V>`           | ✅        | array of `[K, V]`  | `types/unordered_map.hpp`              | `K` not `std::string`, `K`, `V` must be supported |
-| `std::multiset<T>`                   | ✅        | array              | `types/multiset.hpp`                   | `T` must be a supported type             |
-| `std::multimap<K, V>`                | ✅        | array of `[K, V]`  | `types/multimap.hpp`                   | `K`, `V` must be supported                 |
-| `std::unordered_multiset<T>`         | ✅        | array              | `types/unordered_multiset.hpp`         | `T` must be a supported type             |
-| `std::unordered_multimap<K, V>`      | ✅        | array of `[K, V]`  | `types/unordered_multimap.hpp`         | `K`, `V` must be supported                 |
-| `std::deque<T>`                      | ✅        | array              | `types/deque.hpp`                      | `T` must be a supported type             |
-| `std::any`                           | ❌        | -                  | -                                      | Not supported (Type Erasure)               |
-
-*   `T`, `K`, `V` represent any already supported type.
-*   For `map` and `unordered_map`, if the key is not `std::string`, it's serialized as an array of key-value pairs: `[[key1, value1], [key2, value2], ...]`.
-
-### 6.2. Binary Serializer (`BinarySerializer`)
-
-| C++ Type                         | Supported | Size (Bytes)           | Include Header          | Notes                                     |
-| :------------------------------- | :-------: | :--------------------- | :---------------------- | :---------------------------------------- |
-| `bool`                           | ✅        | 1                      | `binary_serializer.hpp` |                                           |
-| `int8_t`, `uint8_t`              | ✅        | 1                      | `binary_serializer.hpp` |                                           |
-| `int16_t`, `uint16_t`            | ✅        | 2                      | `binary_serializer.hpp` | Network Byte Order (Big Endian)           |
-| `int32_t`, `uint32_t`            | ✅        | 4                      | `binary_serializer.hpp` | Network Byte Order (Big Endian)           |
-| `int64_t`, `uint64_t`            | ✅        | 8                      | `binary_serializer.hpp` | Network Byte Order (Big Endian)           |
-| `float`                          | ✅        | 4                      | `binary_serializer.hpp` | IEEE 754, Network Byte Order (Big Endian) |
-| `double`                         | ✅        | 8                      | `binary_serializer.hpp` | IEEE 754, Network Byte Order (Big Endian) |
-| `std::string`                    | ✅        | 4 (length) + N (content) | `types/string.hpp`      | Length uses `uint32_t`, network byte order|
-| `enum class`/`enum`              | ✅        | Depends on underlying type | `types/enum.hpp`        | Serialized as underlying integer type     |
-| Containers (vector, list, map etc.)| ✅        | 4 (size) + elements size | `types/*.hpp`         | Size uses `uint32_t`, network byte order  |
-| `std::optional<T>`               | ✅        | 1 (flag) + [sizeof(T)] | `binary_serializer.hpp` | Stores T's data additionally when present |
-| `struct`/`class`                 | ✅        | Sum of member sizes    | *(Auto-supported)*      | Serialized in `NEKO_SERIALIZER` order     |
-| `NamePairValue<std::string, T>` | ✅        | 4+len(name) + len(T)   | `binary_serializer.hpp` | Special structure for certain scenarios   |
-
-**Note**:
-
-*   Container type support is similar to the JSON serializer; corresponding `types/*.hpp` headers are needed.
-*   The binary serializer uses **Network Byte Order (Big Endian)** by default for multi-byte types.
-
-### 6.3. XML Serializer (`XmlSerializer`)
-
-*   Currently **only supports deserialization**.
-*   Type support is basically the same as the BinarySerializer. Values are typically parsed from XML element/attribute text content.
+more details can be found in the [Supported Types Overview](https://github.com/liuli-neko/NekoProtoTools/wiki/Supported-Types-Overview).
 
 ---
 
@@ -660,13 +570,12 @@ This library provides serialization support for numerous C++ standard library ty
 
 If you need to support a serialization format not built into the library, you can implement a custom serializer. You need to inherit from `detail::OutputSerializer<CustomOutputSerializer>` and `detail::InputSerializer<CustomInputSerializer>` and implement their interfaces.
 
+Implementing details can be found in the [Implementing Custom Serializer](https://github.com/liuli-neko/NekoProtoTools/wiki/Implementing-Custom-Serializer).
+
 **Output Serializer Interface Skeleton**:
 
 ```cpp
-#include <nekoproto/proto/serializer_base.hpp>
-#include <vector>
-#include <string>
-#include <cstddef> // for std::size_t
+#include <nekoproto/serialization/serializer_base.hpp>
 
 using namespace NekoProto; // or NekoProto::detail
 
@@ -710,27 +619,13 @@ public:
     // End the entire serialization process, ensure all buffers are written
     // Destructor should also ensure end() is called or writing is completed
     bool end();
-
-private:
-    // Add necessary member variables, e.g., output buffer reference, state info
-    // std::vector<char>& m_buffer;
-
-    // Forbid copy and move construction/assignment
-    CustomOutputSerializer(const CustomOutputSerializer&) = delete;
-    CustomOutputSerializer& operator=(const CustomOutputSerializer&) = delete;
-    CustomOutputSerializer(CustomOutputSerializer&&) = delete;
-    CustomOutputSerializer& operator=(CustomOutputSerializer&&) = delete;
 };
 ```
 
 **Input Serializer Interface Skeleton**:
 
 ```cpp
-#include <nekoproto/proto/serializer_base.hpp>
-#include <vector>
-#include <string>
-#include <cstddef> // for std::size_t
-#include <string_view> // Example for input source
+#include <nekoproto/serialization/serializer_base.hpp>
 
 using namespace NekoProto; // or NekoProto::detail
 
@@ -772,18 +667,6 @@ public:
     // Load container size tag (usually called before processing an array)
     template <typename T>
     bool loadValue(SizeTag<T>& value); // value.size will be populated
-
-private:
-    // Add necessary member variables, e.g., input data view, current position, parser state
-    // std::string_view m_data;
-    // std::size_t m_pos = 0;
-    // Add state variables for the specific format, e.g., parsing stack, current JSON node, etc.
-
-    // Forbid copy and move construction/assignment
-    CustomInputSerializer(const CustomInputSerializer&) = delete;
-    CustomInputSerializer& operator=(const CustomInputSerializer&) = delete;
-    CustomInputSerializer(CustomInputSerializer&&) = delete;
-    CustomInputSerializer& operator=(CustomInputSerializer&&) = delete;
 };
 ```
 
