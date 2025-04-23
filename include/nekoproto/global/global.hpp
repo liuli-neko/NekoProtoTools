@@ -16,10 +16,13 @@
 
 #include "config.h"
 
-#define NEKO_BEGIN_NAMESPACE namespace NekoProto {
+#ifndef NEKO_NAMESPACE
+#define NEKO_NAMESPACE       NekoProto
+#endif
+
+#define NEKO_BEGIN_NAMESPACE namespace NEKO_NAMESPACE {
 #define NEKO_END_NAMESPACE   }
-#define NEKO_USE_NAMESPACE   using namespace NekoProto;
-#define NEKO_NAMESPACE       ::NekoProto
+#define NEKO_USE_NAMESPACE   using namespace NEKO_NAMESPACE;
 
 #if __cplusplus >= 202002L || _MSVC_LANG >= 202002L
 #define NEKO_CPP_PLUS 20

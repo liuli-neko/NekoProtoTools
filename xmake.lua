@@ -91,8 +91,14 @@ option_end()
 option("enable_communication")
     set_default(false)
     set_showmenu(true)
+    add_deps("enable_protocol")
     set_description("Enable communication module, need ilias and protocol module")
     set_category("modules")
+    after_check(function (option)
+        if option:enabled() then
+            assert(option:dep("enable_protocol"):enabled(), "enable_protocol must be enabled when enable_communication is enabled")
+        end
+    end)
 option_end()
 
 option("enable_jsonrpc")
@@ -100,6 +106,13 @@ option("enable_jsonrpc")
     set_showmenu(true)
     set_description("Enable jsonrpc support, need ilias module")
     set_category("modules")
+option_end()
+
+option("custom_namespace")
+    set_default("NekoProto")
+    set_showmenu(true)
+    set_description("Custom namespace for generated code")
+    set_category("advanced")
 option_end()
 
 
@@ -155,12 +168,11 @@ target("NekoSerializer")
                 "enable_rapidxml", 
                 "enable_protocol",
                 "enable_communication",
-                "enable_jsonrpc")
+                "enable_jsonrpc",
+                "custom_namespace")
 
+    set_configvar("NEKO_NAMESPACE", "$(custom_namespace)")
     on_load(function (target)
-        if has_config("enable_communication") then
-            assert(has_config("enable_protocol"), "enable_protocol must be enabled when enable_communication is enabled")
-        end
         import("lua.auto", {rootdir = os.projectdir()})
         auto().auto_add_packages(target)
     end)

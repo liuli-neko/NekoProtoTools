@@ -58,7 +58,7 @@ TEST(XML, Parse) {
     std::string xml = gXmlData;
     BreakfastMenu breakfastMenu;
     {
-        NekoProto::RapidXmlInputSerializer<> serializer(xml.data(), xml.size());
+        NEKO_NAMESPACE::RapidXmlInputSerializer<> serializer(xml.data(), xml.size());
         serializer(breakfastMenu);
     }
     ASSERT_EQ(breakfastMenu.breakfast_menu.size(), 5);

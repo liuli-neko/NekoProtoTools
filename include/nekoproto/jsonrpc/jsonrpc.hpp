@@ -353,8 +353,8 @@ public:
             NEKO_LOG_ERROR("jsonrpc", "Method {} exist!!!", T::Name);
             return;
         }
-        mHandlers[T::Name] = [&metadata, this](NekoProto::JsonSerializer::InputSerializer& in,
-                                               NekoProto::JsonSerializer::OutputSerializer& out,
+        mHandlers[T::Name] = [&metadata, this](JsonSerializer::InputSerializer& in,
+                                               JsonSerializer::OutputSerializer& out,
                                                JsonRpcRequestMethod& method) -> ILIAS_NAMESPACE::Task<void> {
             return _processRequest(in, out, method, metadata);
         };
@@ -364,8 +364,7 @@ public:
     auto bindRpcMethod(std::string_view name, std::function<RetT(Args...)> func,
                        traits::ArgNamesHelper<ArgNames...> /*unused*/ = {}) -> void {
         mHandlers[name] = [metadata = RpcMethodDynamic<RetT(Args...), ArgNames...>(name, func),
-                           this](NekoProto::JsonSerializer::InputSerializer& in,
-                                 NekoProto::JsonSerializer::OutputSerializer& out,
+                           this](JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
                                  JsonRpcRequestMethod& method) -> ILIAS_NAMESPACE::Task<void> {
             return _processRequest(in, out, method, metadata);
         };
@@ -375,8 +374,7 @@ public:
     auto bindRpcMethod(std::string_view name, std::function<ILIAS_NAMESPACE::IoTask<RetT>(Args...)> func,
                        traits::ArgNamesHelper<ArgNames...> /*unused*/ = {}) -> void {
         mHandlers[name] = [metadata = RpcMethodDynamic<RetT(Args...), ArgNames...>(name, func),
-                           this](NekoProto::JsonSerializer::InputSerializer& in,
-                                 NekoProto::JsonSerializer::OutputSerializer& out,
+                           this](JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
                                  JsonRpcRequestMethod& method) -> ILIAS_NAMESPACE::Task<void> {
             return _processRequest(in, out, method, metadata);
         };
@@ -385,8 +383,8 @@ public:
     auto processRequest(const char* data, std::size_t size, DatagramClientBase* client)
         -> ILIAS_NAMESPACE::Task<std::vector<char>> {
         std::vector<char> buffer;
-        NekoProto::JsonSerializer::OutputSerializer out(buffer);
-        NekoProto::JsonSerializer::InputSerializer in(data, size);
+        JsonSerializer::OutputSerializer out(buffer);
+        JsonSerializer::InputSerializer in(data, size);
         while ((*data == '\n' || *data == ' ') && size > 0) {
             data++;
             size--;
@@ -431,8 +429,8 @@ public:
     }
 
 private:
-    auto _makeBatch(NekoProto::JsonSerializer::InputSerializer& in, NekoProto::JsonSerializer::OutputSerializer& out,
-                    int batchSize) -> ILIAS_NAMESPACE::Task<void> {
+    auto _makeBatch(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out, int batchSize)
+        -> ILIAS_NAMESPACE::Task<void> {
         std::vector<ILIAS_NAMESPACE::Task<>> tasks;
         for (int ix = 0; ix < batchSize; ++ix) {
             JsonRpcRequestMethod method;
@@ -459,7 +457,7 @@ private:
     }
 
     template <typename T, typename RetT>
-    auto _handleSuccess(NekoProto::JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method, RetT&& ret)
+    auto _handleSuccess(JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method, RetT&& ret)
         -> ILIAS_NAMESPACE::Task<void> {
         if (!method.id.has_value()) { // notification
             co_return;
@@ -482,8 +480,8 @@ private:
     }
 
     template <typename T>
-    auto _handleError(NekoProto::JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method,
-                      JsonRpcErrorResponse error) -> ILIAS_NAMESPACE::Task<void> {
+    auto _handleError(JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method, JsonRpcErrorResponse error)
+        -> ILIAS_NAMESPACE::Task<void> {
         if (!method.id.has_value()) { // notification
             co_return;
         }
@@ -497,10 +495,10 @@ private:
     }
 
     template <typename T>
-    auto _callMethod(typename T::RequestType request, NekoProto::JsonSerializer::OutputSerializer& out,
+    auto _callMethod(typename T::RequestType request, JsonSerializer::OutputSerializer& out,
                      JsonRpcRequestMethod method, T& metadata) -> ILIAS_NAMESPACE::Task<void> {
         if constexpr (std::is_void_v<typename T::RawReturnType>) {
-            if constexpr (NekoProto::traits::is_optional<typename T::ParamsTupleType>::value) {
+            if constexpr (traits::is_optional<typename T::ParamsTupleType>::value) {
                 if (auto ret = co_await metadata(); ret) {
                     co_return co_await _handleSuccess<T, std::nullptr_t>(out, std::move(method), nullptr);
                 } else {
@@ -518,7 +516,7 @@ private:
                 }
             }
         } else {
-            if constexpr (NekoProto::traits::is_optional<typename T::ParamsTupleType>::value) {
+            if constexpr (traits::is_optional<typename T::ParamsTupleType>::value) {
                 if (auto ret = co_await metadata(); ret) {
                     co_return co_await _handleSuccess<T, typename T::RawReturnType>(out, std::move(method),
                                                                                     std::move(ret.value()));
@@ -540,9 +538,8 @@ private:
         }
     }
     template <typename T>
-    auto _processRequest(NekoProto::JsonSerializer::InputSerializer& in,
-                         NekoProto::JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod& method, T& metadata)
-        -> ILIAS_NAMESPACE::Task<void> {
+    auto _processRequest(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
+                         JsonRpcRequestMethod& method, T& metadata) -> ILIAS_NAMESPACE::Task<void> {
         typename T::RequestType request;
         if (!in(request)) {
             NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc request");
@@ -552,9 +549,9 @@ private:
     }
 
 private:
-    std::map<std::string_view, std::function<ILIAS_NAMESPACE::Task<void>(
-                                   NekoProto::JsonSerializer::InputSerializer& in,
-                                   NekoProto::JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod& method)>>
+    std::map<std::string_view, std::function<ILIAS_NAMESPACE::Task<void>(JsonSerializer::InputSerializer& in,
+                                                                         JsonSerializer::OutputSerializer& out,
+                                                                         JsonRpcRequestMethod& method)>>
         mHandlers;
 };
 
@@ -866,7 +863,7 @@ private:
     template <typename T, typename... Args>
     auto _sendRequest(bool notification, typename std::decay_t<T>::RequestType& request, Args... args)
         -> ILIAS_NAMESPACE::IoTask<void> {
-        if constexpr (NekoProto::traits::is_optional<typename std::decay_t<T>::ParamsTupleType>::value) {
+        if constexpr (traits::is_optional<typename std::decay_t<T>::ParamsTupleType>::value) {
             if (notification) {
                 request    = std::decay_t<T>::request(nullptr);
                 request.id = std::nullopt;
@@ -882,7 +879,7 @@ private:
             }
         }
         mBuffer.clear();
-        if (auto out = NekoProto::JsonSerializer::OutputSerializer(mBuffer); out(request)) {
+        if (auto out = JsonSerializer::OutputSerializer(mBuffer); out(request)) {
             NEKO_LOG_INFO("jsonrpc", "send {}: {}", notification ? "notification" : "request",
                           std::string_view{mBuffer.data(), mBuffer.size()});
             if (auto ret = co_await mClient->send({reinterpret_cast<std::byte*>(mBuffer.data()), mBuffer.size()});
@@ -904,8 +901,7 @@ private:
             auto buffer = ret.value();
             NEKO_LOG_INFO("jsonrpc", "recv response: {}",
                           std::string_view{reinterpret_cast<const char*>(buffer.data()), buffer.size()});
-            if (auto in = NekoProto::JsonSerializer::InputSerializer(reinterpret_cast<const char*>(buffer.data()),
-                                                                     buffer.size());
+            if (auto in = JsonSerializer::InputSerializer(reinterpret_cast<const char*>(buffer.data()), buffer.size());
                 in(response)) {
                 if (response.id != id) {
                     NEKO_LOG_ERROR("jsonrpc", "id mismatch: {} != {}", std::get<uint64_t>(response.id),

@@ -705,6 +705,12 @@ public:
 ## 9. Development History (Selected Milestones)
 
 *   **(Current Main)**
+    *   split serialization and protocol management, with serialization as a core module and protocol management as an optional module.
+    *   complete JSON-RPC 2.0 protocol support.
+        *   support named parameter passing.
+        *   support built-in methods: `rpc.get_method_list`, `rpc.get_bind_method_list`, `rpc.get_method_info`, `rpc.get_method_info_list`.
+
+*   **v0.2.3 - alpha**
     *   Unified most serialization calls to parenthesis expression `serializer(variable)`.
     *   Special structures like `NameValuePair`, `SizeTag` no longer trigger node expansion; other objects without the `minimal_serializable` attribute trigger node expansion (like JSON nesting).
     *   Supported SIMDJson as JSON input serialization backend (`simdjson::dom`).

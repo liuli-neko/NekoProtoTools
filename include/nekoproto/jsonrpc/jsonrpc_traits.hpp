@@ -12,15 +12,16 @@
 
 #include <ilias/task.hpp>
 
+#include "nekoproto/jsonrpc/jsonrpc_error.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/types/types.hpp"
-#include "nekoproto/jsonrpc/jsonrpc_error.hpp"
+
 
 NEKO_BEGIN_NAMESPACE
 namespace traits {
 template <typename T>
-concept Serializable = requires(NekoProto::JsonSerializer::OutputSerializer serializer, T value) {
+concept Serializable = requires(JsonSerializer::OutputSerializer serializer, T value) {
     { serializer(value) };
 };
 template <typename T, class enable = void>
@@ -94,7 +95,7 @@ ConstexprString(const char (&)[N]) -> ConstexprString<N - 1>;
 
 template <typename T, class enable = void>
 struct TypeName {
-    constexpr static std::string name() { return std::string(::NekoProto::_class_name<T>()); }
+    constexpr static std::string name() { return std::string(_class_name<T>()); }
 };
 
 template <ConstexprString... ArgNames>
