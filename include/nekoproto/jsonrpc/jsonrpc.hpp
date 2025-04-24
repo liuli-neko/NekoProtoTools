@@ -151,6 +151,14 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
 
     template <typename SerializerT>
     bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {
+        if constexpr (sizeof...(ArgNames) == 0 && RpcMethodTraits<Args...>::NumParams == 1) {
+            if constexpr (traits::has_method_const_serialize<
+                              std::tuple_element_t<0, typename RpcMethodTraits<Args...>::RawParamsType>,
+                              SerializerT>::value) {
+                return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
+                                  make_name_value_pair("params", std::get<0>(params)), NEKO_PROTO_NAME_VALUE_PAIR(id));
+            }
+        }
         traits::SerializerHelperObject<const ParamsTupleType, ArgNames...> mParamsHelper{params};
         return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
                           make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id));
@@ -158,6 +166,15 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
 
     template <typename SerializerT>
     bool serialize(SerializerT& serializer) NEKO_NOEXCEPT {
+        if constexpr (sizeof...(ArgNames) == 0 && RpcMethodTraits<Args...>::NumParams == 1) {
+            if constexpr (traits::has_method_serialize<
+                              std::tuple_element_t<0, typename RpcMethodTraits<Args...>::RawParamsType>,
+                              SerializerT>::value) {
+
+                return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
+                                  make_name_value_pair("params", std::get<0>(params)), NEKO_PROTO_NAME_VALUE_PAIR(id));
+            }
+        }
         traits::SerializerHelperObject<ParamsTupleType, ArgNames...> mParamsHelper{params};
         return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
                           make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id));

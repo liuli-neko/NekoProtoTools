@@ -1,6 +1,6 @@
 set_project("neko-proto-tools")
 add_rules("mode.debug", "mode.release", "mode.releasedbg", "mode.coverage", "mode.asan")
-set_version("0.2.1", {build = "%Y%m%d%H%M"})
+set_version("0.2.4", {build = "%Y%m%d%H%M"})
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 set_warnings("allextra")
 set_policy("package.cmake_generator.ninja", true)
