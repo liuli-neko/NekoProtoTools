@@ -58,6 +58,8 @@ TEST(PrivateInvoidParams, RefTest) {
 
     TestStruct ts2{};
     auto pdata = proto.toData();
+    pdata.push_back('\0');
+    NEKO_LOG_DEBUG("unit test", "{}", pdata.data());
     TestStruct::ProtoType::Deserialize(pdata.data(), pdata.size(), ts2);
     EXPECT_EQ(ts2.a, 4);
     EXPECT_EQ(ts2.b, 5.0);

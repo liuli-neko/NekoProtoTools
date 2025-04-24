@@ -33,12 +33,20 @@ TEST(TraitsTest, simdjson) {
     ts.d = "world";
     std::vector<char> buffer;
     {
+#ifdef NEKO_PROTO_ENABLE_SIMDJSON
         SimdJsonOutputSerializer os(buffer);
+#else
+        JsonSerializer::OutputSerializer os(buffer);
+#endif
         os(ts);
     }
     TestStruct ts2;
     {
+#ifdef NEKO_PROTO_ENABLE_SIMDJSON
         SimdJsonInputSerializer is(buffer.data(), buffer.size());
+#else
+        JsonSerializer::InputSerializer is(buffer.data(), buffer.size());
+#endif
         is(ts2);
     }
     EXPECT_EQ(ts.a, ts2.a);

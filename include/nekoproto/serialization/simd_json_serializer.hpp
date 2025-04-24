@@ -18,8 +18,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "private/helpers.hpp"
 #include "nekoproto/global/log.hpp"
+#include "private/helpers.hpp"
 #include "types/enum.hpp"
 
 #ifdef _WIN32
@@ -185,6 +185,24 @@ struct json_output_buffer_type<T, typename std::enable_if<std::is_base_of<std::o
     static output_buffer_stream makeOutputBufferStream(output_stream_buffer_type stream) { return std::move(stream); }
 };
 
+class SimdJsonValue {
+public:
+    SimdJsonValue() = default;
+    explicit SimdJsonValue(const RawJsonValue& value) { mValue = std::make_shared<RawJsonValue>(value); }
+    auto hasValue() const -> bool { return mValue != nullptr; }
+    operator bool() const { return hasValue(); }
+    auto nativeValue() const -> const RawJsonValue& { return *mValue; }
+    auto nativeValue() -> RawJsonValue& { return *mValue; }
+    auto isObject() const -> bool { return mValue && mValue->is_object(); }
+    auto isArray() const -> bool { return mValue && mValue->is_array(); }
+    auto isString() const -> bool { return mValue && mValue->is_string(); }
+    auto isNumber() const -> bool { return mValue && mValue->is_number(); }
+    auto isBool() const -> bool { return mValue && mValue->is_bool(); }
+    auto isNull() const -> bool { return mValue && mValue->is_null(); }
+
+private:
+    std::shared_ptr<RawJsonValue> mValue;
+};
 } // namespace simd
 } // namespace detail
 
@@ -292,6 +310,68 @@ public:
                       detail::enum_to_string(mStateStack.back()));
         return false;
     }
+
+    bool saveValue(const detail::simd::JsonObject& object) NEKO_NOEXCEPT {
+        auto ret = startObject(object.size());
+        for (const auto& [key, value] : object) {
+            ret = ret && _writeKey(key);
+            ret = ret && saveValue(value);
+        }
+        ret = ret && endObject();
+        return ret;
+    }
+
+    bool saveValue(const detail::simd::JsonArray& array) NEKO_NOEXCEPT {
+        auto ret = startArray(array.size());
+        for (const auto& value : array) {
+            ret = ret && saveValue(value);
+        }
+        ret = ret && endArray();
+        return ret;
+    }
+
+    bool saveValue(const detail::simd::RawJsonValue& value) NEKO_NOEXCEPT {
+        if (value.is_bool()) {
+            return saveValue(value.get_bool());
+        }
+        if (value.is_int64()) {
+            return saveValue(value.get_int64());
+        }
+        if (value.is_uint64()) {
+            return saveValue(value.get_uint64());
+        }
+        if (value.is_double()) {
+            return saveValue(value.get_double());
+        }
+        if (value.is_string()) {
+            return saveValue(value.get_string());
+        }
+        if (value.is_null()) {
+            return saveValue(std::nullptr_t{});
+        }
+        if (value.is_array()) {
+            return saveValue(value.get_array());
+        }
+        if (value.is_object()) {
+            return saveValue(value.get_object());
+        }
+        return false;
+    }
+
+    bool saveValue(const detail::simd::SimdJsonValue& value) NEKO_NOEXCEPT {
+        if (!value.hasValue()) {
+            if (_updateSeparatorAndState()) {
+                mStream << "null";
+                return true;
+            }
+            NEKO_LOG_WARN("JsonSerializer", "save SimdJsonValue in Invalid state {}",
+                          detail::enum_to_string(mStateStack.back()));
+            return false;
+        }
+
+        return saveValue(value.nativeValue());
+    }
+
 #if NEKO_CPP_PLUS >= 17
     template <typename CharT, typename Traits>
     bool saveValue(const std::basic_string_view<CharT, Traits> value) NEKO_NOEXCEPT {
@@ -349,6 +429,11 @@ public:
         }
         if (mStateStack.back() == State::ArrayStart) {
             mStateStack.back() = State::InArray;
+            mStateStack.push_back(State::ArrayStart);
+            mStream << "[";
+            return true;
+        }
+        if (mStateStack.back() == State::Null) {
             mStateStack.push_back(State::ArrayStart);
             mStream << "[";
             return true;
@@ -497,7 +582,18 @@ private:
 class SimdJsonInputSerializer : public detail::InputSerializer<SimdJsonInputSerializer> {
 
 public:
-    inline explicit SimdJsonInputSerializer(const char* buf, std::size_t size) NEKO_NOEXCEPT
+    explicit SimdJsonInputSerializer(const detail::simd::SimdJsonValue& value) NEKO_NOEXCEPT
+        : detail::InputSerializer<SimdJsonInputSerializer>(this),
+          mItemStack() {
+        mLastResult = value.hasValue();
+        if (!mLastResult) {
+            NEKO_LOG_INFO("JsonSerializer", "simdjson parser error: empty buffer");
+            return;
+        }
+        mRoot = value.nativeValue();
+    }
+
+    explicit SimdJsonInputSerializer(const char* buf, std::size_t size) NEKO_NOEXCEPT
         : detail::InputSerializer<SimdJsonInputSerializer>(this),
           mItemStack() {
         while (size > 0 && buf[size - 1] == '\0') {
@@ -505,17 +601,17 @@ public:
         }
         if (size == 0) {
             NEKO_LOG_INFO("JsonSerializer", "simdjson parser error: empty buffer");
-            mParserError = true;
+            mLastResult = true;
             return;
         }
         auto error = mParser.parse(buf, size).get(mRoot);
         if (error != 0U) {
             NEKO_LOG_INFO("JsonSerializer", "simdjson parser error: {}", simdjson::error_message(error));
-            mParserError = true;
+            mLastResult = false;
             return;
         }
     }
-    inline operator bool() const NEKO_NOEXCEPT { return !mParserError; }
+    inline operator bool() const NEKO_NOEXCEPT { return mLastResult; }
 
     inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
         if ((*mCurrentItem).eof()) {
@@ -528,7 +624,8 @@ public:
                                               !std::is_enum<T>::value> = traits::default_value_for_enable>
     inline bool loadValue(T& value) NEKO_NOEXCEPT {
         int64_t ret;
-        if (!(*mCurrentItem).value().get_int64().get(ret)) {
+        mLastResult = (*mCurrentItem).value().get_int64().get(ret) == simdjson::error_code::SUCCESS;
+        if (mLastResult) {
             value = static_cast<T>(ret);
             ++(*mCurrentItem);
             return true;
@@ -540,7 +637,8 @@ public:
                                               !std::is_enum<T>::value> = traits::default_value_for_enable>
     inline bool loadValue(T& value) NEKO_NOEXCEPT {
         uint64_t ret;
-        if (!(*mCurrentItem).value().get_uint64().get(ret)) {
+        mLastResult = (*mCurrentItem).value().get_uint64().get(ret) == simdjson::error_code::SUCCESS;
+        if (mLastResult) {
             value = static_cast<T>(ret);
             ++(*mCurrentItem);
             return true;
@@ -550,7 +648,8 @@ public:
 
     template <typename CharT, typename Traits, typename Alloc>
     inline bool loadValue(std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
-        if (!(*mCurrentItem).value().is_string()) {
+        mLastResult = (*mCurrentItem).value().is_string();
+        if (!mLastResult) {
             return false;
         }
         const auto& cvalue = (*mCurrentItem).value();
@@ -561,7 +660,8 @@ public:
 
     inline bool loadValue(float& value) NEKO_NOEXCEPT {
         double ret;
-        if ((*mCurrentItem).value().get_double().get(ret) == 0U) {
+        mLastResult = (*mCurrentItem).value().get_double().get(ret) == simdjson::error_code::SUCCESS;
+        if (mLastResult) {
             value = static_cast<float>(ret);
             ++(*mCurrentItem);
             return true;
@@ -570,7 +670,8 @@ public:
     }
 
     inline bool loadValue(double& value) NEKO_NOEXCEPT {
-        if ((*mCurrentItem).value().get_double().get(value) == 0U) {
+        mLastResult = (*mCurrentItem).value().get_double().get(value) == simdjson::error_code::SUCCESS;
+        if (mLastResult) {
             ++(*mCurrentItem);
             return true;
         }
@@ -578,7 +679,8 @@ public:
     }
 
     inline bool loadValue(bool& value) NEKO_NOEXCEPT {
-        if ((*mCurrentItem).value().get_bool().get(value) == 0U) {
+        mLastResult = (*mCurrentItem).value().get_bool().get(value) == simdjson::error_code::SUCCESS;
+        if (mLastResult) {
             ++(*mCurrentItem);
             return true;
         }
@@ -586,9 +688,17 @@ public:
     }
 
     inline bool loadValue(std::nullptr_t) NEKO_NOEXCEPT {
-        if (!(*mCurrentItem).value().is_null()) {
+        mLastResult = (*mCurrentItem).value().is_null();
+        if (!mLastResult) {
             return false;
         }
+        ++(*mCurrentItem);
+        return true;
+    }
+
+    inline bool loadValue(detail::simd::SimdJsonValue& value) NEKO_NOEXCEPT {
+        mLastResult = true;
+        value       = detail::simd::SimdJsonValue((*mCurrentItem).value().value());
         ++(*mCurrentItem);
         return true;
     }
@@ -602,7 +712,7 @@ public:
     template <typename T>
     inline bool loadValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
         const auto& cvalue = (*mCurrentItem).moveToMember({value.name, value.nameLen});
-        bool ret           = true;
+        mLastResult        = true;
         if constexpr (traits::is_optional<T>::value) {
             if (cvalue.error() != simdjson::error_code::SUCCESS || cvalue.is_null()) {
                 value.value.reset();
@@ -624,10 +734,10 @@ public:
                 }
 #endif
                 typename traits::is_optional<T>::value_type result;
-                ret = operator()(result);
+                mLastResult = operator()(result);
                 value.value.emplace(std::move(result));
 #if defined(NEKO_VERBOSE_LOGS)
-                if (ret) {
+                if (mLastResult) {
                     NEKO_LOG_INFO("JsonSerializer", "optional field {} get value success.",
                                   std::string(value.name, value.nameLen));
                 } else {
@@ -642,11 +752,12 @@ public:
                 NEKO_LOG_ERROR("JsonSerializer", "{} field {} is not find. error {}", NEKO_PRETTY_FUNCTION_NAME,
                                std::string(value.name, value.nameLen), simdjson::error_message(cvalue.error()));
 #endif
+                mLastResult = false;
                 return false;
             }
-            ret = operator()(value.value);
+            mLastResult = operator()(value.value);
 #if defined(NEKO_VERBOSE_LOGS)
-            if (ret) {
+            if (mLastResult) {
                 NEKO_LOG_INFO("JsonSerializer", "field {} get value success.", std::string(value.name, value.nameLen));
             } else {
                 NEKO_LOG_ERROR("JsonSerializer", "{} field {} get value fail.", NEKO_PRETTY_FUNCTION_NAME,
@@ -654,7 +765,7 @@ public:
             }
 #endif
         }
-        return ret;
+        return mLastResult;
     }
     inline bool startNode() NEKO_NOEXCEPT {
         if (mItemStack.empty()) {
@@ -682,7 +793,11 @@ public:
         if (mItemStack.size() >= 2) {
             mItemStack.pop_back();
             mCurrentItem = &mItemStack.back();
-            ++(*mCurrentItem);
+            if (mLastResult) {
+                ++(*mCurrentItem);
+            } else {
+                mLastResult = true;
+            }
             return true;
         }
         if (mItemStack.size() == 1) {
@@ -728,8 +843,20 @@ private:
     detail::simd::ConstJsonIterator* mCurrentItem;
     detail::simd::RawJsonValue mRoot;
     detail::simd::JsonParser mParser;
-    bool mParserError = false;
+    bool mLastResult = true;
 };
+
+template <>
+struct is_minimal_serializable<detail::simd::SimdJsonValue> : std::true_type {};
+
+template <typename BufferT>
+inline bool save(SimdJsonOutputSerializer<BufferT>& sa, const detail::simd::SimdJsonValue& value) NEKO_NOEXCEPT {
+    return sa.saveValue(value);
+}
+
+inline bool load(SimdJsonInputSerializer& sa, detail::simd::SimdJsonValue& value) NEKO_NOEXCEPT {
+    return sa.loadValue(value);
+}
 
 // #######################################################
 // JsonSerializer prologue and epilogue
@@ -920,6 +1047,7 @@ inline bool epilogue(SimdJsonOutputSerializer<BufferT>& /*unused*/, const T& /*u
 struct SimdJsonSerializer {
     using OutputSerializer = SimdJsonOutputSerializer<std::vector<char>>;
     using InputSerializer  = SimdJsonInputSerializer;
+    using JsonValue        = detail::simd::SimdJsonValue;
 };
 
 NEKO_END_NAMESPACE

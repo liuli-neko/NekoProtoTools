@@ -247,6 +247,29 @@ struct set_json_format_option<T, typename std::enable_if<is_pretty_json_writer<T
         writer.SetMaxDecimalPlaces(options.precision);
     }
 };
+
+class RapidJsonValue {
+public:
+    RapidJsonValue() = default;
+    explicit RapidJsonValue(const JsonValue& value) {
+        mValue = std::make_shared<JsonDocument>();
+        mValue->CopyFrom(value, mValue->GetAllocator());
+    }
+    auto hasValue() const -> bool { return mValue != nullptr; }
+    operator bool() const { return hasValue(); }
+    auto nativeValue() const -> const JsonValue& { return *mValue; }
+    auto nativeValue() -> JsonValue& { return *mValue; }
+    auto isObject() const -> bool { return mValue && mValue->IsObject(); }
+    auto isArray() const -> bool { return mValue && mValue->IsArray(); }
+    auto isString() const -> bool { return mValue && mValue->IsString(); }
+    auto isNumber() const -> bool { return mValue && mValue->IsNumber(); }
+    auto isBool() const -> bool { return mValue && mValue->IsBool(); }
+    auto isNull() const -> bool { return mValue && mValue->IsNull(); }
+
+private:
+    std::shared_ptr<JsonDocument> mValue;
+};
+
 } // namespace detail
 
 template <typename BufferT>
@@ -311,12 +334,17 @@ public:
     }
     bool saveValue(const char* value) NEKO_NOEXCEPT { return mWriter.String(value); }
     bool saveValue(const std::nullptr_t) NEKO_NOEXCEPT { return mWriter.Null(); }
+    bool saveValue(const detail::RapidJsonValue& value) NEKO_NOEXCEPT {
+        if (value.hasValue()) {
+            return value.nativeValue().Accept(mWriter);
+        }
+        return saveValue(std::nullptr_t{});
+    }
 #if NEKO_CPP_PLUS >= 17
     template <typename CharT, typename Traits>
     bool saveValue(const std::basic_string_view<CharT, Traits> value) NEKO_NOEXCEPT {
         return mWriter.String(value.data(), (int)value.size());
     }
-
     template <typename T>
     bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
         if constexpr (traits::is_optional<T>::value) {
@@ -399,6 +427,17 @@ public:
           mDocument(),
           mItemStack() {
         mDocument.Parse(buf, size);
+        mLastResult = mDocument.GetParseError() == rapidjson::kParseErrorNone;
+    }
+
+    explicit RapidJsonInputSerializer(detail::RapidJsonValue& value) NEKO_NOEXCEPT
+        : detail::InputSerializer<RapidJsonInputSerializer>(this),
+          mDocument(),
+          mItemStack() {
+        mLastResult = value.hasValue();
+        if (mLastResult) {
+            mDocument.CopyFrom(value.nativeValue(), mDocument.GetAllocator());
+        }
     }
 
     explicit RapidJsonInputSerializer(BufferT& stream) NEKO_NOEXCEPT
@@ -407,6 +446,7 @@ public:
           mStream(new rapidjson::BasicIStreamWrapper<BufferT>(stream)),
           mItemStack() {
         mDocument.ParseStream(*mStream);
+        mLastResult = mDocument.GetParseError() == rapidjson::kParseErrorNone;
     }
 
     ~RapidJsonInputSerializer() NEKO_NOEXCEPT {
@@ -416,7 +456,7 @@ public:
         }
     }
 
-    operator bool() const NEKO_NOEXCEPT { return mDocument.GetParseError() == rapidjson::kParseErrorNone; }
+    operator bool() const NEKO_NOEXCEPT { return mLastResult; }
 
     NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
@@ -430,7 +470,8 @@ public:
                                               !std::is_enum<T>::value> = traits::default_value_for_enable>
     bool loadValue(T& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsInt()) {
+        mLastResult = (*mCurrentItem).value().IsInt();
+        if (!mLastResult) {
             return false;
         }
         value = static_cast<T>((*mCurrentItem).value().GetInt());
@@ -438,11 +479,19 @@ public:
         return true;
     }
 
+    bool loadValue(detail::RapidJsonValue& value) NEKO_NOEXCEPT {
+        NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
+        mLastResult = true;
+        value       = detail::RapidJsonValue((*mCurrentItem).value());
+        return true;
+    }
+
     template <typename T, traits::enable_if_t<std::is_unsigned<T>::value, sizeof(T) < sizeof(uint64_t),
                                               !std::is_enum<T>::value> = traits::default_value_for_enable>
     bool loadValue(T& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsUint()) {
+        mLastResult = (*mCurrentItem).value().IsUint();
+        if (!mLastResult) {
             return false;
         }
         value = static_cast<T>((*mCurrentItem).value().GetUint());
@@ -453,7 +502,8 @@ public:
     template <typename CharT, typename Traits, typename Alloc>
     bool loadValue(std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsString()) {
+        mLastResult = (*mCurrentItem).value().IsString();
+        if (!mLastResult) {
             return false;
         }
         const auto& cvalue = (*mCurrentItem).value();
@@ -464,7 +514,8 @@ public:
 
     bool loadValue(int64_t& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsInt64()) {
+        mLastResult = (*mCurrentItem).value().IsInt64();
+        if (!mLastResult) {
             return false;
         }
         value = (*mCurrentItem).value().GetInt64();
@@ -474,7 +525,8 @@ public:
 
     bool loadValue(uint64_t& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsUint64()) {
+        mLastResult = (*mCurrentItem).value().IsUint64();
+        if (!mLastResult) {
             return false;
         }
         value = (*mCurrentItem).value().GetUint64();
@@ -484,7 +536,8 @@ public:
 
     bool loadValue(float& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsNumber()) {
+        mLastResult = (*mCurrentItem).value().IsNumber();
+        if (!mLastResult) {
             return false;
         }
         value = static_cast<float>((*mCurrentItem).value().GetDouble());
@@ -494,7 +547,8 @@ public:
 
     bool loadValue(double& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsNumber()) {
+        mLastResult = (*mCurrentItem).value().IsNumber();
+        if (!mLastResult) {
             return false;
         }
         value = (*mCurrentItem).value().GetDouble();
@@ -504,7 +558,8 @@ public:
 
     bool loadValue(bool& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsBool()) {
+        mLastResult = (*mCurrentItem).value().IsBool();
+        if (!mLastResult) {
             return false;
         }
         value = (*mCurrentItem).value().GetBool();
@@ -514,7 +569,8 @@ public:
 
     bool loadValue(std::nullptr_t) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
-        if (!(*mCurrentItem).value().IsNull()) {
+        mLastResult = (*mCurrentItem).value().IsNull();
+        if (!mLastResult) {
             return false;
         }
         ++(*mCurrentItem);
@@ -533,7 +589,7 @@ public:
     bool loadValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
         const auto& cvalue = (*mCurrentItem).moveToMember({value.name, value.nameLen});
-        bool ret           = true;
+        mLastResult        = true;
         if constexpr (traits::is_optional<T>::value) {
             if (nullptr == cvalue || cvalue->IsNull()) {
                 value.value.reset();
@@ -555,10 +611,10 @@ public:
                 }
 #endif
                 typename traits::is_optional<T>::value_type result;
-                ret = (*this)(result);
+                mLastResult = (*this)(result);
                 value.value.emplace(std::move(result));
 #if defined(NEKO_VERBOSE_LOGS)
-                if (ret) {
+                if (mLastResult) {
                     NEKO_LOG_INFO("JsonSerializer", "optional field {} get value success.",
                                   std::string(value.name, value.nameLen));
                 } else {
@@ -572,18 +628,19 @@ public:
 #if defined(NEKO_VERBOSE_LOGS)
                 NEKO_LOG_ERROR("JsonSerializer", "field {} is not find.", std::string(value.name, value.nameLen));
 #endif
+                mLastResult = false;
                 return false;
             }
-            ret = (*this)(value.value);
+            mLastResult = (*this)(value.value);
 #if defined(NEKO_VERBOSE_LOGS)
-            if (ret) {
+            if (mLastResult) {
                 NEKO_LOG_INFO("JsonSerializer", "field {} get value success.", std::string(value.name, value.nameLen));
             } else {
                 NEKO_LOG_ERROR("JsonSerializer", "field {} get value fail.", std::string(value.name, value.nameLen));
             }
 #endif
         }
-        return ret;
+        return mLastResult;
     }
 #else
     template <typename T>
@@ -594,18 +651,20 @@ public:
 #if defined(NEKO_VERBOSE_LOGS)
             NEKO_LOG_ERROR("JsonSerializer", "field {} is not find.", std::string(value.name, value.nameLen));
 #endif
-            return false;
+            mLastResult = false;
+            return mLastResult;
         }
 #if defined(NEKO_VERBOSE_LOGS)
-        auto ret = operator()(value.value);
-        if (ret) {
+        mLastResult = operator()(value.value);
+        if (mLastResult) {
             NEKO_LOG_INFO("JsonSerializer", "field {} get value success.", std::string(value.name, value.nameLen));
         } else {
             NEKO_LOG_ERROR("JsonSerializer", "field {} get value fail.", std::string(value.name, value.nameLen));
         }
-        return ret;
+        return mLastResult;
 #else
-        return operator()(value.value);
+        mLastResult = operator()(value.value);
+        return mLastResult;
 #endif
     }
 #endif
@@ -635,7 +694,11 @@ public:
         if (mItemStack.size() >= 2) {
             mItemStack.pop_back();
             mCurrentItem = &mItemStack.back();
-            ++(*mCurrentItem);
+            if (mLastResult) {
+                ++(*mCurrentItem);
+            } else {
+                mLastResult = true;
+            }
         } else if (mItemStack.size() == 1) {
             mItemStack.pop_back();
             mCurrentItem = nullptr;
@@ -680,7 +743,21 @@ private:
     std::vector<detail::ConstJsonIterator> mItemStack;
     detail::ConstJsonIterator* mCurrentItem          = nullptr;
     rapidjson::BasicIStreamWrapper<BufferT>* mStream = nullptr;
+    bool mLastResult                                 = true;
 };
+
+template <>
+struct is_minimal_serializable<detail::RapidJsonValue> : std::true_type {};
+
+template <typename WriterT>
+inline bool save(RapidJsonOutputSerializer<WriterT>& sa, const detail::RapidJsonValue& value) NEKO_NOEXCEPT {
+    return sa.saveValue(value);
+}
+
+template <typename BufferT>
+inline bool load(RapidJsonInputSerializer<BufferT>& sa, detail::RapidJsonValue& value) NEKO_NOEXCEPT {
+    return sa.loadValue(value);
+}
 
 // #######################################################
 // JsonSerializer prologue and epilogue
@@ -882,6 +959,7 @@ inline bool epilogue(RapidJsonOutputSerializer<WriterT>& /*unused*/, const T& /*
 struct RapidJsonSerializer {
     using OutputSerializer = RapidJsonOutputSerializer<std::vector<char>>;
     using InputSerializer  = RapidJsonInputSerializer<std::istream>;
+    using JsonValue        = detail::RapidJsonValue;
 };
 
 NEKO_END_NAMESPACE
