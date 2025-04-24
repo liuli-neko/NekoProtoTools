@@ -99,6 +99,7 @@ struct TypeName {
 
 template <ConstexprString... ArgNames>
 struct ArgNamesHelper {};
+
 template <typename RawParamsType, std::size_t... Is, ConstexprString... ArgNames>
 constexpr auto parameter_to_string(std::index_sequence<Is...> /*unused*/, ArgNamesHelper<ArgNames...> /*unused*/ = {})
     -> std::string {
