@@ -17,7 +17,6 @@
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/types/types.hpp"
 
-
 NEKO_BEGIN_NAMESPACE
 namespace traits {
 template <typename T>
@@ -268,7 +267,6 @@ inline bool load(Serializer& sa, traits::SerializerHelperObject<T, ArgNames...>&
             if (sa.finishNode() && ret) {
                 return ret;
             }
-            sa.rollbackItem();
         }
         return false;
     }

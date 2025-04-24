@@ -174,9 +174,7 @@ struct JsonRpcRequestMethod {
 struct JsonRpcErrorResponse {
     int64_t code;
     std::string message;
-    // 该字段内容由服务器自定义
-    std::map<std::string, std::string> data;
-    NEKO_SERIALIZER(code, message, data)
+    NEKO_SERIALIZER(code, message)
 };
 
 template <typename T>
@@ -447,8 +445,7 @@ private:
             } else {
                 NEKO_LOG_WARN("jsonrpc", "method {} not found!", method.method);
                 JsonRpcErrorResponse error{(int)JsonRpcError::MethodNotFound,
-                                           JsonRpcErrorCategory::instance().message((int)JsonRpcError::MethodNotFound),
-                                           {}};
+                                           JsonRpcErrorCategory::instance().message((int)JsonRpcError::MethodNotFound)};
                 tasks.emplace_back(_handleError<RpcMethodErrorHelper>(out, std::move(method), std::move(error)));
             }
         }
@@ -504,7 +501,7 @@ private:
                 } else {
                     NEKO_LOG_ERROR("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
                     co_return co_await _handleError<T>(
-                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message(), {}});
+                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message()});
                 }
             } else {
                 if (auto ret = co_await std::apply(metadata, request.params); ret) {
@@ -512,7 +509,7 @@ private:
                 } else {
                     NEKO_LOG_ERROR("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
                     co_return co_await _handleError<T>(
-                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message(), {}});
+                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message()});
                 }
             }
         } else {
@@ -523,7 +520,7 @@ private:
                 } else {
                     NEKO_LOG_WARN("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
                     co_return co_await _handleError<T>(
-                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message(), {}});
+                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message()});
                 }
             } else {
                 if (auto ret = co_await std::apply(metadata, request.params); ret) {
@@ -532,7 +529,7 @@ private:
                 } else {
                     NEKO_LOG_WARN("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
                     co_return co_await _handleError<T>(
-                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message(), {}});
+                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message()});
                 }
             }
         }
@@ -543,7 +540,7 @@ private:
         typename T::RequestType request;
         if (!in(request)) {
             NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc request");
-            return _handleError<T>(out, std::move(method), JsonRpcErrorResponse{-32600, "Invalid Request", {}});
+            return _handleError<T>(out, std::move(method), JsonRpcErrorResponse{-32600, "Invalid Request"});
         }
         return _callMethod(std::move(request), out, std::move(method), metadata);
     }

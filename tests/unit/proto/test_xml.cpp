@@ -1,4 +1,8 @@
 #include <gtest/gtest.h>
+
+#include "nekoproto/serialization/serializer_base.hpp"
+
+#ifdef NEKO_PROTO_ENABLE_RAPIDXML
 #include <rapidxml/rapidxml.hpp>
 
 #include "nekoproto/serialization/types/enum.hpp"
@@ -88,7 +92,7 @@ TEST(XML, Parse) {
                  "Two eggs, bacon or sausage, toast, and our ever-popular hash browns");
     EXPECT_EQ(breakfastMenu.breakfast_menu[4].calories, 950);
 }
-
+#endif
 int main(int argc, char** argv) {
     testing::InitGoogleTest(&argc, argv);
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);

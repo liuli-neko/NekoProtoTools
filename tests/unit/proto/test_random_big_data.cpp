@@ -2,9 +2,10 @@
 #include <gtest/gtest.h>
 #include <string>
 
-#include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/proto/proto_base.hpp"
+#include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
+
 #if NEKO_CPP_PLUS >= 17
 #include "nekoproto/serialization/simd_json_serializer.hpp"
 #endif
@@ -250,19 +251,19 @@ std::vector<char> make_data(const char* data) { return std::vector<char>(data, d
 TEST(BigProtoTest, Serializer) {
     NEKO_LOG_DEBUG("unit test", "{} size {}", ProtoFactory::protoName<TestStruct1>(), sizeof(TestStruct1));
     NEKO_LOG_DEBUG("unit test", "{} type size {}", ProtoFactory::protoName<TestStruct1>(),
-                  sizeof(TestStruct1::ProtoType));
+                   sizeof(TestStruct1::ProtoType));
 
     NEKO_LOG_DEBUG("unit test", "{} size {}", ProtoFactory::protoName<TestStruct2>(), sizeof(TestStruct2));
     NEKO_LOG_DEBUG("unit test", "{} type size {}", ProtoFactory::protoName<TestStruct2>(),
-                  sizeof(TestStruct2::ProtoType));
+                   sizeof(TestStruct2::ProtoType));
 
     NEKO_LOG_DEBUG("unit test", "{} size {}", ProtoFactory::protoName<TestStruct3>(), sizeof(TestStruct3));
     NEKO_LOG_DEBUG("unit test", "{} type size {}", ProtoFactory::protoName<TestStruct3>(),
-                  sizeof(TestStruct3::ProtoType));
+                   sizeof(TestStruct3::ProtoType));
 
     NEKO_LOG_DEBUG("unit test", "{} size {}", ProtoFactory::protoName<TestStruct4>(), sizeof(TestStruct4));
     NEKO_LOG_DEBUG("unit test", "{} type size {}", ProtoFactory::protoName<TestStruct4>(),
-                  sizeof(TestStruct4::ProtoType));
+                   sizeof(TestStruct4::ProtoType));
 
     // 统计解析时长
     auto data  = make_data(data_1);
@@ -286,7 +287,7 @@ TEST(BigProtoTest, Serializer) {
     NEKO_LOG_DEBUG("unit test", "Serializer f0 size: {}", proto2.f0.size());
     end = std::chrono::high_resolution_clock::now();
     NEKO_LOG_DEBUG("unit test", "total time: {}s",
-                  std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count());
+                   std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count());
 }
 #if NEKO_CPP_PLUS >= 17
 TEST(BigProtoTest, SimdJsonSerializer) {
@@ -308,7 +309,11 @@ TEST(BigProtoTest, SimdJsonSerializer) {
     auto end   = start;
     TestStruct4 proto1;
     {
+#ifdef NEKO_PROTO_ENABLE_SIMDJSON
         SimdJsonInputSerializer serializer(data.data(), data.size());
+#elif defined(NEKO_PROTO_ENABLE_RAPIDJSON)
+        JsonSerializer::InputSerializer serializer(data.data(), data.size());
+#endif
         serializer(proto1);
     }
     NEKO_LOG_DEBUG(
@@ -326,7 +331,7 @@ TEST(BigProtoTest, SimdJsonSerializer) {
     NEKO_LOG_DEBUG("unit test", "Serializer f0 size: {}", proto2.f0.size());
     end = std::chrono::high_resolution_clock::now();
     NEKO_LOG_DEBUG("unit test", "total time: {}s",
-                  std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count());
+                   std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count());
     EXPECT_EQ(proto1.f0, proto2.f0);
     EXPECT_EQ(proto1.f1, proto2.f1);
     EXPECT_EQ(proto1.f2, proto2.f2);

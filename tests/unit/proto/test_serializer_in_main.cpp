@@ -1,13 +1,12 @@
 #include <gtest/gtest.h>
 
+#include "nekoproto/proto/proto_base.hpp"
 #include "nekoproto/serialization/binary_serializer.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
-#include "nekoproto/proto/proto_base.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/simd_json_serializer.hpp"
 #include "nekoproto/serialization/to_string.hpp"
 #include "nekoproto/serialization/types/types.hpp"
-
 
 NEKO_USE_NAMESPACE
 
@@ -97,6 +96,14 @@ struct ZTypeTest1 {
     NEKO_SERIALIZER(a, b, c, d, e, f, g)
 };
 
+struct ZTypeTest2 {
+    JsonSerializer::JsonValue value;
+};
+
+struct ZTypeTest3 {
+    ZTypeTest1 value;
+};
+
 int main(int argc, char** argv) {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
@@ -109,7 +116,11 @@ int main(int argc, char** argv) {
         "\"hello\"],\"k\":1,\"l\":1.114514,\"m\":[1.1,2.2,3.3,2,1,0,1.11451555213339]}";
     std::vector<char> data(str.begin(), str.end());
     TestP testp;
+#ifdef NEKO_PROTO_ENABLE_SIMDJSON
     SimdJsonSerializer::InputSerializer input(data.data(), data.size());
+#else
+    JsonSerializer::InputSerializer input(data.data(), data.size());
+#endif
     auto ret = input(testp);
     EXPECT_TRUE(ret);
     EXPECT_EQ(testp.a, 3);
@@ -154,7 +165,11 @@ int main(int argc, char** argv) {
 
     std::vector<char> outbuf;
     {
+#ifdef NEKO_PROTO_ENABLE_SIMDJSON
         SimdJsonSerializer::OutputSerializer out(outbuf);
+#else
+        JsonSerializer::OutputSerializer out(outbuf);
+#endif
         out(tp2);
     }
     outbuf.push_back('\0');
@@ -162,7 +177,11 @@ int main(int argc, char** argv) {
 
     {
         TestP tp3;
+#ifdef NEKO_PROTO_ENABLE_SIMDJSON
         SimdJsonSerializer::InputSerializer in(outbuf.data(), outbuf.size() - 1);
+#else
+        JsonSerializer::InputSerializer in(outbuf.data(), outbuf.size() - 1);
+#endif
         EXPECT_TRUE(in(tp3));
         EXPECT_STREQ(serializable_to_string(tp3).c_str(), serializable_to_string(tp2).c_str());
     }
@@ -191,5 +210,42 @@ int main(int argc, char** argv) {
     EXPECT_EQ(*zt.g, *zt1.g);
     EXPECT_EQ(*zt.f["hello"], *zt1.f["hello"]);
     EXPECT_EQ(zt.f["nullptr"], zt1.f["nullptr"]);
+
+    ZTypeTest3 zt3;
+    zt3.value = ZTypeTest1{{{1, 1}, {2, 2}},
+                           {{1, "world"}},
+                           {1, 2, 3},
+                           {{1.1, 1}, {1.1, 1.2}, {2.2, 2}},
+                           {1.1, 2.2, 3.3, 3.3},
+                           {{"hello", std::make_shared<std::string>("world")}, {"nullptr", nullptr}},
+                           std::make_unique<std::string>("hello")};
+    std::vector<char> dataT3;
+    {
+        JsonSerializer::OutputSerializer outputT3(dataT3);
+        outputT3(zt3);
+    }
+
+    dataT3.push_back('\0');
+    ZTypeTest2 zt2;
+    {
+        JsonSerializer::InputSerializer inputT3(dataT3.data(), dataT3.size() - 1);
+        inputT3(zt2);
+        NEKO_LOG_DEBUG("unit test", "{}", dataT3.data());
+        EXPECT_TRUE(zt2.value.hasValue());
+        EXPECT_TRUE(zt2.value.isObject());
+        {
+            JsonSerializer::InputSerializer input(zt2.value);
+            input(zt1);
+        }
+    }
+    EXPECT_EQ(zt3.value.a, zt1.a);
+    EXPECT_EQ(zt3.value.b, zt1.b);
+    EXPECT_EQ(zt3.value.c, zt1.c);
+    EXPECT_EQ(zt3.value.d, zt1.d);
+    EXPECT_EQ(zt3.value.e, zt1.e);
+    EXPECT_EQ(*zt3.value.g, *zt1.g);
+    EXPECT_EQ(*zt3.value.f["hello"], *zt1.f["hello"]);
+    EXPECT_EQ(zt3.value.f["nullptr"], zt1.f["nullptr"]);
+
     return RUN_ALL_TESTS();
 }
