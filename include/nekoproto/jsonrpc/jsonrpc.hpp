@@ -353,8 +353,8 @@ public:
         }
         mHandlers[T::Name] = [&metadata, this](JsonSerializer::InputSerializer& in,
                                                JsonSerializer::OutputSerializer& out,
-                                               JsonRpcRequestMethod& method) -> ILIAS_NAMESPACE::Task<void> {
-            return _processRequest(in, out, method, metadata);
+                                               JsonRpcRequestMethod method) -> ILIAS_NAMESPACE::Task<void> {
+            return _processRequest(in, out, std::move(method), metadata);
         };
     }
 
@@ -363,8 +363,8 @@ public:
                        traits::ArgNamesHelper<ArgNames...> /*unused*/ = {}) -> void {
         mHandlers[name] = [metadata = RpcMethodDynamic<RetT(Args...), ArgNames...>(name, func),
                            this](JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
-                                 JsonRpcRequestMethod& method) -> ILIAS_NAMESPACE::Task<void> {
-            return _processRequest(in, out, method, metadata);
+                                 JsonRpcRequestMethod method) -> ILIAS_NAMESPACE::Task<void> {
+            return _processRequest(in, out, std::move(method), metadata);
         };
     }
 
@@ -373,8 +373,8 @@ public:
                        traits::ArgNamesHelper<ArgNames...> /*unused*/ = {}) -> void {
         mHandlers[name] = [metadata = RpcMethodDynamic<RetT(Args...), ArgNames...>(name, func),
                            this](JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
-                                 JsonRpcRequestMethod& method) -> ILIAS_NAMESPACE::Task<void> {
-            return _processRequest(in, out, method, metadata);
+                                 JsonRpcRequestMethod method) -> ILIAS_NAMESPACE::Task<void> {
+            return _processRequest(in, out, std::move(method), metadata);
         };
     }
 
@@ -441,12 +441,12 @@ private:
             }
             in.rollbackItem();
             if (auto it = mHandlers.find(method.method); it != mHandlers.end()) {
-                tasks.emplace_back(it->second(in, out, method));
+                tasks.emplace_back(it->second(in, out, std::move(method)));
             } else {
                 NEKO_LOG_WARN("jsonrpc", "method {} not found!", method.method);
-                JsonRpcErrorResponse error{(int)JsonRpcError::MethodNotFound,
-                                           JsonRpcErrorCategory::instance().message((int)JsonRpcError::MethodNotFound)};
-                tasks.emplace_back(_handleError<RpcMethodErrorHelper>(out, std::move(method), std::move(error)));
+                tasks.emplace_back(_handleError<RpcMethodErrorHelper>(
+                    out, std::move(method), (int)JsonRpcError::MethodNotFound,
+                    JsonRpcErrorCategory::instance().message((int)JsonRpcError::MethodNotFound)));
             }
         }
         co_await ILIAS_NAMESPACE::whenAll(std::move(tasks));
@@ -477,15 +477,15 @@ private:
     }
 
     template <typename T>
-    auto _handleError(JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method, JsonRpcErrorResponse error)
-        -> ILIAS_NAMESPACE::Task<void> {
+    auto _handleError(JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method, int64_t code,
+                      std::string message) -> ILIAS_NAMESPACE::Task<void> {
         if (!method.id.has_value()) { // notification
             co_return;
         }
         if (!method.jsonrpc.has_value() && method.id.value().index() == 0) { // notification in jsonrpc 1.0
             co_return;
         }
-        if (!out(T::response(method.id.value(), error))) {
+        if (!out(T::response(method.id.value(), {code, message}))) {
             NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
             co_return;
         }
@@ -500,16 +500,16 @@ private:
                     co_return co_await _handleSuccess<T, std::nullptr_t>(out, std::move(method), nullptr);
                 } else {
                     NEKO_LOG_ERROR("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
-                    co_return co_await _handleError<T>(
-                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message()});
+                    co_return co_await _handleError<T>(out, std::move(method), ret.error().value(),
+                                                       ret.error().message());
                 }
             } else {
                 if (auto ret = co_await std::apply(metadata, request.params); ret) {
                     co_return co_await _handleSuccess<T, std::nullptr_t>(out, std::move(method), nullptr);
                 } else {
                     NEKO_LOG_ERROR("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
-                    co_return co_await _handleError<T>(
-                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message()});
+                    co_return co_await _handleError<T>(out, std::move(method), ret.error().value(),
+                                                       ret.error().message());
                 }
             }
         } else {
@@ -519,8 +519,8 @@ private:
                                                                                     std::move(ret.value()));
                 } else {
                     NEKO_LOG_WARN("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
-                    co_return co_await _handleError<T>(
-                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message()});
+                    co_return co_await _handleError<T>(out, std::move(method), ret.error().value(),
+                                                       ret.error().message());
                 }
             } else {
                 if (auto ret = co_await std::apply(metadata, request.params); ret) {
@@ -528,19 +528,20 @@ private:
                                                                                     std::move(ret.value()));
                 } else {
                     NEKO_LOG_WARN("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
-                    co_return co_await _handleError<T>(
-                        out, std::move(method), JsonRpcErrorResponse{ret.error().value(), ret.error().message()});
+                    co_return co_await _handleError<T>(out, std::move(method), ret.error().value(),
+                                                       ret.error().message());
                 }
             }
         }
     }
     template <typename T>
     auto _processRequest(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
-                         JsonRpcRequestMethod& method, T& metadata) -> ILIAS_NAMESPACE::Task<void> {
+                         JsonRpcRequestMethod&& method, T& metadata) -> ILIAS_NAMESPACE::Task<void> {
         typename T::RequestType request;
         if (!in(request)) {
             NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc request");
-            return _handleError<T>(out, std::move(method), JsonRpcErrorResponse{-32600, "Invalid Request"});
+            return _handleError<T>(out, std::move(method), (int64_t)JsonRpcError::InvalidRequest,
+                                   JsonRpcErrorCategory::instance().message((int64_t)JsonRpcError::InvalidRequest));
         }
         return _callMethod(std::move(request), out, std::move(method), metadata);
     }
@@ -548,7 +549,7 @@ private:
 private:
     std::map<std::string_view, std::function<ILIAS_NAMESPACE::Task<void>(JsonSerializer::InputSerializer& in,
                                                                          JsonSerializer::OutputSerializer& out,
-                                                                         JsonRpcRequestMethod& method)>>
+                                                                         JsonRpcRequestMethod method)>>
         mHandlers;
 };
 

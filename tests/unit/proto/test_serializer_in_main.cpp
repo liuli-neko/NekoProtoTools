@@ -98,10 +98,14 @@ struct ZTypeTest1 {
 
 struct ZTypeTest2 {
     JsonSerializer::JsonValue value;
+
+    // NEKO_SERIALIZER(value)
 };
 
 struct ZTypeTest3 {
     ZTypeTest1 value;
+
+    // NEKO_SERIALIZER(value)
 };
 
 int main(int argc, char** argv) {
