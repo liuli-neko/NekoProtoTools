@@ -12,9 +12,9 @@
 #include <cstring>
 
 #include "../json_serializer.hpp"
-#include "nekoproto/global/global.hpp"
 #include "../private/helpers.hpp"
 #include "../serializer_base.hpp"
+#include "nekoproto/global/global.hpp"
 
 #if NEKO_CPP_PLUS >= 17
 NEKO_BEGIN_NAMESPACE
@@ -589,7 +589,7 @@ struct any_type {
 template <typename T, typename _Cond = void, typename... Args>
 struct can_aggregate_impl : std::false_type {};
 template <typename T, typename... Args>
-struct can_aggregate_impl<T, std::void_t<decltype(T{{std::declval<Args>()}...})>, Args...> : std::true_type {};
+struct can_aggregate_impl<T, std::void_t<decltype(T{std::declval<Args>()...})>, Args...> : std::true_type {};
 template <typename T, typename... Args>
 struct can_aggregate : can_aggregate_impl<T, void, Args...> {};
 
@@ -601,8 +601,8 @@ struct can_aggregate : can_aggregate_impl<T, void, Args...> {};
  */
 template <typename T, typename... Args>
 constexpr auto tuple_size([[maybe_unused]] Args&&... args) noexcept {
-    if constexpr (!can_aggregate<T, Args...>::value) {
-        return sizeof...(args) - 1;
+    if constexpr (!can_aggregate<T, any_type, Args...>::value) {
+        return sizeof...(args);
     } else {
         return tuple_size<T>(std::forward<Args>(args)..., any_type{});
     }
@@ -630,6 +630,8 @@ constexpr bool can_unwrap_v = std::is_aggregate_v<std::remove_cv_t<T>> && !is_st
 template <typename T>
 constexpr auto unwrap_struct(T& data) noexcept {
     static_assert(can_unwrap_v<T>, "The struct must be aggregate");
+    static_assert(tuple_size_v<T> > 0, "The struct must have at least one member");
+    static_assert(tuple_size_v<T> <= 60, "The struct must have at most 60 members");
     return unwrap_struct_impl(data, size<tuple_size_v<T>>{});
 }
 
