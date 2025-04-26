@@ -748,12 +748,17 @@ public:
             }
         } else {
             if (cvalue.error() != simdjson::error_code::SUCCESS) {
+                if constexpr (is_skipable<T>::value) {
+                    mLastResult = true;
+                    return true;
+                } else {
 #if defined(NEKO_VERBOSE_LOGS)
-                NEKO_LOG_ERROR("JsonSerializer", "{} field {} is not find. error {}", NEKO_PRETTY_FUNCTION_NAME,
-                               std::string(value.name, value.nameLen), simdjson::error_message(cvalue.error()));
+                    NEKO_LOG_ERROR("JsonSerializer", "{} field {} is not find. error {}", NEKO_PRETTY_FUNCTION_NAME,
+                                   std::string(value.name, value.nameLen), simdjson::error_message(cvalue.error()));
 #endif
-                mLastResult = false;
-                return false;
+                    mLastResult = false;
+                    return false;
+                }
             }
             mLastResult = operator()(value.value);
 #if defined(NEKO_VERBOSE_LOGS)
