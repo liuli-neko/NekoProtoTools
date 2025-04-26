@@ -11,6 +11,7 @@
 #pragma once
 
 #include <functional>
+#include <ilias/task/when_all.hpp>
 #include <memory>
 #include <tuple>
 #include <type_traits>
@@ -359,6 +360,31 @@ struct RpcMethodErrorHelper {
 };
 
 class JsonRpcServerImp {
+private:
+    auto _makeBatch(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out, int batchSize) {
+        std::vector<ILIAS_NAMESPACE::Task<>> tasks;
+        for (int ix = 0; ix < batchSize; ++ix) {
+            JsonRpcRequestMethod method;
+            if (!in(method)) {
+                break;
+            }
+            if (method.jsonrpc.has_value() && method.jsonrpc.value() != "2.0") {
+                NEKO_LOG_ERROR("jsonrpc", "unsupport jsonrpc version! {}", method.jsonrpc.value());
+                break;
+            }
+            in.rollbackItem();
+            if (auto it = mHandlers.find(method.method); it != mHandlers.end()) {
+                tasks.emplace_back(it->second(in, out, std::move(method)));
+            } else {
+                NEKO_LOG_WARN("jsonrpc", "method {} not found!", method.method);
+                _handleError<RpcMethodErrorHelper>(
+                    out, std::move(method), (int)JsonRpcError::MethodNotFound,
+                    JsonRpcErrorCategory::instance().message((int)JsonRpcError::MethodNotFound));
+            }
+        }
+        return ILIAS_NAMESPACE::whenAll(std::move(tasks));
+    }
+
 public:
     JsonRpcServerImp() {}
 
@@ -371,28 +397,32 @@ public:
         mHandlers[T::Name] = [&metadata, this](JsonSerializer::InputSerializer& in,
                                                JsonSerializer::OutputSerializer& out,
                                                JsonRpcRequestMethod method) -> ILIAS_NAMESPACE::Task<void> {
-            return _processRequest(in, out, std::move(method), metadata);
+            typename T::RequestType request;
+            if (!in(request)) {
+                NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc request");
+                co_return _handleError<T>(
+                    out, std::move(method), (int64_t)JsonRpcError::InvalidRequest,
+                    JsonRpcErrorCategory::instance().message((int64_t)JsonRpcError::InvalidRequest));
+            }
+            if constexpr (traits::is_optional<typename T::ParamsTupleType>::value) {
+                co_return _processMethodReturn<T>(co_await metadata(), out, std::move(method));
+            } else {
+                co_return _processMethodReturn<T>(co_await std::apply(metadata, request.params), out,
+                                                  std::move(method));
+            }
         };
     }
 
     template <typename RetT, typename... Args, traits::ConstexprString... ArgNames>
     auto bindRpcMethod(std::string_view name, std::function<RetT(Args...)> func,
                        traits::ArgNamesHelper<ArgNames...> /*unused*/ = {}) -> void {
-        mHandlers[name] = [metadata = RpcMethodDynamic<RetT(Args...), ArgNames...>(name, func),
-                           this](JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
-                                 JsonRpcRequestMethod method) -> ILIAS_NAMESPACE::Task<void> {
-            return _processRequest(in, out, std::move(method), metadata);
-        };
+        return _registerRpcMethod<RpcMethodDynamic<RetT(Args...), ArgNames...>>(name, func);
     }
 
     template <typename RetT, typename... Args, traits::ConstexprString... ArgNames>
     auto bindRpcMethod(std::string_view name, std::function<ILIAS_NAMESPACE::IoTask<RetT>(Args...)> func,
                        traits::ArgNamesHelper<ArgNames...> /*unused*/ = {}) -> void {
-        mHandlers[name] = [metadata = RpcMethodDynamic<RetT(Args...), ArgNames...>(name, func),
-                           this](JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
-                                 JsonRpcRequestMethod method) -> ILIAS_NAMESPACE::Task<void> {
-            return _processRequest(in, out, std::move(method), metadata);
-        };
+        _registerRpcMethod<RpcMethodDynamic<RetT(Args...), ArgNames...>>(name, func);
     }
 
     auto processRequest(const char* data, std::size_t size, DatagramClientBase* client)
@@ -444,123 +474,81 @@ public:
     }
 
 private:
-    auto _makeBatch(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out, int batchSize)
-        -> ILIAS_NAMESPACE::Task<void> {
-        std::vector<ILIAS_NAMESPACE::Task<>> tasks;
-        for (int ix = 0; ix < batchSize; ++ix) {
-            JsonRpcRequestMethod method;
-            if (!in(method)) {
-                break;
+    // RpcMethodDynamic<RetT(Args...), ArgNames...>
+    template <typename T, typename Callable>
+    auto _registerRpcMethod(std::string_view name, std::function<Callable> func) -> void {
+        mHandlers[name] = [metadata = T(name, func), this](JsonSerializer::InputSerializer& in,
+                                                           JsonSerializer::OutputSerializer& out,
+                                                           JsonRpcRequestMethod method) -> ILIAS_NAMESPACE::Task<void> {
+            typename T::RequestType request;
+            if (!in(request)) {
+                NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc request");
+                co_return _handleError<T>(
+                    out, std::move(method), (int64_t)JsonRpcError::InvalidRequest,
+                    JsonRpcErrorCategory::instance().message((int64_t)JsonRpcError::InvalidRequest));
             }
-            if (method.jsonrpc.has_value() && method.jsonrpc.value() != "2.0") {
-                NEKO_LOG_ERROR("jsonrpc", "unsupport jsonrpc version! {}", method.jsonrpc.value());
-                break;
-            }
-            in.rollbackItem();
-            if (auto it = mHandlers.find(method.method); it != mHandlers.end()) {
-                tasks.emplace_back(it->second(in, out, std::move(method)));
+            if constexpr (traits::is_optional<typename T::ParamsTupleType>::value) {
+                co_return _processMethodReturn<T>(co_await metadata(), out, std::move(method));
             } else {
-                NEKO_LOG_WARN("jsonrpc", "method {} not found!", method.method);
-                tasks.emplace_back(_handleError<RpcMethodErrorHelper>(
-                    out, std::move(method), (int)JsonRpcError::MethodNotFound,
-                    JsonRpcErrorCategory::instance().message((int)JsonRpcError::MethodNotFound)));
+                co_return _processMethodReturn<T>(co_await std::apply(metadata, request.params), out,
+                                                  std::move(method));
             }
-        }
-        co_await ILIAS_NAMESPACE::whenAll(std::move(tasks));
-        co_return;
+        };
     }
 
     template <typename T, typename RetT>
-    auto _handleSuccess(JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method, RetT&& ret)
-        -> ILIAS_NAMESPACE::Task<void> {
+    auto _handleSuccess(JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method, RetT&& ret) -> void {
         if (!method.id.has_value()) { // notification
-            co_return;
+            return;
         }
         if (!method.jsonrpc.has_value() && method.id.value().index() == 0) { // notification in jsonrpc 1.0
-            co_return;
+            return;
         }
         std::vector<char> buffer;
         if constexpr (std::is_void_v<typename T::RawReturnType>) {
             if (!out(T::response(method.id.value(), nullptr))) {
                 NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
-                co_return;
+                return;
             }
         } else {
             if (!out(T::response(method.id.value(), std::forward<RetT>(ret)))) {
                 NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
-                co_return;
+                return;
             }
         }
     }
 
     template <typename T>
     auto _handleError(JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method, int64_t code,
-                      std::string message) -> ILIAS_NAMESPACE::Task<void> {
+                      std::string message) -> void {
         if (!method.id.has_value()) { // notification
-            co_return;
+            return;
         }
         if (!method.jsonrpc.has_value() && method.id.value().index() == 0) { // notification in jsonrpc 1.0
-            co_return;
+            return;
         }
         if (!out(T::response(method.id.value(), {code, message}))) {
             NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
-            co_return;
+            return;
         }
     }
 
     template <typename T>
-    auto _callMethod(typename T::RequestType request, JsonSerializer::OutputSerializer& out,
-                     JsonRpcRequestMethod method, T& metadata) -> ILIAS_NAMESPACE::Task<void> {
+    auto _processMethodReturn(ILIAS_NAMESPACE::Result<typename T::RawReturnType> result,
+                              JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method) -> void {
         if constexpr (std::is_void_v<typename T::RawReturnType>) {
-            if constexpr (traits::is_optional<typename T::ParamsTupleType>::value) {
-                if (auto ret = co_await metadata(); ret) {
-                    co_return co_await _handleSuccess<T, std::nullptr_t>(out, std::move(method), nullptr);
-                } else {
-                    NEKO_LOG_ERROR("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
-                    co_return co_await _handleError<T>(out, std::move(method), ret.error().value(),
-                                                       ret.error().message());
-                }
-            } else {
-                if (auto ret = co_await std::apply(metadata, request.params); ret) {
-                    co_return co_await _handleSuccess<T, std::nullptr_t>(out, std::move(method), nullptr);
-                } else {
-                    NEKO_LOG_ERROR("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
-                    co_return co_await _handleError<T>(out, std::move(method), ret.error().value(),
-                                                       ret.error().message());
-                }
+            if (result) {
+                return _handleSuccess<T, std::nullptr_t>(out, std::move(method), nullptr);
             }
+            NEKO_LOG_ERROR("jsonrpc", "method {} failed to execute, {}", method.method, result.error().message());
+            return _handleError<T>(out, std::move(method), result.error().value(), result.error().message());
         } else {
-            if constexpr (traits::is_optional<typename T::ParamsTupleType>::value) {
-                if (auto ret = co_await metadata(); ret) {
-                    co_return co_await _handleSuccess<T, typename T::RawReturnType>(out, std::move(method),
-                                                                                    std::move(ret.value()));
-                } else {
-                    NEKO_LOG_WARN("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
-                    co_return co_await _handleError<T>(out, std::move(method), ret.error().value(),
-                                                       ret.error().message());
-                }
-            } else {
-                if (auto ret = co_await std::apply(metadata, request.params); ret) {
-                    co_return co_await _handleSuccess<T, typename T::RawReturnType>(out, std::move(method),
-                                                                                    std::move(ret.value()));
-                } else {
-                    NEKO_LOG_WARN("jsonrpc", "method {} failed to execute, {}", method.method, ret.error().message());
-                    co_return co_await _handleError<T>(out, std::move(method), ret.error().value(),
-                                                       ret.error().message());
-                }
+            if (result) {
+                return _handleSuccess<T, typename T::RawReturnType>(out, std::move(method), std::move(result.value()));
             }
+            NEKO_LOG_WARN("jsonrpc", "method {} failed to execute, {}", method.method, result.error().message());
+            return _handleError<T>(out, std::move(method), result.error().value(), result.error().message());
         }
-    }
-    template <typename T>
-    auto _processRequest(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
-                         JsonRpcRequestMethod&& method, T& metadata) -> ILIAS_NAMESPACE::Task<void> {
-        typename T::RequestType request;
-        if (!in(request)) {
-            NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc request");
-            return _handleError<T>(out, std::move(method), (int64_t)JsonRpcError::InvalidRequest,
-                                   JsonRpcErrorCategory::instance().message((int64_t)JsonRpcError::InvalidRequest));
-        }
-        return _callMethod(std::move(request), out, std::move(method), metadata);
     }
 
 private:
@@ -849,21 +837,31 @@ private:
         }
         if (auto grid = co_await mMutex.uniqueLock(); grid) {
             typename std::decay_t<T>::RequestType request;
-            if (auto ret =
-                    co_await _sendRequest<T, Args...>(metadata.isNotification(), request, std::forward<Args>(args)...);
-                !ret) {
+            if (auto ret = _sendRequest<T, Args...>(metadata.isNotification(), request, std::forward<Args>(args)...);
+                ret) {
+                if (auto ret = co_await mClient->send({reinterpret_cast<std::byte*>(mBuffer.data()), mBuffer.size()});
+                    !ret) {
+                    NEKO_LOG_ERROR("jsonrpc", "send {} request failed", request.method);
+                    co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+                }
+            } else {
                 co_return ILIAS_NAMESPACE::Unexpected(ret.error());
             }
             if (!metadata.isNotification()) {
                 typename std::decay_t<T>::ResponseType respone;
-                if (auto ret = co_await _recvResponse<T>(respone, request.id.value()); !ret) {
-                    co_return ILIAS_NAMESPACE::Unexpected(ret.error());
-                } else {
-                    if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
-                        co_return {};
+                if (auto ret = co_await mClient->recv(); ret) {
+                    if (auto ret1 = _recvResponse<T>(ret.value(), respone, request.id.value()); !ret1) {
+                        co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
                     } else {
-                        co_return ret.value();
+                        if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
+                            co_return {};
+                        } else {
+                            co_return ret1.value();
+                        }
                     }
+                } else {
+                    NEKO_LOG_ERROR("jsonrpc", "Error: {}", ret.error().message());
+                    co_return ILIAS_NAMESPACE::Unexpected(ret.error());
                 }
             } else {
                 co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::Ok);
@@ -877,7 +875,7 @@ private:
 
     template <typename T, typename... Args>
     auto _sendRequest(bool notification, typename std::decay_t<T>::RequestType& request, Args... args)
-        -> ILIAS_NAMESPACE::IoTask<void> {
+        -> ILIAS_NAMESPACE::Result<void> {
         if constexpr (traits::is_optional<typename std::decay_t<T>::ParamsTupleType>::value) {
             if (notification) {
                 request    = std::decay_t<T>::request(nullptr);
@@ -897,52 +895,39 @@ private:
         if (auto out = JsonSerializer::OutputSerializer(mBuffer); out(request)) {
             NEKO_LOG_INFO("jsonrpc", "send {}: {}", notification ? "notification" : "request",
                           std::string_view{mBuffer.data(), mBuffer.size()});
-            if (auto ret = co_await mClient->send({reinterpret_cast<std::byte*>(mBuffer.data()), mBuffer.size()});
-                !ret) {
-                NEKO_LOG_ERROR("jsonrpc", "send {} request failed", request.method);
-                co_return ILIAS_NAMESPACE::Unexpected(ret.error());
-            }
-        } else {
-            NEKO_LOG_ERROR("jsonrpc", "make {} request failed", request.method);
-            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::InvalidRequest);
+            return {};
         }
-        co_return {};
+        NEKO_LOG_ERROR("jsonrpc", "make {} request failed", request.method);
+        return ILIAS_NAMESPACE::Unexpected(JsonRpcError::InvalidRequest);
     }
 
     template <typename T>
-    auto _recvResponse(typename std::decay_t<T>::ResponseType& response, detail::JsonRpcIdType& id)
-        -> ILIAS_NAMESPACE::IoTask<typename std::decay_t<T>::RawReturnType> {
-        if (auto ret = co_await mClient->recv(); ret) {
-            auto buffer = ret.value();
-            NEKO_LOG_INFO("jsonrpc", "recv response: {}",
-                          std::string_view{reinterpret_cast<const char*>(buffer.data()), buffer.size()});
-            if (auto in = JsonSerializer::InputSerializer(reinterpret_cast<const char*>(buffer.data()), buffer.size());
-                in(response)) {
-                if (response.id != id) {
-                    NEKO_LOG_ERROR("jsonrpc", "id mismatch: {} != {}", std::get<uint64_t>(response.id),
-                                   std::get<uint64_t>(id));
-                    co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ResponseIdNotMatch);
-                }
-                if (response.error.has_value()) {
-                    detail::JsonRpcErrorResponse err = response.error.value();
-                    NEKO_LOG_WARN("jsonrpc", "Error({}): {}", err.code, err.message);
-                    co_return ILIAS_NAMESPACE::Unexpected(
-                        err.code > 0 ? ILIAS_NAMESPACE::Error(ILIAS_NAMESPACE::Error::Code(err.code))
-                                     : ILIAS_NAMESPACE::Error(JsonRpcError(err.code)));
-                } else {
-                    if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
-                        co_return {};
-                    } else {
-                        co_return response.result.value();
-                    }
-                }
+    auto _recvResponse(std::span<std::byte> buffer, typename std::decay_t<T>::ResponseType& response,
+                       detail::JsonRpcIdType& id) -> ILIAS_NAMESPACE::Result<typename std::decay_t<T>::RawReturnType> {
+        NEKO_LOG_INFO("jsonrpc", "recv response: {}",
+                      std::string_view{reinterpret_cast<const char*>(buffer.data()), buffer.size()});
+        if (auto in = JsonSerializer::InputSerializer(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+            in(response)) {
+            if (response.id != id) {
+                NEKO_LOG_ERROR("jsonrpc", "id mismatch: {} != {}", std::get<uint64_t>(response.id),
+                               std::get<uint64_t>(id));
+                return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ResponseIdNotMatch);
+            }
+            if (response.error.has_value()) {
+                detail::JsonRpcErrorResponse err = response.error.value();
+                NEKO_LOG_WARN("jsonrpc", "Error({}): {}", err.code, err.message);
+                return ILIAS_NAMESPACE::Unexpected(err.code > 0
+                                                       ? ILIAS_NAMESPACE::Error(ILIAS_NAMESPACE::Error::Code(err.code))
+                                                       : ILIAS_NAMESPACE::Error(JsonRpcError(err.code)));
+            }
+            if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
+                return {};
             } else {
-                NEKO_LOG_ERROR("jsonrpc", "Error: response parser error");
-                co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ParseError);
+                return response.result.value();
             }
         } else {
-            NEKO_LOG_ERROR("jsonrpc", "Error: {}", ret.error().message());
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+            NEKO_LOG_ERROR("jsonrpc", "Error: response parser error");
+            return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ParseError);
         }
     }
 
