@@ -101,8 +101,8 @@ public:
     template <class T, class A>                                                                                        \
     struct has_method_##test_name##_impl {                                                                             \
         template <class TT, class AA>                                                                                  \
-        static auto test(int) -> decltype(method_access::method_##name(std::declval<AA&>(), std::declval<TT&>()),      \
-                                          std::true_type());                                                           \
+        static auto test(int)                                                                                          \
+            -> decltype(method_access::method_##name(std::declval<AA&>(), std::declval<TT&>()), std::true_type());     \
         template <class, class>                                                                                        \
         static std::false_type test(...);                                                                              \
         static const bool value = std::is_same<decltype(test<T, A>(0)), std::true_type>::value;                        \
@@ -117,9 +117,9 @@ public:
     template <class T, class A>                                                                                        \
     struct has_method_##test_name##_impl {                                                                             \
         template <class TT, class AA>                                                                                  \
-        static auto test(int) -> decltype(method_access::method_##name(std::declval<AA&>(),                            \
-                                                                       std::declval<const TT&>()),                     \
-                                          std::true_type());                                                           \
+        static auto test(int)                                                                                          \
+            -> decltype(method_access::method_##name(std::declval<AA&>(), std::declval<const TT&>()),                  \
+                        std::true_type());                                                                             \
         template <class, class>                                                                                        \
         static std::false_type test(...);                                                                              \
         static const bool value = std::is_same<decltype(test<T, A>(0)), std::true_type>::value;                        \
@@ -140,8 +140,8 @@ struct has_function_save_impl { // NOLINT(readability-identifier-naming)
         std::is_same<decltype(test<T, A>(0)), std::true_type>::value;
 
     template <class TT, class AA>
-    static auto test2(int) -> decltype(save(std::declval<AA&>(), std::declval<typename std::remove_const<TT>::type&>()),
-                                       std::true_type());
+    static auto test2(int)
+        -> decltype(save(std::declval<AA&>(), std::declval<typename std::remove_const<TT>::type&>()), std::true_type());
     template <class, class>
     static std::false_type test2(...);
     static const bool not_const_type = // NOLINT(readability-identifier-naming)
@@ -231,4 +231,7 @@ struct is_minimal_serializable<std::basic_string<CharT, Traits, Alloc>, void> : 
 template <typename CharT, typename Traits>
 struct is_minimal_serializable<std::basic_string_view<CharT, Traits>, void> : std::true_type {};
 #endif
+
+template <typename T, class enable = void>
+struct is_skipable : std::false_type {}; // NOLINT(readability-identifier-naming)
 NEKO_END_NAMESPACE

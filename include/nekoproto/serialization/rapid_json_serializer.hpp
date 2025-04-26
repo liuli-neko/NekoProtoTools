@@ -625,11 +625,16 @@ public:
             }
         } else {
             if (nullptr == cvalue) {
+                if constexpr (is_skipable<T>::value) {
+                    mLastResult = true;
+                    return true;
+                } else {
 #if defined(NEKO_VERBOSE_LOGS)
-                NEKO_LOG_ERROR("JsonSerializer", "field {} is not find.", std::string(value.name, value.nameLen));
+                    NEKO_LOG_ERROR("JsonSerializer", "field {} is not find.", std::string(value.name, value.nameLen));
 #endif
-                mLastResult = false;
-                return false;
+                    mLastResult = false;
+                    return false;
+                }
             }
             mLastResult = (*this)(value.value);
 #if defined(NEKO_VERBOSE_LOGS)
@@ -648,11 +653,16 @@ public:
         NEKO_ASSERT(mCurrentItem != nullptr, "JsonSerializer", "Current Item is nullptr");
         const auto& v = (*mCurrentItem).move_to_member({value.name, value.nameLen});
         if (nullptr == v) {
+            if (is_skipable<T>::value) {
+                mLastResult = true;
+                return true;
+            } else {
 #if defined(NEKO_VERBOSE_LOGS)
-            NEKO_LOG_ERROR("JsonSerializer", "field {} is not find.", std::string(value.name, value.nameLen));
+                NEKO_LOG_ERROR("JsonSerializer", "field {} is not find.", std::string(value.name, value.nameLen));
 #endif
-            mLastResult = false;
-            return mLastResult;
+                mLastResult = false;
+                return mLastResult;
+            }
         }
 #if defined(NEKO_VERBOSE_LOGS)
         mLastResult = operator()(value.value);
