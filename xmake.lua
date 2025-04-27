@@ -153,6 +153,10 @@ if is_plat("linux") then
     add_cxxflags("-fcoroutines")
 end
 
+if is_plat("windows") then 
+    add_cxxflags("/bigobj")
+end
+
 target("NekoSerializer")
     set_kind("headeronly")
     add_headerfiles("include/(nekoproto/global/**.hpp)")

@@ -756,11 +756,10 @@ private:
 template <typename ProtocolT>
 class JsonRpcClient {
 public:
-    JsonRpcClient(ILIAS_NAMESPACE::IoContext& ctx) : mScop(ctx) {
+    JsonRpcClient(ILIAS_NAMESPACE::IoContext& /*unused*/) {
         auto rpcMethodMetadatas = detail::unwrap_struct(mProtocol);
         traits::for_each_tuple_element(
             rpcMethodMetadatas, [this](auto&& rpcMethodMetadata) { this->_registerRpcMethod(rpcMethodMetadata); });
-        mScop.setAutoCancel(true);
     }
     ~JsonRpcClient() { close(); }
     auto operator->() const { return &mProtocol; }
@@ -768,14 +767,10 @@ public:
         if (mClient != nullptr) {
             dynamic_cast<DatagramBase*>(mClient.get())->cancel();
         }
-        mScop.cancel();
-        mScop.wait();
         if (mClient != nullptr) {
             dynamic_cast<DatagramBase*>(mClient.get())->close();
         }
     }
-
-    auto wait() -> ILIAS_NAMESPACE::Task<void> { co_await mScop.wait(); }
 
     auto isConnected() const -> bool { return mClient != nullptr && mClient->isConnected(); }
 
@@ -825,8 +820,7 @@ private:
     void _registerRpcMethod(T&& metadata) {
         metadata = (typename std::decay_t<T>::CoroutinesFuncType)[this, &metadata](auto... args)
                        ->ILIAS_NAMESPACE::IoTask<typename std::decay_t<T>::RawReturnType> {
-            auto waithandle = mScop.spawn(_callRemote<T, decltype(args)...>(metadata, args...));
-            co_return co_await std::move(waithandle);
+            return _callRemote<T, decltype(args)...>(metadata, args...);
         };
     }
 
@@ -937,6 +931,5 @@ private:
     uint64_t mId                                = 0;
     std::vector<char> mBuffer;
     ILIAS_NAMESPACE::Mutex mMutex;
-    ILIAS_NAMESPACE::TaskScope mScop;
 };
 NEKO_END_NAMESPACE
