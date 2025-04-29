@@ -2,9 +2,9 @@
 
 #include "nekoproto/proto/proto_base.hpp"
 #include "nekoproto/serialization/binary_serializer.hpp"
+#include "nekoproto/serialization/json/simd_json_serializer.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
-#include "nekoproto/serialization/simd_json_serializer.hpp"
 #include "nekoproto/serialization/to_string.hpp"
 #include "nekoproto/serialization/types/types.hpp"
 
@@ -115,8 +115,8 @@ int main(int argc, char** argv) {
     testing::InitGoogleTest(&argc, argv);
     std::string str =
         "{\"a\":3,\"b\":\"Struct "
-        "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A(1)"
-        "\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,"
+        "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A"
+        "\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"TEnum_A\"],\"j\":[1,"
         "\"hello\"],\"k\":1,\"l\":1.114514,\"m\":[1.1,2.2,3.3,2,1,0,1.11451555213339]}";
     std::vector<char> data(str.begin(), str.end());
     TestP testp;

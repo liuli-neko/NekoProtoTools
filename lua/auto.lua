@@ -40,12 +40,10 @@ function autofunc.auto_add_packages(target)
     
     if has_config("enable_communication") or has_config("enable_jsonrpc") then
         target:add("packages", "ilias", {public = true})
-        target:set("languages", "c++20")
     end
     
     if has_config("enable_tests") then
         target:add("packages", "gtest", {public = true})
-        target:set("languages", "c++20")
     end
     
     if has_config("cereal_test") then

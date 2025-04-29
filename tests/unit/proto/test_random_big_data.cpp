@@ -6,8 +6,8 @@
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 
-#if NEKO_CPP_PLUS >= 17
-#include "nekoproto/serialization/simd_json_serializer.hpp"
+#if NEKO_PROTO_ENABLE_SIMDJSON
+#include "nekoproto/serialization/json/simd_json_serializer.hpp"
 #endif
 #include "nekoproto/serialization/to_string.hpp"
 #include "nekoproto/serialization/types/map.hpp"

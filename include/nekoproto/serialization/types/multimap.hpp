@@ -19,10 +19,10 @@ NEKO_BEGIN_NAMESPACE
 template <typename Serializer, typename K, typename V>
 inline bool save(Serializer& sa, const std::multimap<K, V>& value) {
     bool ret = sa.startArray(value.size());
-    for (const auto& v : value) {
+    for (const auto& val : value) {
         ret = sa.startObject(1) && ret;
-        ret = sa(make_name_value_pair("key", 3, v.first)) && ret;
-        ret = sa(make_name_value_pair("value", 5, v.second)) && ret;
+        ret = sa(make_name_value_pair("key", 3, val.first)) && ret;
+        ret = sa(make_name_value_pair("value", 5, val.second)) && ret;
         ret = sa.endObject() && ret;
     }
     return ret && sa.endArray();
@@ -30,16 +30,16 @@ inline bool save(Serializer& sa, const std::multimap<K, V>& value) {
 
 template <typename Serializer, typename K, typename V>
 inline bool load(Serializer& sa, std::multimap<K, V>& value) {
-    K k;
-    V v;
+    K key;
+    V val;
     bool ret;
-    std::size_t s;
-    ret = sa(make_size_tag(s));
+    std::size_t size;
+    ret = sa(make_size_tag(size));
     value.clear();
-    while (ret && s--) {
+    while (ret && size--) {
         ret = sa.startNode() && ret;
-        if (sa(make_name_value_pair("key", 3, k)) && sa(make_name_value_pair("value", 5, v))) {
-            value.emplace(std::move(k), std::move(v));
+        if (sa(make_name_value_pair("key", 3, key)) && sa(make_name_value_pair("value", 5, val))) {
+            value.emplace(std::move(key), std::move(val));
         } else {
             break;
         }

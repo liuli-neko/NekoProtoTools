@@ -15,11 +15,9 @@
 #include "nekoproto/global/log.hpp"
 
 #include <limits>
-#include <type_traits>
-#if NEKO_CPP_PLUS >= 17
 #include <optional>
+#include <type_traits>
 #include <variant>
-#endif
 
 #ifdef _WIN32
 #pragma push_macro("GetObject")
@@ -56,12 +54,13 @@ struct xml_output_buffer_type { // NOLINT(readability-identifier-naming)
 template <typename BufferT = void>
 class RapidXmlOutputSerializer : public detail::OutputSerializer<RapidXmlOutputSerializer<BufferT>> {
     static_assert(std::is_class<BufferT>::value, "XmlOutputSerializer not implement");
+
 public:
     explicit RapidXmlOutputSerializer() NEKO_NOEXCEPT : detail::OutputSerializer<RapidXmlOutputSerializer>(this) {}
 
-    RapidXmlOutputSerializer(const RapidXmlOutputSerializer& other) NEKO_NOEXCEPT
+    RapidXmlOutputSerializer(const RapidXmlOutputSerializer& /*unused*/) NEKO_NOEXCEPT
         : detail::OutputSerializer<RapidXmlOutputSerializer>(this) {}
-    RapidXmlOutputSerializer(RapidXmlOutputSerializer&& other) NEKO_NOEXCEPT
+    RapidXmlOutputSerializer(RapidXmlOutputSerializer&& /*unused*/) NEKO_NOEXCEPT
         : detail::OutputSerializer<RapidXmlOutputSerializer>(this) {}
     ~RapidXmlOutputSerializer() { end(); }
     template <typename T>
@@ -69,36 +68,35 @@ public:
         return false;
     }
 
-    template <typename T, traits::enable_if_t<std::is_signed<T>::value, sizeof(T) < sizeof(int64_t),
-                                              !std::is_enum<T>::value> = traits::default_value_for_enable>
-    bool saveValue(const T value) NEKO_NOEXCEPT {
+    template <typename T>
+        requires std::is_signed_v<T> && (sizeof(T) < sizeof(int64_t)) && (!std::is_enum_v<T>)
+    bool saveValue(const T /*unused*/) NEKO_NOEXCEPT {
         return false;
     }
-    template <typename T, traits::enable_if_t<std::is_unsigned<T>::value, sizeof(T) < sizeof(uint64_t),
-                                              !std::is_enum<T>::value> = traits::default_value_for_enable>
-    bool saveValue(const T value) NEKO_NOEXCEPT {
+    template <typename T>
+        requires std::is_unsigned_v<T> && (sizeof(T) < sizeof(uint64_t)) && (!std::is_enum_v<T>)
+    bool saveValue(const T /*unused*/) NEKO_NOEXCEPT {
         return false;
     }
-    bool saveValue(const int64_t value) NEKO_NOEXCEPT { return false; }
-    bool saveValue(const uint64_t value) NEKO_NOEXCEPT { return false; }
-    bool saveValue(const float value) NEKO_NOEXCEPT { return false; }
-    bool saveValue(const double value) NEKO_NOEXCEPT { return false; }
-    bool saveValue(const bool value) NEKO_NOEXCEPT { return false; }
+    bool saveValue(const int64_t /*unused*/) NEKO_NOEXCEPT { return false; }
+    bool saveValue(const uint64_t /*unused*/) NEKO_NOEXCEPT { return false; }
+    bool saveValue(const float /*unused*/) NEKO_NOEXCEPT { return false; }
+    bool saveValue(const double /*unused*/) NEKO_NOEXCEPT { return false; }
+    bool saveValue(const bool /*unused*/) NEKO_NOEXCEPT { return false; }
     template <typename CharT, typename Traits, typename Alloc>
-    bool saveValue(const std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
+    bool saveValue(const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
         return false;
     }
-    bool saveValue(const char* value) NEKO_NOEXCEPT { return false; }
+    bool saveValue(const char* /*unused*/) NEKO_NOEXCEPT { return false; }
     bool saveValue(const std::nullptr_t) NEKO_NOEXCEPT { return false; }
-#if NEKO_CPP_PLUS >= 17
     template <typename CharT, typename Traits>
-    bool saveValue(const std::basic_string_view<CharT, Traits> value) NEKO_NOEXCEPT {
+    bool saveValue(const std::basic_string_view<CharT, Traits> /*unused*/) NEKO_NOEXCEPT {
         return false;
     }
 
     template <typename T>
     bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
-        if constexpr (traits::is_optional<T>::value) {
+        if constexpr (traits::optional_like_type<T>::value) {
             if (value.value.has_value()) {
                 return /*write key &&*/ (*this)(value.value.value());
             }
@@ -107,12 +105,6 @@ public:
             return /*write key &&*/ (*this)(value.value);
         }
     }
-#else
-    template <typename T>
-    bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
-        return /* write key &&*/ (*this)(value.value);
-    }
-#endif
     bool startArray(const std::size_t /*unused*/) NEKO_NOEXCEPT {
         // TODO: start array
         return true;
@@ -182,8 +174,8 @@ public:
         return {};
     }
 
-    template <typename T, traits::enable_if_t<std::is_signed<T>::value, sizeof(T) <= sizeof(int64_t),
-                                              !std::is_enum<T>::value> = traits::default_value_for_enable>
+    template <typename T>
+        requires std::is_signed_v<T> && (sizeof(T) <= sizeof(int64_t)) && (!std::is_enum_v<T>)
     bool loadValue(T& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mNode != nullptr, "XMLSerializer", "Current Item is nullptr");
         NEKO_LOG_INFO("XMLSerializer", "load signed value: {}", std::string{mNode->value(), mNode->value_size()});
@@ -204,8 +196,8 @@ public:
         return false;
     }
 
-    template <typename T, traits::enable_if_t<std::is_unsigned<T>::value, sizeof(T) <= sizeof(uint64_t),
-                                              !std::is_enum<T>::value> = traits::default_value_for_enable>
+    template <typename T>
+        requires std::is_unsigned_v<T> && (sizeof(T) <= sizeof(uint64_t)) && (!std::is_enum_v<T>)
     bool loadValue(T& value) NEKO_NOEXCEPT {
         NEKO_ASSERT(mNode != nullptr, "XMLSerializer", "Current Item is nullptr");
         NEKO_LOG_INFO("XMLSerializer", "load unsigned value: {}", std::string{mNode->value(), mNode->value_size()});
@@ -312,12 +304,12 @@ public:
         NEKO_LOG_INFO("XMLSerializer", "Load NameValuePair: {}", std::string{value.name, value.nameLen});
         auto node = mNode->first_node(value.name, value.nameLen);
         bool ret  = true;
-        if constexpr (traits::is_optional<T>::value) {
+        if constexpr (traits::optional_like_type<T>::value) {
             if (nullptr == node) {
                 NEKO_LOG_WARN("XMLSerializer", "Node {} not found", std::string{value.name, value.nameLen});
                 value.value.reset();
             } else {
-                typename traits::is_optional<T>::value_type result;
+                typename traits::optional_like_type<T>::type result;
                 mStack.push_back(mNode);
                 mNode = node;
                 ret   = (*this)(result);
@@ -443,85 +435,76 @@ inline bool epilogue(RapidXmlOutputSerializer<WriterT>& /*unused*/, const SizeTa
 
 // #########################################################
 // class apart from name value pair, size tag, std::string, NEKO_STRING_VIEW
-template <class T, typename BufferT,
-          traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::value,
-                              !traits::has_method_serialize<T, RapidXmlInputSerializer<BufferT>>::value> =
-              traits::default_value_for_enable>
+template <class T, typename BufferT>
+    requires std::is_class_v<T> && (!is_minimal_serializable<T>::value) &&
+             (!traits::has_method_serialize<T, RapidXmlInputSerializer<BufferT>>)
 inline bool prologue(RapidXmlInputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
-template <class T, typename BufferT,
-          traits::enable_if_t<traits::has_method_serialize<T, RapidXmlInputSerializer<BufferT>>::value> =
-              traits::default_value_for_enable>
+template <class T, typename BufferT>
+    requires traits::has_method_serialize<T, RapidXmlInputSerializer<BufferT>>
 inline bool prologue(RapidXmlInputSerializer<BufferT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return sa.startNode();
 }
-template <typename T, typename BufferT,
-          traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::value,
-                              !traits::has_method_serialize<T, RapidXmlInputSerializer<BufferT>>::value> =
-              traits::default_value_for_enable>
+template <typename T, typename BufferT>
+    requires std::is_class_v<T> && (!is_minimal_serializable<T>::value) &&
+             (!traits::has_method_serialize<T, RapidXmlInputSerializer<BufferT>>)
 inline bool epilogue(RapidXmlInputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
-template <typename T, typename BufferT,
-          traits::enable_if_t<traits::has_method_serialize<T, RapidXmlInputSerializer<BufferT>>::value> =
-              traits::default_value_for_enable>
+template <typename T, typename BufferT>
+    requires traits::has_method_serialize<T, RapidXmlInputSerializer<BufferT>>
 inline bool epilogue(RapidXmlInputSerializer<BufferT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return sa.finishNode();
 }
 
-template <class T, typename WriterT,
-          traits::enable_if_t<std::is_class<T>::value, !std::is_same<std::string, T>::value,
-                              !is_minimal_serializable<T>::valueT,
-                              !traits::has_method_const_serialize<T, RapidXmlOutputSerializer<WriterT>>::value> =
-              traits::default_value_for_enable>
+template <class T, typename WriterT>
+    requires std::is_class_v<T> && (!std::is_same_v<std::string, T>) && (!is_minimal_serializable<T>::value) &&
+             (!traits::has_method_const_serialize<T, RapidXmlOutputSerializer<WriterT>>)
 inline bool prologue(RapidXmlOutputSerializer<WriterT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
-template <typename T, typename WriterT,
-          traits::enable_if_t<std::is_class<T>::value, !is_minimal_serializable<T>::valueT,
-                              !traits::has_method_const_serialize<T, RapidXmlOutputSerializer<WriterT>>::value> =
-              traits::default_value_for_enable>
+template <typename T, typename WriterT>
+    requires std::is_class_v<T> && (!std::is_same_v<std::string, T>) && (!is_minimal_serializable<T>::value) &&
+             (!traits::has_method_const_serialize<T, RapidXmlOutputSerializer<WriterT>>)
 inline bool epilogue(RapidXmlOutputSerializer<WriterT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
-template <typename T, typename WriterT,
-          traits::enable_if_t<traits::has_method_const_serialize<T, RapidXmlOutputSerializer<WriterT>>::value ||
-                              traits::has_method_serialize<T, RapidXmlOutputSerializer<WriterT>>::value> =
-              traits::default_value_for_enable>
+template <typename T, typename WriterT>
+    requires traits::has_method_const_serialize<T, RapidXmlOutputSerializer<WriterT>> ||
+             traits::has_method_serialize<T, RapidXmlOutputSerializer<WriterT>>
 inline bool prologue(RapidXmlOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return sa.startObject(-1);
 }
-template <typename T, typename WriterT,
-          traits::enable_if_t<traits::has_method_const_serialize<T, RapidXmlOutputSerializer<WriterT>>::value ||
-                              traits::has_method_serialize<T, RapidXmlOutputSerializer<WriterT>>::value> =
-              traits::default_value_for_enable>
+template <typename T, typename WriterT>
+    requires traits::has_method_const_serialize<T, RapidXmlOutputSerializer<WriterT>> ||
+             traits::has_method_serialize<T, RapidXmlOutputSerializer<WriterT>>
 inline bool epilogue(RapidXmlOutputSerializer<WriterT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     return sa.endObject();
 }
 
 // #########################################################
 // # arithmetic types
-template <typename T, typename BufferT,
-          traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
+template <typename T, typename BufferT>
+    requires std::is_arithmetic_v<T>
 inline bool prologue(RapidXmlInputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
-template <typename T, typename BufferT,
-          traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
+template <typename T, typename BufferT>
+    requires std::is_arithmetic_v<T>
 inline bool epilogue(RapidXmlInputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
-template <typename T, typename WriterT,
-          traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
+template <typename T, typename WriterT>
+    requires std::is_arithmetic_v<T>
 inline bool prologue(RapidXmlOutputSerializer<WriterT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
-template <typename T, typename WriterT,
-          traits::enable_if_t<std::is_arithmetic<T>::value> = traits::default_value_for_enable>
+template <typename T, typename WriterT>
+    requires std::is_arithmetic_v<T>
 inline bool epilogue(RapidXmlOutputSerializer<WriterT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
@@ -584,24 +567,25 @@ inline bool epilogue(RapidXmlOutputSerializer<WriterT>& /*unused*/, const std::n
 }
 // #####################################################
 // # minimal serializable
-template <typename T, typename BufferT,
-          traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
+template <typename T, typename BufferT>
+    requires is_minimal_serializable<T>::value
 inline bool prologue(RapidXmlInputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
-template <typename T, typename BufferT,
-          traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
+template <typename T, typename BufferT>
+    requires is_minimal_serializable<T>::value
 inline bool epilogue(RapidXmlInputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
 
-template <typename T, typename WriterT,
-          traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
+template <typename T, typename WriterT>
+    requires is_minimal_serializable<T>::value
 inline bool prologue(RapidXmlOutputSerializer<WriterT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
-template <typename T, typename WriterT,
-          traits::enable_if_t<is_minimal_serializable<T>::value> = traits::default_value_for_enable>
+
+template <typename T, typename WriterT>
+    requires is_minimal_serializable<T>::value
 inline bool epilogue(RapidXmlOutputSerializer<WriterT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }

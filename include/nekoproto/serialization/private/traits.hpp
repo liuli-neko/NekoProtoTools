@@ -11,39 +11,32 @@
 #pragma once
 #include "nekoproto/global/global.hpp"
 
-#include <type_traits>
-#if NEKO_CPP_PLUS >= 17
 #include <optional>
-#endif
+#include <type_traits>
 
 NEKO_BEGIN_NAMESPACE
+struct TestSerializableTrait {
+    template <typename... T>
+    bool operator()(T&&... /*unused*/) {
+        return true;
+    }
+    bool saveValue(auto) { return true; }   // NOLINT
+    bool loadValue(auto) { return true; }   // NOLINT
+    bool startArray(auto) { return true; }  // NOLINT
+    bool endArray() { return true; }        // NOLINT
+    bool startObject(auto) { return true; } // NOLINT
+    bool endObject() { return true; }       // NOLINT
+    bool end() { return true; }             // NOLINT
+    bool startNode() { return true; }       // NOLINT
+    bool endNode() { return true; }         // NOLINT
+    void rollbackItem() {}                  // NOLINT
+    bool isArray() { return true; }         // NOLINT
+    bool isObject() { return true; }        // NOLINT
+};
 namespace traits {
 namespace detail {
 struct NameValuePairCore {}; // help to trait the type
 struct SizeTagCore {};       // help to trait the type
-struct SerializableTraitTest {
-    template <typename T>
-    inline bool operator()(T&& /*unused*/) const {
-        return true;
-    }
-};
-template <bool B, bool... Bs>
-struct conditions_and // NOLINT(readability-identifier-naming)
-    : std::integral_constant<bool, B && conditions_and<Bs...>::value> {};
-template <bool B>
-struct conditions_and<B> : std::integral_constant<bool, B> {};
-template <bool B, bool... Bs>
-struct conditions_or // NOLINT(readability-identifier-naming)
-    : std::integral_constant<bool, B || conditions_or<Bs...>::value> {};
-template <bool B>
-struct conditions_or<B> : std::integral_constant<bool, B> {};
-enum class default_type {}; // NOLINT(readability-identifier-naming)
-template <bool... Conditions>
-struct enable_if // NOLINT(readability-identifier-naming)
-    : std::enable_if<conditions_and<Conditions...>::value, default_type> {};
-template <bool... Conditions>
-struct disable_if // NOLINT(readability-identifier-naming)
-    : std::enable_if<!conditions_or<Conditions...>::value, default_type> {};
 } // namespace detail
 
 template <typename T>
@@ -51,13 +44,7 @@ T& dereference(T* ptr) NEKO_NOEXCEPT {
     return *ptr;
 }
 
-static const detail::default_type default_value_for_enable = {}; // NOLINT(readability-identifier-naming)
-template <bool... Conditions>
-using enable_if_t = typename detail::enable_if<Conditions...>::type;
-template <bool... Conditions>
-using disable_if_t = typename detail::disable_if<Conditions...>::type;
-
-class method_access {
+class method_access { // NOLINT
 public:
     template <typename SerializerT, typename T>
     static auto method_serialize(SerializerT& sa, T& value) // NOLINT(readability-identifier-naming)
@@ -66,21 +53,9 @@ public:
     }
 
     template <typename SerializerT, typename T>
-    static auto method_deserialize(SerializerT& sa, T& value) // NOLINT(readability-identifier-naming)
-        NEKO_NOEXCEPT -> decltype(value.deserialize(sa)) {
-        return value.deserialize(sa);
-    }
-
-    template <typename SerializerT, typename T>
     static auto method_const_serialize(SerializerT& sa, const T& value) // NOLINT(readability-identifier-naming)
         NEKO_NOEXCEPT -> decltype(value.serialize(sa)) {
         return value.serialize(sa);
-    }
-
-    template <typename SerializerT, typename T>
-    static auto method_load(SerializerT& sa, T& value) // NOLINT(readability-identifier-naming)
-        NEKO_NOEXCEPT -> decltype(value.load(sa)) {
-        return value.load(sa);
     }
 
     template <typename SerializerT, typename T>
@@ -94,130 +69,76 @@ public:
         NEKO_NOEXCEPT -> decltype(value.save(sa)) {
         return value.save(sa);
     }
+
+    template <typename SerializerT, typename T>
+    static auto method_load(SerializerT& sa, T& value) // NOLINT(readability-identifier-naming)
+        NEKO_NOEXCEPT -> decltype(value.load(sa)) {
+        return value.load(sa);
+    }
 };
 
-#define NEKO_MAKE_HAS_METHOD_TEST(name, test_name)                                                                     \
-    namespace detail {                                                                                                 \
-    template <class T, class A>                                                                                        \
-    struct has_method_##test_name##_impl {                                                                             \
-        template <class TT, class AA>                                                                                  \
-        static auto test(int)                                                                                          \
-            -> decltype(method_access::method_##name(std::declval<AA&>(), std::declval<TT&>()), std::true_type());     \
-        template <class, class>                                                                                        \
-        static std::false_type test(...);                                                                              \
-        static const bool value = std::is_same<decltype(test<T, A>(0)), std::true_type>::value;                        \
-    };                                                                                                                 \
-    } /* end namespace detail */                                                                                       \
-    template <class T, class A>                                                                                        \
-    struct has_method_##test_name : std::integral_constant<bool, detail::has_method_##test_name##_impl<T, A>::value> { \
-    };
-
-#define NEKO_MAKE_HAS_CONST_METHOD_TEST(name, test_name)                                                               \
-    namespace detail {                                                                                                 \
-    template <class T, class A>                                                                                        \
-    struct has_method_##test_name##_impl {                                                                             \
-        template <class TT, class AA>                                                                                  \
-        static auto test(int)                                                                                          \
-            -> decltype(method_access::method_##name(std::declval<AA&>(), std::declval<const TT&>()),                  \
-                        std::true_type());                                                                             \
-        template <class, class>                                                                                        \
-        static std::false_type test(...);                                                                              \
-        static const bool value = std::is_same<decltype(test<T, A>(0)), std::true_type>::value;                        \
-    };                                                                                                                 \
-    } /* end namespace detail */                                                                                       \
-    template <class T, class A>                                                                                        \
-    struct has_method_##test_name : std::integral_constant<bool, detail::has_method_##test_name##_impl<T, A>::value> { \
-    };
-
-namespace detail {
 template <class T, class A>
-struct has_function_save_impl { // NOLINT(readability-identifier-naming)
-    template <class TT, class AA>
-    static auto test(int) -> decltype(save(std::declval<AA&>(), std::declval<const TT&>()), std::true_type());
-    template <class, class>
-    static std::false_type test(...);
-    static const bool value = // NOLINT(readability-identifier-naming)
-        std::is_same<decltype(test<T, A>(0)), std::true_type>::value;
-
-    template <class TT, class AA>
-    static auto test2(int)
-        -> decltype(save(std::declval<AA&>(), std::declval<typename std::remove_const<TT>::type&>()), std::true_type());
-    template <class, class>
-    static std::false_type test2(...);
-    static const bool not_const_type = // NOLINT(readability-identifier-naming)
-        std::is_same<decltype(test2<T, A>(0)), std::true_type>::value;
+concept has_function_save = requires(A& sa, const T& value) {
+    { save(sa, value) } -> std::convertible_to<bool>;
 };
+
 template <class T, class A>
-struct has_function_load_impl { // NOLINT(readability-identifier-naming)
-    template <class TT, class AA>
-    static auto test(int) -> decltype(load(std::declval<AA&>(), std::declval<TT&>()), std::true_type());
-    template <class, class>
-    static std::false_type test(...);
-    static const bool value = // NOLINT(readability-identifier-naming)
-        std::is_same<decltype(test<T, A>(0)), std::true_type>::value;
+concept has_function_load = requires(A& sa, T& value) {
+    { load(sa, value) } -> std::convertible_to<bool>;
 };
-} /* end namespace detail */
 
 template <class T, class A>
-struct has_function_save // NOLINT(readability-identifier-naming)
-    : std::integral_constant<bool, detail::has_function_save_impl<T, A>::value> {
-    using check = typename detail::has_function_save_impl<T, A>;
-    static_assert(check::value || !check::not_const_type,
-                  "detected a non-const type parameter in non-member function save. \n "
-                  " non-member functions save must always pass their types as const");
+concept has_method_serialize = requires(A& sa, T& value) {
+    { method_access::method_serialize(sa, value) };
 };
+
 template <class T, class A>
-struct has_function_load // NOLINT(readability-identifier-naming)
-    : std::integral_constant<bool, detail::has_function_load_impl<T, A>::value> {};
+concept has_method_const_serialize = requires(A& sa, const T& value) {
+    { method_access::method_const_serialize(sa, value) };
+};
 
-NEKO_MAKE_HAS_METHOD_TEST(serialize, serialize)
-NEKO_MAKE_HAS_METHOD_TEST(deserialize, deserialize)
-NEKO_MAKE_HAS_METHOD_TEST(load, load)
-NEKO_MAKE_HAS_METHOD_TEST(save, save)
-NEKO_MAKE_HAS_CONST_METHOD_TEST(serialize, const_serialize)
-NEKO_MAKE_HAS_CONST_METHOD_TEST(save, const_save)
+template <class T, class A>
+concept has_method_save = requires(A& sa, const T& value) {
+    { method_access::method_const_save(sa, value) };
+} || requires(A& sa, const T& value) {
+    { method_access::method_save(sa, value) };
+};
 
-#undef NEKO_MAKE_HAS_METHOD_TEST
-#undef NEKO_MAKE_HAS_CONST_METHOD_TEST
+template <class T, class A>
+concept has_method_load = requires(A& sa, T& value) {
+    { method_access::method_load(sa, value) };
+};
 
-#if NEKO_CPP_PLUS >= 17
+template <typename T>
+concept optional_like = requires(T t, typename T::value_type v) {
+    { T() } -> std::same_as<T>;
+    { T(v) } -> std::same_as<T>;
+    { t.has_value() } -> std::convertible_to<bool>;
+    { t.value() };
+    { t = v };
+    { t.reset() };
+    { t.emplace() };
+};
+
 template <typename T, class enable = void>
-struct is_optional : std::false_type {}; // NOLINT(readability-identifier-naming)
-template <typename T>
-struct is_optional<std::optional<T>, void> : std::true_type {
-    using value_type = T;
-};
-template <typename T>
-struct is_optional<std::optional<T>&, void> : std::true_type {
-    using value_type = T;
-};
-template <typename T>
-struct is_optional<const std::optional<T>&, void> : std::true_type {
-    using value_type = T;
-};
-template <typename T>
-struct is_optional<const std::optional<T>, void> : std::true_type {
-    using value_type = T;
-};
-#endif
-
-template <typename T, typename SerializerT = detail::SerializableTraitTest, class enable = void>
-struct can_be_serializable : std::false_type {}; // NOLINT(readability-identifier-naming)
+struct optional_like_type : public std::false_type {};
 
 template <typename T>
-struct can_be_serializable<
-    T, detail::SerializableTraitTest,
-    typename std::enable_if<std::is_same<
-        decltype(std::declval<T>().serialize(std::declval<detail::SerializableTraitTest&>())),
-        decltype(std::declval<T>().deserialize(std::declval<detail::SerializableTraitTest&>()))>::value>::type>
-    : std::true_type {};
+    requires optional_like<std::remove_cvref_t<T>>
+struct optional_like_type<T, void> : public std::true_type {
+    using type = std::remove_cvref_t<T>::value_type;
+};
 
-template <typename T, typename SerializerT>
+template <typename T>
+concept can_be_serializable =
+    (has_method_serialize<T, TestSerializableTrait>) ||
+    (has_function_save<T, TestSerializableTrait> && has_function_load<T, TestSerializableTrait>) ||
+    (has_method_save<T, TestSerializableTrait> && has_method_load<T, TestSerializableTrait>);
 
-struct can_be_serializable<T, SerializerT,
-                           typename std::enable_if<has_method_const_serialize<T, SerializerT>::value &&
-                                                   has_method_serialize<T, SerializerT>::value>::type>
-    : std::true_type {};
+template <typename T>
+using ref_type = typename std::conditional<
+    std::is_array<typename std::remove_reference<T>::type>::value, typename std::remove_cv<T>::type,
+    typename std::conditional<std::is_lvalue_reference<T>::value, T, typename std::decay<T>::type>::type>::type;
 
 } // namespace traits
 
@@ -227,10 +148,8 @@ struct is_minimal_serializable : std::false_type {}; // NOLINT(readability-ident
 template <typename CharT, typename Traits, typename Alloc>
 struct is_minimal_serializable<std::basic_string<CharT, Traits, Alloc>, void> : std::true_type {};
 
-#if NEKO_CPP_PLUS >= 17
 template <typename CharT, typename Traits>
 struct is_minimal_serializable<std::basic_string_view<CharT, Traits>, void> : std::true_type {};
-#endif
 
 template <typename T, class enable = void>
 struct is_skipable : std::false_type {}; // NOLINT(readability-identifier-naming)

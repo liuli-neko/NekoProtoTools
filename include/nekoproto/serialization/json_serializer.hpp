@@ -13,12 +13,12 @@
 // default JsonSerializer type definition
 #include "nekoproto/global/global.hpp"
 #if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
-#include "rapid_json_serializer.hpp"
+#include "json/rapid_json_serializer.hpp"
 NEKO_BEGIN_NAMESPACE
 using JsonSerializer = RapidJsonSerializer;
 NEKO_END_NAMESPACE
 #elif defined(NEKO_PROTO_ENABLE_SIMDJSON)
-#include "simd_json_serializer.hpp"
+#include "json/simd_json_serializer.hpp"
 NEKO_BEGIN_NAMESPACE
 using JsonSerializer = SimdJsonSerializer;
 NEKO_END_NAMESPACE

@@ -31,59 +31,58 @@ public:
     PrintSerializer(PrintSerializer&& other) NEKO_NOEXCEPT : OutputSerializer<PrintSerializer>(this),
                                                              mBuffer(other.mBuffer) {}
     template <typename T>
-    inline bool saveValue(const SizeTag<T>& size) NEKO_NOEXCEPT {
+    bool saveValue(const SizeTag<T>& size) NEKO_NOEXCEPT {
         mBuffer += "[size : " + std::to_string(size.size) + "]";
         return true;
     }
-    template <typename T, traits::enable_if_t<std::is_signed<T>::value, sizeof(T) <= sizeof(int64_t),
-                                              !std::is_enum<T>::value> = traits::default_value_for_enable>
-    inline bool saveValue(const T value) NEKO_NOEXCEPT {
+    template <typename T>
+        requires std::is_signed_v<T> && (sizeof(T) <= sizeof(int64_t)) && (!std::is_enum_v<T>)
+    bool saveValue(const T value) NEKO_NOEXCEPT {
         mBuffer += std::to_string(static_cast<int64_t>(value)) + ", ";
         return true;
     }
-    template <typename T, traits::enable_if_t<std::is_unsigned<T>::value, sizeof(T) <= sizeof(int64_t),
-                                              !std::is_enum<T>::value> = traits::default_value_for_enable>
-    inline bool saveValue(const T value) NEKO_NOEXCEPT {
+    template <typename T>
+        requires std::is_unsigned_v<T> && (sizeof(T) <= sizeof(int64_t)) && (!std::is_enum_v<T>)
+    bool saveValue(const T value) NEKO_NOEXCEPT {
         mBuffer += std::to_string(static_cast<uint64_t>(value)) + ", ";
         return true;
     }
-    inline bool saveValue(const float value) NEKO_NOEXCEPT {
+    bool saveValue(const float value) NEKO_NOEXCEPT {
         std::ostringstream buffer;
         buffer << value << ", ";
         mBuffer += buffer.str();
         return true;
     }
-    inline bool saveValue(const double value) NEKO_NOEXCEPT {
+    bool saveValue(const double value) NEKO_NOEXCEPT {
         std::ostringstream buffer;
         buffer << value << ", ";
         mBuffer += buffer.str();
         return true;
     }
-    inline bool saveValue(const bool value) NEKO_NOEXCEPT {
+    bool saveValue(const bool value) NEKO_NOEXCEPT {
         mBuffer += std::string(value ? "true" : "false") + ", ";
         return true;
     }
-    inline bool saveValue(const std::string& value) NEKO_NOEXCEPT {
+    bool saveValue(const std::string& value) NEKO_NOEXCEPT {
         mBuffer += "\"" + value + "\", ";
         return true;
     }
-    inline bool saveValue(const char* value) NEKO_NOEXCEPT {
+    bool saveValue(const char* value) NEKO_NOEXCEPT {
         mBuffer += "\"" + std::string(value) + "\", ";
         return true;
     }
-    inline bool saveValue(std::nullptr_t) NEKO_NOEXCEPT {
+    bool saveValue(std::nullptr_t) NEKO_NOEXCEPT {
         mBuffer += "\"nullptr\", ";
         return true;
     }
-#if NEKO_CPP_PLUS >= 17
-    inline bool saveValue(const std::string_view value) NEKO_NOEXCEPT {
+    bool saveValue(const std::string_view value) NEKO_NOEXCEPT {
         mBuffer += "\"" + std::string(value) + "\", ";
         return true;
     }
     template <typename T>
-    inline bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
+    bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
         mBuffer += std::string{value.name, value.nameLen} + " = ";
-        if constexpr (traits::is_optional<T>::value) {
+        if constexpr (traits::optional_like_type<T>::value) {
             if (value.value.has_value()) {
                 return (*this)(value.value.value());
             }
@@ -94,13 +93,6 @@ public:
             return (*this)(value.value);
         }
     }
-#else
-    template <typename T>
-    inline bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
-        mBuffer += std::string{value.name, value.nameLen} + " = ";
-        return (*this)(value.value);
-    }
-#endif
     bool startArray(const std::size_t /*unused*/) NEKO_NOEXCEPT {
         mBuffer += "[";
         return true;
@@ -150,30 +142,28 @@ inline std::string serializable_to_string(T&& value) NEKO_NOEXCEPT {
     return buffer;
 };
 
-template <typename T, traits::enable_if_t<traits::has_method_const_serialize<T, PrintSerializer>::value ||
-                                          traits::has_method_serialize<T, PrintSerializer>::value> =
-                          traits::default_value_for_enable>
+template <typename T>
+    requires traits::has_method_const_serialize<T, PrintSerializer> || traits::has_method_serialize<T, PrintSerializer>
 inline bool prologue(PrintSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     sa.startObject((std::size_t)-1);
     return true;
 }
-template <typename T, traits::enable_if_t<traits::has_method_const_serialize<T, PrintSerializer>::value ||
-                                          traits::has_method_serialize<T, PrintSerializer>::value> =
-                          traits::default_value_for_enable>
+template <typename T>
+    requires traits::has_method_const_serialize<T, PrintSerializer> || traits::has_method_serialize<T, PrintSerializer>
 inline bool epilogue(PrintSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
     sa.endObject();
     return true;
 }
 
-template <typename T, traits::enable_if_t<!traits::has_method_const_serialize<T, PrintSerializer>::value,
-                                          !traits::has_method_serialize<T, PrintSerializer>::value> =
-                          traits::default_value_for_enable>
+template <typename T>
+    requires(!traits::has_method_const_serialize<T, PrintSerializer>) &&
+            (!traits::has_method_serialize<T, PrintSerializer>)
 inline bool prologue(PrintSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }
-template <typename T, traits::enable_if_t<!traits::has_method_const_serialize<T, PrintSerializer>::value,
-                                          !traits::has_method_serialize<T, PrintSerializer>::value> =
-                          traits::default_value_for_enable>
+template <typename T>
+    requires(!traits::has_method_const_serialize<T, PrintSerializer>) &&
+            (!traits::has_method_serialize<T, PrintSerializer>)
 inline bool epilogue(PrintSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
     return true;
 }

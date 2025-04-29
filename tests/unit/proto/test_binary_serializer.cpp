@@ -107,5 +107,7 @@ TEST(BinarySerializer, Serialize2) {
 }
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
+    NEKO_LOG_INFO("test", "this is a test log");
     return RUN_ALL_TESTS();
 }
