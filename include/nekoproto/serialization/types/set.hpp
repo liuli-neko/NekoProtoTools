@@ -18,24 +18,25 @@ NEKO_BEGIN_NAMESPACE
 template <typename Serializer, typename T>
 inline bool save(Serializer& sa, const std::set<T>& value) {
     auto ret = sa.startArray(value.size());
-    for (const auto& v : value)
-        ret = sa(v) && ret;
+    for (const auto& val : value) {
+        ret = sa(val) && ret;
+    }
     ret = sa.endArray() && ret;
     return ret;
 }
 
 template <typename Serializer, typename T>
 inline bool load(Serializer& sa, std::set<T>& value) {
-    std::size_t s = 0;
-    auto ret      = sa(make_size_tag(s));
+    std::size_t size = 0;
+    auto ret         = sa(make_size_tag(size));
     if (!ret) {
         return false;
     }
     value.clear();
-    T v;
-    for (std::size_t i = 0; i < s; ++i) {
-        ret = sa(v) && ret;
-        value.insert(std::move(v));
+    T val;
+    for (std::size_t i = 0; i < size; ++i) {
+        ret = sa(val) && ret;
+        value.insert(std::move(val));
     }
     return ret;
 }

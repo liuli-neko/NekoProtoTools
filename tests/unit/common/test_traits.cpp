@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
+#include "nekoproto/serialization/json/simd_json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
-#include "nekoproto/serialization/simd_json_serializer.hpp"
 #include "nekoproto/serialization/types/optional.hpp"
 #include "nekoproto/serialization/types/struct_unwrap.hpp"
 #include "nekoproto/serialization/types/vector.hpp"
@@ -18,10 +18,10 @@ struct TestStruct {
 
 TEST(TraitsTest, test) {
     EXPECT_EQ(NEKO_CPP_PLUS, 20);
-    EXPECT_FALSE(traits::is_optional<int>::value);
-    EXPECT_TRUE(traits::is_optional<std::optional<int>&>::value);
-    EXPECT_TRUE(traits::is_optional<const std::optional<int>&>::value);
-    EXPECT_TRUE(traits::is_optional<const std::optional<int>>::value);
+    EXPECT_FALSE(traits::optional_like_type<int>::value);
+    EXPECT_TRUE(traits::optional_like_type<std::optional<int>&>::value);
+    EXPECT_TRUE(traits::optional_like_type<const std::optional<int>&>::value);
+    EXPECT_TRUE(traits::optional_like_type<const std::optional<int>>::value);
     EXPECT_TRUE(detail::can_unwrap_v<TestStruct>);
 }
 

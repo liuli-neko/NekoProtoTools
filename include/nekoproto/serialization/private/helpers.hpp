@@ -35,11 +35,9 @@ public:
         : name(name),
           nameLen(nameLen),
           value(std::forward<T>(value)) {}
-#if NEKO_CPP_PLUS >= 17
     NameValuePair(std::string_view name, T&& value) NEKO_NOEXCEPT : name(name.data()),
                                                                     nameLen(name.size()),
                                                                     value(std::forward<T>(value)) {}
-#endif
     const char* name;
     std::size_t nameLen;
     Type value;
@@ -62,12 +60,10 @@ inline NameValuePair<T> make_name_value_pair(const std::string& name, T&& value)
     return {name.c_str(), name.size(), std::forward<T>(value)};
 }
 
-#if NEKO_CPP_PLUS >= 17
 template <class T>
 inline NameValuePair<T> make_name_value_pair(const std::string_view& name, T&& value) NEKO_NOEXCEPT {
     return {name, std::forward<T>(value)};
 }
-#endif
 
 #define NEKO_PROTO_NAME_VALUE_PAIR(value) make_name_value_pair(#value, value)
 
@@ -134,53 +130,40 @@ private:
         ret      = ret && _process(std::forward<Other>(tail)...);
         return ret;
     }
-    template <class T, traits::enable_if_t<traits::has_method_const_serialize<T, SerializerType>::value,
-                                           !traits::has_function_save<T, SerializerType>::value,
-                                           !traits::has_method_const_save<T, SerializerType>::value> =
-                           traits::default_value_for_enable>
+
+    template <typename T>
+        requires traits::has_method_save<T, SerializerType>
     bool _processImpl(const T& value) NEKO_NOEXCEPT {
-        return traits::method_access::method_const_serialize(*mSelf, value);
+        return traits::method_access::method_save(*mSelf, value);
     }
-    template <class T, traits::enable_if_t<traits::has_function_save<T, SerializerType>::value,
-                                           !traits::has_method_const_save<T, SerializerType>::value,
-                                           !traits::has_method_const_serialize<T, SerializerType>::value> =
-                           traits::default_value_for_enable>
+
+    template <typename T>
+        requires traits::has_function_save<T, SerializerType> && (!traits::has_method_save<T, SerializerType>)
     bool _processImpl(const T& value) NEKO_NOEXCEPT {
         return save(*mSelf, value);
     }
-    template <class T, traits::enable_if_t<traits::has_method_const_save<T, SerializerType>::value,
-                                           !traits::has_function_save<T, SerializerType>::value,
-                                           !traits::has_method_const_serialize<T, SerializerType>::value> =
-                           traits::default_value_for_enable>
+
+    template <typename T>
+        requires traits::has_method_const_serialize<T, SerializerType> &&
+                 (!traits::has_function_save<T, SerializerType>) && (!traits::has_method_save<T, SerializerType>)
     bool _processImpl(const T& value) NEKO_NOEXCEPT {
-        return traits::method_access::method_const_save(*mSelf, value);
+        return traits::method_access::method_const_serialize(*mSelf, value);
     }
-    template <class T, traits::enable_if_t<traits::has_method_serialize<T, SerializerType>::value,
-                                           !traits::has_method_const_save<T, SerializerType>::value,
-                                           !traits::has_function_save<T, SerializerType>::value,
-                                           !traits::has_method_const_serialize<T, SerializerType>::value> =
-                           traits::default_value_for_enable>
+
+    template <typename T>
+        requires traits::has_method_serialize<T, SerializerType> &&
+                 (!traits::has_method_const_serialize<T, SerializerType>) &&
+                 (!traits::has_function_save<T, SerializerType>) && (!traits::has_method_save<T, SerializerType>)
     bool _processImpl(const T& value) NEKO_NOEXCEPT {
-        // will copy the value if it is not const, I'm not sure if this is the best way to do it. but there is no way to
-        // convert a const value to a reference safely. maybe we should have a const serializer method.
-        auto tmpValue = value;
-        return traits::method_access::method_serialize(*mSelf, tmpValue);
+        return traits::method_access::method_serialize(*mSelf, const_cast<T&>(value));
     }
-    template <class T, traits::enable_if_t<traits::has_method_serialize<T, SerializerType>::value,
-                                           !traits::has_method_const_save<T, SerializerType>::value,
-                                           !traits::has_function_save<T, SerializerType>::value,
-                                           !traits::has_method_const_serialize<T, SerializerType>::value> =
-                           traits::default_value_for_enable>
-    bool _processImpl(T& value) NEKO_NOEXCEPT {
-        return traits::method_access::method_serialize(*mSelf, value);
-    }
-    template <class T, traits::enable_if_t<!traits::has_function_save<T, SerializerType>::value,
-                                           !traits::has_method_const_save<T, SerializerType>::value,
-                                           !traits::has_method_const_serialize<T, SerializerType>::value,
-                                           !traits::has_method_serialize<T, SerializerType>::value> =
-                           traits::default_value_for_enable>
+
+    template <typename T>
+        requires(!traits::has_method_const_serialize<T, SerializerType>) &&
+                (!traits::has_function_save<T, SerializerType>) && (!traits::has_method_serialize<T, SerializerType>) &&
+                (!traits::has_method_save<T, SerializerType>)
     bool _processImpl(const T& /*unused*/) NEKO_NOEXCEPT {
-        static_assert(traits::has_method_const_serialize<T, SerializerType>::value != 0,
+        static_assert(traits::has_method_const_serialize<T, SerializerType>,
                       "can not find any function to serialize this Type, must have a serialize method or save method"
                       "or save function.");
         return false;
@@ -219,42 +202,31 @@ private:
         ret      = _process(tail...) && ret;
         return ret;
     }
-    template <class T, traits::enable_if_t<traits::has_method_deserialize<T, SerializerType>::value,
-                                           !traits::has_method_load<T, SerializerType>::value,
-                                           !traits::has_function_load<T, SerializerType>::value> =
-                           traits::default_value_for_enable>
-    bool _processImpl(T& value) NEKO_NOEXCEPT {
-        return traits::method_access::method_deserialize(*mSelf, value);
-    }
-    template <class T, traits::enable_if_t<traits::has_function_load<T, SerializerType>::value,
-                                           !traits::has_method_load<T, SerializerType>::value,
-                                           !traits::has_method_deserialize<T, SerializerType>::value> =
-                           traits::default_value_for_enable>
-    bool _processImpl(T& value) NEKO_NOEXCEPT {
-        return load(*mSelf, value);
-    }
-    template <class T, traits::enable_if_t<traits::has_method_load<T, SerializerType>::value,
-                                           !traits::has_function_load<T, SerializerType>::value,
-                                           !traits::has_method_deserialize<T, SerializerType>::value> =
-                           traits::default_value_for_enable>
+
+    template <typename T>
+        requires traits::has_method_load<T, SerializerType>
     bool _processImpl(T& value) NEKO_NOEXCEPT {
         return traits::method_access::method_load(*mSelf, value);
     }
-    template <class T, traits::enable_if_t<!traits::has_method_load<T, SerializerType>::value,
-                                           !traits::has_function_load<T, SerializerType>::value,
-                                           !traits::has_method_deserialize<T, SerializerType>::value,
-                                           traits::has_method_serialize<T, SerializerType>::value> =
-                           traits::default_value_for_enable>
+
+    template <typename T>
+        requires traits::has_function_load<T, SerializerType> && (!traits::has_method_load<T, SerializerType>)
+    bool _processImpl(T& value) NEKO_NOEXCEPT {
+        return load(*mSelf, value);
+    }
+
+    template <typename T>
+        requires traits::has_method_serialize<T, SerializerType> && (!traits::has_function_load<T, SerializerType>) &&
+                 (!traits::has_method_load<T, SerializerType>)
     bool _processImpl(T& value) NEKO_NOEXCEPT {
         return traits::method_access::method_serialize(*mSelf, value);
     }
-    template <class T, traits::enable_if_t<!traits::has_function_load<T, SerializerType>::value,
-                                           !traits::has_method_load<T, SerializerType>::value,
-                                           !traits::has_method_deserialize<T, SerializerType>::value,
-                                           !traits::has_method_serialize<T, SerializerType>::value> =
-                           traits::default_value_for_enable>
+
+    template <typename T>
+        requires(!traits::has_method_serialize<T, SerializerType>) && (!traits::has_function_load<T, SerializerType>) &&
+                (!traits::has_method_load<T, SerializerType>)
     bool _processImpl(T& /*unused*/) NEKO_NOEXCEPT {
-        static_assert(traits::has_method_deserialize<T, SerializerType>::value != 0,
+        static_assert(traits::has_method_serialize<T, SerializerType>,
                       "can not find any function to serialize this Type, must have a serialize method or save method"
                       "or save function.");
         return false;
@@ -397,12 +369,10 @@ inline bool save(SerializerT& serializer, std::nullptr_t) NEKO_NOEXCEPT {
     return serializer.saveValue(nullptr);
 }
 
-#if NEKO_CPP_PLUS >= 17
 template <typename SerializerT, typename CharT, typename Traits>
 inline bool save(SerializerT& serializer, const std::basic_string_view<CharT, Traits>& value) NEKO_NOEXCEPT {
     return serializer.saveValue(value);
 }
-#endif
 
 template <typename SerializerT, typename CharT, typename Traits, typename Alloc>
 inline bool load(SerializerT& serializer, std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {

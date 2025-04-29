@@ -67,6 +67,7 @@
 #include <vector>
 
 #include "nekoproto/global/global.hpp"
+#include "nekoproto/global/reflect.hpp"
 #include "private/proto_base_private.hpp"
 
 #define NEKO_RESERVED_PROTO_TYPE_SIZE 64
@@ -220,7 +221,7 @@ template <typename T>
 NEKO_STRING_VIEW ProtoFactory::protoName() NEKO_NOEXCEPT {
     const auto& name = T::ProtoType::name();
     if (name.empty()) NEKO_IF_UNLIKELY {
-            return _class_name<T>();
+            return detail::class_nameof<T>;
         }
     return name;
 }
@@ -278,7 +279,7 @@ inline IProto IProto::clone() const {
 
 template <typename T>
 bool IProto::getField(const NEKO_STRING_VIEW& name, T* result) NEKO_NOEXCEPT {
-    NEKO_ASSERT(mImp != nullptr, "ReflectionSerializer", "proto object is nullptr");
+    NEKO_ASSERT(mImp != nullptr, "ReflectionSerializer", " protoobject is nullptr");
     auto* reflectionObject = mImp->getReflectionObject();
     if (reflectionObject == nullptr) {
         return false;
@@ -365,7 +366,7 @@ struct declared_specify_type<ProtoT, typename std::enable_if<has_method_specify_
 
 template <typename ProtoT, typename SerializerT>
 NEKO_STRING_VIEW ProtoBase<ProtoT, SerializerT>::gProtoName = []() NEKO_NOEXCEPT {
-    NEKO_STRING_VIEW name = _class_name<ProtoT>();
+    NEKO_STRING_VIEW name = class_nameof<ProtoT>;
     declared_specify_type<ProtoT>::declared();
     static_init_funcs(name, [name](NEKO_NAMESPACE::ProtoFactory* self) { self->regist<ProtoBaseType>(name); });
     return name;

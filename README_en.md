@@ -711,7 +711,6 @@ public:
         *   support built-in methods: `rpc.get_method_list`, `rpc.get_bind_method_list`, `rpc.get_method_info`, `rpc.get_method_info_list`.
     *   add the is_skipable trait. mark a type can skipable like optional
     *   optimize jsonrpc template expansion, enable /bigobj option to compile
-    *   split serialization and protocol management, with protocol management as an optional component.
 
 *   **v0.2.3**
     *   Unified most serialization calls to parenthesis expression `serializer(variable)`.

@@ -12,8 +12,8 @@
 #include <type_traits>
 #include <utility>
 
-#include "nekoproto/global/global.hpp"
 #include "../private/helpers.hpp"
+#include "nekoproto/global/global.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
@@ -29,17 +29,17 @@ inline bool save(Serializer& sa, const std::pair<K, V>& value) {
 
 template <typename Serializer, typename K, typename V>
 inline bool load(Serializer& sa, std::pair<K, V>& value) {
-    K k;
-    V v;
+    K key;
+    V val;
     bool ret;
-    std::size_t s;
-    ret = sa(make_size_tag(s));
+    std::size_t size;
+    ret = sa(make_size_tag(size));
     if (ret) {
-        if (sa(make_name_value_pair("first", 5, k)) && sa(make_name_value_pair("second", 6, v))) {
-            value = std::make_pair(std::move(k), std::move(v));
+        if (sa(make_name_value_pair("first", 5, key)) && sa(make_name_value_pair("second", 6, val))) {
+            value = std::make_pair(std::move(key), std::move(val));
         }
     }
-    return ret && (s == 2);
+    return ret && (size == 2);
 }
 
 NEKO_END_NAMESPACE

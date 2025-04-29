@@ -154,8 +154,7 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
     bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {
         if constexpr (sizeof...(ArgNames) == 0 && RpcMethodTraits<Args...>::NumParams == 1) {
             if constexpr (traits::has_method_const_serialize<
-                              std::tuple_element_t<0, typename RpcMethodTraits<Args...>::RawParamsType>,
-                              SerializerT>::value) {
+                              std::tuple_element_t<0, typename RpcMethodTraits<Args...>::RawParamsType>, SerializerT>) {
                 return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
                                   make_name_value_pair("params", std::get<0>(params)), NEKO_PROTO_NAME_VALUE_PAIR(id));
             }
@@ -169,8 +168,7 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
     bool serialize(SerializerT& serializer) NEKO_NOEXCEPT {
         if constexpr (sizeof...(ArgNames) == 0 && RpcMethodTraits<Args...>::NumParams == 1) {
             if constexpr (traits::has_method_serialize<
-                              std::tuple_element_t<0, typename RpcMethodTraits<Args...>::RawParamsType>,
-                              SerializerT>::value) {
+                              std::tuple_element_t<0, typename RpcMethodTraits<Args...>::RawParamsType>, SerializerT>) {
 
                 return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
                                   make_name_value_pair("params", std::get<0>(params)), NEKO_PROTO_NAME_VALUE_PAIR(id));
@@ -404,7 +402,7 @@ public:
                     out, std::move(method), (int64_t)JsonRpcError::InvalidRequest,
                     JsonRpcErrorCategory::instance().message((int64_t)JsonRpcError::InvalidRequest));
             }
-            if constexpr (traits::is_optional<typename T::ParamsTupleType>::value) {
+            if constexpr (traits::optional_like_type<typename T::ParamsTupleType>::value) {
                 co_return _processMethodReturn<T>(co_await metadata(), out, std::move(method));
             } else {
                 co_return _processMethodReturn<T>(co_await std::apply(metadata, request.params), out,
@@ -487,7 +485,7 @@ private:
                     out, std::move(method), (int64_t)JsonRpcError::InvalidRequest,
                     JsonRpcErrorCategory::instance().message((int64_t)JsonRpcError::InvalidRequest));
             }
-            if constexpr (traits::is_optional<typename T::ParamsTupleType>::value) {
+            if constexpr (traits::optional_like_type<typename T::ParamsTupleType>::value) {
                 co_return _processMethodReturn<T>(co_await metadata(), out, std::move(method));
             } else {
                 co_return _processMethodReturn<T>(co_await std::apply(metadata, request.params), out,
@@ -870,7 +868,7 @@ private:
     template <typename T, typename... Args>
     auto _sendRequest(bool notification, typename std::decay_t<T>::RequestType& request, Args... args)
         -> ILIAS_NAMESPACE::Result<void> {
-        if constexpr (traits::is_optional<typename std::decay_t<T>::ParamsTupleType>::value) {
+        if constexpr (traits::optional_like_type<typename std::decay_t<T>::ParamsTupleType>::value) {
             if (notification) {
                 request    = std::decay_t<T>::request(nullptr);
                 request.id = std::nullopt;

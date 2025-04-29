@@ -23,20 +23,19 @@
 #include <vector>
 #endif
 
-#include "nekoproto/global/global.hpp"
 #include "../private/helpers.hpp"
 #include "../serializer_base.hpp"
+#include "nekoproto/global/global.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
-#if __cplusplus >= 201703L || _MSVC_LANG > 201402L
 /// ====================== enum string =========================
 #ifndef NEKO_ENUM_SEARCH_DEPTH
 #define NEKO_ENUM_SEARCH_DEPTH 60
 #endif
 
 #if defined(__GNUC__) || defined(__MINGW__) || defined(__clang__)
-#define NEKO_FUNCTION              __PRETTY_FUNCTION__
+#define NEKO_FUNCTION __PRETTY_FUNCTION__
 
 namespace detail {
 template <typename T, T Value>
@@ -96,46 +95,56 @@ constexpr auto _Neko_GetValidEnumNames(std::index_sequence<N...> seq) noexcept {
     std::array<std::pair<T, std::string_view>, validCount> arr;
     std::string_view vstr[sizeof...(N)]{_Neko_GetEnumName<T, T(N)>()...};
 
-    std::size_t n    = 0;
+    std::size_t ns   = 0;
     std::size_t left = validCount;
     auto iter        = arr.begin();
 
-    for (auto i : vstr) {
-        if (!i.empty()) {
+    for (auto idx : vstr) {
+        if (!idx.empty()) {
             // Valid name
-            iter->first  = T(n);
-            iter->second = i;
+            iter->first  = T(ns);
+            iter->second = idx;
             ++iter;
         }
         if (left == 0) {
             break;
         }
 
-        n += 1;
+        ns += 1;
     }
-
     return arr;
 }
 template <typename T>
 std::string enum_to_string(const T& value) {
     constexpr static auto KEnumArr = _Neko_GetValidEnumNames<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
     std::string ret;
-    for (int i = 0; i < KEnumArr.size(); ++i) {
-        if (KEnumArr[i].first == value) {
-            ret = std::string(KEnumArr[i].second);
+    for (int idx = 0; idx < KEnumArr.size(); ++idx) {
+        if (KEnumArr[idx].first == value) {
+            ret = std::string(KEnumArr[idx].second);
         }
     }
     return ret;
 }
 template <typename T>
+bool string_to_enum(const std::string& str, T& value) {
+    constexpr static auto KEnumArr = _Neko_GetValidEnumNames<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
+    for (int idx = 0; idx < KEnumArr.size(); ++idx) {
+        if (KEnumArr[idx].second == str) {
+            value = T(KEnumArr[idx].first);
+            return true;
+        }
+    }
+    return false;
+}
+template <typename T>
 std::string make_enum_string(const std::string& fmt) {
     constexpr static auto KEnumArr = _Neko_GetValidEnumNames<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
     std::string ret;
-    for (int i = 0; i < KEnumArr.size(); ++i) {
-        if (KEnumArr[i].second.size() > 0) {
+    for (int idx = 0; idx < KEnumArr.size(); ++idx) {
+        if (KEnumArr[idx].second.size() > 0) {
             std::string tfmt = fmt;
-            tfmt.replace(tfmt.find("{enum}"), 6, KEnumArr[i].second);
-            tfmt.replace(tfmt.find("{num}"), 5, std::to_string(i));
+            tfmt.replace(tfmt.find("{enum}"), 6, KEnumArr[idx].second);
+            tfmt.replace(tfmt.find("{num}"), 5, std::to_string(idx));
             ret += tfmt;
         }
     }
@@ -144,32 +153,25 @@ std::string make_enum_string(const std::string& fmt) {
 } // namespace detail
 /// ====================== end enum string =====================
 
-template <typename SerializerT, typename T,
-          traits::enable_if_t<std::is_enum<T>::value> = traits::default_value_for_enable>
+template <typename SerializerT, typename T>
+    requires std::is_enum_v<T>
 inline bool save(SerializerT& sa, const T& value) {
     std::string ret = detail::enum_to_string(value);
-    ret += "(" + std::to_string(static_cast<int32_t>(value)) + ")";
+    if (ret.empty()) {
+        return sa(static_cast<int>(value));
+    }
     return sa(ret);
 }
-#else
-template <typename SerializerT, typename T,
-          traits::enable_if_t<std::is_enum<T>::value> = traits::default_value_for_enable>
-inline bool save(SerializerT& sa, const T& value) {
-    return sa(static_cast<int>(value));
-}
-#endif
-template <typename SerializerT, typename T,
-          traits::enable_if_t<std::is_enum<T>::value> = traits::default_value_for_enable>
+template <typename SerializerT, typename T>
+    requires std::is_enum_v<T>
 inline bool load(SerializerT& sa, T& value) {
-    std::string enum_str;
-    int enum_int = 0;
-    if (sa(enum_str)) {
-        std::size_t left  = enum_str.find_last_of(')');
-        std::size_t right = enum_str.find_last_of('(');
-        int32_t v         = std::stoi(enum_str.substr(right + 1, left - right - 1));
-        value             = static_cast<T>(v);
-    } else if (sa(enum_int)) {
-        value = static_cast<T>(enum_int);
+    std::string enumStr;
+    if (sa(enumStr)) {
+        return detail::string_to_enum(enumStr, value);
+    }
+    int enumInt = 0;
+    if (sa(enumInt)) {
+        value = static_cast<T>(enumInt);
     } else {
         return false;
     }

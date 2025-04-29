@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
+#include "nekoproto/proto/proto_base.hpp"
 #include "nekoproto/serialization/binary_serializer.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
-#include "nekoproto/proto/proto_base.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/to_string.hpp"
 #include "nekoproto/serialization/types/array.hpp"
@@ -975,14 +975,8 @@ TEST(RandomProtoTest, EnumTest) {
     out.end();
     buffer.push_back('\0');
     const char* str = buffer.data();
-#if __cplusplus >= 201703L || _MSVC_LANG > 201402L
-    EXPECT_STREQ(str,
-                 "{\"a\":\"TestEnumBG8AC0(0)\",\"b\":\"TestEnumBG8AC10(10)\",\"c\":\"TestEnumBG8AC20(20)\",\"d\":"
-                 "\"TestEnumBG8AC30(30)\",\"e\":\"TestEnumBG8AC40(40)\",\"f\":\"TestEnumBG8AC50(50)\",\"g\":\"(60)\","
-                 "\"h\":\"(61)\"}");
-#else
-    EXPECT_STREQ(str, "{\"a\":0,\"b\":10,\"c\":20,\"d\":30,\"e\":40,\"f\":50,\"g\":60,\"h\":61}");
-#endif
+    EXPECT_STREQ(str, "{\"a\":\"TestEnumBG8AC0\",\"b\":\"TestEnumBG8AC10\",\"c\":\"TestEnumBG8AC20\",\"d\":"
+                      "\"TestEnumBG8AC30\",\"e\":\"TestEnumBG8AC40\",\"f\":\"TestEnumBG8AC50\",\"g\":60,\"h\":61}");
 }
 
 int main(int argc, char** argv) {

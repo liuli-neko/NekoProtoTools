@@ -1,12 +1,11 @@
 #include <gtest/gtest.h>
 
+#include "nekoproto/proto/proto_base.hpp"
 #include "nekoproto/serialization/binary_serializer.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
-#include "nekoproto/proto/proto_base.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/to_string.hpp"
 #include "nekoproto/serialization/types/types.hpp"
-
 
 NEKO_USE_NAMESPACE
 
@@ -58,13 +57,10 @@ struct TestP {
     TEnum h                      = TEnum_A;
     StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum_A};
     std::tuple<int, std::string> j = {1, "hello"};
-#if NEKO_CPP_PLUS >= 17
     std::optional<int> k;
     std::variant<int, std::string, double> l;
     NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j, k, l)
-#else
-    NEKO_SERIALIZER(a, b, c, d, e, f, g, h, i, j)
-#endif
+
     NEKO_DECLARE_PROTOCOL(TestP, JsonSerializer)
 };
 
@@ -104,30 +100,21 @@ TEST_F(ProtoTest, StructSerialize) {
     testp.h = TEnum_A;
     testp.i = StructA{1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
     testp.j = std::make_tuple(1, "hello");
-#if NEKO_CPP_PLUS >= 17
     testp.l = "this a test for variant";
-#endif
     std::vector<char> data;
     data = testp.makeProto().toData();
     data.push_back('\0');
-#if NEKO_CPP_PLUS >= 17
     EXPECT_STREQ(data.data(), "{\"a\":3,\"b\":\"Struct "
                               "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,"
-                              "0,0],\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},"
-                              "[1,2,3,0,0],\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"l\":\"this a test for variant\"}");
-#else
-    EXPECT_STREQ(data.data(),
-                 "{\"a\":3,\"b\":\"Struct "
-                 "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":1,"
-                 "\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],1],\"j\":[1,\"hello\"]}");
-#endif
+                              "0,0],\"h\":\"TEnum_A\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},"
+                              "[1,2,3,0,0],\"TEnum_A\"],\"j\":[1,\"hello\"],\"l\":\"this a test for variant\"}");
 }
 
 TEST_F(ProtoTest, StructDeserialize) {
     std::string str = "{\"a\":3,\"b\":\"Struct "
                       "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
-                      "\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
-                      "\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"k\":1,\"l\":1.114514}";
+                      "\"h\":\"TEnum_A\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
+                      "\"TEnum_A\"],\"j\":[1,\"hello\"],\"k\":1,\"l\":1.114514}";
     std::vector<char> data(str.begin(), str.end());
     TestP testp;
     JsonSerializer::InputSerializer input(data.data(), data.size());
@@ -223,8 +210,8 @@ TEST_F(ProtoTest, Base64Covert) {
 TEST_F(ProtoTest, JsonProtoRef) {
     std::string str = "{\"a\":3,\"b\":\"Struct "
                       "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
-                      "\"h\":\"TEnum_A(1)\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
-                      "\"TEnum_A(1)\"],\"j\":[1,\"hello\"],\"l\":23}";
+                      "\"h\":\"TEnum_A\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
+                      "\"TEnum_A\"],\"j\":[1,\"hello\"],\"l\":23}";
     auto proto      = mFactory->create("TestP");
     proto.fromData(str.data(), str.length());
     auto* rawp = proto.cast<TestP>(); // success cast
@@ -292,15 +279,15 @@ TEST_F(ProtoTest, InvalidParams) {
     EXPECT_TRUE(mFactory->create(-1) == nullptr);
     str = "{\"a\":3.213123,\"b\":123"
           ",\"c\":12,\"d\":\"dddd\",\"f\":[1,2,3],\"e\":{\"a\":1,\"b\":2},\"h\":[1,2,3,0,0],"
-          "\"g\":\"TEnum_A(1)\",\"j\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
-          "\"TEnum_A(1)\"],\"i\":[1,\"hello\"],\"l\":23}";
+          "\"g\":\"TEnum_A\",\"j\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
+          "\"TEnum_A\"],\"i\":[1,\"hello\"],\"l\":23}";
     EXPECT_FALSE(proto.makeProto().fromData(str.data(), str.length()));
     str = "aaaaaaaaaaaaa";
     EXPECT_FALSE(proto.makeProto().fromData(str.data(), str.length()));
     str = "{\"a\":3.213123,\"b\":123"
           ",\"c\":12,\"d\":\"dddd\",\"f\":23,\"e\":null,\"h\":23.22,"
-          "\"g\":\"TEnum_A(1)\",\"j\":[1,\"hello\",true,3.141592654,[1,2,3],"
-          "\"TEnum_A(1)\"],\"i\":[1,\"hello\"],\"l\":23}";
+          "\"g\":\"TEnum_A\",\"j\":[1,\"hello\",true,3.141592654,[1,2,3],"
+          "\"TEnum_A\"],\"i\":[1,\"hello\"],\"l\":23}";
     EXPECT_FALSE(proto.makeProto().fromData(str.data(), str.length()));
     auto dest = TestP::ProtoType::Serialize(proto);
     EXPECT_FALSE(dest.empty());
@@ -351,14 +338,13 @@ struct ZTypeTest {
     NEKO_DECLARE_PROTOCOL(ZTypeTest, JsonSerializer)
 };
 
-#if NEKO_CPP_PLUS >= 17
 static const char* gZTypeTestStr =
 #if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
     "{\"a\":1,\"b\":\"field set "
     "test\",\"c\":false,\"d\":3.141592654,\"e\":[1,2,3],\"f\":[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"g\":["
     "1.1,2.2,3.3,4.4,5.5],\"h\":[\"a\",\"b\",\"c\"],\"i\":[1.100000023841858,2.200000047683716,3.299999952316284,4."
     "400000095367432,5.5,6.599999904632568,7.699999809265137],\"j\":[1,2,3,4,5,6,7],\"k\":[1,\"hello\",true,3."
-    "141592654,[1,2,3],[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"TEnum_A(1)\"],\"l\":\"hello shared "
+    "141592654,[1,2,3],[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"TEnum_A\"],\"l\":\"hello shared "
     "ptr\",\"p\":[{\"key\":1,\"value\":\"hello\"},{\"key\":1,\"value\":\"world\"},{\"key\":2,\"value\":\"world\"}],"
     "\"q\":[\"a\","
     "\"a\",\"b\",\"b\",\"c\"],\"t\":[[1,2,3],[4,5,6],[7,8,9]],\"v\":"
@@ -367,35 +353,11 @@ static const char* gZTypeTestStr =
     "{\"a\":1,\"b\":\"field set "
     "test\",\"c\":false,\"d\":3.141592654,\"e\":[1,2,3],\"f\":[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"g\":["
     "1.1,2.2,3.3,4.4,5.5],\"h\":[\"a\",\"b\",\"c\"],\"i\":[1.1,2.2,3.3,4.4,5.5,6.6,7.7],\"j\":[1,2,3,4,5,6,7],\"k\":[1,"
-    "\"hello\",true,3.141592654,[1,2,3],[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"TEnum_A(1)\"],\"l\":"
+    "\"hello\",true,3.141592654,[1,2,3],[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"TEnum_A\"],\"l\":"
     "\"hello shared "
     "ptr\",\"p\":[{\"key\":1,\"value\":\"hello\"},{\"key\":1,\"value\":\"world\"},{\"key\":2,\"value\":\"world\"}],"
     "\"q\":[\"a\",\"a\",\"b\",\"b\",\"c\"],\"t\":[[1,2,3],[4,5,6],[7,8,9]],\"v\":"
     "\"0011111100111111\",\"w\":{\"first\":\"hello\",\"second\":\"world\"},\"x\":1,\"y\":\"hello\"}";
-#endif
-#else
-static const char* zTypeTestStr =
-#if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
-    "{\"a\":1,\"b\":\"field set "
-    "test\",\"c\":false,\"d\":3.141592654,\"e\":[1,2,3],\"f\":[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"g\":["
-    "1.1,2.2,3.3,4.4,5.5],\"h\":[\"a\",\"b\",\"c\"],\"i\":[1.100000023841858,2.200000047683716,3.299999952316284,4."
-    "400000095367432,5.5,6.599999904632568,7.699999809265137],\"j\":[1,2,3,4,5,6,7],\"k\":[1,\"hello\",true,3."
-    "141592654,[1,2,3],[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],1],\"l\":\"hello shared "
-    "ptr\",\"p\":[{\"key\":1,\"value\":\"hello\"},{\"key\":1,\"value\":\"world\"},{\"key\":2,\"value\":\"world\"}],"
-    "\"q\":[\"a\","
-    "\"a\",\"b\",\"b\",\"c\"],\"t\":[[1,2,3],[4,5,6],[7,8,9]],\"v\":"
-    "\"0011111100111111\",\"w\":{\"first\":\"hello\",\"second\":\"world\"}}";
-#else
-    "{\"a\":1,\"b\":\"field set "
-    "test\",\"c\":false,\"d\":3.141592654,\"e\":[1,2,3],\"f\":[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"g\":["
-    "1.1,2.2,3.3,4.4,5.5],\"h\":[\"a\",\"b\",\"c\"],\"i\":[1.1,2.2,3.3,4."
-    "4,5.5,6.6,7.7],\"j\":[1,2,3,4,5,6,7],\"k\":[1,\"hello\",true,3."
-    "141592654,[1,2,3],[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],1],\"l\":\"hello shared "
-    "ptr\",\"p\":[{\"key\":1,\"value\":\"hello\"},{\"key\":1,\"value\":\"world\"},{\"key\":2,\"value\":\"world\"}],"
-    "\"q\":[\"a\","
-    "\"a\",\"b\",\"b\",\"c\"],\"t\":[[1,2,3],[4,5,6],[7,8,9]],\"v\":"
-    "\"0011111100111111\",\"w\":{\"first\":\"hello\",\"second\":\"world\"}}";
-#endif
 #endif
 
 TEST_F(ProtoTest, AllType) {

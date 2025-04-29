@@ -4,6 +4,7 @@ set_version("0.2.4", {build = "%Y%m%d%H%M"})
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 set_warnings("allextra")
 set_policy("package.cmake_generator.ninja", true)
+set_languages("c++20")
 
 add_configfiles("include/nekoproto/global/config.h.in")
 set_configdir("include/nekoproto/global")

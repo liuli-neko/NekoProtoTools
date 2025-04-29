@@ -666,6 +666,8 @@ public:
 ---
 
 ## 9. 开发历史 (部分里程碑)
+*   **当前**
+    *   提升最低c++支持到c++20, 新增简单静态反射支持。
 
 *   **v0.2.4**
     *   分离序列化和协议管理，序列化作为核心必要模块，协议管理作为可选模块。
@@ -674,7 +676,6 @@ public:
         *   支持内置方法：`rpc.get_method_list`, `rpc.get_bind_method_list`, `rpc.get_method_info`, `rpc.get_method_info_list`。
     *   给类型增加跳过标记is_skipable。标识一个非optional的可跳过类型。
     *   优化jsonrpc模板膨胀，开启/bigobj选项编译
-    *   分离序列化和协议管理部分，协议管理作为可选组件
 
 *   **v0.2.3**
     *   统一大部分序列化调用为括号表达式 `serializer(variable)`。

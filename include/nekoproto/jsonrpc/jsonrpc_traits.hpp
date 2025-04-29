@@ -16,6 +16,7 @@
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/types/types.hpp"
+#include "nekoproto/global/reflect.hpp"
 
 NEKO_BEGIN_NAMESPACE
 namespace traits {
@@ -94,7 +95,7 @@ ConstexprString(const char (&)[N]) -> ConstexprString<N - 1>;
 
 template <typename T, class enable = void>
 struct TypeName {
-    constexpr static std::string name() { return std::string(_class_name<T>()); }
+    constexpr static std::string name() { return std::string(NEKO_NAMESPACE::detail::class_nameof<T>); }
 };
 
 template <ConstexprString... ArgNames>
