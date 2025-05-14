@@ -267,6 +267,52 @@ public:
     auto isBool() const -> bool { return mValue && mValue->IsBool(); }
     auto isNull() const -> bool { return mValue && mValue->IsNull(); }
 
+    template <typename T>
+    auto value(T& value) const -> bool {
+        if (mValue && mValue->template Is<T>()) {
+            value = mValue->template Get<T>();
+            return true;
+        }
+        return false;
+    }
+
+    auto size() const -> std::size_t {
+        if (isArray()) {
+            return mValue->Size();
+        }
+        if (isObject()) {
+            return mValue->MemberCount();
+        }
+        return 0;
+    }
+
+    template <typename T>
+        requires std::convertible_to<T, std::string_view>
+    auto operator[](const T& name) const -> RapidJsonValue {
+        if (isObject()) {
+            auto view  = std::string_view(name);
+            auto value = mValue->FindMember(JsonValue(view.data(), view.size()));
+            if (value != mValue->MemberEnd()) {
+                return RapidJsonValue(value->value);
+            }
+        }
+        return RapidJsonValue();
+    }
+
+    auto operator[](std::size_t index) const -> RapidJsonValue {
+        if (isArray()) {
+            if (index < mValue->Size()) {
+                return RapidJsonValue(mValue->GetArray()[index]);
+            }
+        }
+        if (isObject()) {
+            if (index < mValue->MemberCount()) {
+                return RapidJsonValue((mValue->MemberBegin() + index)->value);
+            }
+        }
+        return RapidJsonValue();
+    }
+
 private:
     std::shared_ptr<JsonDocument> mValue;
 };

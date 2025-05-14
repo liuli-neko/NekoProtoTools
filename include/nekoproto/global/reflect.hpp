@@ -404,7 +404,7 @@ constexpr auto unwrap_struct(T& data) noexcept {
 }
 
 template <class T>
-inline constexpr T external = {};
+inline static T external;
 
 template <class T>
 struct ptr_t final { // NOLINT

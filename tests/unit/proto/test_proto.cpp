@@ -104,17 +104,20 @@ TEST_F(ProtoTest, StructSerialize) {
     std::vector<char> data;
     data = testp.makeProto().toData();
     data.push_back('\0');
-    EXPECT_STREQ(data.data(), "{\"a\":3,\"b\":\"Struct "
-                              "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,"
-                              "0,0],\"h\":\"TEnum_A\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},"
-                              "[1,2,3,0,0],\"TEnum_A\"],\"j\":[1,\"hello\"],\"l\":\"this a test for variant\"}");
+    EXPECT_STREQ(
+        data.data(),
+        "{\"a\":3,\"b\":\"Struct "
+        "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A\","
+        "\"i\":{\"a\":1,\"b\":\"hello\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,"
+        "3,0,0],\"h\":\"TEnum_A\"},\"j\":[1,\"hello\"],\"l\":\"this a test for variant\"}");
 }
 
 TEST_F(ProtoTest, StructDeserialize) {
     std::string str = "{\"a\":3,\"b\":\"Struct "
                       "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
-                      "\"h\":\"TEnum_A\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
-                      "\"TEnum_A\"],\"j\":[1,\"hello\"],\"k\":1,\"l\":1.114514}";
+                      "\"h\":\"TEnum_A\",\"i\":{\"a\":1,\"b\":\"hello\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],"
+                      "\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
+                      "\"h\":\"TEnum_A\"},\"j\":[1,\"hello\"],\"k\":1,\"l\":1.114514}";
     std::vector<char> data(str.begin(), str.end());
     TestP testp;
     JsonSerializer::InputSerializer input(data.data(), data.size());
@@ -210,8 +213,9 @@ TEST_F(ProtoTest, Base64Covert) {
 TEST_F(ProtoTest, JsonProtoRef) {
     std::string str = "{\"a\":3,\"b\":\"Struct "
                       "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
-                      "\"h\":\"TEnum_A\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],"
-                      "\"TEnum_A\"],\"j\":[1,\"hello\"],\"l\":23}";
+                      "\"h\":\"TEnum_A\",\"i\":{\"a\":1,\"b\":\"hello\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],"
+                      "\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":"
+                      "\"TEnum_A\"},\"j\":[1,\"hello\"],\"l\":23}";
     auto proto      = mFactory->create("TestP");
     proto.fromData(str.data(), str.length());
     auto* rawp = proto.cast<TestP>(); // success cast
@@ -379,10 +383,8 @@ TEST_F(ProtoTest, AllType) {
     tproto.t         = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
     tproto.v         = {0x3f3f3f};
     tproto.w         = {"hello", "world"};
-#if NEKO_CPP_PLUS >= 17
-    tproto.x = 1;
-    tproto.y = "hello";
-#endif
+    tproto.x         = 1;
+    tproto.y         = "hello";
 
     auto data = tproto.makeProto().toData();
     data.push_back('\0');
