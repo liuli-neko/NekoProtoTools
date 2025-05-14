@@ -184,6 +184,15 @@ TEST(Reflection, Local) {
     EXPECT_EQ(test.member2, 22);
 }
 
+TEST(Reflection, ConstObject) {
+    const Test1 test = {
+        .member1 = 1,
+        .member2 = 2,
+        .member3 = 3,
+    };
+    Reflect<Test1>::forEach(test, [](auto&& field) { std::cout << field << std::endl; });
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);

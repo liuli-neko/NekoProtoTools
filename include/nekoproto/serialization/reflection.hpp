@@ -228,7 +228,11 @@ template <typename T>
 struct MetaPrivate<T, void> {
     static constexpr auto names = // NOLINT
         member_names_impl<T>(std::make_index_sequence<member_count_v<T>>{});
-    static constexpr decltype(auto) value(T& obj) { return unwrap_struct(obj); }
+    template <typename U>
+        requires std::same_as<std::remove_cvref_t<T>, std::remove_cvref_t<U>>
+    static constexpr decltype(auto) value(U&& obj) {
+        return unwrap_struct(std::forward<U>(obj));
+    }
 };
 
 template <typename T>
@@ -375,8 +379,10 @@ private:
             return std::array<std::string_view, 0>{};
         }
     }
-
-    static decltype(auto) _getValues(T& obj) { return detail::MetaPrivate<T>::value(obj); }
+    template <typename U>
+    static decltype(auto) _getValues(U&& obj) {
+        return detail::MetaPrivate<T>::value(std::forward<U>(obj));
+    }
     static decltype(auto) _getValues() {
         if constexpr (detail::has_value_function<T>) {
             return detail::MetaPrivate<T>::value();
@@ -388,11 +394,12 @@ private:
     }
 
 public:
-    template <typename CallableT>
+    template <typename U, typename CallableT>
         requires std::is_class_v<CallableT> && requires(CallableT call) {
             { call(std::declval<int&>()) };
+            requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>;
         }
-    static void forEach(T& obj, CallableT&& func) noexcept {
+    static void forEach(U&& obj, CallableT&& func) noexcept {
         if constexpr (detail::has_values_meta<T>) {
             if constexpr (detail::has_value_function_one<T>) {
                 decltype(auto) values = _getValues(obj);
@@ -418,11 +425,12 @@ public:
         }
     }
 
-    template <typename CallableT>
+    template <typename U, typename CallableT>
         requires std::is_class_v<CallableT> && requires(CallableT call) {
             { call(std::declval<int&>(), std::declval<std::string_view>()) };
+            requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>;
         }
-    static void forEach(T& obj, CallableT&& func) noexcept {
+    static void forEach(U&& obj, CallableT&& func) noexcept {
         if constexpr (detail::has_values_meta<T> && detail::has_names_meta<T>) {
             if constexpr (detail::has_value_function_one<T>) {
                 auto names            = _getNames();

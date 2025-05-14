@@ -54,10 +54,8 @@ public:
     using ValueIterator  = simdjson::dom::array::iterator;
 
 public:
-    inline ConstJsonIterator() NEKO_NOEXCEPT : mType(Null) {};
-    inline ConstJsonIterator(const JsonObject& object) NEKO_NOEXCEPT : mMemberIndex(0),
-                                                                       mSize(object.size()),
-                                                                       mType(Member) {
+    ConstJsonIterator() NEKO_NOEXCEPT : mType(Null) {};
+    ConstJsonIterator(const JsonObject& object) NEKO_NOEXCEPT : mMemberIndex(0), mSize(object.size()), mType(Member) {
         if (mSize == 0) {
             mType = Null;
             return;
@@ -68,7 +66,7 @@ public:
         }
     }
 
-    inline ConstJsonIterator(const JsonArray& array) NEKO_NOEXCEPT : mValueIndex(0), mSize(array.size()), mType(Value) {
+    ConstJsonIterator(const JsonArray& array) NEKO_NOEXCEPT : mValueIndex(0), mSize(array.size()), mType(Value) {
         if (mSize == 0) {
             mType = Null;
             return;
@@ -78,9 +76,9 @@ public:
         }
     }
 
-    inline ~ConstJsonIterator() = default;
+    ~ConstJsonIterator() = default;
 
-    inline ConstJsonIterator& operator++() NEKO_NOEXCEPT {
+    ConstJsonIterator& operator++() NEKO_NOEXCEPT {
         if (mType == Member) {
             ++mMemberIndex;
         } else {
@@ -89,7 +87,7 @@ public:
         return *this;
     }
 
-    inline ConstJsonIterator& operator--() NEKO_NOEXCEPT {
+    ConstJsonIterator& operator--() NEKO_NOEXCEPT {
         if (mType == Member) {
             --mMemberIndex;
         } else {
@@ -98,12 +96,12 @@ public:
         return *this;
     }
 
-    inline bool eof() const NEKO_NOEXCEPT {
+    bool eof() const NEKO_NOEXCEPT {
         return mType == Null || (mType == Value && mValueIndex == (int)mValues.size()) ||
                (mType == Member && mMemberIndex >= (int)mMembers.size());
     }
-    inline std::size_t size() const NEKO_NOEXCEPT { return mSize; }
-    inline JsonValue value() NEKO_NOEXCEPT {
+    std::size_t size() const NEKO_NOEXCEPT { return mSize; }
+    JsonValue value() NEKO_NOEXCEPT {
         NEKO_ASSERT(!eof(), "JsonSerializer", "JsonInputSerializer get next value called on end of this json object");
         switch (mType) {
         case Value:
@@ -115,13 +113,13 @@ public:
                 simdjson::error_code::NO_SUCH_FIELD); // should never reach here, but needed to avoid compiler warning
         }
     }
-    inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
+    NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
         if (mType == Member && mMemberIndex < (int)mMembers.size()) {
             return mMembers[mMemberIndex].key();
         }
         return {};
     };
-    inline JsonValue moveToMember(const NEKO_STRING_VIEW& name) NEKO_NOEXCEPT {
+    JsonValue moveToMember(const NEKO_STRING_VIEW& name) NEKO_NOEXCEPT {
         if (mType != Member) {
             return JsonValue(simdjson::error_code::NO_SUCH_FIELD);
         }
@@ -189,6 +187,11 @@ class SimdJsonValue {
 public:
     SimdJsonValue() = default;
     explicit SimdJsonValue(const RawJsonValue& value) { mValue = std::make_shared<RawJsonValue>(value); }
+    explicit SimdJsonValue(const JsonValue& value) {
+        if (value.error() == simdjson::error_code::SUCCESS) {
+            mValue = std::make_shared<RawJsonValue>(value.value_unsafe());
+        }
+    }
     auto hasValue() const -> bool { return mValue != nullptr; }
     operator bool() const { return hasValue(); }
     auto nativeValue() const -> const RawJsonValue& { return *mValue; }
@@ -199,6 +202,58 @@ public:
     auto isNumber() const -> bool { return mValue && mValue->is_number(); }
     auto isBool() const -> bool { return mValue && mValue->is_bool(); }
     auto isNull() const -> bool { return mValue && mValue->is_null(); }
+
+    template <typename T>
+    auto value(T& value) const -> bool {
+        if (mValue) {
+            return mValue->get<T>(value) == simdjson::error_code::SUCCESS;
+        }
+        return false;
+    }
+
+    auto size() const -> std::size_t {
+        if (isArray()) {
+            return mValue->get_array().size();
+        }
+        if (isObject()) {
+            return mValue->get_object().size();
+        }
+        return 0;
+    }
+
+    template <typename T>
+        requires std::convertible_to<T, std::string_view>
+    auto operator[](const T& name) const -> SimdJsonValue {
+        if (isObject()) {
+            auto value = mValue->get_object().at_key(std::string_view(name));
+            if (value.error() == simdjson::error_code::SUCCESS) {
+                return SimdJsonValue(value.value());
+            }
+        }
+        return {};
+    }
+
+    auto operator[](std::size_t index) const -> SimdJsonValue {
+        if (isArray() && index < size()) {
+            auto array = mValue->get_array();
+            if (array.error() == simdjson::error_code::SUCCESS) {
+                return SimdJsonValue(array.value().at(index));
+            }
+            return {};
+        }
+        if (isObject() && index < size()) {
+            auto obj = mValue->get_object();
+            if (obj.error() == simdjson::error_code::SUCCESS) {
+                auto item = obj.begin();
+                while (index > 0) {
+                    index--;
+                    item++;
+                }
+                return SimdJsonValue(item.value());
+            }
+        }
+        return {};
+    }
 
 private:
     std::shared_ptr<RawJsonValue> mValue;
@@ -599,9 +654,9 @@ public:
             return;
         }
     }
-    inline operator bool() const NEKO_NOEXCEPT { return mLastResult; }
+    operator bool() const NEKO_NOEXCEPT { return mLastResult; }
 
-    inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
+    NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
         if ((*mCurrentItem).eof()) {
             return {};
         }
@@ -610,7 +665,7 @@ public:
 
     template <typename T>
         requires std::is_signed_v<T> && (sizeof(T) <= sizeof(int64_t)) && (!std::is_enum_v<T>)
-    inline bool loadValue(T& value) NEKO_NOEXCEPT {
+    bool loadValue(T& value) NEKO_NOEXCEPT {
         int64_t ret;
         mLastResult = (*mCurrentItem).value().get_int64().get(ret) == simdjson::error_code::SUCCESS;
         if (mLastResult) {
@@ -623,7 +678,7 @@ public:
 
     template <typename T>
         requires std::is_unsigned_v<T> && (sizeof(T) <= sizeof(uint64_t)) && (!std::is_enum_v<T>)
-    inline bool loadValue(T& value) NEKO_NOEXCEPT {
+    bool loadValue(T& value) NEKO_NOEXCEPT {
         uint64_t ret;
         mLastResult = (*mCurrentItem).value().get_uint64().get(ret) == simdjson::error_code::SUCCESS;
         if (mLastResult) {
@@ -635,7 +690,7 @@ public:
     }
 
     template <typename CharT, typename Traits, typename Alloc>
-    inline bool loadValue(std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
+    bool loadValue(std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
         mLastResult = (*mCurrentItem).value().is_string();
         if (!mLastResult) {
             return false;
@@ -646,7 +701,7 @@ public:
         return true;
     }
 
-    inline bool loadValue(float& value) NEKO_NOEXCEPT {
+    bool loadValue(float& value) NEKO_NOEXCEPT {
         double ret;
         mLastResult = (*mCurrentItem).value().get_double().get(ret) == simdjson::error_code::SUCCESS;
         if (mLastResult) {
@@ -657,7 +712,7 @@ public:
         return false;
     }
 
-    inline bool loadValue(double& value) NEKO_NOEXCEPT {
+    bool loadValue(double& value) NEKO_NOEXCEPT {
         mLastResult = (*mCurrentItem).value().get_double().get(value) == simdjson::error_code::SUCCESS;
         if (mLastResult) {
             ++(*mCurrentItem);
@@ -666,7 +721,7 @@ public:
         return false;
     }
 
-    inline bool loadValue(bool& value) NEKO_NOEXCEPT {
+    bool loadValue(bool& value) NEKO_NOEXCEPT {
         mLastResult = (*mCurrentItem).value().get_bool().get(value) == simdjson::error_code::SUCCESS;
         if (mLastResult) {
             ++(*mCurrentItem);
@@ -675,7 +730,7 @@ public:
         return false;
     }
 
-    inline bool loadValue(std::nullptr_t) NEKO_NOEXCEPT {
+    bool loadValue(std::nullptr_t) NEKO_NOEXCEPT {
         mLastResult = (*mCurrentItem).value().is_null();
         if (!mLastResult) {
             return false;
@@ -684,7 +739,7 @@ public:
         return true;
     }
 
-    inline bool loadValue(detail::simd::SimdJsonValue& value) NEKO_NOEXCEPT {
+    bool loadValue(detail::simd::SimdJsonValue& value) NEKO_NOEXCEPT {
         mLastResult = true;
         value       = detail::simd::SimdJsonValue((*mCurrentItem).value().value());
         ++(*mCurrentItem);
@@ -692,13 +747,13 @@ public:
     }
 
     template <typename T>
-    inline bool loadValue(const SizeTag<T>& value) NEKO_NOEXCEPT {
+    bool loadValue(const SizeTag<T>& value) NEKO_NOEXCEPT {
         value.size = static_cast<uint32_t>((*mCurrentItem).size());
         return true;
     }
 
     template <typename T>
-    inline bool loadValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
+    bool loadValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
         const auto& cvalue = (*mCurrentItem).moveToMember({value.name, value.nameLen});
         mLastResult        = true;
         if constexpr (traits::optional_like_type<T>::value) {
@@ -729,7 +784,7 @@ public:
                     NEKO_LOG_INFO("JsonSerializer", "optional field {} get value success.",
                                   std::string(value.name, value.nameLen));
                 } else {
-                    NEKO_LOG_ERROR("JsonSerializer", "optional {} field {} get value fail.", NEKO_PRETTY_FUNCTION_NAME,
+                    NEKO_LOG_ERROR("JsonSerializer", "optional field {} get value fail.",
                                    std::string(value.name, value.nameLen));
                 }
 #endif
@@ -741,7 +796,7 @@ public:
                     return true;
                 } else {
 #if defined(NEKO_VERBOSE_LOGS)
-                    NEKO_LOG_ERROR("JsonSerializer", "{} field {} is not find. error {}", NEKO_PRETTY_FUNCTION_NAME,
+                    NEKO_LOG_ERROR("JsonSerializer", "field {} is not find. error {}",
                                    std::string(value.name, value.nameLen), simdjson::error_message(cvalue.error()));
 #endif
                     mLastResult = false;
@@ -753,14 +808,13 @@ public:
             if (mLastResult) {
                 NEKO_LOG_INFO("JsonSerializer", "field {} get value success.", std::string(value.name, value.nameLen));
             } else {
-                NEKO_LOG_ERROR("JsonSerializer", "{} field {} get value fail.", NEKO_PRETTY_FUNCTION_NAME,
-                               std::string(value.name, value.nameLen));
+                NEKO_LOG_ERROR("JsonSerializer", "field {} get value fail.", std::string(value.name, value.nameLen));
             }
 #endif
         }
         return mLastResult;
     }
-    inline bool startNode() NEKO_NOEXCEPT {
+    bool startNode() NEKO_NOEXCEPT {
         if (mItemStack.empty()) {
             if (mRoot.is_array()) {
                 mItemStack.emplace_back(mRoot.get_array());
@@ -782,7 +836,7 @@ public:
         return true;
     }
 
-    inline bool finishNode() NEKO_NOEXCEPT {
+    bool finishNode() NEKO_NOEXCEPT {
         if (mItemStack.size() >= 2) {
             mItemStack.pop_back();
             mCurrentItem = &mItemStack.back();

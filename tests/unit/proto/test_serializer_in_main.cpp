@@ -116,8 +116,9 @@ int main(int argc, char** argv) {
     std::string str =
         "{\"a\":3,\"b\":\"Struct "
         "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A"
-        "\",\"i\":[1,\"hello\",true,3.141592654,[1,2,3],{\"a\":1,\"b\":2},[1,2,3,0,0],\"TEnum_A\"],\"j\":[1,"
-        "\"hello\"],\"k\":1,\"l\":1.114514,\"m\":[1.1,2.2,3.3,2,1,0,1.11451555213339]}";
+        "\",\"i\":{\"a\":1,\"b\":\"hello\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,"
+        "2,3,0,0],\"h\":\"TEnum_A\"},\"j\":[1,\"hello\"],\"k\":1,\"l\":1.114514,\"m\":[1.1,2.2,3.3,2,1,0,1."
+        "11451555213339]}";
     std::vector<char> data(str.begin(), str.end());
     TestP testp;
 #ifdef NEKO_PROTO_ENABLE_SIMDJSON
@@ -157,11 +158,9 @@ int main(int argc, char** argv) {
     EXPECT_EQ(testp.i.h, TEnum_A);
     EXPECT_EQ(std::get<0>(testp.j), 1);
     EXPECT_STREQ(std::get<1>(testp.j).c_str(), "hello");
-#if NEKO_CPP_PLUS >= 17
     EXPECT_EQ(testp.k.value_or(-1), 1);
     EXPECT_EQ(testp.l.index(), 2);
     // EXPECT_DOUBLE_EQ(std::get<2>(testp.l), 1.114514);
-#endif
     TestP tp2;
     tp2.makeProto() = testp;
     EXPECT_STREQ(serializable_to_string(testp).c_str(), serializable_to_string(tp2).c_str());
@@ -237,6 +236,12 @@ int main(int argc, char** argv) {
         NEKO_LOG_DEBUG("unit test", "{}", dataT3.data());
         EXPECT_TRUE(zt2.value.hasValue());
         EXPECT_TRUE(zt2.value.isObject());
+        EXPECT_EQ(zt2.value.size(), 7);
+        EXPECT_EQ(zt2.value["a"].size(), 2);
+        EXPECT_EQ(zt2.value["b"].size(), 1);
+        EXPECT_EQ(zt2.value["c"].size(), 3);
+        EXPECT_EQ(zt2.value["d"].size(), 3);
+        EXPECT_FALSE(zt2.value["ff"]);
         {
             JsonSerializer::InputSerializer input(zt2.value);
             input(zt1);
