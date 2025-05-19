@@ -657,6 +657,9 @@ public:
     operator bool() const NEKO_NOEXCEPT { return mLastResult; }
 
     NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
+        if (mCurrentItem == nullptr) {
+            return {};
+        }
         if ((*mCurrentItem).eof()) {
             return {};
         }
@@ -666,6 +669,9 @@ public:
     template <typename T>
         requires std::is_signed_v<T> && (sizeof(T) <= sizeof(int64_t)) && (!std::is_enum_v<T>)
     bool loadValue(T& value) NEKO_NOEXCEPT {
+        if (mCurrentItem == nullptr) {
+            return false;
+        }
         int64_t ret;
         mLastResult = (*mCurrentItem).value().get_int64().get(ret) == simdjson::error_code::SUCCESS;
         if (mLastResult) {
@@ -679,6 +685,9 @@ public:
     template <typename T>
         requires std::is_unsigned_v<T> && (sizeof(T) <= sizeof(uint64_t)) && (!std::is_enum_v<T>)
     bool loadValue(T& value) NEKO_NOEXCEPT {
+        if (mCurrentItem == nullptr) {
+            return false;
+        }
         uint64_t ret;
         mLastResult = (*mCurrentItem).value().get_uint64().get(ret) == simdjson::error_code::SUCCESS;
         if (mLastResult) {
@@ -691,6 +700,9 @@ public:
 
     template <typename CharT, typename Traits, typename Alloc>
     bool loadValue(std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
+        if (mCurrentItem == nullptr) {
+            return false;
+        }
         mLastResult = (*mCurrentItem).value().is_string();
         if (!mLastResult) {
             return false;
@@ -702,6 +714,9 @@ public:
     }
 
     bool loadValue(float& value) NEKO_NOEXCEPT {
+        if (mCurrentItem == nullptr) {
+            return false;
+        }
         double ret;
         mLastResult = (*mCurrentItem).value().get_double().get(ret) == simdjson::error_code::SUCCESS;
         if (mLastResult) {
@@ -713,6 +728,9 @@ public:
     }
 
     bool loadValue(double& value) NEKO_NOEXCEPT {
+        if (mCurrentItem == nullptr) {
+            return false;
+        }
         mLastResult = (*mCurrentItem).value().get_double().get(value) == simdjson::error_code::SUCCESS;
         if (mLastResult) {
             ++(*mCurrentItem);
@@ -722,6 +740,9 @@ public:
     }
 
     bool loadValue(bool& value) NEKO_NOEXCEPT {
+        if (mCurrentItem == nullptr) {
+            return false;
+        }
         mLastResult = (*mCurrentItem).value().get_bool().get(value) == simdjson::error_code::SUCCESS;
         if (mLastResult) {
             ++(*mCurrentItem);
@@ -731,6 +752,9 @@ public:
     }
 
     bool loadValue(std::nullptr_t) NEKO_NOEXCEPT {
+        if (mCurrentItem == nullptr) {
+            return false;
+        }
         mLastResult = (*mCurrentItem).value().is_null();
         if (!mLastResult) {
             return false;
@@ -740,6 +764,9 @@ public:
     }
 
     bool loadValue(detail::simd::SimdJsonValue& value) NEKO_NOEXCEPT {
+        if (mCurrentItem == nullptr) {
+            return false;
+        }
         mLastResult = true;
         value       = detail::simd::SimdJsonValue((*mCurrentItem).value().value());
         ++(*mCurrentItem);
@@ -748,12 +775,18 @@ public:
 
     template <typename T>
     bool loadValue(const SizeTag<T>& value) NEKO_NOEXCEPT {
+        if (mCurrentItem == nullptr) {
+            return false;
+        }
         value.size = static_cast<uint32_t>((*mCurrentItem).size());
         return true;
     }
 
     template <typename T>
     bool loadValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
+        if (mCurrentItem == nullptr) {
+            return false;
+        }
         const auto& cvalue = (*mCurrentItem).moveToMember({value.name, value.nameLen});
         mLastResult        = true;
         if constexpr (traits::optional_like_type<T>::value) {
@@ -823,7 +856,7 @@ public:
             } else {
                 return false;
             }
-        } else {
+        } else if (mCurrentItem != nullptr) {
             if ((*mCurrentItem).value().is_array()) {
                 mItemStack.emplace_back((*mCurrentItem).value().get_array());
             } else if ((*mCurrentItem).value().is_object()) {
@@ -831,6 +864,8 @@ public:
             } else {
                 return false;
             }
+        } else {
+            return false;
         }
         mCurrentItem = &mItemStack.back();
         return true;
@@ -903,189 +938,6 @@ inline bool save(SimdJsonOutputSerializer<BufferT>& sa, const detail::simd::Simd
 
 inline bool load(SimdJsonInputSerializer& sa, detail::simd::SimdJsonValue& value) NEKO_NOEXCEPT {
     return sa.loadValue(value);
-}
-
-// #######################################################
-// JsonSerializer prologue and epilogue
-// #######################################################
-
-// #######################################################
-// name value pair
-template <typename T>
-inline bool prologue(SimdJsonInputSerializer& /*unused*/, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-template <typename T>
-inline bool epilogue(SimdJsonInputSerializer& /*unused*/, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-
-template <typename T, typename BufferT>
-inline bool prologue(SimdJsonOutputSerializer<BufferT>& /*unused*/, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-template <typename T, typename BufferT>
-inline bool epilogue(SimdJsonOutputSerializer<BufferT>& /*unused*/, const NameValuePair<T>& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-
-// #########################################################
-//  size tag
-template <typename T>
-inline bool prologue(SimdJsonInputSerializer& /*unused*/, const SizeTag<T>& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-template <typename T>
-inline bool epilogue(SimdJsonInputSerializer& /*unused*/, const SizeTag<T>& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-
-template <typename T, typename BufferT>
-inline bool prologue(SimdJsonOutputSerializer<BufferT>& /*unused*/, const SizeTag<T>& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-template <typename T, typename BufferT>
-inline bool epilogue(SimdJsonOutputSerializer<BufferT>& /*unused*/, const SizeTag<T>& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-
-// #########################################################
-// class apart from name value pair, size tag, std::string, NEKO_STRING_VIEW
-template <class T>
-    requires std::is_class_v<T> && (!is_minimal_serializable<T>::value)
-inline bool prologue(SimdJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
-    return sa.startNode();
-}
-template <typename T>
-    requires std::is_class_v<T> && (!is_minimal_serializable<T>::value)
-inline bool epilogue(SimdJsonInputSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
-    return sa.finishNode();
-}
-
-template <class T, typename BufferT>
-    requires std::is_class_v<T> && (!std::is_same_v<std::string, T>) && (!is_minimal_serializable<T>::value) &&
-             (!traits::has_method_const_serialize<T, SimdJsonOutputSerializer<BufferT>>)
-inline bool prologue(SimdJsonOutputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-
-template <typename T, typename BufferT>
-    requires std::is_class_v<T> && (!std::is_same_v<std::string, T>) && (!is_minimal_serializable<T>::value) &&
-             (!traits::has_method_const_serialize<T, SimdJsonOutputSerializer<BufferT>>)
-inline bool epilogue(SimdJsonOutputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-
-template <typename T, typename BufferT>
-    requires traits::has_method_const_serialize<T, SimdJsonOutputSerializer<BufferT>>
-inline bool prologue(SimdJsonOutputSerializer<BufferT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
-    return sa.startObject((std::size_t)-1);
-}
-template <typename T, typename BufferT>
-    requires traits::has_method_const_serialize<T, SimdJsonOutputSerializer<BufferT>>
-inline bool epilogue(SimdJsonOutputSerializer<BufferT>& sa, const T& /*unused*/) NEKO_NOEXCEPT {
-    return sa.endObject();
-}
-
-// #########################################################
-// # arithmetic types
-template <typename T>
-    requires std::is_arithmetic_v<T>
-inline bool prologue(SimdJsonInputSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-template <typename T>
-    requires std::is_arithmetic_v<T>
-inline bool epilogue(SimdJsonInputSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-
-template <typename T, typename BufferT>
-    requires std::is_arithmetic_v<T>
-inline bool prologue(SimdJsonOutputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-template <typename T, typename BufferT>
-    requires std::is_arithmetic_v<T>
-inline bool epilogue(SimdJsonOutputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-
-// #####################################################
-// # std::string
-template <typename CharT, typename Traits, typename Alloc>
-inline bool prologue(SimdJsonInputSerializer& /*unused*/,
-                     const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-template <typename CharT, typename Traits, typename Alloc>
-inline bool epilogue(SimdJsonInputSerializer& /*unused*/,
-                     const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-
-template <typename CharT, typename Traits, typename Alloc, typename BufferT>
-inline bool prologue(SimdJsonOutputSerializer<BufferT>& /*unused*/,
-                     const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-template <typename CharT, typename Traits, typename Alloc, typename BufferT>
-inline bool epilogue(SimdJsonOutputSerializer<BufferT>& /*unused*/,
-                     const std::basic_string<CharT, Traits, Alloc>& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-
-#if NEKO_CPP_PLUS >= 17
-template <typename CharT, typename Traits, typename BufferT>
-inline bool prologue(SimdJsonOutputSerializer<BufferT>& /*unused*/,
-                     const std::basic_string_view<CharT, Traits>& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-template <typename CharT, typename Traits, typename BufferT>
-inline bool epilogue(SimdJsonOutputSerializer<BufferT>& /*unused*/,
-                     const std::basic_string_view<CharT, Traits>& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-#endif
-
-// #####################################################
-// # std::nullptr_t
-inline bool prologue(SimdJsonInputSerializer& /*unused*/, const std::nullptr_t& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-inline bool epilogue(SimdJsonInputSerializer& /*unused*/, const std::nullptr_t& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-template <typename BufferT>
-inline bool prologue(SimdJsonOutputSerializer<BufferT>& /*unused*/, const std::nullptr_t& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-template <typename BufferT>
-inline bool epilogue(SimdJsonOutputSerializer<BufferT>& /*unused*/, const std::nullptr_t& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-// #####################################################
-// # minimal serializable
-template <typename T>
-    requires is_minimal_serializable<T>::value
-inline bool prologue(SimdJsonInputSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-template <typename T>
-    requires is_minimal_serializable<T>::value
-inline bool epilogue(SimdJsonInputSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-
-template <typename T, typename BufferT>
-    requires is_minimal_serializable<T>::value
-inline bool prologue(SimdJsonOutputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-template <typename T, typename BufferT>
-    requires is_minimal_serializable<T>::value
-inline bool epilogue(SimdJsonOutputSerializer<BufferT>& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
-    return true;
 }
 
 // #####################################################

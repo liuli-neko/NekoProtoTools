@@ -28,15 +28,17 @@ inline bool save(Serializer& sa, const std::deque<T>& values) {
 template <typename Serializer, typename T>
 inline bool load(Serializer& sa, std::deque<T>& value) {
     std::size_t size = 0;
-    auto ret         = sa(make_size_tag(size));
+    auto ret         = sa.startNode();
+    ret              = ret && sa(make_size_tag(size));
     if (!ret) {
+        sa.finishNode();
         return false;
     }
     value.resize(size);
     for (std::size_t i = 0; i < size; ++i) {
         ret = sa(value[i]) && ret;
     }
-    return ret;
+    return sa.finishNode() && ret;
 }
 
 NEKO_END_NAMESPACE

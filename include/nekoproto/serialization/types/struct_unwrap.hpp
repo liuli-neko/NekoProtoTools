@@ -21,8 +21,7 @@
 NEKO_BEGIN_NAMESPACE
 
 template <typename SerializerT, typename T>
-    requires detail::can_unwrap_v<T> && (!traits::has_method_const_serialize<T, SerializerT>) &&
-             (!traits::has_method_serialize<T, SerializerT>)
+    requires detail::has_values_meta<std::decay_t<T>>
 inline bool save(SerializerT& sa, const T& value) {
     using ValueType = std::decay_t<T>;
     bool ret        = true;
@@ -41,13 +40,17 @@ inline bool save(SerializerT& sa, const T& value) {
 }
 
 template <typename SerializerT, typename T>
-    requires detail::can_unwrap_v<T> && (!traits::has_method_const_serialize<T, SerializerT>) &&
-             (!traits::has_method_serialize<T, SerializerT>)
+    requires detail::has_values_meta<std::decay_t<T>>
 inline bool load(SerializerT& sa, T& value) {
     using ValueType = std::decay_t<T>;
     uint32_t size   = 0;
     bool ret        = true;
-    sa(make_size_tag(size));
+    ret             = sa.startNode();
+    ret             = ret && sa(make_size_tag(size));
+    if (!ret) {
+        sa.finishNode();
+        return ret;
+    }
     if constexpr (detail::has_values_meta<ValueType> && detail::has_names_meta<ValueType>) {
         Reflect<ValueType>::forEach(value, [&sa, &ret](auto&& value, std::string_view name) {
             ret = sa(make_name_value_pair(name, value)) && ret;
@@ -58,11 +61,12 @@ inline bool load(SerializerT& sa, T& value) {
                 "proto",
                 "array struct size mismatch: json object size {} != struct size {}, array can not has optional member.",
                 size, detail::member_count_v<ValueType>);
+            sa.finishNode();
             return false;
         }
         Reflect<ValueType>::forEach(value, [&sa, &ret](auto&& value) { ret = sa(value) && ret; });
     }
-    return ret;
+    return sa.finishNode() && ret;
 }
 
 NEKO_END_NAMESPACE

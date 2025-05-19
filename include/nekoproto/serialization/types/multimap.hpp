@@ -32,9 +32,10 @@ template <typename Serializer, typename K, typename V>
 inline bool load(Serializer& sa, std::multimap<K, V>& value) {
     K key;
     V val;
-    bool ret;
-    std::size_t size;
-    ret = sa(make_size_tag(size));
+    bool ret         = true;
+    std::size_t size = 0;
+    ret              = sa.startNode();
+    ret              = ret && sa(make_size_tag(size));
     value.clear();
     while (ret && size--) {
         ret = sa.startNode() && ret;
@@ -45,7 +46,7 @@ inline bool load(Serializer& sa, std::multimap<K, V>& value) {
         }
         ret = sa.finishNode() && ret;
     }
-    return ret;
+    return sa.finishNode() && ret;
 }
 
 NEKO_END_NAMESPACE

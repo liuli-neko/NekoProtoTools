@@ -82,8 +82,8 @@ struct TaggedValue {
     constexpr const RawType&& operator*() const&& noexcept { return std::move(value()); }
 
     // Optional: pointer-like access if InnerValue supports it
-    constexpr auto operator->() noexcept { return std::addressof(value()); }
-    constexpr auto operator->() const noexcept { return std::addressof(value()); }
+    constexpr auto operator->() noexcept { return &value(); }
+    constexpr auto operator->() const noexcept { return &value(); }
 };
 
 // --- Helper Trait to Identify TaggedValue ---

@@ -24,6 +24,8 @@
 NEKO_BEGIN_NAMESPACE
 template <typename T, class enable = void>
 struct Meta;
+template <typename T>
+struct Reflect;
 
 namespace detail {
 template <std::size_t Diameter, std::size_t Offset, std::size_t... Is, typename ArgsTuple>
@@ -117,6 +119,40 @@ template <typename T>
 struct is_ref_array<Array<T>, void> : std::true_type {};
 
 template <typename T>
+concept is_local_ref_value = requires {
+    { T::Neko::value };
+    requires std::is_reference_v<decltype(T::Neko::value)>;
+} || requires {
+    { T::Neko::value };
+    requires is_member_ref_function<decltype(T::Neko::value), T>;
+} || requires {
+    { T::Neko::value };
+    requires std::is_member_object_pointer_v<decltype(T::Neko::value)>;
+};
+
+template <typename T>
+concept is_meta_ref_value = requires {
+    { Meta<T>::value };
+    requires std::is_reference_v<decltype(Meta<T>::value)>;
+} || requires {
+    { Meta<T>::value };
+    requires is_member_ref_function<decltype(Meta<T>::value), T>;
+} || requires {
+    { Meta<T>::value };
+    requires std::is_member_object_pointer_v<decltype(Meta<T>::value)>;
+};
+
+template <typename A, typename T, class enable = void>
+struct is_all_meta_ref_value : std::false_type {};
+
+template <typename A, typename... Args>
+struct is_all_meta_ref_value<A, std::tuple<Args...>, void> {
+    constexpr static bool value =
+        ((std::is_reference_v<Args> || is_member_ref_function<Args, A> || std::is_member_object_pointer_v<Args>) &&
+         ...);
+};
+
+template <typename T>
 concept is_local_names = requires {
     { T::Neko::names };
 };
@@ -135,12 +171,14 @@ template <typename T>
 concept is_meta_ref_values = requires {
     { Meta<T>::values };
     requires is_std_tuple_v<std::decay_t<decltype(Meta<T>::values)>>;
+    requires is_all_meta_ref_value<T, std::decay_t<decltype(T::Neko::values)>>::value;
 };
 
 template <typename T>
 concept is_local_ref_values = requires {
     { T::Neko::values };
     requires is_std_tuple_v<std::decay_t<decltype(T::Neko::values)>>;
+    requires is_all_meta_ref_value<T, std::decay_t<decltype(T::Neko::values)>>::value;
 };
 
 template <typename T>
@@ -165,30 +203,6 @@ template <typename T>
 concept is_meta_ref_array = requires {
     { Meta<T>::value };
     requires is_ref_array<std::decay_t<decltype(Meta<T>::value)>>::value;
-};
-
-template <typename T>
-concept is_local_ref_value = requires {
-    { T::Neko::value };
-    requires std::is_reference_v<decltype(T::Neko::value)>;
-} || requires {
-    { T::Neko::value };
-    requires is_member_ref_function<decltype(T::Neko::value), T>;
-} || requires {
-    { T::Neko::value };
-    requires std::is_member_object_pointer_v<decltype(T::Neko::value)>;
-};
-
-template <typename T>
-concept is_meta_ref_value = requires {
-    { Meta<T>::value };
-    requires std::is_reference_v<decltype(Meta<T>::value)>;
-} || requires {
-    { Meta<T>::value };
-    requires is_member_ref_function<decltype(Meta<T>::value), T>;
-} || requires {
-    { Meta<T>::value };
-    requires std::is_member_object_pointer_v<decltype(Meta<T>::value)>;
 };
 
 template <typename T>
@@ -361,16 +375,15 @@ template <typename T>
 concept has_name_function = requires {
     { MetaPrivate<T>::names() };
 };
+
 template <typename T>
 concept has_name_member = requires {
     { MetaPrivate<T>::names };
 };
-} // namespace detail
 
 template <typename T>
-struct Reflect {
-private:
-    static auto _getNames() {
+struct ReflectHelper {
+    static auto getNames() {
         if constexpr (detail::has_name_function<T>) {
             return detail::MetaPrivate<T>::names();
         } else if constexpr (detail::has_name_member<T>) {
@@ -380,10 +393,10 @@ private:
         }
     }
     template <typename U>
-    static decltype(auto) _getValues(U&& obj) {
+    static decltype(auto) getValues(U&& obj) {
         return detail::MetaPrivate<T>::value(std::forward<U>(obj));
     }
-    static decltype(auto) _getValues() {
+    static decltype(auto) getValues() {
         if constexpr (detail::has_value_function<T>) {
             return detail::MetaPrivate<T>::value();
         } else if constexpr (detail::has_value_member<T>) {
@@ -392,17 +405,17 @@ private:
             return std::forward_as_tuple();
         }
     }
+};
+} // namespace detail
 
-public:
-    template <typename U, typename CallableT>
-        requires std::is_class_v<CallableT> && requires(CallableT call) {
-            { call(std::declval<int&>()) };
-            requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>;
-        }
-    static void forEach(U&& obj, CallableT&& func) noexcept {
+template <typename T>
+struct Reflect {
+    template <typename U, typename CallAbleT>
+        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
+    static void forEachWithoutName(U&& obj, CallAbleT&& func) noexcept {
         if constexpr (detail::has_values_meta<T>) {
             if constexpr (detail::has_value_function_one<T>) {
-                decltype(auto) values = _getValues(obj);
+                decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
                 if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
                     [&values, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
                         ((func(detail::value_ref(std::get<Is>(values), obj))), ...);
@@ -411,7 +424,7 @@ public:
                     func(detail::value_ref(values, obj));
                 }
             } else {
-                decltype(auto) values = _getValues();
+                decltype(auto) values = detail::ReflectHelper<T>::getValues();
                 if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
                     [&values, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
                         ((func(detail::value_ref(std::get<Is>(values), obj))), ...);
@@ -425,16 +438,13 @@ public:
         }
     }
 
-    template <typename U, typename CallableT>
-        requires std::is_class_v<CallableT> && requires(CallableT call) {
-            { call(std::declval<int&>(), std::declval<std::string_view>()) };
-            requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>;
-        }
-    static void forEach(U&& obj, CallableT&& func) noexcept {
+    template <typename U, typename CallAbleT>
+        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
+    static void forEachWithName(U&& obj, CallAbleT&& func) noexcept {
         if constexpr (detail::has_values_meta<T> && detail::has_names_meta<T>) {
             if constexpr (detail::has_value_function_one<T>) {
-                auto names            = _getNames();
-                decltype(auto) values = _getValues(obj);
+                auto names            = detail::ReflectHelper<T>::getNames();
+                decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
                 if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
                     static_assert(std::tuple_size_v<std::decay_t<decltype(values)>> ==
                                       std::tuple_size_v<std::decay_t<decltype(names)>>,
@@ -448,8 +458,8 @@ public:
                     func(detail::value_ref(values, obj), names[0]);
                 }
             } else {
-                auto names            = _getNames();
-                decltype(auto) values = _getValues();
+                auto names            = detail::ReflectHelper<T>::getNames();
+                decltype(auto) values = detail::ReflectHelper<T>::getValues();
                 using ValueType       = std::decay_t<decltype(values)>;
                 using NameType        = std::decay_t<decltype(names)>;
                 if constexpr (detail::is_std_tuple_v<ValueType>) {
@@ -468,9 +478,27 @@ public:
         }
     }
 
+    template <typename U, typename CallAbleT>
+        requires requires(U&& obj, CallAbleT&& func) {
+            forEachWithName(obj, func);
+            func(std::declval<int&>(), std::declval<std::string_view>());
+        }
+    static void forEach(U&& obj, CallAbleT&& func) noexcept {
+        forEachWithName(obj, func);
+    }
+
+    template <typename U, typename CallAbleT>
+        requires requires(U&& obj, CallAbleT&& func) {
+            forEachWithoutName(obj, func);
+            func(std::declval<int&>());
+        }
+    static void forEach(U&& obj, CallAbleT&& func) noexcept {
+        forEachWithoutName(obj, func);
+    }
+
     static decltype(auto) names() noexcept {
         if constexpr (detail::has_names_meta<T>) {
-            return _getNames();
+            return detail::ReflectHelper<T>::getNames();
         } else {
             return std::array<std::string_view, 0>{};
         }

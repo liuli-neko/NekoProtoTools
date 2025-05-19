@@ -46,8 +46,9 @@ inline bool load(Serializer& sa, std::map<K, V>& value) {
     K k;
     V v;
     bool ret;
-    std::size_t s;
-    ret = sa(make_size_tag(s));
+    std::size_t s = 0;
+    ret           = sa.startNode();
+    ret           = ret && sa(make_size_tag(s));
     value.clear();
     while (ret && s--) {
         std::size_t ksize;
@@ -60,15 +61,16 @@ inline bool load(Serializer& sa, std::map<K, V>& value) {
         }
         ret = sa.finishNode() && ret;
     }
-    return ret;
+    return sa.finishNode() && ret;
 }
 
 template <typename Serializer, typename V>
 inline bool load(Serializer& sa, std::map<std::string, V>& value) {
     bool ret = true;
     V val;
-    std::size_t sz;
-    ret = sa(make_size_tag(sz));
+    std::size_t sz = 0;
+    ret            = sa.startNode();
+    ret            = ret && sa(make_size_tag(sz));
     value.clear();
     for (int i = 0; i < (int)sz; ++i) {
         const auto& name = sa.name();
@@ -82,7 +84,7 @@ inline bool load(Serializer& sa, std::map<std::string, V>& value) {
             break;
         }
     }
-    return ret;
+    return sa.finishNode() && ret;
 }
 
 NEKO_END_NAMESPACE

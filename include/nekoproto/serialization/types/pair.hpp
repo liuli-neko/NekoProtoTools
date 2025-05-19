@@ -31,15 +31,16 @@ template <typename Serializer, typename K, typename V>
 inline bool load(Serializer& sa, std::pair<K, V>& value) {
     K key;
     V val;
-    bool ret;
-    std::size_t size;
-    ret = sa(make_size_tag(size));
+    bool ret         = true;
+    std::size_t size = 0;
+    ret              = sa.startNode();
+    ret              = ret && sa(make_size_tag(size));
     if (ret) {
         if (sa(make_name_value_pair("first", 5, key)) && sa(make_name_value_pair("second", 6, val))) {
             value = std::make_pair(std::move(key), std::move(val));
         }
     }
-    return ret && (size == 2);
+    return sa.finishNode() && ret && (size == 2);
 }
 
 NEKO_END_NAMESPACE

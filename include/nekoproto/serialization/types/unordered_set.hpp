@@ -28,7 +28,8 @@ inline bool save(Serializer& sa, const std::unordered_set<T>& values) {
 template <typename Serializer, typename T>
 inline bool load(Serializer& sa, std::unordered_set<T>& values) {
     std::size_t size = 0;
-    auto ret         = sa(make_size_tag(size));
+    auto ret         = sa.startNode();
+    ret              = ret && sa(make_size_tag(size));
     if (!ret) {
         return false;
     }
@@ -38,7 +39,7 @@ inline bool load(Serializer& sa, std::unordered_set<T>& values) {
         ret = sa(value) && ret;
         values.insert(std::move(value));
     }
-    return ret;
+    return sa.finishNode() && ret;
 }
 
 NEKO_END_NAMESPACE

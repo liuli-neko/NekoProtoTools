@@ -28,7 +28,8 @@ inline bool save(Serializer& sa, const std::vector<T>& values) {
 template <typename Serializer, typename T>
 inline bool load(Serializer& sa, std::vector<T>& values) {
     std::size_t size = 0;
-    auto ret         = sa(make_size_tag(size));
+    auto ret         = sa.startNode();
+    ret              = ret && sa(make_size_tag(size));
     if (!ret) {
         return false;
     }
@@ -36,7 +37,7 @@ inline bool load(Serializer& sa, std::vector<T>& values) {
     for (std::size_t i = 0; i < size; ++i) {
         ret = sa(values[i]) && ret;
     }
-    return ret;
+    return sa.finishNode() && ret;
 }
 
 template <typename Serializer>
@@ -52,8 +53,10 @@ inline bool save(Serializer& sa, const std::vector<bool>& values) {
 template <typename Serializer>
 inline bool load(Serializer& sa, std::vector<bool>& values) {
     std::size_t size = 0;
-    auto ret         = sa(make_size_tag(size));
+    auto ret         = sa.startNode();
+    ret              = ret && sa(make_size_tag(size));
     if (!ret) {
+        sa.finishNode();
         return false;
     }
     values.resize(size);
@@ -62,7 +65,7 @@ inline bool load(Serializer& sa, std::vector<bool>& values) {
         ret       = sa(value) && ret;
         values[i] = value;
     }
-    return ret;
+    return sa.finishNode() && ret;
 }
 
 NEKO_END_NAMESPACE

@@ -40,8 +40,7 @@ struct MXXParams {
     NEKO_SERIALIZER(param1, param2, param3)
 };
 
-class Protocol {
-public:
+struct Protocol {
     RpcMethod<int(int, int), "test1", "num1", "num2"> test1;
     RpcMethod<void(int, int), "test2", "num1", "num2"> test2;
     RpcMethod<void(), "test3"> test3;
@@ -241,7 +240,7 @@ TEST_F(JsonRpcTest, BindAndCallUdp) {
         params.param1 = 114514;
         params.param2 = "hello";
         params.param3 = {1, 2, 3, 4};
-        auto res = (ilias_wait client->test11(params));
+        auto res      = (ilias_wait client->test11(params));
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), "114514hello4");
     }

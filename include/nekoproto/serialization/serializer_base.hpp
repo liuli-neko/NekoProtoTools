@@ -62,12 +62,18 @@
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/global/log.hpp"
 #include "private/helpers.hpp"
+#include "types/struct_unwrap.hpp"
 
 NEKO_BEGIN_NAMESPACE
 // NOLINTBEGIN
 namespace detail {
-#if NEKO_CPP_PLUS >= 17
+inline constexpr int _members_size() NEKO_NOEXCEPT { // NOLINT(readability-identifier-naming)
+    return 0;
+}
 inline constexpr int _members_size(std::string_view names) NEKO_NOEXCEPT { // NOLINT(readability-identifier-naming)
+    if (names.empty()) {
+        return 0;
+    }
     int count         = 0;
     std::size_t begin = 0;
     std::size_t end   = names.find_first_of(',', begin + 1);
@@ -84,84 +90,35 @@ inline constexpr int _members_size(std::string_view names) NEKO_NOEXCEPT { // NO
 template <int N>
 inline constexpr std::array<std::string_view, N>
 _parse_names(std::string_view names) NEKO_NOEXCEPT { // NOLINT(readability-identifier-naming)
-    std::array<std::string_view, N> namesVec;
-    std::size_t begin = 0;
-    std::size_t end   = names.find_first_of(',', begin + 1);
-    int icount        = 0;
-    while (end != std::string_view::npos) {
-        std::size_t bbegin     = names.find_first_not_of(' ', begin);
-        std::size_t eend       = names.find_last_not_of(' ', end);
-        std::string_view token = names.substr(bbegin, eend - bbegin);
-        namesVec[icount++]     = token;
-        begin                  = end + 1;
-        end                    = names.find_first_of(',', begin + 1);
+    if constexpr (N == 0) {
+        return {};
+    } else {
+        std::array<std::string_view, N> namesVec;
+        std::size_t begin = 0;
+        std::size_t end   = names.find_first_of(',', begin + 1);
+        int icount        = 0;
+        while (end != std::string_view::npos) {
+            std::size_t bbegin     = names.find_first_not_of(' ', begin);
+            std::size_t eend       = names.find_last_not_of(' ', end);
+            std::string_view token = names.substr(bbegin, eend - bbegin);
+            namesVec[icount++]     = token;
+            begin                  = end + 1;
+            end                    = names.find_first_of(',', begin + 1);
+        }
+        if (begin != names.size()) {
+            std::size_t bbegin     = names.find_first_not_of(' ', begin);
+            std::size_t eend       = names.back() == ' ' ? names.find_last_not_of(' ') : names.size();
+            std::string_view token = names.substr(bbegin, eend - bbegin);
+            namesVec[N - 1]        = token;
+        }
+        return namesVec;
     }
-    if (begin != names.size()) {
-        std::size_t bbegin     = names.find_first_not_of(' ', begin);
-        std::size_t eend       = names.back() == ' ' ? names.find_last_not_of(' ') : names.size();
-        std::string_view token = names.substr(bbegin, eend - bbegin);
-        namesVec[N - 1]        = token;
-    }
-    return namesVec;
 }
-#else
-struct neko_string_view {
-    const char* mData;
-    std::size_t mSize;
-    std::size_t size() const { return mSize; }
-    const char* data() const { return mData; }
-};
-inline std::vector<neko_string_view> _parse_names(const char* names) NEKO_NOEXCEPT {
-    std::string namesStr(names);
-    std::vector<neko_string_view> namesVec;
-    std::size_t begin = 0;
-    std::size_t end   = namesStr.find_first_of(',', begin + 1);
-    while (end != std::string::npos) {
-        std::size_t bbegin = namesStr.find_first_not_of(' ', begin);
-        std::size_t eend   = namesStr.find_last_not_of(' ', end);
-        namesVec.push_back({names + bbegin, eend - bbegin});
-        begin = end + 1;
-        end   = namesStr.find_first_of(',', begin + 1);
-    }
-    if (begin != namesStr.size()) {
-        std::size_t bbegin = namesStr.find_first_not_of(' ', begin);
-        std::size_t eend   = namesStr.back() == ' ' ? namesStr.find_last_not_of(' ') : namesStr.size();
-        namesVec.push_back({names + bbegin, eend - bbegin});
-    }
-    return namesVec;
-}
-#endif
-template <typename SerializerT, typename NamesT, typename T>
-inline bool unfold_function_imp(SerializerT& serializer, const NamesT& namesVec, int nameIdx, T&& value) NEKO_NOEXCEPT {
-    NEKO_ASSERT(nameIdx < (int)namesVec.size(), "serializer", "unfoldFunctionImp: index out of range");
-    return serializer(make_name_value_pair(namesVec[nameIdx].data(), namesVec[nameIdx].size(), std::forward<T>(value)));
-}
-
-template <typename SerializerT, typename NamesT, typename T, typename... Args>
-inline bool unfold_function_imp(SerializerT& serializer, const NamesT& namesVec, int nameIdx, T&& value,
-                                Args&&... args) NEKO_NOEXCEPT {
-    bool ret = 0;
-    NEKO_ASSERT(nameIdx < (int)namesVec.size(), "serializer", "unfoldFunctionImp: index out of range");
-    ret = serializer(make_name_value_pair(namesVec[nameIdx].data(), namesVec[nameIdx].size(), std::forward<T>(value)));
-
-    return unfold_function_imp<SerializerT>(serializer, namesVec, nameIdx + 1, args...) && ret;
-}
-template <typename SerializerT, typename NamesT, typename... Args>
-inline bool _unfold_function(SerializerT& serializer, const NamesT& namesVec, // NOLINT(readability-identifier-naming)
-                             Args&&... args) NEKO_NOEXCEPT {
-    int index = 0;
-    return unfold_function_imp<SerializerT>(serializer, namesVec, index, args...);
-}
-#if NEKO_CPP_PLUS >= 17
-NEKO_CONSTEXPR_FUNC int count_parameter_size(std::string_view view) { return view.empty() ? 0 : 1; }
-NEKO_CONSTEXPR_FUNC int count_parameter_size() { return 0; }
-#endif
 } // namespace detail
 
 NEKO_END_NAMESPACE
 // NOLINTEND
 
-#if NEKO_CPP_PLUS < 17
 /**
  * @brief generate serialize and deserialize functions for a class.
  *
@@ -188,94 +145,23 @@ NEKO_END_NAMESPACE
  */
 #define NEKO_SERIALIZER(...)                                                                                           \
 public:                                                                                                                \
-    template <typename SerializerT>                                                                                    \
-    bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {                                                      \
-        static auto _kNames_ = NEKO_NAMESPACE::detail::_parse_names(#__VA_ARGS__);                                     \
-        return NEKO_NAMESPACE::detail::_unfold_function<SerializerT>(serializer, _kNames_, __VA_ARGS__);               \
+    template <int N>                                                                                                   \
+    auto& _neko_get_n_member_reference() {                                                                             \
+        auto tuple = std::tie(__VA_ARGS__);                                                                            \
+        return std::get<N>(tuple);                                                                                     \
     }                                                                                                                  \
-    template <typename SerializerT>                                                                                    \
-    bool serialize(SerializerT& serializer) NEKO_NOEXCEPT {                                                            \
-        static auto _kNames_ = NEKO_NAMESPACE::detail::_parse_names(#__VA_ARGS__);                                     \
-        return NEKO_NAMESPACE::detail::_unfold_function<SerializerT>(serializer, _kNames_, __VA_ARGS__);               \
-    }
-#else
-/**
- * @brief generate serialize and deserialize functions for a class.
- *
- * Give all member variables that require serialization and deserialization support as parameters to the macro,
- * this macro will generate the serialize and deserialize functions for the class to process all given members.
- *
- * @param ...Args
- * member variables that require serialization and deserialization support.
- *
- * @note
- * Don't use this macro duplicate times. because it will generate same functions for class.
- * This function cannot directly serialize members and needs to be used in conjunction with supported serializers.
- * Please refer to the default JSON serializer implementation for the implementation specifications of the serializer.
- *
- * @example
- * class MyClass {
- *  ...
- *  NEKO_SERIALIZER(a, b, c)
- * private:
- *  int a;
- *  std::string b;
- *  std::vector<int> c;
- * };
- */
-#ifdef __GNUC__
-#define NEKO_SERIALIZER(...)                                                                                           \
-private:                                                                                                               \
-public:                                                                                                                \
-    template <typename SerializerT>                                                                                    \
-    bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {                                                      \
-        if constexpr (NEKO_NAMESPACE::detail::count_parameter_size(#__VA_ARGS__)) {                                    \
-            constexpr uint32_t _kSize_ = NEKO_NAMESPACE::detail::_members_size(#__VA_ARGS__);                          \
-            constexpr std::array<std::string_view, _kSize_> _kNames_ =                                                 \
-                NEKO_NAMESPACE::detail::_parse_names<_kSize_>(#__VA_ARGS__);                                           \
-            return NEKO_NAMESPACE::detail::_unfold_function<SerializerT>(serializer,                                   \
-                                                                         _kNames_ __VA_OPT__(, )##__VA_ARGS__);        \
-        } else {                                                                                                       \
-            return true;                                                                                               \
-        }                                                                                                              \
+    template <int N>                                                                                                   \
+    const auto& _neko_get_n_member_reference() const {                                                                 \
+        auto tuple = std::tie(__VA_ARGS__);                                                                            \
+        return std::get<N>(tuple);                                                                                     \
     }                                                                                                                  \
-    template <typename SerializerT>                                                                                    \
-    bool serialize(SerializerT& serializer) NEKO_NOEXCEPT {                                                            \
-        if constexpr (NEKO_NAMESPACE::detail::count_parameter_size(#__VA_ARGS__)) {                                    \
-            constexpr uint32_t _kSize_ = NEKO_NAMESPACE::detail::_members_size(#__VA_ARGS__);                          \
-            constexpr std::array<std::string_view, _kSize_> _kNames_ =                                                 \
-                NEKO_NAMESPACE::detail::_parse_names<_kSize_>(#__VA_ARGS__);                                           \
-            return NEKO_NAMESPACE::detail::_unfold_function<SerializerT>(serializer,                                   \
-                                                                         _kNames_ __VA_OPT__(, )##__VA_ARGS__);        \
-        } else {                                                                                                       \
-            return true;                                                                                               \
-        }                                                                                                              \
-    }
-#else
-#define NEKO_SERIALIZER(...)                                                                                           \
-private:                                                                                                               \
-public:                                                                                                                \
-    template <typename SerializerT>                                                                                    \
-    bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {                                                      \
-        if constexpr (NEKO_NAMESPACE::detail::count_parameter_size(#__VA_ARGS__)) {                                    \
-            constexpr uint32_t _kSize_ = NEKO_NAMESPACE::detail::_members_size(#__VA_ARGS__);                          \
-            constexpr std::array<std::string_view, _kSize_> _kNames_ =                                                 \
-                NEKO_NAMESPACE::detail::_parse_names<_kSize_>(#__VA_ARGS__);                                           \
-            return NEKO_NAMESPACE::detail::_unfold_function<SerializerT>(serializer, _kNames_, ##__VA_ARGS__);         \
-        } else {                                                                                                       \
-            return true;                                                                                               \
-        }                                                                                                              \
-    }                                                                                                                  \
-    template <typename SerializerT>                                                                                    \
-    bool serialize(SerializerT& serializer) NEKO_NOEXCEPT {                                                            \
-        if constexpr (NEKO_NAMESPACE::detail::count_parameter_size(#__VA_ARGS__)) {                                    \
-            constexpr uint32_t _kSize_ = NEKO_NAMESPACE::detail::_members_size(#__VA_ARGS__);                          \
-            constexpr std::array<std::string_view, _kSize_> _kNames_ =                                                 \
-                NEKO_NAMESPACE::detail::_parse_names<_kSize_>(#__VA_ARGS__);                                           \
-            return NEKO_NAMESPACE::detail::_unfold_function<SerializerT>(serializer, _kNames_, ##__VA_ARGS__);         \
-        } else {                                                                                                       \
-            return true;                                                                                               \
-        }                                                                                                              \
-    }
-#endif
-#endif
+    friend struct Neko;                                                                                                \
+                                                                                                                       \
+    struct Neko {                                                                                                      \
+        constexpr static std::array names =                                                                            \
+            NEKO_NAMESPACE::detail::_parse_names<NEKO_NAMESPACE::detail::_members_size(#__VA_ARGS__)>(#__VA_ARGS__);   \
+        constexpr static auto values = []<std::size_t... Is>(std::index_sequence<Is...>) {                             \
+            return std::tuple{                                                                                         \
+                ([](auto&& self) -> auto& { return self.template _neko_get_n_member_reference<Is>(); })...};           \
+        }(std::make_index_sequence<NEKO_NAMESPACE::detail::_members_size(#__VA_ARGS__)>{});                            \
+    };

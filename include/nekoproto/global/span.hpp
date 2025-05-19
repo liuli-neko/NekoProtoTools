@@ -44,7 +44,7 @@ public:
 
     template <typename It, typename End>
     Span(It begin, End end)
-        : mData(reinterpret_cast<pointer>(std::addressof(*begin))), mSize(std::distance(begin, end)) {}
+        : mData(reinterpret_cast<pointer>(&(*begin))), mSize(std::distance(begin, end)) {}
 
     template <typename U = T, size_type N>
     Span(const U (&data)[N]) : mData(reinterpret_cast<pointer>(data)), mSize(N * sizeof(U) / sizeof(T)) {}

@@ -28,8 +28,10 @@ inline bool save(Serializer& sa, const std::multiset<T>& value) {
 template <typename Serializer, typename T>
 inline bool load(Serializer& sa, std::multiset<T>& value) {
     std::size_t size = 0;
-    auto ret         = sa(make_size_tag(size));
+    auto ret         = sa.startNode();
+    ret              = ret && sa(make_size_tag(size));
     if (!ret) {
+        sa.finishNode();
         return false;
     }
     value.clear();
@@ -38,7 +40,7 @@ inline bool load(Serializer& sa, std::multiset<T>& value) {
         ret = sa(val) && ret;
         value.insert(std::move(val));
     }
-    return ret;
+    return sa.finishNode() && ret;
 }
 
 NEKO_END_NAMESPACE
