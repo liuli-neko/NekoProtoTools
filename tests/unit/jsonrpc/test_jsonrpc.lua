@@ -3,7 +3,7 @@ if has_config("enable_jsonrpc") then
         set_kind("binary")
         set_default(false)
         add_includedirs("$(projectdir)/include")
-        add_defines("NEKO_PROTO_STATIC", "ILIAS_TASK_TRACE")
+        add_defines("NEKO_PROTO_STATIC", "ILIAS_TASK_TRACE", "NEKO_VERBOSE_LOGS")
         add_tests("cpp20", {run_timeout = 5000, languages = "c++20"})
         set_group("jsonrpc")
         add_files("test_jsonrpc.cpp")

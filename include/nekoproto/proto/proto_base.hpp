@@ -81,7 +81,7 @@ auto static_init_funcs(const NEKO_STRING_VIEW&, std::function<void(ProtoFactory*
     -> std::map<NEKO_STRING_VIEW, std::function<void(ProtoFactory*)>>&;
 } // namespace detail
 
-class NEKO_PROTO_API IProto {
+class IProto {
 public:
     IProto() = default;
     explicit IProto(detail::AbstractProto* proto);

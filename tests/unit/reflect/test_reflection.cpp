@@ -28,6 +28,7 @@ TEST(Reflection, Test) {
     static_assert(!detail::is_local_ref_array<Test1>, "Test1 must not be local_ref_array");
     static_assert(!detail::is_local_ref_value<Test1>, "Test1 must not be local_ref_value");
     Test1 test{.member1 = 23, .member2 = 12, .member3 = 45};
+
     Reflect<Test1>::forEach(test, [](auto& field) {
         std::cout << field << std::endl;
         field += 10;
@@ -163,11 +164,13 @@ struct Test6 {
     int member2 = 125;
 };
 
+NEKO_BEGIN_NAMESPACE
 template <>
 struct Meta<Test6, void> {
     constexpr static auto value = // NOLINT
         Object("the_member1", [](auto&& self) -> auto& { return self.member1; }, "the_member2", &Test6::member2);
 };
+NEKO_END_NAMESPACE
 
 TEST(Reflection, Local) {
     static_assert(!detail::is_local_ref_values<Test6>, "Test6 must be local_ref_values");

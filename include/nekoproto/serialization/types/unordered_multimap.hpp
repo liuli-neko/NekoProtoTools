@@ -31,9 +31,10 @@ template <typename Serializer, typename K, typename V>
 inline bool load(Serializer& sa, std::unordered_multimap<K, V>& values) {
     K key;
     V value;
-    bool ret;
-    std::size_t size;
-    ret = sa(make_size_tag(size));
+    bool ret         = true;
+    std::size_t size = 0;
+    ret              = sa.startNode();
+    ret              = ret && sa(make_size_tag(size));
     values.clear();
     while (ret && size--) {
         ret = sa.startNode() && ret;
@@ -44,7 +45,7 @@ inline bool load(Serializer& sa, std::unordered_multimap<K, V>& values) {
         }
         ret = sa.finishNode() && ret;
     }
-    return ret;
+    return sa.finishNode() && ret;
 }
 
 NEKO_END_NAMESPACE

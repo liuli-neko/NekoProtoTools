@@ -142,30 +142,4 @@ inline std::string serializable_to_string(T&& value) NEKO_NOEXCEPT {
     return buffer;
 };
 
-template <typename T>
-    requires traits::has_method_const_serialize<T, PrintSerializer> || traits::has_method_serialize<T, PrintSerializer>
-inline bool prologue(PrintSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
-    sa.startObject((std::size_t)-1);
-    return true;
-}
-template <typename T>
-    requires traits::has_method_const_serialize<T, PrintSerializer> || traits::has_method_serialize<T, PrintSerializer>
-inline bool epilogue(PrintSerializer& sa, const T& /*unused*/) NEKO_NOEXCEPT {
-    sa.endObject();
-    return true;
-}
-
-template <typename T>
-    requires(!traits::has_method_const_serialize<T, PrintSerializer>) &&
-            (!traits::has_method_serialize<T, PrintSerializer>)
-inline bool prologue(PrintSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-template <typename T>
-    requires(!traits::has_method_const_serialize<T, PrintSerializer>) &&
-            (!traits::has_method_serialize<T, PrintSerializer>)
-inline bool epilogue(PrintSerializer& /*unused*/, const T& /*unused*/) NEKO_NOEXCEPT {
-    return true;
-}
-
 NEKO_END_NAMESPACE

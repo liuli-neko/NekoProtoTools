@@ -151,33 +151,41 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
     std::optional<JsonRpcIdType> id;
 
     template <typename SerializerT>
-    bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {
+    bool save(SerializerT& serializer) const NEKO_NOEXCEPT {
+        serializer.startObject(-1);
         if constexpr (sizeof...(ArgNames) == 0 && RpcMethodTraits<Args...>::NumParams == 1) {
-            if constexpr (traits::has_method_const_serialize<
-                              std::tuple_element_t<0, typename RpcMethodTraits<Args...>::RawParamsType>, SerializerT>) {
+            if constexpr (!is_minimal_serializable<
+                              std::tuple_element_t<0, typename RpcMethodTraits<Args...>::RawParamsType>>::value) {
                 return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                                  make_name_value_pair("params", std::get<0>(params)), NEKO_PROTO_NAME_VALUE_PAIR(id));
+                                  make_name_value_pair("params", std::get<0>(params)), NEKO_PROTO_NAME_VALUE_PAIR(id)) &
+                       serializer.endObject();
             }
         }
         traits::SerializerHelperObject<const ParamsTupleType, ArgNames...> mParamsHelper{params};
         return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                          make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id));
+                          make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id)) &
+               serializer.endObject();
     }
 
     template <typename SerializerT>
-    bool serialize(SerializerT& serializer) NEKO_NOEXCEPT {
+    bool load(SerializerT& serializer) NEKO_NOEXCEPT {
+        serializer.startNode();
         if constexpr (sizeof...(ArgNames) == 0 && RpcMethodTraits<Args...>::NumParams == 1) {
-            if constexpr (traits::has_method_serialize<
-                              std::tuple_element_t<0, typename RpcMethodTraits<Args...>::RawParamsType>, SerializerT>) {
+            if constexpr (!is_minimal_serializable<
+                              std::tuple_element_t<0, typename RpcMethodTraits<Args...>::RawParamsType>>::value) {
 
                 return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                                  make_name_value_pair("params", std::get<0>(params)), NEKO_PROTO_NAME_VALUE_PAIR(id));
+                                  make_name_value_pair("params", std::get<0>(params)), NEKO_PROTO_NAME_VALUE_PAIR(id)) &
+                       serializer.finishNode();
             }
         }
         traits::SerializerHelperObject<ParamsTupleType, ArgNames...> mParamsHelper{params};
         return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                          make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id));
+                          make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id)) &
+               serializer.finishNode();
+        ;
     }
+    NEKO_SERIALIZER(jsonrpc, method, params, id)
 };
 
 struct JsonRpcRequestMethod {
@@ -396,18 +404,8 @@ public:
                                                JsonSerializer::OutputSerializer& out,
                                                JsonRpcRequestMethod method) -> ILIAS_NAMESPACE::Task<void> {
             typename T::RequestType request;
-            if (!in(request)) {
-                NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc request");
-                co_return _handleError<T>(
-                    out, std::move(method), (int64_t)JsonRpcError::InvalidRequest,
-                    JsonRpcErrorCategory::instance().message((int64_t)JsonRpcError::InvalidRequest));
-            }
-            if constexpr (traits::optional_like_type<typename T::ParamsTupleType>::value) {
-                co_return _processMethodReturn<T>(co_await metadata(), out, std::move(method));
-            } else {
-                co_return _processMethodReturn<T>(co_await std::apply(metadata, request.params), out,
-                                                  std::move(method));
-            }
+            auto success = in(request);
+            return _handle<T>(success, request, out, std::move(method), metadata);
         };
     }
 
@@ -472,6 +470,19 @@ public:
     }
 
 private:
+    template <typename T>
+    auto _handle(bool success, auto request, auto& out, auto method, auto& metadata) -> ILIAS_NAMESPACE::Task<void> {
+        if (!success) {
+            NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc request");
+            co_return _handleError<T>(out, std::move(method), (int64_t)JsonRpcError::InvalidRequest,
+                                      JsonRpcErrorCategory::instance().message((int64_t)JsonRpcError::InvalidRequest));
+        }
+        if constexpr (traits::optional_like_type<typename T::ParamsTupleType>::value) {
+            co_return _processMethodReturn<T>(co_await metadata(), out, std::move(method));
+        } else {
+            co_return _processMethodReturn<T>(co_await std::apply(metadata, request.params), out, std::move(method));
+        }
+    }
     // RpcMethodDynamic<RetT(Args...), ArgNames...>
     template <typename T, typename Callable>
     auto _registerRpcMethod(std::string_view name, std::function<Callable> func) -> void {
@@ -479,18 +490,8 @@ private:
                                                            JsonSerializer::OutputSerializer& out,
                                                            JsonRpcRequestMethod method) -> ILIAS_NAMESPACE::Task<void> {
             typename T::RequestType request;
-            if (!in(request)) {
-                NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc request");
-                co_return _handleError<T>(
-                    out, std::move(method), (int64_t)JsonRpcError::InvalidRequest,
-                    JsonRpcErrorCategory::instance().message((int64_t)JsonRpcError::InvalidRequest));
-            }
-            if constexpr (traits::optional_like_type<typename T::ParamsTupleType>::value) {
-                co_return _processMethodReturn<T>(co_await metadata(), out, std::move(method));
-            } else {
-                co_return _processMethodReturn<T>(co_await std::apply(metadata, request.params), out,
-                                                  std::move(method));
-            }
+            auto success = in(request);
+            return _handle<T>(success, request, out, std::move(method), metadata);
         };
     }
 
@@ -696,21 +697,19 @@ private:
     }
 
     auto _init() {
-        auto rpcMethodMetadatas = detail::unwrap_struct(mProtocol);
-        auto registerRpcMethod  = [this]<typename T>(T& rpcMethodMetadata) {
+        auto registerRpcMethod = [this]<typename T>(T& rpcMethodMetadata) {
             struct MethodMetadata : public MethodMetadataBase {
                 std::string_view description() override { return rawData->description; }
                 bool isBinded() const override { return static_cast<bool>(*rawData); }
                 T* rawData;
             };
             auto metadata                            = std::make_unique<MethodMetadata>();
-            metadata->rawData                        = std::addressof(rpcMethodMetadata);
+            metadata->rawData                        = &rpcMethodMetadata;
             mMethodMetadatas[rpcMethodMetadata.Name] = std::move(metadata);
             mImp.registerRpcMethod(rpcMethodMetadata);
         };
-        traits::for_each_tuple_element(rpcMethodMetadatas, registerRpcMethod);
-        auto rpcMethoddatas = detail::unwrap_struct(mRpc);
-        traits::for_each_tuple_element(rpcMethoddatas, registerRpcMethod);
+        Reflect<ProtocolT>::forEachWithoutName(mProtocol, registerRpcMethod);
+        Reflect<decltype(mRpc)>::forEachWithoutName(mRpc, registerRpcMethod);
         mRpc.getMethodInfo = [this](std::string methodName) -> std::string {
             if (auto it = methodMetadatas().find(methodName); it != methodMetadatas().end()) {
                 return std::string(it->second->description());
@@ -755,9 +754,8 @@ template <typename ProtocolT>
 class JsonRpcClient {
 public:
     JsonRpcClient(ILIAS_NAMESPACE::IoContext& /*unused*/) {
-        auto rpcMethodMetadatas = detail::unwrap_struct(mProtocol);
-        traits::for_each_tuple_element(
-            rpcMethodMetadatas, [this](auto&& rpcMethodMetadata) { this->_registerRpcMethod(rpcMethodMetadata); });
+        Reflect<ProtocolT>::forEachWithoutName(
+            mProtocol, [this](auto& rpcMethodMetadata) { this->_registerRpcMethod(rpcMethodMetadata); });
     }
     ~JsonRpcClient() { close(); }
     auto operator->() const { return &mProtocol; }
@@ -831,10 +829,10 @@ private:
             typename std::decay_t<T>::RequestType request;
             if (auto ret = _sendRequest<T, Args...>(metadata.isNotification(), request, std::forward<Args>(args)...);
                 ret) {
-                if (auto ret = co_await mClient->send({reinterpret_cast<std::byte*>(mBuffer.data()), mBuffer.size()});
-                    !ret) {
+                if (auto ret1 = co_await mClient->send({reinterpret_cast<std::byte*>(mBuffer.data()), mBuffer.size()});
+                    !ret1) {
                     NEKO_LOG_ERROR("jsonrpc", "send {} request failed", request.method);
-                    co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+                    co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
                 }
             } else {
                 co_return ILIAS_NAMESPACE::Unexpected(ret.error());

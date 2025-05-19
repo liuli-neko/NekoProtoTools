@@ -184,11 +184,7 @@ inline ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() N
     if (mReflectionSerializer != nullptr) {
         return mReflectionSerializer->getObject();
     }
-    mReflectionSerializer.reset(new ReflectionSerializer());
-    bool ret = mData->serialize(*mReflectionSerializer);
-    NEKO_ASSERT(ret, "ReflectionSerializer", "{} get reflection object error", gProtoName);
-    NEKO_ASSERT(mReflectionSerializer->getObject() != nullptr, "ReflectionSerializer",
-                "mReflectionSerializer->getObject() is nullptr");
+    mReflectionSerializer = std::make_unique<ReflectionSerializer>(ReflectionSerializer::reflection(*mData));
     return mReflectionSerializer->getObject();
 }
 

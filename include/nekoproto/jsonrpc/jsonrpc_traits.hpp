@@ -12,11 +12,11 @@
 
 #include <ilias/task.hpp>
 
+#include "nekoproto/global/reflect.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_error.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/types/types.hpp"
-#include "nekoproto/global/reflect.hpp"
 
 NEKO_BEGIN_NAMESPACE
 namespace traits {
@@ -30,24 +30,6 @@ template <Serializable T>
 struct IsSerializable<T, void> : std::true_type {};
 template <>
 struct IsSerializable<void> : std::true_type {};
-
-// Helper to apply a function `func` to each element of a tuple `t`
-// `func` should be a generic callable (like a template lambda)
-template <typename Tuple, typename Func>
-constexpr void for_each_tuple_element(Tuple&& tuple, Func&& func) {
-    // Get tuple size at compile time
-    constexpr std::size_t Ns = std::tuple_size_v<std::remove_cvref_t<Tuple>>;
-
-    // Generate index sequence 0, 1, ..., Ns-1
-    // Use an immediately-invoked lambda to capture the index pack Is...
-    [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-        // Use a fold expression over the comma operator
-        // For each index I in Is..., call func(std::get<I>(tuple))
-        ((void)std::forward<Func>(func)(std::get<Is>(std::forward<Tuple>(tuple))), ...);
-        // The (void) cast suppresses potential warnings about unused result of comma operator
-        // std::forward preserves value category of tuple and func
-    }(std::make_index_sequence<Ns>{});
-}
 
 // --- ConstexprString Implementation (C++20 NTTP) ---
 template <std::size_t N>
@@ -238,43 +220,47 @@ struct TypeName<const T, void> {
 template <typename T, ConstexprString... ArgNames>
 struct SerializerHelperObject {
     T& mTuple;
+    template <typename Serializer>
+    bool save(Serializer& sa) const NEKO_NOEXCEPT {
+        if constexpr (sizeof...(ArgNames) > 0) {
+            bool ret                                                        = sa.startObject(sizeof...(ArgNames));
+            std::array<std::string_view, sizeof...(ArgNames)> argNamesArray = {ArgNames.view()...};
+            ret = [&sa, &argNamesArray, this]<std::size_t... Is>(std::index_sequence<Is...>) {
+                return ((sa(make_name_value_pair(argNamesArray[Is], std::get<Is>(mTuple)))) && ...);
+            }(std::make_index_sequence<sizeof...(ArgNames)>{});
+            return ret && sa.endObject();
+        } else {
+            return sa(mTuple);
+        }
+    }
+
+    template <typename Serializer>
+    bool load(Serializer& sa) NEKO_NOEXCEPT {
+        if (sa.isObject()) {
+            if constexpr (sizeof...(ArgNames) > 0) {
+                bool ret = sa.startNode();
+                if (ret) {
+                    std::array<std::string_view, sizeof...(ArgNames)> argNamesArray = {ArgNames.view()...};
+                    ret = [&sa, &argNamesArray, this]<std::size_t... Is>(std::index_sequence<Is...>) {
+                        return ((sa(make_name_value_pair(argNamesArray[Is], std::get<Is>(mTuple)))) && ...);
+                    }(std::make_index_sequence<sizeof...(ArgNames)>{});
+                }
+                if (sa.finishNode() && ret) {
+                    return ret;
+                }
+            }
+            return false;
+        }
+        return sa(mTuple);
+    }
+
+    struct Neko {
+        static constexpr std::array<std::string_view, sizeof...(ArgNames)> names = {ArgNames.view()...}; // NOLINT
+        static constexpr std::tuple values = []<std::size_t... Is>(std::index_sequence<Is...>) {         // NOLINT
+            return std::tuple{([](auto&& self) -> auto& { return std::get<Is>(self.mTuple); })...};
+        }(std::make_index_sequence<sizeof...(ArgNames)>{});
+    };
 };
 } // namespace traits
 
-template <typename Serializer, typename T, traits::ConstexprString... ArgNames>
-inline bool save(Serializer& sa, const traits::SerializerHelperObject<T, ArgNames...>& value) {
-    if constexpr (sizeof...(ArgNames) > 0) {
-        bool ret                                                        = sa.startObject(sizeof...(ArgNames));
-        std::array<std::string_view, sizeof...(ArgNames)> argNamesArray = {ArgNames.view()...};
-        ret = [&sa, &value, &argNamesArray]<std::size_t... Is>(std::index_sequence<Is...>) {
-            return ((sa(make_name_value_pair(argNamesArray[Is], std::get<Is>(value.mTuple)))) && ...);
-        }(std::make_index_sequence<sizeof...(ArgNames)>{});
-        return ret && sa.endObject();
-    } else {
-        return sa(value.mTuple);
-    }
-}
-
-template <typename Serializer, typename T, traits::ConstexprString... ArgNames>
-inline bool load(Serializer& sa, traits::SerializerHelperObject<T, ArgNames...>& value) {
-    if (sa.isObject()) {
-        if constexpr (sizeof...(ArgNames) > 0) {
-            bool ret = sa.startNode();
-            if (ret) {
-                std::array<std::string_view, sizeof...(ArgNames)> argNamesArray = {ArgNames.view()...};
-                ret = [&sa, &value, &argNamesArray]<std::size_t... Is>(std::index_sequence<Is...>) {
-                    return ((sa(make_name_value_pair(argNamesArray[Is], std::get<Is>(value.mTuple)))) && ...);
-                }(std::make_index_sequence<sizeof...(ArgNames)>{});
-            }
-            if (sa.finishNode() && ret) {
-                return ret;
-            }
-        }
-        return false;
-    }
-    return sa(value.mTuple);
-}
-
-template <typename T, traits::ConstexprString... ArgNames>
-struct is_minimal_serializable<traits::SerializerHelperObject<T, ArgNames...>, void> : std::true_type {};
 NEKO_END_NAMESPACE

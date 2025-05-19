@@ -23,11 +23,12 @@
 #include <set>
 
 #include "detail/thread_await.hpp"
-#include "nekoproto/serialization/binary_serializer.hpp"
 #include "nekoproto/proto/proto_base.hpp"
+#include "nekoproto/serialization/binary_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/types/byte.hpp"
 #include "nekoproto/serialization/types/map.hpp"
+#include "nekoproto/serialization/types/struct_unwrap.hpp"
 #include "nekoproto/serialization/types/vector.hpp"
 
 NEKO_BEGIN_NAMESPACE
@@ -75,12 +76,12 @@ public:
     uint16_t messageType = 0; // 2 : the type of this message
 
     template <typename SerializerT>
-    bool serialize(SerializerT& serializer) const NEKO_NOEXCEPT {
+    bool save(SerializerT& serializer) const NEKO_NOEXCEPT {
         return serializer(make_fixed_length_field(length), make_fixed_length_field(data),
                           make_fixed_length_field(messageType));
     }
     template <typename SerializerT>
-    bool serialize(SerializerT& serializer) NEKO_NOEXCEPT {
+    bool load(SerializerT& serializer) NEKO_NOEXCEPT {
         return serializer(make_fixed_length_field(length), make_fixed_length_field(data),
                           make_fixed_length_field(messageType));
     }
@@ -91,7 +92,7 @@ private:
     friend class detail::proto_method_access;
 };
 
-struct NEKO_PROTO_API ProtocolTable {
+struct ProtocolTable {
     uint32_t protocolFactoryVersion            = 0;
     std::map<uint32_t, std::string> protoTable = {};
 
@@ -102,8 +103,7 @@ private:
     friend class detail::proto_method_access;
 };
 
-class NEKO_PROTO_API RawDataMessage {
-public:
+struct RawDataMessage {
     inline RawDataMessage(uint32_t length = 0, int32_t type = 0, const std::string& name = "unknown")
         : length(length), type(type), name(name) {}
     uint32_t length = 0;
@@ -117,6 +117,12 @@ public:
 private:
     friend class detail::proto_method_access;
 };
+static_assert(std::is_class_v<decltype(RawDataMessage::Neko::values)>, "value");
+static_assert(detail::is_std_tuple_v<std::decay_t<decltype(RawDataMessage::Neko::values)>>, "tuple");
+static_assert(detail::is_all_meta_ref_value<RawDataMessage, std::decay_t<decltype(RawDataMessage::Neko::values)>>::value, "0");
+static_assert(detail::is_local_ref_values<RawDataMessage>, "static ");
+static_assert(detail::has_names_meta<RawDataMessage>, "names? why");
+static_assert(detail::has_values_meta<RawDataMessage>, "why ");
 
 // enum | code | message | system code mapping
 #define NEKO_CHANNEL_ERROR_CODE_TABLE                                                                                  \

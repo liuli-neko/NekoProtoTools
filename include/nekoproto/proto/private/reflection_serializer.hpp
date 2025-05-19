@@ -20,6 +20,8 @@
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/global/log.hpp"
 
+#include "nekoproto/serialization/types/struct_unwrap.hpp"
+
 NEKO_BEGIN_NAMESPACE
 
 template <typename T>
@@ -48,9 +50,7 @@ template <typename T>
 class ReflectionField : public ReflectionFieldBase {
 public:
     explicit ReflectionField(const NEKO_STRING_VIEW& name, T* value) : mValue(value), mName(name) {
-        if (value == nullptr) {
-            throw std::invalid_argument("can not make reflection object " + std::string(name) + " for nullptr");
-        }
+        NEKO_ASSERT(value != nullptr, "ReflectionSerializer", "can not make reflection object {} for nullptr", name);
     }
     const T& getField() const NEKO_NOEXCEPT { return *mValue; }
     void setField(const T& value) NEKO_NOEXCEPT { (*mValue) = value; }
@@ -64,15 +64,19 @@ private:
 
 class ReflectionObject {
 public:
-    ReflectionObject() = default;
-    inline ~ReflectionObject() { clear(); }
-    inline void clear() NEKO_NOEXCEPT {
-        for (auto& it : mFields) {
-            delete it.second;
-            it.second = nullptr;
+    ReflectionObject()                        = default;
+    ReflectionObject(const ReflectionObject&) = delete;
+    ReflectionObject(ReflectionObject&& other) : mFields(std::move(other.mFields)) {}
+    ReflectionObject& operator=(const ReflectionObject&) = delete;
+    ReflectionObject& operator=(ReflectionObject&& other) {
+        if (this != &other) {
+            mFields = std::move(other.mFields);
         }
-        mFields.clear();
+        return *this;
     }
+
+    inline ~ReflectionObject() { clear(); }
+    inline void clear() NEKO_NOEXCEPT { mFields.clear(); }
 
     template <typename T>
     T getField(const NEKO_STRING_VIEW& name, const T& defaultValue) const NEKO_NOEXCEPT {
@@ -86,8 +90,8 @@ public:
                            typeid(T).name(), it->second->typeInfo().name());
             return defaultValue;
         }
-        auto reflectionField  = dynamic_cast<ReflectionField<T>*>(it->second);
-        auto reflectionField1 = dynamic_cast<ReflectionField<const T>*>(it->second);
+        auto reflectionField  = dynamic_cast<ReflectionField<T>*>(it->second.get());
+        auto reflectionField1 = dynamic_cast<ReflectionField<const T>*>(it->second.get());
         if (reflectionField == nullptr && reflectionField1 == nullptr) {
             NEKO_LOG_ERROR("ReflectionSerializer", "field {} type mismatch, expected {} but got {}.", name,
                            typeid(T).name(), it->second->typeInfo().name());
@@ -110,7 +114,7 @@ public:
                            typeid(T).name(), it->second->typeInfo().name());
             return false;
         }
-        auto reflectionField = dynamic_cast<ReflectionField<T>*>(it->second);
+        auto reflectionField = dynamic_cast<ReflectionField<T>*>(it->second.get());
         if (reflectionField == nullptr) {
             NEKO_LOG_ERROR("ReflectionSerializer", "field {} type mismatch, expected {} but got {}.", name,
                            typeid(T).name(), it->second->typeInfo().name());
@@ -134,7 +138,7 @@ public:
                            typeid(T).name(), it->second->typeInfo().name());
             return false;
         }
-        auto reflectionField = dynamic_cast<ReflectionField<T>*>(it->second);
+        auto reflectionField = dynamic_cast<ReflectionField<T>*>(it->second.get());
         if (reflectionField == nullptr) {
             NEKO_LOG_ERROR("ReflectionSerializer", "field {} type mismatch, expected {} but got {}.", name,
                            typeid(T).name(), it->second->typeInfo().name());
@@ -146,33 +150,63 @@ public:
 
     template <typename T>
     ReflectionField<T>* bindField(const NEKO_STRING_VIEW& name, T* value) {
+        if (value == nullptr) {
+            return nullptr;
+        }
         auto it = mFields.find(name);
         if (it == mFields.end()) {
-            mFields.insert(std::make_pair(name, new ReflectionField<T>(name, value)));
-            return static_cast<ReflectionField<T>*>(mFields.find(name)->second);
+            mFields.insert(std::make_pair<const NEKO_STRING_VIEW&, std::unique_ptr<ReflectionFieldBase>>(
+                name, std::make_unique<ReflectionField<T>>(name, value)));
+            return static_cast<ReflectionField<T>*>(mFields.find(name)->second.get());
         }
         NEKO_LOG_WARN("ReflectionSerializer", "field {} already exists, duplicate field will be overwritten.", name);
-        delete it->second;
-        it->second = new ReflectionField<T>(name, value);
-        return static_cast<ReflectionField<T>*>(it->second);
+        it->second = std::make_unique<ReflectionField<T>>(name, value);
+        return static_cast<ReflectionField<T>*>(it->second.get());
     }
 
 private:
-    std::map<NEKO_STRING_VIEW, ReflectionFieldBase*> mFields;
+    std::map<NEKO_STRING_VIEW, std::unique_ptr<ReflectionFieldBase>> mFields;
 };
+} // namespace detail
 
 class ReflectionSerializer {
 public:
-    inline ReflectionSerializer() { mObject.clear(); }
-    inline ~ReflectionSerializer() = default;
-    inline operator bool() const { return true; }
+    ReflectionSerializer() { mObject.clear(); }
+    ReflectionSerializer(const ReflectionSerializer&)            = delete;
+    ReflectionSerializer& operator=(const ReflectionSerializer&) = delete;
+    ReflectionSerializer(ReflectionSerializer&& other) : mObject(std::move(other.mObject)) {}
+    ReflectionSerializer& operator=(ReflectionSerializer&& other) {
+        mObject = std::move(other.mObject);
+        return *this;
+    }
+    ~ReflectionSerializer() = default;
+    operator bool() const { return true; }
+    bool startNode() { return true; }  // NOLINT
+    bool finishNode() { return true; } // NOLINT
+    template <typename T>
+        requires traits::can_be_serializable<T>
+    static ReflectionSerializer reflection(T& obj) {
+        ReflectionSerializer rs;
+        auto ret = true;
+        if constexpr (traits::has_function_load<T, ReflectionSerializer>) {
+            ret = load(rs, obj);
+        } else if constexpr (traits::has_method_load<T, ReflectionSerializer>) {
+            ret = obj.load(rs);
+        } else {
+            static_assert(traits::has_function_load<T, ReflectionSerializer>,
+                          "Reflection operations cannot be performed on this type");
+        }
+        NEKO_ASSERT(ret, "ReflectionSerializer", "{} get reflection object error", detail::class_nameof<T>);
+        NEKO_ASSERT(rs.getObject() != nullptr, "ReflectionSerializer", "reflection object is nullptr");
+        return rs;
+    }
 
     template <typename... Ts>
     bool operator()(const Ts&... fields) {
         return _process(fields...);
     }
 
-    inline ReflectionObject* getObject() { return &mObject; }
+    inline detail::ReflectionObject* getObject() { return &mObject; }
 
 private:
     template <typename T, typename... Ts>
@@ -181,18 +215,16 @@ private:
     }
     template <typename T>
     bool _process(const NameValuePair<T>& field) {
-        return nullptr != mObject.bindField(NEKO_STRING_VIEW(field.name, field.nameLen), std::addressof(field.value));
+        return nullptr != mObject.bindField(NEKO_STRING_VIEW(field.name, field.nameLen), &field.value);
     }
-    template <typename T, typename std::enable_if<!is_name_value_pair<T>::Value, char>::type = 0>
+    template <typename T, typename std::enable_if<!detail::is_name_value_pair<T>::Value, char>::type = 0>
     bool _process(const T& /*unused*/) {
         NEKO_LOG_WARN("ReflectionSerializer", "Types other than NameValuePair are not supported reflection");
         return true;
     }
 
 private:
-    ReflectionObject mObject;
+    detail::ReflectionObject mObject;
 };
-
-} // namespace detail
 
 NEKO_END_NAMESPACE

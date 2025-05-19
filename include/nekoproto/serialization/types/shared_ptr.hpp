@@ -12,8 +12,8 @@
 #include <memory>
 #include <type_traits>
 
-#include "nekoproto/global/global.hpp"
 #include "../private/helpers.hpp"
+#include "nekoproto/global/global.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
@@ -36,6 +36,6 @@ inline bool load(Serializer& sa, std::shared_ptr<T>& value) {
 }
 
 template <typename T>
-struct is_minimal_serializable<std::shared_ptr<T>, void> : std::true_type {};
+struct is_minimal_serializable<std::shared_ptr<T>, void> : is_minimal_serializable<T> {};
 
 NEKO_END_NAMESPACE

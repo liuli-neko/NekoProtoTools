@@ -144,27 +144,10 @@ private:
     }
 
     template <typename T>
-        requires traits::has_method_const_serialize<T, SerializerType> &&
-                 (!traits::has_function_save<T, SerializerType>) && (!traits::has_method_save<T, SerializerType>)
-    bool _processImpl(const T& value) NEKO_NOEXCEPT {
-        return traits::method_access::method_const_serialize(*mSelf, value);
-    }
-
-    template <typename T>
-        requires traits::has_method_serialize<T, SerializerType> &&
-                 (!traits::has_method_const_serialize<T, SerializerType>) &&
-                 (!traits::has_function_save<T, SerializerType>) && (!traits::has_method_save<T, SerializerType>)
-    bool _processImpl(const T& value) NEKO_NOEXCEPT {
-        return traits::method_access::method_serialize(*mSelf, const_cast<T&>(value));
-    }
-
-    template <typename T>
-        requires(!traits::has_method_const_serialize<T, SerializerType>) &&
-                (!traits::has_function_save<T, SerializerType>) && (!traits::has_method_serialize<T, SerializerType>) &&
-                (!traits::has_method_save<T, SerializerType>)
+        requires(!traits::has_function_save<T, SerializerType>) && (!traits::has_method_save<T, SerializerType>)
     bool _processImpl(const T& /*unused*/) NEKO_NOEXCEPT {
-        static_assert(traits::has_method_const_serialize<T, SerializerType>,
-                      "can not find any function to serialize this Type, must have a serialize method or save method"
+        static_assert(traits::has_function_save<T, SerializerType>,
+                      "can not find any function to serialize this Type, must have a save method"
                       "or save function.");
         return false;
     }
@@ -216,18 +199,10 @@ private:
     }
 
     template <typename T>
-        requires traits::has_method_serialize<T, SerializerType> && (!traits::has_function_load<T, SerializerType>) &&
-                 (!traits::has_method_load<T, SerializerType>)
-    bool _processImpl(T& value) NEKO_NOEXCEPT {
-        return traits::method_access::method_serialize(*mSelf, value);
-    }
-
-    template <typename T>
-        requires(!traits::has_method_serialize<T, SerializerType>) && (!traits::has_function_load<T, SerializerType>) &&
-                (!traits::has_method_load<T, SerializerType>)
+        requires(!traits::has_function_load<T, SerializerType>) && (!traits::has_method_load<T, SerializerType>)
     bool _processImpl(T& /*unused*/) NEKO_NOEXCEPT {
-        static_assert(traits::has_method_serialize<T, SerializerType>,
-                      "can not find any function to serialize this Type, must have a serialize method or save method"
+        static_assert(traits::has_function_load<T, SerializerType>,
+                      "can not find any function to serialize this Type, must save method"
                       "or save function.");
         return false;
     }

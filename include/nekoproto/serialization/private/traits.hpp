@@ -28,7 +28,7 @@ struct TestSerializableTrait {
     bool endObject() { return true; }       // NOLINT
     bool end() { return true; }             // NOLINT
     bool startNode() { return true; }       // NOLINT
-    bool endNode() { return true; }         // NOLINT
+    bool finishNode() { return true; }      // NOLINT
     void rollbackItem() {}                  // NOLINT
     bool isArray() { return true; }         // NOLINT
     bool isObject() { return true; }        // NOLINT
@@ -46,18 +46,6 @@ T& dereference(T* ptr) NEKO_NOEXCEPT {
 
 class method_access { // NOLINT
 public:
-    template <typename SerializerT, typename T>
-    static auto method_serialize(SerializerT& sa, T& value) // NOLINT(readability-identifier-naming)
-        NEKO_NOEXCEPT -> decltype(value.serialize(sa)) {
-        return value.serialize(sa);
-    }
-
-    template <typename SerializerT, typename T>
-    static auto method_const_serialize(SerializerT& sa, const T& value) // NOLINT(readability-identifier-naming)
-        NEKO_NOEXCEPT -> decltype(value.serialize(sa)) {
-        return value.serialize(sa);
-    }
-
     template <typename SerializerT, typename T>
     static auto method_const_save(SerializerT& sa, const T& value) // NOLINT(readability-identifier-naming)
         NEKO_NOEXCEPT -> decltype(value.save(sa)) {
@@ -85,16 +73,6 @@ concept has_function_save = requires(A& sa, const T& value) {
 template <class T, class A>
 concept has_function_load = requires(A& sa, T& value) {
     { load(sa, value) } -> std::convertible_to<bool>;
-};
-
-template <class T, class A>
-concept has_method_serialize = requires(A& sa, T& value) {
-    { method_access::method_serialize(sa, value) };
-};
-
-template <class T, class A>
-concept has_method_const_serialize = requires(A& sa, const T& value) {
-    { method_access::method_const_serialize(sa, value) };
 };
 
 template <class T, class A>
@@ -131,7 +109,6 @@ struct optional_like_type<T, void> : public std::true_type {
 
 template <typename T>
 concept can_be_serializable =
-    (has_method_serialize<T, TestSerializableTrait>) ||
     (has_function_save<T, TestSerializableTrait> && has_function_load<T, TestSerializableTrait>) ||
     (has_method_save<T, TestSerializableTrait> && has_method_load<T, TestSerializableTrait>);
 
@@ -150,6 +127,13 @@ struct is_minimal_serializable<std::basic_string<CharT, Traits, Alloc>, void> : 
 
 template <typename CharT, typename Traits>
 struct is_minimal_serializable<std::basic_string_view<CharT, Traits>, void> : std::true_type {};
+
+template <>
+struct is_minimal_serializable<const char*, void> : std::true_type {};
+
+template <typename T>
+    requires std::is_arithmetic_v<T> || std::is_enum_v<T>
+struct is_minimal_serializable<T, void> : std::true_type {};
 
 template <typename T, class enable = void>
 struct is_skipable : std::false_type {}; // NOLINT(readability-identifier-naming)

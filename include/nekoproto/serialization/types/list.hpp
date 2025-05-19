@@ -28,8 +28,10 @@ inline bool save(Serializer& sa, const std::list<T>& values) {
 template <typename Serializer, typename T>
 inline bool load(Serializer& sa, std::list<T>& values) {
     std::size_t size = 0;
-    auto ret         = sa(make_size_tag(size));
+    auto ret         = sa.startNode();
+    ret              = ret && sa(make_size_tag(size));
     if (!ret) {
+        sa.finishNode();
         return false;
     }
     values.clear();
@@ -38,7 +40,7 @@ inline bool load(Serializer& sa, std::list<T>& values) {
         ret = sa(value) && ret;
     }
 
-    return ret;
+    return sa.finishNode() && ret;
 }
 
 NEKO_END_NAMESPACE
