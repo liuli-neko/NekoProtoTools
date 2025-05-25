@@ -1053,6 +1053,28 @@ TEST_F(JsonSerializerTest, SerializableTest) {
     EXPECT_EQ(proto.i.load(), proto2.i.load());
 }
 
+struct ZTypeTest2 {
+    std::optional<int> a = {2};
+    std::variant<std::monostate, std::string> b;
+};
+
+TEST_F(JsonSerializerTest, OptionalVariantTest) {
+    ZTypeTest2 proto;
+    NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(proto));
+    proto.b = "hello";
+    NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(proto));
+    EXPECT_TRUE(mOutput(proto));
+    mBuffer.push_back('\0');
+
+    ZTypeTest2 proto2;
+    {
+        JsonSerializer::InputSerializer input(mBuffer.data(), mBuffer.size());
+        input(proto2);
+    }
+    EXPECT_EQ(proto.a, proto2.a);
+    EXPECT_EQ(proto.b, proto2.b);
+}
+
 int main(int argc, char** argv) {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);

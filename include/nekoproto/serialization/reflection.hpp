@@ -233,7 +233,7 @@ template <typename T>
 concept is_meta_ref_values = requires {
     { Meta<T>::values };
     requires is_std_tuple_v<std::decay_t<decltype(Meta<T>::values)>>;
-    requires is_all_meta_ref_value<T, std::decay_t<decltype(T::Neko::values)>>::value;
+    requires is_all_meta_ref_value<T, std::decay_t<decltype(Meta<T>::values)>>::value;
 };
 
 template <typename T>

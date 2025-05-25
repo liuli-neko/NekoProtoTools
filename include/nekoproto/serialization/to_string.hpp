@@ -83,8 +83,8 @@ public:
     bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
         mBuffer += std::string{value.name, value.nameLen} + " = ";
         if constexpr (traits::optional_like_type<T>::value) {
-            if (value.value.has_value()) {
-                return (*this)(value.value.value());
+            if (traits::optional_like_type<T>::has_value(value.value)) {
+                return (*this)(traits::optional_like_type<T>::get_value(value.value));
             }
             mBuffer += "null, ";
             return true;

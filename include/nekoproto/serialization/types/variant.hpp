@@ -47,6 +47,23 @@ struct unfold_variant_helper { // NOLINT(readability-identifier-naming)
     }
 };
 
+template <typename Serializer>
+inline bool save(Serializer& sa, const std::monostate& /*unused*/) {
+    return sa(nullptr);
+}
+
+template <typename Serializer>
+inline bool load(Serializer& sa, std::monostate& /*unused*/) {
+    nullptr_t dummy;
+    return sa(dummy);
+}
+
+template <>
+struct Meta<std::monostate> {
+    static constexpr std::array<std::string_view, 0> names;
+    static constexpr std::tuple<> values;
+};
+
 template <typename Serializer, typename... Ts>
 inline bool save(Serializer& sa, const std::variant<Ts...>& value) {
     return unfold_variant_helper<Serializer, Ts...>::unfoldValue(sa, value, std::make_index_sequence<sizeof...(Ts)>());

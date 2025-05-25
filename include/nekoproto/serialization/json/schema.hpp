@@ -69,11 +69,12 @@ struct ExtUnits final {
 };
 
 struct Schema final {
-    bool reflection_helper{}; // NOLINT needed to support automatic reflection, because ref is a std::optional
     std::optional<std::string_view> ref{};
     using schema_number = std::optional<std::variant<int64_t, uint64_t, double>>;
     using schema_any    = std::variant<std::monostate, bool, int64_t, uint64_t, double, std::string_view>;
     // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
+    std::optional<std::string> schema{};
+    std::optional<std::string_view> type{};
     std::optional<std::string_view> title{};
     std::optional<std::string_view> description{};
     std::optional<schema_any> defaultValue{};
@@ -116,7 +117,9 @@ struct Schema final {
 
     struct Neko {
         using T = Schema;
-        static constexpr std::array names{"$ref",             // NOLINT
+        static constexpr std::array names{"$ref", // NOLINT
+                                          "$schema",
+                                          "type",
                                           "title",            //
                                           "description",      //
                                           "default",          //
@@ -147,6 +150,8 @@ struct Schema final {
                                           "ExtAdvanced"};
 
         static constexpr std::tuple values = {&T::ref,              // NOLINT
+                                              &T::schema,           //
+                                              &T::type,             //
                                               &T::title,            //
                                               &T::description,      //
                                               &T::defaultValue,     //
@@ -214,9 +219,16 @@ struct Schematic final {
 
 template <typename T = void>
 struct ToJsonSchema {
+    static Schema schema(auto& s, Schematic& defs) {}
+};
+
+template <>
+struct ToJsonSchema<int> {
     static Schema schema(auto& s, Schematic& defs) {
-        
+        s.attributes.format = "int32";
+        return s;
     }
 };
+
 } // namespace detail
 NEKO_END_NAMESPACE

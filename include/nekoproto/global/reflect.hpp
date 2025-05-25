@@ -14,6 +14,8 @@
 #include "string_literal.hpp"
 
 #include <array>
+#include <optional>
+
 #ifdef __GNUC__
 #include <cxxabi.h>
 #include <list>
@@ -356,8 +358,24 @@ constexpr auto unwrap_struct_impl(T& data) noexcept {
     }
 }
 
+template <typename T, class enable = void>
+struct is_optional : std::false_type {};
+
+template <typename T>
+struct is_optional<std::optional<T>, void> : std::true_type {};
+
+template <typename T>
+struct is_optional<std::optional<T>&, void> : std::true_type {};
+
+template <typename T>
+struct is_optional<const std::optional<T>, void> : std::true_type {};
+
+template <typename T>
+struct is_optional<const std::optional<T>&, void> : std::true_type {};
+
 struct any_type {
-    template <typename T>
+    template <typename T,
+              typename = std::enable_if_t<!is_optional<std::decay_t<T>>::value>> // 禁用到 optional 的直接转换
     operator T() {}
 };
 template <typename T, typename _Cond = void, typename... Args>
