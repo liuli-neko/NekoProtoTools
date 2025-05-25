@@ -92,4 +92,48 @@ inline constexpr std::string_view join() {              // NOLINT
 template <const std::string_view&... Strs>
 inline constexpr auto join_v = detail::join<Strs...>(); // NOLINT
 
+// --- ConstexprString Implementation (C++20 NTTP) ---
+template <std::size_t N>
+struct ConstexprString {
+    std::array<char, N + 1> data{};
+
+    // consteval 构造函数，确保编译时创建
+    consteval ConstexprString(const char* str) noexcept {
+        std::size_t actualLen = 0;
+        // 复制直到 null 或达到 N
+        while (str[actualLen] != '\0' && actualLen < N) {
+            data[actualLen] = str[actualLen];
+            actualLen++;
+        }
+        // 如果有空间，添加 null 终止符 (string_view 不需要，但 c_str 可能需要)
+        if (actualLen <= N) {
+            data[actualLen] = '\0';
+        }
+        // C++20 要求 NTTP 类型的所有基类和非静态数据成员都是 public 的
+        // 并且类型是结构性相等的 (structural equality) - 默认即可
+    }
+
+    // 比较运算符对 NTTP 至关重要
+    constexpr auto operator<=>(const ConstexprString&) const = default;
+    constexpr bool operator==(const ConstexprString&) const  = default;
+
+    // 访问器
+    [[nodiscard]]
+    constexpr std::size_t size() const noexcept {
+        return N;
+    }
+    [[nodiscard]]
+    constexpr std::string_view view() const noexcept {
+        return std::string_view(data.data(), N);
+    }
+    [[nodiscard]]
+    constexpr const char* c_str() const noexcept { // NOLINT
+        return data.data();
+    }
+};
+
+// CTAD 推导指引，方便从字面量创建 ConstexprString (去掉末尾 '\0')
+template <std::size_t N>
+ConstexprString(const char (&)[N]) -> ConstexprString<N - 1>;
+
 NEKO_END_NAMESPACE

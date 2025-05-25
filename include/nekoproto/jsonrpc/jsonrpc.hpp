@@ -137,9 +137,9 @@ concept RpcMethodT = requires() { std::is_constructible_v<typename RpcMethodTrai
  *
  */
 using JsonRpcIdType = std::variant<std::nullptr_t, uint64_t, std::string>;
-template <typename T, traits::ConstexprString... ArgNames>
+template <typename T, ConstexprString... ArgNames>
 struct JsonRpcRequest2;
-template <typename... Args, traits::ConstexprString... ArgNames>
+template <typename... Args, ConstexprString... ArgNames>
 struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
     using ParamsTupleType = typename RpcMethodTraits<Args...>::ParamsTupleType;
     static_assert(sizeof...(ArgNames) == 0 || RpcMethodTraits<Args...>::NumParams == sizeof...(ArgNames),
@@ -224,7 +224,7 @@ struct JsonRpcResponse<void> {
     NEKO_SERIALIZER(jsonrpc, error, id)
 };
 
-template <RpcMethodT T, traits::ConstexprString MethodName, traits::ConstexprString... ArgNames>
+template <RpcMethodT T, ConstexprString MethodName, ConstexprString... ArgNames>
 class RpcMethod : public RpcMethodTraits<T> {
     static_assert(sizeof...(ArgNames) == 0 || RpcMethodTraits<T>::NumParams == sizeof...(ArgNames),
                   "RpcMethodTraits: The number of parameters and names do not match.");
@@ -284,7 +284,7 @@ public:
     }();
 };
 
-template <RpcMethodT T, traits::ConstexprString... ArgNames>
+template <RpcMethodT T, ConstexprString... ArgNames>
 class RpcMethodDynamic : public RpcMethodTraits<T> {
     static_assert(sizeof...(ArgNames) == 0 || RpcMethodTraits<T>::NumParams == sizeof...(ArgNames),
                   "RpcMethodDynamic: The number of parameters and names do not match.");
@@ -355,7 +355,7 @@ private:
     static std::string gName;
 };
 
-template <RpcMethodT T, traits::ConstexprString... ArgNames>
+template <RpcMethodT T, ConstexprString... ArgNames>
 std::string RpcMethodDynamic<T, ArgNames...>::gName;
 
 struct RpcMethodErrorHelper {
@@ -409,13 +409,13 @@ public:
         };
     }
 
-    template <typename RetT, typename... Args, traits::ConstexprString... ArgNames>
+    template <typename RetT, typename... Args, ConstexprString... ArgNames>
     auto bindRpcMethod(std::string_view name, std::function<RetT(Args...)> func,
                        traits::ArgNamesHelper<ArgNames...> /*unused*/ = {}) -> void {
         return _registerRpcMethod<RpcMethodDynamic<RetT(Args...), ArgNames...>>(name, func);
     }
 
-    template <typename RetT, typename... Args, traits::ConstexprString... ArgNames>
+    template <typename RetT, typename... Args, ConstexprString... ArgNames>
     auto bindRpcMethod(std::string_view name, std::function<ILIAS_NAMESPACE::IoTask<RetT>(Args...)> func,
                        traits::ArgNamesHelper<ArgNames...> /*unused*/ = {}) -> void {
         _registerRpcMethod<RpcMethodDynamic<RetT(Args...), ArgNames...>>(name, func);
@@ -631,7 +631,7 @@ public:
         co_return false;
     }
 
-    template <traits::ConstexprString... ArgNames, typename RetT, typename... Args>
+    template <ConstexprString... ArgNames, typename RetT, typename... Args>
     auto bindMethod(std::string_view name, std::function<RetT(Args...)> func) -> void {
         static_assert(sizeof...(ArgNames) == 0 || sizeof...(ArgNames) == sizeof...(Args),
                       "bindMethod: The number of parameters and names do not match.");
@@ -649,7 +649,7 @@ public:
         mMethodMetadatas[name] = std::move(metadata);
     }
 
-    template <traits::ConstexprString... ArgNames, typename RetT, typename... Args>
+    template <ConstexprString... ArgNames, typename RetT, typename... Args>
     auto bindMethod(std::string_view name, std::function<ILIAS_NAMESPACE::IoTask<RetT>(Args...)> func) -> void {
         static_assert(sizeof...(ArgNames) == 0 || sizeof...(ArgNames) == sizeof...(Args),
                       "bindMethod: The number of parameters and names do not match.");
@@ -797,14 +797,14 @@ public:
         co_return false;
     }
 
-    template <typename RetT, traits::ConstexprString... ArgNames, typename... Args>
+    template <typename RetT, ConstexprString... ArgNames, typename... Args>
     auto callRemote(std::string_view name, Args... args) -> ILIAS_NAMESPACE::IoTask<RetT> {
         using CoroutinesFuncType = typename detail::RpcMethodDynamic<RetT(Args...), ArgNames...>::CoroutinesFuncType;
         detail::RpcMethodDynamic<RetT(Args...), ArgNames...> metadata(name, (CoroutinesFuncType)(nullptr), false);
         co_return co_await _callRemote(metadata, std::forward<Args>(args)...);
     }
 
-    template <typename RetT, traits::ConstexprString... ArgNames, typename... Args>
+    template <typename RetT, ConstexprString... ArgNames, typename... Args>
     auto notifyRemote(std::string_view name, Args... args) -> ILIAS_NAMESPACE::IoTask<RetT> {
         using CoroutinesFuncType = typename detail::RpcMethodDynamic<RetT(Args...), ArgNames...>::CoroutinesFuncType;
         detail::RpcMethodDynamic<RetT(Args...), ArgNames...> metadata(name, (CoroutinesFuncType)(nullptr), true);
