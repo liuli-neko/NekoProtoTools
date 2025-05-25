@@ -9,19 +9,8 @@
  *
  */
 #pragma once
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wenum-constexpr-conversion"
-#endif
 
-#include <cstring>
 #include <string>
-#ifdef __GNUC__
-#include <cxxabi.h>
-#include <list>
-#include <map>
-#include <vector>
-#endif
 
 #include "../private/helpers.hpp"
 #include "../serializer_base.hpp"
@@ -62,6 +51,3 @@ inline bool load(SerializerT& sa, T& value) {
 }
 
 NEKO_END_NAMESPACE
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif

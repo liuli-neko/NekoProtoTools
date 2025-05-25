@@ -14,6 +14,12 @@
 #include "string_literal.hpp"
 
 #include <array>
+#ifdef __GNUC__
+#include <cxxabi.h>
+#include <list>
+#include <map>
+#include <vector>
+#endif
 
 NEKO_BEGIN_NAMESPACE
 namespace detail {
@@ -508,6 +514,10 @@ template <class T, std::size_t... Is>
 }
 
 /// ====================== enum string =========================
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wenum-constexpr-conversion"
+#endif
 #ifndef NEKO_ENUM_SEARCH_DEPTH
 #define NEKO_ENUM_SEARCH_DEPTH 60
 #endif
@@ -585,5 +595,8 @@ constexpr auto neko_get_valid_enum_names(std::index_sequence<N...> seq) noexcept
     }
     return arr;
 }
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 } // namespace detail
 NEKO_END_NAMESPACE
