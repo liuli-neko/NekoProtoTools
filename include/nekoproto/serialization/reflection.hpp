@@ -93,8 +93,7 @@ struct Enumerate {
         requires((std::is_enum_v<ValueTs> + ...) == sizeof...(ValueTs))
     constexpr Enumerate(ValueTs&&... values) noexcept {
         auto enumToString = [](const T& value) -> std::string {
-            constexpr static auto KEnumArr =
-                neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
+            constexpr auto KEnumArr = neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
             std::string ret;
             for (int idx = 0; idx < KEnumArr.size(); ++idx) {
                 if (KEnumArr[idx].first == value) {
@@ -689,9 +688,9 @@ struct Reflect<T, std::enable_if_t<std::is_enum_v<T>>> {
         if constexpr (detail::is_meta_enumerate<T>) {
             return Meta<T>::value.names;
         } else {
-            constexpr static auto KEnumArr =
+            constexpr auto KEnumArr =
                 detail::neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
-            constexpr static auto KEnumArrSize = KEnumArr.size();
+            constexpr auto KEnumArrSize = KEnumArr.size();
             std::array<std::string_view, KEnumArrSize> names{};
             for (int i = 0; i < KEnumArrSize; ++i) {
                 names[i] = KEnumArr[i].second;
@@ -703,9 +702,9 @@ struct Reflect<T, std::enable_if_t<std::is_enum_v<T>>> {
         if constexpr (detail::is_meta_enumerate<T>) {
             return Meta<T>::value.values;
         } else {
-            constexpr static auto KEnumArr =
+            constexpr auto KEnumArr =
                 detail::neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
-            constexpr static auto KEnumArrSize = KEnumArr.size();
+            constexpr auto KEnumArrSize = KEnumArr.size();
             std::array<T, KEnumArrSize> values{};
             for (int i = 0; i < KEnumArrSize; ++i) {
                 values[i] = KEnumArr[i].first;
