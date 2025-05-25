@@ -395,8 +395,9 @@ public:
     template <typename T>
     bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
         if constexpr (traits::optional_like_type<T>::value) {
-            if (value.value.has_value()) {
-                return mWriter.Key(value.name, (int)value.nameLen) && (*this)(value.value.value());
+            if (traits::optional_like_type<T>::has_value(value.value)) {
+                return mWriter.Key(value.name, (int)value.nameLen) &&
+                       (*this)(traits::optional_like_type<T>::get_value(value.value));
             }
             return true;
         } else {
@@ -658,7 +659,7 @@ public:
         mLastResult        = true;
         if constexpr (traits::optional_like_type<T>::value) {
             if (nullptr == cvalue || cvalue->IsNull()) {
-                value.value.reset();
+                traits::optional_like_type<T>::set_null(value.value);
 #if defined(NEKO_VERBOSE_LOGS)
                 NEKO_LOG_INFO("JsonSerializer", "optional field {} is not find.",
                               std::string(value.name, value.nameLen));
@@ -668,7 +669,7 @@ public:
                 // Why would anyone write "None" in json?
                 // I've seen it, and it's a disaster.
                 if (cvalue->IsString() && std::strcmp(cvalue->GetString(), "None") == 0) {
-                    value.value.reset();
+                    traits::optional_like_type<T>::set_null(value.value);
 #if defined(NEKO_VERBOSE_LOGS)
                     NEKO_LOG_WARN("JsonSerializer", "optional field {} is \"None\".",
                                   std::string(value.name, value.nameLen));
@@ -678,7 +679,7 @@ public:
 #endif
                 typename traits::optional_like_type<T>::type result;
                 mLastResult = (*this)(result);
-                value.value.emplace(std::move(result));
+                traits::optional_like_type<T>::set_value(value.value, std::move(result));
 #if defined(NEKO_VERBOSE_LOGS)
                 if (mLastResult) {
                     NEKO_LOG_INFO("JsonSerializer", "optional field {} get value success.",
