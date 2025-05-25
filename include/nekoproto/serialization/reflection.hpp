@@ -14,7 +14,9 @@
 #include "nekoproto/global/log.hpp"
 #include "nekoproto/global/reflect.hpp"
 
+#include <any>
 #include <array>
+#include <map>
 #include <tuple>
 #include <type_traits>
 #include <utility> // For std::index_sequence
@@ -24,8 +26,6 @@
 NEKO_BEGIN_NAMESPACE
 template <typename T, class enable = void>
 struct Meta;
-template <typename T>
-struct Reflect;
 
 namespace detail {
 template <std::size_t Diameter, std::size_t Offset, std::size_t... Is, typename ArgsTuple>
@@ -45,6 +45,12 @@ constexpr decltype(auto) init_names_array(std::index_sequence<Is...> /*unused*/,
     return std::array{std::string_view(std::get<(Is * Diameter) + Offset>(std::forward<ArgsTuple>(argsTuple)))...};
 }
 
+template <std::size_t Diameter, std::size_t Offset, std::size_t... Is, typename ArgsTuple>
+constexpr decltype(auto) init_values_array(std::index_sequence<Is...> /*unused*/, ArgsTuple&& argsTuple) {
+    // Construct the target tuple using the value elements (odd indices)
+    return std::array{std::get<(Is * Diameter) + Offset>(std::forward<ArgsTuple>(argsTuple))...};
+}
+
 template <typename... ValueTs>
 using double_type_tuple = decltype(init_values_tuple<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
                                                            std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
@@ -61,6 +67,49 @@ struct is_std_tuple<std::tuple<Ts...>> : std::true_type {};
 template <typename T>
 inline constexpr bool is_std_tuple_v = is_std_tuple<std::remove_cvref_t<T>>::value;
 } // namespace detail
+
+template <typename T, std::size_t N>
+struct Enumerate {
+    static_assert(std::is_enum_v<T>, "T must be a enum type");
+    std::array<std::string_view, N> names;
+    std::array<T, N> values;
+
+    Enumerate()                 = default;
+    Enumerate(const Enumerate&) = default;
+    Enumerate(Enumerate&&)      = default;
+
+    template <typename... ValueTs>
+        requires(sizeof...(ValueTs) % 2 == 0U) && ((std::is_enum_v<ValueTs> + ...) == (sizeof...(ValueTs) / 2))
+    constexpr Enumerate(ValueTs&&... values) noexcept {
+        names               = detail::init_names_array<2, 0>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
+                                                             std::forward_as_tuple(values...));
+        const auto& avalues = detail::init_values_array<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
+                                                              std::forward_as_tuple(values...));
+        [this, &avalues]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
+            ((std::get<Is>(this->values) = std::get<Is>(avalues)), ...);
+        }(std::make_index_sequence<N>{});
+    }
+    template <typename... ValueTs>
+        requires((std::is_enum_v<ValueTs> + ...) == sizeof...(ValueTs))
+    constexpr Enumerate(ValueTs&&... values) noexcept {
+        auto enumToString = [](const T& value) -> std::string {
+            constexpr static auto KEnumArr =
+                neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
+            std::string ret;
+            for (int idx = 0; idx < KEnumArr.size(); ++idx) {
+                if (KEnumArr[idx].first == value) {
+                    ret = std::string(KEnumArr[idx].second);
+                }
+            }
+            if (ret.empty()) {
+                ret = std::to_string(std::underlying_type_t<T>(value));
+            }
+            return ret;
+        };
+        this->values = std::array{values...};
+        this->names  = std::array{enumToString(values)...};
+    }
+};
 
 template <typename T>
 struct Object {
@@ -103,6 +152,14 @@ struct Array {
 };
 
 template <typename... ValueTs>
+    requires(sizeof...(ValueTs) % 2 == 0U) && ((std::is_enum_v<ValueTs> + ...) == (sizeof...(ValueTs) / 2))
+Enumerate(ValueTs&&...) -> Enumerate<std::tuple_element_t<1, std::tuple<ValueTs...>>, sizeof...(ValueTs) / 2>;
+
+template <typename... ValueTs>
+    requires((std::is_enum_v<ValueTs> + ...) == sizeof...(ValueTs))
+Enumerate(ValueTs&&... values) -> Enumerate<std::tuple_element_t<0, std::tuple<ValueTs...>>, sizeof...(ValueTs)>;
+
+template <typename... ValueTs>
 Object(ValueTs&&...) -> Object<detail::double_type_tuple<ValueTs...>>;
 
 template <typename... ValueTs>
@@ -117,6 +174,12 @@ template <typename T, class enable = void>
 struct is_ref_array : std::false_type {}; // NOLINT
 template <typename T>
 struct is_ref_array<Array<T>, void> : std::true_type {};
+
+template <typename T, class enable = void>
+struct is_ref_enumerate : std::false_type {}; // NOLINT
+
+template <typename T, std::size_t N>
+struct is_ref_enumerate<Enumerate<T, N>, void> : std::true_type {};
 
 template <typename T>
 concept is_local_ref_value = requires {
@@ -203,6 +266,12 @@ template <typename T>
 concept is_meta_ref_array = requires {
     { Meta<T>::value };
     requires is_ref_array<std::decay_t<decltype(Meta<T>::value)>>::value;
+};
+
+template <typename T>
+concept is_meta_enumerate = std::is_enum_v<T> && requires {
+    { Meta<T>::value };
+    requires is_ref_enumerate<std::decay_t<decltype(Meta<T>::value)>>::value;
 };
 
 template <typename T>
@@ -394,7 +463,11 @@ struct ReflectHelper {
     }
     template <typename U>
     static decltype(auto) getValues(U&& obj) {
-        return detail::MetaPrivate<T>::value(std::forward<U>(obj));
+        if constexpr (detail::has_value_function_one<T>) {
+            return detail::MetaPrivate<T>::value(std::forward<U>(obj));
+        } else {
+            return getValues();
+        }
     }
     static decltype(auto) getValues() {
         if constexpr (detail::has_value_function<T>) {
@@ -406,35 +479,63 @@ struct ReflectHelper {
         }
     }
 };
+struct RefAny {
+    RefAny()              = default;
+    RefAny(const RefAny&) = default;
+    RefAny(RefAny&&)      = default;
+    template <typename T>
+    RefAny(T&& obj) : mAny(std::ref(std::forward<T>(obj))) {}
+    template <typename T>
+    decltype(auto) as() {
+        return std::any_cast<std::reference_wrapper<T>>(mAny).get();
+    }
+    RefAny& operator=(const RefAny&) = default;
+    RefAny& operator=(RefAny&&)      = default;
+
+    template <typename T>
+    RefAny& operator=(T&& obj) {
+        as<T>() = std::forward<T>(obj);
+        return *this;
+    }
+
+    const auto& type() const { return mAny.type(); }
+    bool valid() const { return mAny.has_value(); }
+
+    template <typename T>
+    operator T() {
+        return as<T>();
+    }
+    template <typename T>
+    operator std::reference_wrapper<T>() {
+        return std::any_cast<std::reference_wrapper<T>>(mAny);
+    }
+    template <typename T>
+    bool operator==(const T& obj) const {
+        return std::any_cast<std::reference_wrapper<T>>(mAny).get() == obj;
+    }
+
+private:
+    std::any mAny;
+};
+
 } // namespace detail
 
-template <typename T>
+template <typename T, class enable = void>
 struct Reflect {
     template <typename U, typename CallAbleT>
         requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
     static void forEachWithoutName(U&& obj, CallAbleT&& func) noexcept {
         if constexpr (detail::has_values_meta<T>) {
-            if constexpr (detail::has_value_function_one<T>) {
-                decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
-                if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
-                    [&values, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
-                        ((func(detail::value_ref(std::get<Is>(values), obj))), ...);
-                    }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
-                } else {
-                    func(detail::value_ref(values, obj));
-                }
+            decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
+            if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
+                [&values, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
+                    ((func(detail::value_ref(std::get<Is>(values), obj))), ...);
+                }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
             } else {
-                decltype(auto) values = detail::ReflectHelper<T>::getValues();
-                if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
-                    [&values, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
-                        ((func(detail::value_ref(std::get<Is>(values), obj))), ...);
-                    }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
-                } else {
-                    func(detail::value_ref(values, obj));
-                }
+                func(detail::value_ref(values, obj));
             }
         } else {
-            NEKO_LOG_ERROR("reflection", "apply unknown");
+            static_assert(detail::has_values_meta<T>, "type has no values meta");
         }
     }
 
@@ -442,39 +543,21 @@ struct Reflect {
         requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
     static void forEachWithName(U&& obj, CallAbleT&& func) noexcept {
         if constexpr (detail::has_values_meta<T> && detail::has_names_meta<T>) {
-            if constexpr (detail::has_value_function_one<T>) {
-                auto names            = detail::ReflectHelper<T>::getNames();
-                decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
-                if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
-                    static_assert(std::tuple_size_v<std::decay_t<decltype(values)>> ==
-                                      std::tuple_size_v<std::decay_t<decltype(names)>>,
-                                  "values and names size mismatch");
-                    [&values, &names, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
-                        ((func(detail::value_ref(std::get<Is>(values), obj), names[Is])), ...);
-                    }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
-                } else {
-                    static_assert(1 == std::tuple_size_v<std::decay_t<decltype(names)>>,
-                                  "values and names size mismatch");
-                    func(detail::value_ref(values, obj), names[0]);
-                }
+            auto names            = detail::ReflectHelper<T>::getNames();
+            decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
+            if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
+                static_assert(std::tuple_size_v<std::decay_t<decltype(values)>> ==
+                                  std::tuple_size_v<std::decay_t<decltype(names)>>,
+                              "values and names size mismatch");
+                [&values, &names, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
+                    ((func(detail::value_ref(std::get<Is>(values), obj), names[Is])), ...);
+                }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
             } else {
-                auto names            = detail::ReflectHelper<T>::getNames();
-                decltype(auto) values = detail::ReflectHelper<T>::getValues();
-                using ValueType       = std::decay_t<decltype(values)>;
-                using NameType        = std::decay_t<decltype(names)>;
-                if constexpr (detail::is_std_tuple_v<ValueType>) {
-                    static_assert(std::tuple_size_v<ValueType> == std::tuple_size_v<NameType>,
-                                  "values and names size mismatch");
-                    [&values, &names, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
-                        ((func(detail::value_ref(std::get<Is>(values), obj), names[Is])), ...);
-                    }(std::make_index_sequence<std::tuple_size_v<ValueType>>{});
-                } else {
-                    static_assert(1 == std::tuple_size_v<NameType>, "values and names size mismatch");
-                    func(detail::value_ref(values, obj), names[0]);
-                }
+                static_assert(1 == std::tuple_size_v<std::decay_t<decltype(names)>>, "values and names size mismatch");
+                func(detail::value_ref(values, obj), names[0]);
             }
         } else {
-            NEKO_LOG_ERROR("reflection", "apply unknown");
+            static_assert(detail::has_values_meta<T> && detail::has_names_meta<T>, "type has no values or names meta");
         }
     }
 
@@ -496,12 +579,187 @@ struct Reflect {
         forEachWithoutName(obj, func);
     }
 
+    static constexpr auto size() noexcept {
+        if constexpr (detail::has_values_meta<T>) {
+            if constexpr (detail::has_value_function_one<T>) {
+                return detail::member_count_v<T>;
+            } else {
+                decltype(auto) values = detail::ReflectHelper<T>::getValues();
+                if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
+                    return std::tuple_size_v<std::decay_t<decltype(values)>>;
+                } else {
+                    return 1;
+                }
+            }
+        }
+    }
+
     static decltype(auto) names() noexcept {
         if constexpr (detail::has_names_meta<T>) {
             return detail::ReflectHelper<T>::getNames();
         } else {
             return std::array<std::string_view, 0>{};
         }
+    }
+
+    static auto name(int index) noexcept {
+        if constexpr (detail::has_names_meta<T>) {
+            auto names = detail::ReflectHelper<T>::getNames();
+            if (index < 0 || index >= names.size()) {
+                NEKO_LOG_ERROR("reflection", "index out of range");
+                return std::string_view{};
+            }
+            return names[index];
+        } else {
+            return std::string_view{};
+        }
+    }
+
+    static decltype(auto) className() noexcept { return detail::class_nameof<T>; }
+
+    template <std::size_t N, typename U>
+        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
+    static decltype(auto) value(U&& obj) noexcept {
+        if constexpr (detail::has_values_meta<T>) {
+            decltype(auto) values = detail::ReflectHelper<T>::getValues(std::forward<U>(obj));
+            if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
+                static_assert(std::tuple_size_v<std::decay_t<decltype(values)>> > N, "out of range");
+                return detail::value_ref(std::get<N>(values), obj);
+            } else if constexpr (N == 0) {
+                return detail::value_ref(values, obj);
+            } else {
+                static_assert(N < 0, "out of range");
+            }
+        } else {
+            static_assert(detail::has_values_meta<T>, "no values meta");
+        }
+    }
+
+    template <typename U>
+        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
+    static detail::RefAny value(U&& obj, int idx) {
+        if constexpr (detail::has_values_meta<T>) {
+            detail::RefAny ret;
+            decltype(auto) values = detail::ReflectHelper<T>::getValues(std::forward<U>(obj));
+            if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
+                [&obj, &ret, &values, idx]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
+                    ((idx == Is ? (ret = detail::RefAny(detail::value_ref(std::get<Is>(values), obj)))
+                                : detail::RefAny{}),
+                     ...);
+                }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
+            } else {
+                if (idx == 0) {
+                    ret = detail::RefAny(detail::value_ref(values, obj));
+                }
+            }
+            return ret;
+        } else {
+            static_assert(detail::has_values_meta<T>, "no values meta");
+        }
+    }
+
+    template <typename U>
+        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
+    static detail::RefAny value(U&& obj, std::string_view name) {
+        if constexpr (detail::has_values_meta<T> && detail::has_names_meta<T>) {
+            detail::RefAny ret;
+            decltype(auto) values = detail::ReflectHelper<T>::getValues(std::forward<U>(obj));
+            decltype(auto) names  = detail::ReflectHelper<T>::getNames();
+            if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
+                [&obj, &ret, &values, &names, name]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
+                    ((name == names[Is] ? (ret = detail::RefAny(detail::value_ref(std::get<Is>(values), obj)))
+                                        : detail::RefAny{}),
+                     ...);
+                }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
+            } else {
+                if (names.size() == 1 && name == names[0]) {
+                    ret = detail::RefAny(detail::value_ref(values, obj));
+                }
+            }
+            return ret;
+        } else {
+            static_assert(detail::has_values_meta<T> && detail::has_names_meta<T>, "no values or names meta");
+        }
+    }
+};
+
+template <typename T>
+struct Reflect<T, std::enable_if_t<std::is_enum_v<T>>> {
+    static constexpr auto names() noexcept {
+        if constexpr (detail::is_meta_enumerate<T>) {
+            return Meta<T>::value.names;
+        } else {
+            constexpr static auto KEnumArr =
+                detail::neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
+            constexpr static auto KEnumArrSize = KEnumArr.size();
+            std::array<std::string_view, KEnumArrSize> names{};
+            for (int i = 0; i < KEnumArrSize; ++i) {
+                names[i] = KEnumArr[i].second;
+            }
+            return names;
+        }
+    }
+    static constexpr auto values() noexcept {
+        if constexpr (detail::is_meta_enumerate<T>) {
+            return Meta<T>::value.values;
+        } else {
+            constexpr static auto KEnumArr =
+                detail::neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
+            constexpr static auto KEnumArrSize = KEnumArr.size();
+            std::array<T, KEnumArrSize> values{};
+            for (int i = 0; i < KEnumArrSize; ++i) {
+                values[i] = KEnumArr[i].first;
+            }
+            return values;
+        }
+    }
+    static const auto& nameMap() noexcept {
+        static std::map<std::string_view, T> kNameMap = []() {
+            auto map = std::map<std::string_view, T>{};
+            auto ns  = names();
+            auto vs  = values();
+            for (int i = 0; i < ns.size(); ++i) {
+                map[ns[i]] = vs[i];
+            }
+            return map;
+        }();
+        return kNameMap;
+    }
+    static const auto& valueMap() noexcept {
+        static std::map<T, std::string_view> kValueMap = []() {
+            auto map = std::map<T, std::string_view>{};
+            auto ns  = names();
+            auto vs  = values();
+            for (int i = 0; i < ns.size(); ++i) {
+                map[vs[i]] = ns[i];
+            }
+            return map;
+        }();
+        return kValueMap;
+    }
+    static constexpr auto className() noexcept { return detail::class_nameof<T>; }
+    static constexpr auto size() noexcept { return names().size(); }
+    static auto value(std::string_view name) noexcept {
+        static auto kEnums = values();
+        static auto kNames = names();
+        for (int i = 0; i < size(); ++i) {
+            if (kNames[i] == name) {
+                return kEnums[i];
+            }
+        }
+        NEKO_LOG_ERROR("reflection", "name not found");
+        return T{}; // FIXME: this is not a good way to handle this
+    }
+    static auto name(T value) noexcept {
+        static auto kNames = names();
+        static auto kEnums = values();
+        for (int i = 0; i < size(); ++i) {
+            if (kEnums[i] == value) {
+                return kNames[i];
+            }
+        }
+        NEKO_LOG_ERROR("reflection", "value not found");
+        return std::string_view{}; // FIXME: this is not a good way to handle this
     }
 };
 

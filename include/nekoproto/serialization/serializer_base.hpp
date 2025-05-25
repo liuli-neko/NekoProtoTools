@@ -114,6 +114,12 @@ _parse_names(std::string_view names) NEKO_NOEXCEPT { // NOLINT(readability-ident
         return namesVec;
     }
 }
+
+template <ConstexprString NamesStr>
+struct _make_names_impl {
+    constexpr static int size         = _members_size(NamesStr.view());
+    constexpr static std::array names = _parse_names<size>(NamesStr.view());
+};
 } // namespace detail
 
 NEKO_END_NAMESPACE
@@ -158,10 +164,9 @@ public:                                                                         
     friend struct Neko;                                                                                                \
                                                                                                                        \
     struct Neko {                                                                                                      \
-        constexpr static std::array names =                                                                            \
-            NEKO_NAMESPACE::detail::_parse_names<NEKO_NAMESPACE::detail::_members_size(#__VA_ARGS__)>(#__VA_ARGS__);   \
-        constexpr static auto values = []<std::size_t... Is>(std::index_sequence<Is...>) {                             \
-            return std::tuple{                                                                                         \
-                ([](auto&& self) -> auto& { return self.template _neko_get_n_member_reference<Is>(); })...};           \
+        constexpr static std::array names = NEKO_NAMESPACE::detail::_make_names_impl<#__VA_ARGS__>::names;             \
+        constexpr static auto values      = []<std::size_t... Is>(std::index_sequence<Is...>) {                        \
+            return std::tuple{                                                                                    \
+                ([](auto&& self) -> auto& { return self.template _neko_get_n_member_reference<Is>(); })...};      \
         }(std::make_index_sequence<NEKO_NAMESPACE::detail::_members_size(#__VA_ARGS__)>{});                            \
     };

@@ -854,6 +854,10 @@ constexpr static const char* StructProtoData =
 #endif
 
 TEST(RandomProtoTest, StructTest) {
+    EXPECT_EQ(Reflect<TestStructProto>::name(0), "a");
+    EXPECT_EQ(Reflect<TestStructProto>::name(1), "b");
+    ASSERT_EQ(Reflect<TestStructProto>::name(2), "c");
+
     ProtoFactory factory;
     int offset = NEKO_RESERVED_PROTO_TYPE_SIZE;
     EXPECT_EQ(factory.protoType<TestStruct1>(), 1 + offset);

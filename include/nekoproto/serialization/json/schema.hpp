@@ -19,29 +19,48 @@
 #include <variant>
 #include <vector>
 
+#include "nekoproto/serialization/reflection.hpp"
+
 NEKO_BEGIN_NAMESPACE
 
-enum class DefinedFormats : uint32_t {
-    datetime,              // NOLINT
-    date,                  // NOLINT
-    time,                  // NOLINT
-    duration,              // NOLINT
-    email,                 // NOLINT
-    idn_email,             // NOLINT
-    hostname,              // NOLINT
-    idn_hostname,          // NOLINT
-    ipv4,                  // NOLINT
-    ipv6,                  // NOLINT
-    uri,                   // NOLINT
-    uri_reference,         // NOLINT
-    iri,                   // NOLINT
-    iri_reference,         // NOLINT
-    uuid,                  // NOLINT
-    uri_template,          // NOLINT
-    json_pointer,          // NOLINT
-    relative_json_pointer, // NOLINT
-    regex                  // NOLINT
+#define NEKO_JSON_SCHEMA_FORMATS_TABLE                                                                                 \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(Datetime, "date-time")                                                               \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(Date, "date")                                                                        \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(Time, "time")                                                                        \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(Duration, "duration")                                                                \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(Email, "email")                                                                      \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(IdnEmail, "idn-email")                                                               \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(Hostname, "hostname")                                                                \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(IdnHostname, "idn-hostname")                                                         \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(Ipv4, "ipv4")                                                                        \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(Ipv6, "ipv6")                                                                        \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(Uri, "uri")                                                                          \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(UriReference, "uri-reference")                                                       \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(Iri, "iri")                                                                          \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(IriReference, "iri-reference")                                                       \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(Uuid, "uuid")                                                                        \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(UriTemplate, "uri-template")                                                         \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(JsonPointer, "json-pointer")                                                         \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(RelativeJsonPointer, "relative-json-pointer")                                        \
+    NEKO_JSON_SCHEMA_FORMATS_ENUM(Regex, "regex")
+
+enum struct DefinedFormats : uint32_t {
+#define NEKO_JSON_SCHEMA_FORMATS_ENUM(name, _) name,
+    NEKO_JSON_SCHEMA_FORMATS_TABLE
+#undef NEKO_JSON_SCHEMA_FORMATS_ENUM
 };
+
+template <>
+struct Meta<DefinedFormats> {
+    using T                     = DefinedFormats;
+    static constexpr auto value = Enumerate{// NOLINT
+#define NEKO_JSON_SCHEMA_FORMATS_ENUM(name, str) str, DefinedFormats::name,
+                                            NEKO_JSON_SCHEMA_FORMATS_TABLE
+#undef NEKO_JSON_SCHEMA_FORMATS_ENUM
+    };
+};
+
+#undef NEKO_JSON_SCHEMA_FORMATS_TABLE
 
 struct ExtUnits final {
     std::optional<std::string_view> unitAscii{};   // ascii representation of the unit, e.g. "m^2" for square meters
@@ -170,40 +189,34 @@ struct Schematic final {
     std::optional<std::vector<std::string_view>> required{};
     std::optional<std::vector<std::string_view>> examples{};
     Schema attributes{};
+
+    struct Neko {
+        using T = Schematic;
+        static constexpr std::array names{"type",                 // NOLINT
+                                          "properties",           //
+                                          "items",                //
+                                          "additionalProperties", //
+                                          "$defs",                //
+                                          "oneOf",                //
+                                          "required",             //
+                                          "examples"};
+
+        static constexpr std::tuple values = {&T::type,                 // NOLINT
+                                              &T::properties,           //
+                                              &T::items,                //
+                                              &T::additionalProperties, //
+                                              &T::defs,                 //
+                                              &T::oneOf,                //
+                                              &T::required,             //
+                                              &T::examples};
+    };
 };
-
-#define NEKO_JSON_SCHEMA_FORMATS_TABLE                                                                                 \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Datetime, "date-time")                                                               \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Date, "date")                                                                        \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Time, "time")                                                                        \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Duration, "duration")                                                                \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Email, "email")                                                                      \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(IdnEmail, "idn-email")                                                               \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Hostname, "hostname")                                                                \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(IdnHostname, "idn-hostname")                                                         \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Ipv4, "ipv4")                                                                        \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Ipv6, "ipv6")                                                                        \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Uri, "uri")                                                                          \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(UriReference, "uri-reference")                                                       \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Iri, "iri")                                                                          \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(IriReference, "iri-reference")                                                       \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Uuid, "uuid")                                                                        \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(UriTemplate, "uri-template")                                                         \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(JsonPointer, "json-pointer")                                                         \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(RelativeJsonPointer, "relative-json-pointer")                                        \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Regex, "regex")
-
-enum struct DefinedFormats : uint32_t {
-#define NEKO_JSON_SCHEMA_FORMATS_ENUM(name, _) name,
-    NEKO_JSON_SCHEMA_FORMATS_TABLE
-#undef NEKO_JSON_SCHEMA_FORMATS_ENUM
-};
-
-#undef NEKO_JSON_SCHEMA_FORMATS_TABLE
 
 template <typename T = void>
 struct ToJsonSchema {
-    static Schema schema(auto& s, auto& defs) {}
+    static Schema schema(auto& s, Schematic& defs) {
+        
+    }
 };
 } // namespace detail
 NEKO_END_NAMESPACE

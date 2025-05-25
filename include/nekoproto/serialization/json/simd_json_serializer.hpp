@@ -301,7 +301,7 @@ public:
             mStream << value;
             return true;
         }
-        NEKO_LOG_WARN("JsonSerializer", "save signed in Invalid state {}", detail::enum_to_string(mStateStack.back()));
+        NEKO_LOG_WARN("JsonSerializer", "save signed in Invalid state {}", Reflect<State>::name(mStateStack.back()));
         return false;
     }
     template <typename T>
@@ -311,8 +311,7 @@ public:
             mStream << value;
             return true;
         }
-        NEKO_LOG_WARN("JsonSerializer", "save unsigned in Invalid state {}",
-                      detail::enum_to_string(mStateStack.back()));
+        NEKO_LOG_WARN("JsonSerializer", "save unsigned in Invalid state {}", Reflect<State>::name(mStateStack.back()));
         return false;
     }
     bool saveValue(const float value) NEKO_NOEXCEPT {
@@ -320,7 +319,7 @@ public:
             mStream << std::setprecision(6) << value;
             return true;
         }
-        NEKO_LOG_WARN("JsonSerializer", "save float in Invalid state {}", detail::enum_to_string(mStateStack.back()));
+        NEKO_LOG_WARN("JsonSerializer", "save float in Invalid state {}", Reflect<State>::name(mStateStack.back()));
         return false;
     }
     bool saveValue(const double value) NEKO_NOEXCEPT {
@@ -328,7 +327,7 @@ public:
             mStream << std::setprecision(15) << value;
             return true;
         }
-        NEKO_LOG_WARN("JsonSerializer", "save double in Invalid state {}", detail::enum_to_string(mStateStack.back()));
+        NEKO_LOG_WARN("JsonSerializer", "save double in Invalid state {}", Reflect<State>::name(mStateStack.back()));
         return false;
     }
     bool saveValue(const bool value) NEKO_NOEXCEPT {
@@ -336,7 +335,7 @@ public:
             mStream << (value ? "true" : "false");
             return true;
         }
-        NEKO_LOG_WARN("JsonSerializer", "save bool in Invalid state {}", detail::enum_to_string(mStateStack.back()));
+        NEKO_LOG_WARN("JsonSerializer", "save bool in Invalid state {}", Reflect<State>::name(mStateStack.back()));
         return false;
     }
     template <typename CharT, typename Traits, typename Alloc>
@@ -345,7 +344,7 @@ public:
             mStream << "\"" << value << "\"";
             return true;
         }
-        NEKO_LOG_WARN("JsonSerializer", "save string in Invalid state {}", detail::enum_to_string(mStateStack.back()));
+        NEKO_LOG_WARN("JsonSerializer", "save string in Invalid state {}", Reflect<State>::name(mStateStack.back()));
         return false;
     }
     bool saveValue(const char* value) NEKO_NOEXCEPT {
@@ -353,7 +352,7 @@ public:
             mStream << "\"" << value << "\"";
             return true;
         }
-        NEKO_LOG_WARN("JsonSerializer", "save str in Invalid state {}", detail::enum_to_string(mStateStack.back()));
+        NEKO_LOG_WARN("JsonSerializer", "save str in Invalid state {}", Reflect<State>::name(mStateStack.back()));
         return false;
     }
     bool saveValue(const std::nullptr_t) NEKO_NOEXCEPT {
@@ -361,8 +360,7 @@ public:
             mStream << "null";
             return true;
         }
-        NEKO_LOG_WARN("JsonSerializer", "save nullptr_t in Invalid state {}",
-                      detail::enum_to_string(mStateStack.back()));
+        NEKO_LOG_WARN("JsonSerializer", "save nullptr_t in Invalid state {}", Reflect<State>::name(mStateStack.back()));
         return false;
     }
 
@@ -420,7 +418,7 @@ public:
                 return true;
             }
             NEKO_LOG_WARN("JsonSerializer", "save SimdJsonValue in Invalid state {}",
-                          detail::enum_to_string(mStateStack.back()));
+                          Reflect<State>::name(mStateStack.back()));
             return false;
         }
 
@@ -433,7 +431,7 @@ public:
             mStream << "\"" << value << "\"";
             return true;
         }
-        NEKO_LOG_WARN("JsonSerializer", "save string in Invalid state {}", detail::enum_to_string(mStateStack.back()));
+        NEKO_LOG_WARN("JsonSerializer", "save string in Invalid state {}", Reflect<State>::name(mStateStack.back()));
         return false;
     }
 
@@ -441,7 +439,7 @@ public:
     bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
         if (mStateStack.back() == State::AfterKey) {
             NEKO_LOG_WARN("JsonSerializer", "save key {} in warning state {}", std::string{value.name, value.nameLen},
-                          detail::enum_to_string(mStateStack.back()));
+                          Reflect<State>::name(mStateStack.back()));
             return false;
         }
         if constexpr (traits::optional_like_type<T>::value) {
@@ -482,7 +480,7 @@ public:
             return true;
         }
         NEKO_LOG_WARN("JsonSerializer", "startArray called in wrong state {}",
-                      detail::enum_to_string(mStateStack.back()));
+                      Reflect<State>::name(mStateStack.back()));
         return false;
     }
     bool endArray() NEKO_NOEXCEPT {
@@ -494,8 +492,7 @@ public:
             }
             return true;
         }
-        NEKO_LOG_WARN("JsonSerializer", "endArray called in wrong state {}",
-                      detail::enum_to_string(mStateStack.back()));
+        NEKO_LOG_WARN("JsonSerializer", "endArray called in wrong state {}", Reflect<State>::name(mStateStack.back()));
         return false;
     }
     bool startObject(const std::size_t /*unused*/) NEKO_NOEXCEPT {
@@ -522,7 +519,7 @@ public:
             return true;
         }
         NEKO_LOG_WARN("JsonSerializer", "startObject called in wrong state {}",
-                      detail::enum_to_string(mStateStack.back()));
+                      Reflect<State>::name(mStateStack.back()));
         return false;
     }
     bool endObject() NEKO_NOEXCEPT {
@@ -534,8 +531,7 @@ public:
             }
             return true;
         }
-        NEKO_LOG_WARN("JsonSerializer", "endObject called in wrong state {}",
-                      detail::enum_to_string(mStateStack.back()));
+        NEKO_LOG_WARN("JsonSerializer", "endObject called in wrong state {}", Reflect<State>::name(mStateStack.back()));
         return false;
     }
     bool end() NEKO_NOEXCEPT {

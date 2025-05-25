@@ -507,5 +507,83 @@ template <class T, std::size_t... Is>
     }
 }
 
+/// ====================== enum string =========================
+#ifndef NEKO_ENUM_SEARCH_DEPTH
+#define NEKO_ENUM_SEARCH_DEPTH 60
+#endif
+#if defined(__GNUC__) || defined(__MINGW__) || defined(__clang__)
+template <typename T, T Value>
+constexpr auto neko_get_enum_name() noexcept {
+    // constexpr auto _Neko_GetEnumName() [with T = MyEnum; T Value = MyValues]
+    // constexpr auto _Neko_GetEnumName() [with T = MyEnum; T Value =
+    // (MyEnum)114514]"
+    std::string_view name(__PRETTY_FUNCTION__);
+    std::size_t eqBegin   = name.find_last_of(' ');
+    std::size_t end       = name.find_last_of(']');
+    std::string_view body = name.substr(eqBegin + 1, end - eqBegin - 1);
+    if (body[0] == '(') {
+        // Failed
+        return std::string_view();
+    }
+    return body;
+}
+#elif defined(_MSC_VER)
+#define NEKO_ENUM_TO_NAME(enumType)
+template <typename T, T Value>
+constexpr auto neko_get_enum_name() noexcept {
+    // auto __cdecl _Neko_GetEnumName<enum main::MyEnum,(enum
+    // main::MyEnum)0x2>(void) auto __cdecl _Neko_GetEnumName<enum
+    // main::MyEnum,main::MyEnum::Wtf>(void)
+    std::string_view name(__FUNCSIG__);
+    std::size_t dotBegin  = name.find_first_of(',');
+    std::size_t end       = name.find_last_of('>');
+    std::string_view body = name.substr(dotBegin + 1, end - dotBegin - 1);
+    if (body[0] == '(') {
+        // Failed
+        return std::string_view();
+    }
+    return body;
+}
+#else
+template <typename T, T Value>
+constexpr auto neko_get_enum_name() noexcept {
+    // Unsupported
+    return std::string_view();
+}
+#endif
+template <typename T, T Value>
+constexpr bool neko_is_valid_enum() noexcept {
+    return !neko_get_enum_name<T, Value>().empty();
+}
+template <typename T, std::size_t... N>
+constexpr std::size_t neko_get_valid_enum_count(std::index_sequence<N...> /*unused*/) noexcept {
+    return (... + neko_is_valid_enum<T, T(N)>());
+}
+template <typename T, std::size_t... N>
+constexpr auto neko_get_valid_enum_names(std::index_sequence<N...> seq) noexcept {
+    constexpr auto ValidCount = neko_get_valid_enum_count<T>(seq);
+
+    std::array<std::pair<T, std::string_view>, ValidCount> arr;
+    std::string_view vstr[sizeof...(N)]{neko_get_enum_name<T, T(N)>()...};
+
+    std::size_t ns   = 0;
+    std::size_t left = ValidCount;
+    auto iter        = arr.begin();
+
+    for (auto idx : vstr) {
+        if (!idx.empty()) {
+            // Valid name
+            iter->first  = T(ns);
+            iter->second = idx;
+            ++iter;
+        }
+        if (left == 0) {
+            break;
+        }
+
+        ns += 1;
+    }
+    return arr;
+}
 } // namespace detail
 NEKO_END_NAMESPACE

@@ -9,6 +9,22 @@
 
 NEKO_USE_NAMESPACE
 
+template <typename T>
+std::string make_enum_string(const std::string& fmt) {
+    auto names  = Reflect<T>::names();
+    auto values = Reflect<T>::values();
+    std::string ret;
+    for (int idx = 0; idx < names.size(); ++idx) {
+        if (names[idx].size() > 0) {
+            std::string tfmt = fmt;
+            tfmt.replace(tfmt.find("{enum}"), 6, names[idx]);
+            tfmt.replace(tfmt.find("{num}"), 5, std::to_string(values[idx]));
+            ret += tfmt;
+        }
+    }
+    return ret;
+}
+
 enum TEnum { TEnum_A = 1, TEnum_B = 2, TEnum_C = 3 };
 
 struct StructA {
@@ -21,30 +37,6 @@ struct StructA {
     std::array<int, 5> g;
     TEnum h;
 };
-
-#if NEKO_CPP_PLUS < 17
-NEKO_BEGIN_NAMESPACE
-template <typename Serializer>
-inline bool save(Serializer& sa, const StructA& value) {
-    auto ret = sa.startArray((uint32_t)8);
-    ret      = sa(value.a, value.b, value.c, value.d, value.e, value.f, value.g, value.h) && ret;
-    ret      = sa.endArray() && ret;
-    return ret;
-}
-
-template <typename Serializer>
-inline bool load(Serializer& sa, StructA& value) {
-    uint32_t size;
-    auto ret = sa(make_size_tag(size));
-    if (size != 8) {
-        NEKO_LOG_DEBUG("unit test", "struct size mismatch: json obejct size {} != struct size 8", size);
-        return false;
-    }
-    ret = sa(value.a, value.b, value.c, value.d, value.e, value.f, value.g, value.h) && ret;
-    return ret;
-}
-NEKO_END_NAMESPACE
-#endif
 
 struct TestP {
     int a                        = 1;
@@ -86,6 +78,52 @@ protected:
     virtual void TearDown() {}
     std::unique_ptr<ProtoFactory> mFactory;
 };
+
+TEST_F(ProtoTest, Reflection) {
+    EXPECT_EQ(Reflect<TestP>::name(0), "a");
+    EXPECT_EQ(Reflect<TestP>::name(1), "b");
+    EXPECT_EQ(Reflect<TestP>::name(2), "c");
+    EXPECT_EQ(Reflect<TestP>::name(3), "d");
+    EXPECT_EQ(Reflect<TestP>::name(4), "e");
+    EXPECT_EQ(Reflect<TestP>::name(5), "f");
+    EXPECT_EQ(Reflect<TestP>::name(6), "g");
+    EXPECT_EQ(Reflect<TestP>::name(7), "h");
+    EXPECT_EQ(Reflect<TestP>::name(8), "i");
+    EXPECT_EQ(Reflect<TestP>::name(9), "j");
+    EXPECT_EQ(Reflect<TestP>::name(10), "k");
+    EXPECT_EQ(Reflect<TestP>::name(11), "l");
+    EXPECT_EQ(Reflect<TestP>::name(12), "");
+    EXPECT_EQ(Reflect<TestP>::size(), 12);
+
+    TestP testp;
+    EXPECT_EQ(Reflect<TestP>::value<0>(testp), 1);
+    EXPECT_EQ(Reflect<TestP>::value<1>(testp), "hello");
+    EXPECT_TRUE(Reflect<TestP>::value<2>(testp));
+    EXPECT_EQ(Reflect<TestP>::value<3>(testp), 3.14);
+    EXPECT_EQ(Reflect<TestP>::value<4>(testp), (std::list<int>{1, 2, 3, 4, 5}));
+    EXPECT_EQ(Reflect<TestP>::value<7>(testp), TEnum_A);
+
+    Reflect<TestP>::value(testp, 0).as<int>()           = 2;
+    Reflect<TestP>::value(testp, "b").as<std::string>() = "world";
+    Reflect<TestP>::value<2>(testp)                     = false;
+    Reflect<TestP>::value<3>(testp)                     = 6.28;
+    Reflect<TestP>::value<4>(testp)                     = std::list<int>{6, 7, 8, 9, 10};
+    Reflect<TestP>::value<7>(testp)                     = TEnum_B;
+
+    EXPECT_EQ(Reflect<TestP>::value(testp, 0).as<int>(), 2);
+    EXPECT_EQ(Reflect<TestP>::value(testp, 1).as<std::string>(), "world");
+    EXPECT_FALSE(Reflect<TestP>::value(testp, "c").as<bool>());
+    EXPECT_EQ(Reflect<TestP>::value(testp, "d").as<double>(), 6.28);
+    EXPECT_EQ(Reflect<TestP>::value<4>(testp), (std::list<int>{6, 7, 8, 9, 10}));
+    EXPECT_EQ(Reflect<TestP>::value<7>(testp), TEnum_B);
+
+    const TestP testp2 = testp;
+    EXPECT_EQ(Reflect<TestP>::value(testp2, 0).as<const int>(), 2);
+    EXPECT_EQ(Reflect<TestP>::value(testp2, 1).as<const std::string>(), "world");
+    EXPECT_FALSE(Reflect<TestP>::value(testp2, "c").as<const bool>());
+    EXPECT_EQ(Reflect<TestP>::value(testp2, "d").as<const double>(), 6.28);
+    EXPECT_EQ(Reflect<TestP>::value<4>(testp2), (std::list<int>{6, 7, 8, 9, 10}));
+}
 
 TEST_F(ProtoTest, StructSerialize) {
     EXPECT_EQ(mFactory->protoType<TestP>(), NEKO_RESERVED_PROTO_TYPE_SIZE + 2);
@@ -396,7 +434,7 @@ int main(int argc, char** argv) {
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
 
-    NEKO_LOG_DEBUG("test", "{}", detail::make_enum_string<TEnum>("{enum}:{num},"));
+    NEKO_LOG_DEBUG("test", "{}", make_enum_string<TEnum>("{enum}:{num},"));
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
