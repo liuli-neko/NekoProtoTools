@@ -148,7 +148,7 @@ private:
     bool _processImpl(const T& /*unused*/) NEKO_NOEXCEPT {
         static_assert(traits::has_function_save<T, SerializerType>,
                       "can not find any function to serialize this Type, must have a save method"
-                      "or save function.");
+                      " or save function.");
         return false;
     }
 

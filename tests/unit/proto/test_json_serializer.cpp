@@ -5,6 +5,7 @@
 
 #include "nekoproto/proto/proto_base.hpp"
 #include "nekoproto/serialization/binary_serializer.hpp"
+#include "nekoproto/serialization/json/schema.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/to_string.hpp"
@@ -13,7 +14,12 @@
 NEKO_USE_NAMESPACE
 
 enum TEnum { TEnum_A = 1, TEnum_B = 2, TEnum_C = 3 };
-
+template <>
+struct Meta<TEnum> {
+    using T                     = TEnum;
+    static constexpr auto value = Enumerate{// NOLINT
+                                            "TEnum_A", TEnum_A, "TEnum_B", TEnum_B, "TEnum_C", TEnum_C};
+};
 struct StructA {
     int a;
     std::string b;
@@ -1073,6 +1079,25 @@ TEST_F(JsonSerializerTest, OptionalVariantTest) {
     }
     EXPECT_EQ(proto.a, proto2.a);
     EXPECT_EQ(proto.b, proto2.b);
+}
+
+TEST_F(JsonSerializerTest, JsonSchema) {
+    static_assert(detail::has_values_meta<TestP>, "ZTypeTest2 should have values meta");
+    static_assert(detail::has_values_meta<JsonSchema>, "JsonSchema should have values meta");
+    TestP proto;
+    auto schema = generate_schema<TestP>(proto);
+    static_assert(detail::has_values_meta<decltype(schema)>, "JsonSchema should have values meta");
+    static_assert(traits::has_function_save<decltype(schema), PrintSerializer>, "JsonSchema should have save function");
+    static_assert(!traits::has_method_save<decltype(schema), PrintSerializer>,
+                  "JsonSchema should not have save method");
+
+    std::vector<char> mBuffer;
+    RapidJsonOutputSerializer<std::vector<char>> output(mBuffer);
+    output(schema);
+    output.end();
+    mBuffer.push_back('\0');
+
+    NEKO_LOG_DEBUG("unit test", "{}", mBuffer.data());
 }
 
 int main(int argc, char** argv) {
