@@ -81,15 +81,17 @@ public:
     }
     template <typename T>
     bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
-        mBuffer += std::string{value.name, value.nameLen} + " = ";
         if constexpr (traits::optional_like_type<T>::value) {
             if (traits::optional_like_type<T>::has_value(value.value)) {
+                mBuffer += std::string{value.name, value.nameLen} + " = ";
                 return (*this)(traits::optional_like_type<T>::get_value(value.value));
             }
-            mBuffer += "null, ";
+#if defined(NEKO_PRINT_NULL)
+            mBuffer += std::string{value.name, value.nameLen} + " = null, ";
+#endif
             return true;
-
         } else {
+            mBuffer += std::string{value.name, value.nameLen} + " = ";
             return (*this)(value.value);
         }
     }

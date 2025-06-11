@@ -302,7 +302,7 @@ public:
     auto operator[](std::size_t index) const -> RapidJsonValue {
         if (isArray()) {
             if (index < mValue->Size()) {
-                return RapidJsonValue(mValue->GetArray()[index]);
+                return RapidJsonValue(mValue->GetArray()[(int)index]);
             }
         }
         if (isObject()) {

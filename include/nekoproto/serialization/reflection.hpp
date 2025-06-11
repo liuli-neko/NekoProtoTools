@@ -156,7 +156,7 @@ Enumerate(ValueTs&&...) -> Enumerate<std::tuple_element_t<1, std::tuple<ValueTs.
 
 template <typename... ValueTs>
     requires((std::is_enum_v<ValueTs> + ...) == sizeof...(ValueTs))
-Enumerate(ValueTs&&... values) -> Enumerate<std::tuple_element_t<0, std::tuple<ValueTs...>>, sizeof...(ValueTs)>;
+Enumerate(ValueTs&&...) -> Enumerate<std::tuple_element_t<0, std::tuple<ValueTs...>>, sizeof...(ValueTs)>;
 
 template <typename... ValueTs>
 Object(ValueTs&&...) -> Object<detail::double_type_tuple<ValueTs...>>;
@@ -741,7 +741,7 @@ struct Reflect<T, std::enable_if_t<std::is_enum_v<T>>> {
     static auto value(std::string_view name) noexcept {
         static auto kEnums = values();
         static auto kNames = names();
-        for (int i = 0; i < size(); ++i) {
+        for (int i = 0; i < (int)size(); ++i) {
             if (kNames[i] == name) {
                 return kEnums[i];
             }
@@ -752,7 +752,7 @@ struct Reflect<T, std::enable_if_t<std::is_enum_v<T>>> {
     static auto name(T value) noexcept {
         static auto kNames = names();
         static auto kEnums = values();
-        for (int i = 0; i < size(); ++i) {
+        for (int i = 0; i < (int)size(); ++i) {
             if (kEnums[i] == value) {
                 return kNames[i];
             }
