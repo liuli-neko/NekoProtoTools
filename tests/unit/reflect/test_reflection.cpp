@@ -119,7 +119,7 @@ struct Test4 {
     int member2 = 125;
 
     struct Neko {
-        constexpr static auto value = &Test4::member1; // NOLINT
+        constexpr static auto value = make_tag<Tag{.flat = true}>(&Test4::member1); // NOLINT
     };
 };
 

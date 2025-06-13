@@ -60,8 +60,8 @@ inline bool load(Serializer& sa, std::monostate& /*unused*/) {
 
 template <>
 struct Meta<std::monostate> {
-    static constexpr std::array<std::string_view, 0> names;
-    static constexpr std::tuple<> values;
+    static constexpr std::array<std::string_view, 0> names = {}; // NOLINT
+    static constexpr std::tuple<> values                   = {}; // NOLINT
 };
 
 template <typename Serializer, typename... Ts>

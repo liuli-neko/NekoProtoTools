@@ -21,6 +21,7 @@
 #include <type_traits>
 #include <utility> // For std::index_sequence
 
+#include "private/tags.hpp"
 #include "private/traits.hpp"
 
 NEKO_BEGIN_NAMESPACE
@@ -180,28 +181,50 @@ struct is_ref_enumerate : std::false_type {}; // NOLINT
 template <typename T, std::size_t N>
 struct is_ref_enumerate<Enumerate<T, N>, void> : std::true_type {};
 
+template <typename T, typename U, class enable = void>
+struct MemberMetadata {
+    using raw_type                        = T;
+    using parent_type                     = U;
+    constexpr static bool IsRef           = std::is_reference_v<raw_type>;
+    constexpr static bool IsLRef          = std::is_lvalue_reference_v<raw_type>;
+    constexpr static bool IsLambda        = is_member_ref_function<raw_type, U>;
+    constexpr static bool IsMemberPointer = std::is_member_object_pointer_v<raw_type>;
+    constexpr static bool IsOk            = IsRef || IsLambda || IsMemberPointer;
+
+    constexpr static Tag tag = {};
+    template <typename V>
+    constexpr static decltype(auto) value(V&& obj) {
+        return std::forward<V>(obj);
+    }
+};
+
+template <typename T, typename U>
+struct MemberMetadata<T, U, std::enable_if_t<is_tagged_value_v<T>>> {
+    using raw_type                        = typename std::decay_t<T>::raw_type;
+    using parent_type                     = U;
+    constexpr static bool IsRef           = std::is_reference_v<raw_type>;
+    constexpr static bool IsLRef          = std::is_lvalue_reference_v<raw_type>;
+    constexpr static bool IsLambda        = is_member_ref_function<raw_type, U>;
+    constexpr static bool IsMemberPointer = std::is_member_object_pointer_v<raw_type>;
+    constexpr static bool IsOk            = IsRef || IsLambda || IsMemberPointer;
+
+    constexpr static Tag tag = std::decay_t<T>::tag;
+    template <typename V>
+    constexpr static decltype(auto) value(V&& obj) {
+        return std::forward<V>(obj).value;
+    }
+};
+
 template <typename T>
 concept is_local_ref_value = requires {
     { T::Neko::value };
-    requires std::is_reference_v<decltype(T::Neko::value)>;
-} || requires {
-    { T::Neko::value };
-    requires is_member_ref_function<decltype(T::Neko::value), T>;
-} || requires {
-    { T::Neko::value };
-    requires std::is_member_object_pointer_v<decltype(T::Neko::value)>;
+    requires MemberMetadata<decltype(T::Neko::value), T>::IsOk;
 };
 
 template <typename T>
 concept is_meta_ref_value = requires {
     { Meta<T>::value };
-    requires std::is_reference_v<decltype(Meta<T>::value)>;
-} || requires {
-    { Meta<T>::value };
-    requires is_member_ref_function<decltype(Meta<T>::value), T>;
-} || requires {
-    { Meta<T>::value };
-    requires std::is_member_object_pointer_v<decltype(Meta<T>::value)>;
+    requires MemberMetadata<decltype(Meta<T>::value), T>::IsOk;
 };
 
 template <typename A, typename T, class enable = void>
@@ -209,9 +232,7 @@ struct is_all_meta_ref_value : std::false_type {};
 
 template <typename A, typename... Args>
 struct is_all_meta_ref_value<A, std::tuple<Args...>, void> {
-    constexpr static bool value =
-        ((std::is_reference_v<Args> || is_member_ref_function<Args, A> || std::is_member_object_pointer_v<Args>) &&
-         ...);
+    constexpr static bool value = (MemberMetadata<Args, A>::IsOk && ...);
 };
 
 template <typename T>
@@ -273,23 +294,23 @@ concept is_meta_enumerate = std::is_enum_v<T> && requires {
     requires is_ref_enumerate<std::decay_t<decltype(Meta<T>::value)>>::value;
 };
 
-template <typename T>
-    requires std::is_member_object_pointer_v<std::remove_cvref_t<T>>
-constexpr decltype(auto) value_ref(T&& dt, auto& obj) noexcept {
-    return obj.*dt;
+template <typename T, typename U>
+    requires MemberMetadata<std::decay_t<T>, U>::IsMemberPointer
+constexpr decltype(auto) value_ref(T&& dt, U& obj) noexcept {
+    return obj.*MemberMetadata<std::decay_t<T>, U>::value(dt);
 }
 
 template <typename T, typename ObjT>
-    requires std::is_lvalue_reference_v<T> && (!std::is_member_object_pointer_v<std::remove_cvref_t<T>>) &&
-             (!is_member_ref_function<T, ObjT>)
+    requires MemberMetadata<T, ObjT>::IsLRef && (!MemberMetadata<std::decay_t<T>, ObjT>::IsMemberPointer) &&
+             (!MemberMetadata<std::decay_t<T>, ObjT>::IsLambda)
 constexpr decltype(auto) value_ref(T&& dt, ObjT& /*unused*/) noexcept {
-    return dt;
+    return MemberMetadata<std::decay_t<T>, ObjT>::value(dt);
 }
 
 template <typename T, typename ObjT>
-    requires is_member_ref_function<T, ObjT>
+    requires MemberMetadata<std::decay_t<T>, ObjT>::IsLambda
 constexpr decltype(auto) value_ref(T&& dt, ObjT& obj) noexcept {
-    return dt(obj);
+    return MemberMetadata<std::decay_t<T>, ObjT>::value(dt)(obj);
 }
 
 template <typename T>

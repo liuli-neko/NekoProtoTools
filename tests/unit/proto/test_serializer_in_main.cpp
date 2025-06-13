@@ -23,30 +23,6 @@ struct StructA {
     TEnum h;
 };
 
-#if NEKO_CPP_PLUS < 17
-NEKO_BEGIN_NAMESPACE
-template <typename Serializer>
-inline bool save(Serializer& sa, const StructA& value) {
-    auto ret = sa.startArray((uint32_t)8);
-    ret      = sa(value.a, value.b, value.c, value.d, value.e, value.f, value.g, value.h) && ret;
-    ret      = sa.endArray() && ret;
-    return ret;
-}
-
-template <typename Serializer>
-inline bool load(Serializer& sa, StructA& value) {
-    uint32_t size;
-    auto ret = sa(make_size_tag(size));
-    if (size != 8) {
-        NEKO_LOG_ERROR("unit test", "struct size mismatch: json obejct size {} != struct size 8", size);
-        return false;
-    }
-    ret = sa(value.a, value.b, value.c, value.d, value.e, value.f, value.g, value.h) && ret;
-    return ret;
-}
-NEKO_END_NAMESPACE
-#endif
-
 struct TestP {
     int a                        = 1;
     std::string b                = "hello";
