@@ -12,6 +12,8 @@
 
 #include "global.hpp"
 
+#include <array>
+
 NEKO_BEGIN_NAMESPACE
 
 template <size_t N>

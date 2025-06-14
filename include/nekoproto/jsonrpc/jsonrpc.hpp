@@ -277,9 +277,10 @@ public:
     operator bool() const { return this->mCoFunction != nullptr; }
 
     std::string description = []() {
-        return traits::TypeName<RawReturnType>::name() + " " + std::string(Name) + "(" +
-               traits::parameter_to_string<RawParamsType>(std::make_index_sequence<std::tuple_size_v<RawParamsType>>{},
-                                                          traits::ArgNamesHelper<ArgNames...>{}) +
+        return std::string(traits::TypeName<RawReturnType>::name()) + " " + std::string(Name) + "(" +
+               std::string(traits::parameter_to_string<RawParamsType>(
+                   std::make_index_sequence<std::tuple_size_v<RawParamsType>>{},
+                   traits::ArgNamesHelper<ArgNames...>{})) +
                ")";
     }();
 };
@@ -642,9 +643,9 @@ public:
             std::string descript;
         };
         auto metadata      = std::make_unique<MethodMetadata>();
-        metadata->descript = traits::TypeName<RetT>::name() + " " + std::string(name) + "(" +
-                             traits::parameter_to_string<std::tuple<Args...>>(
-                                 std::make_index_sequence<sizeof...(Args)>{}, traits::ArgNamesHelper<ArgNames...>{}) +
+        metadata->descript = std::string(traits::TypeName<RetT>::name()) + " " + std::string(name) + "(" +
+                             std::string(traits::parameter_to_string<std::tuple<Args...>>(
+                                 std::make_index_sequence<sizeof...(Args)>{}, traits::ArgNamesHelper<ArgNames...>{})) +
                              ")";
         mMethodMetadatas[name] = std::move(metadata);
     }
@@ -660,9 +661,9 @@ public:
             std::string descript;
         };
         auto metadata      = std::make_unique<MethodMetadata>();
-        metadata->descript = traits::TypeName<RetT>::name() + " " + std::string(name) + "(" +
-                             traits::parameter_to_string<std::tuple<Args...>>(
-                                 std::make_index_sequence<sizeof...(Args)>{}, traits::ArgNamesHelper<ArgNames...>{}) +
+        metadata->descript = std::string(traits::TypeName<RetT>::name()) + " " + std::string(name) + "(" +
+                             std::string(traits::parameter_to_string<std::tuple<Args...>>(
+                                 std::make_index_sequence<sizeof...(Args)>{}, traits::ArgNamesHelper<ArgNames...>{})) +
                              ")";
         mMethodMetadatas[name] = std::move(metadata);
     }
