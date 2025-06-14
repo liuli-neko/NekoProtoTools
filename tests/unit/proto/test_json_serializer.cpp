@@ -14,12 +14,16 @@
 NEKO_USE_NAMESPACE
 
 enum TEnum { TEnum_A = 1, TEnum_B = 2, TEnum_C = 3 };
+
+NEKO_BEGIN_NAMESPACE
 template <>
 struct Meta<TEnum> {
     using T                     = TEnum;
     static constexpr auto value = Enumerate{// NOLINT
                                             "TEnum_A", TEnum_A, "TEnum_B", TEnum_B, "TEnum_C", TEnum_C};
 };
+NEKO_END_NAMESPACE
+
 struct StructA {
     int a;
     std::string b;

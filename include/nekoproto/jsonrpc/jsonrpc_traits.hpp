@@ -11,6 +11,7 @@
 #pragma once
 
 #include <ilias/task.hpp>
+#include <string_view>
 
 #include "nekoproto/global/reflect.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_error.hpp"
@@ -41,136 +42,183 @@ struct ArgNamesHelper {};
 
 template <typename RawParamsType, std::size_t... Is, ConstexprString... ArgNames>
 constexpr auto parameter_to_string(std::index_sequence<Is...> /*unused*/, ArgNamesHelper<ArgNames...> /*unused*/ = {})
-    -> std::string {
+    -> std::string_view {
     if constexpr (sizeof...(Is) == 0) {
         return "";
     } else if constexpr (sizeof...(ArgNames) != sizeof...(Is)) {
-        constexpr std::size_t Nt = sizeof...(Is) - 1;
-        return ((traits::TypeName<std::tuple_element_t<Is, RawParamsType>>::name() + (Is == Nt ? "" : ", ")) + ...);
+        constexpr auto joined_arr = []() {
+            constexpr std::size_t Nt                                 = sizeof...(Is) - 1;
+            constexpr std::array<std::string_view, Nt + 1> argsNames = {
+                traits::TypeName<std::tuple_element_t<Is, RawParamsType>>::name()...};
+            constexpr std::size_t len =
+                (traits::TypeName<std::tuple_element_t<Is, RawParamsType>>::name().size() + ...) + Nt * 2;
+            std::array<char, len + 1> arr;
+            auto append = [idx = 0, &arr](const auto& str) mutable {
+                for (auto ch : str) {
+                    arr[idx++] = ch;
+                }
+                if (idx + 1 < arr.size()) {
+                    arr[idx++] = ',';
+                    arr[idx++] = ' ';
+                }
+            };
+            (append(traits::TypeName<std::tuple_element_t<Is, RawParamsType>>::name()), ...);
+            arr[len] = '\0';
+            return arr;
+        }();
+        auto& static_arr = NEKO_NAMESPACE::detail::make_static<joined_arr>::value;
+        return {static_arr.data(), static_arr.size() - 1};
     } else {
-        constexpr std::size_t Nt                                  = sizeof...(Is) - 1;
-        std::array<std::string_view, sizeof...(Is)> argNamesArray = {ArgNames.view()...};
-        return ((traits::TypeName<std::tuple_element_t<Is, RawParamsType>>::name() + " " +
-                 std::string(argNamesArray[Is]) + (Is == Nt ? "" : ", ")) +
-                ...);
+        constexpr auto joined_arr = []() {
+            constexpr std::size_t Nt                                 = sizeof...(Is) - 1;
+            constexpr std::array<std::string_view, Nt + 1> argsNames = {ArgNames.view()...};
+            constexpr std::size_t len                                = (ArgNames.view().size() + ...) + Nt * 2;
+            std::array<char, len + 1> arr;
+            auto append = [idx = 0, &arr](const auto& str) mutable {
+                for (auto ch : str) {
+                    arr[idx++] = ch;
+                }
+                if (idx + 1 < arr.size()) {
+                    arr[idx++] = ',';
+                    arr[idx++] = ' ';
+                }
+            };
+            (append(ArgNames.view()), ...);
+            arr[len] = '\0';
+            return arr;
+        }();
+        auto& static_arr = NEKO_NAMESPACE::detail::make_static<joined_arr>::value;
+        return {static_arr.data(), static_arr.size() - 1};
     }
 };
 template <>
 struct TypeName<void, void> {
-    constexpr static std::string name() { return "void"; }
+    constexpr static std::string_view name() { return std::string_view("void"); }
 };
 template <typename T>
 struct TypeName<std::optional<T>, void> {
-    constexpr static std::string name() { return "std::optional<" + TypeName<T>::name() + ">"; }
+    constexpr static std::string_view name() {
+        return join_v<std::string_view("std::optional<"), TypeName<T>::name(), std::string_view(">")>;
+    }
 };
 template <typename... Args>
 struct TypeName<std::variant<Args...>, void> {
-    constexpr static std::string name() {
-        return "std::variant<" + parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}) +
-               ">";
+    constexpr static std::string_view name() {
+        return join_v<std::string_view("std::variant<"),
+                      parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}),
+                      std::string_view(">")>;
     }
 };
 template <typename T, std::size_t N>
 struct TypeName<std::array<T, N>, void> {
-    constexpr static std::string name() { return "std::array<" + TypeName<T>::name() + ", " + std::to_string(N) + ">"; }
+    constexpr static std::string_view name() {
+        return join_v<std::string_view("std::array<"), TypeName<T>::name(), std::string_view(", "), std::to_string(N),
+                      std::string_view(">")>;
+    }
 };
 template <typename... Args>
 struct TypeName<std::tuple<Args...>, void> {
-    ;
-    constexpr static std::string name() {
-        return "std::tuple<" + parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}) +
-               ">";
+    constexpr static std::string_view name() {
+        return join_v<std::string_view("std::tuple<"),
+                      parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}),
+                      std::string_view(">")>;
     }
 };
 template <typename T, typename T2>
 struct TypeName<std::pair<T, T2>, void> {
-    constexpr static std::string name() {
-        return "std::pair<" + TypeName<T>::name() + ", " + TypeName<T2>::name() + ">";
+    constexpr static std::string_view name() {
+
+        return join_v<std::string_view("std::pair<"), TypeName<T>::name(), std::string_view(", "), TypeName<T2>::name(),
+                      std::string_view(">")>;
     }
 };
 template <typename T>
 struct TypeName<std::vector<T>, void> {
-    constexpr static std::string name() { return "std::vector<" + TypeName<T>::name() + ">"; }
+    constexpr static std::string_view name() {
+        return join_v<std::string_view("std::vector<"), TypeName<T>::name(), std::string_view(">")>;
+    }
 };
 template <>
 struct TypeName<std::string, void> {
-    constexpr static std::string name() { return "std::string"; }
+    constexpr static std::string_view name() { return std::string_view("std::string"); }
 };
 template <>
 struct TypeName<std::u8string, void> {
-    constexpr static std::string name() { return "std::u8string"; }
+    constexpr static std::string_view name() { return std::string_view("std::u8string"); }
 };
 template <>
 struct TypeName<std::u16string, void> {
-    constexpr static std::string name() { return "std::u16string"; }
+    constexpr static std::string_view name() { return std::string_view("std::u16string"); }
 };
 template <>
 struct TypeName<std::u32string, void> {
-    constexpr static std::string name() { return "std::u32string"; }
+    constexpr static std::string_view name() { return std::string_view("std::u32string"); }
 };
 template <>
 struct TypeName<std::byte, void> {
-    constexpr static std::string name() { return "std::byte"; }
+    constexpr static std::string_view name() { return std::string_view("std::byte"); }
 };
 template <>
 struct TypeName<std::nullptr_t, void> {
-    constexpr static std::string name() { return "std::nullptr_t"; }
+    constexpr static std::string_view name() { return std::string_view("std::nullptr_t"); }
 };
 template <>
 struct TypeName<bool, void> {
-    constexpr static std::string name() { return "bool"; }
+    constexpr static std::string_view name() { return std::string_view("bool"); }
 };
 template <>
 struct TypeName<int, void> {
-    constexpr static std::string name() { return "int"; }
+    constexpr static std::string_view name() { return std::string_view("int"); }
 };
 template <>
 struct TypeName<unsigned int, void> {
-    constexpr static std::string name() { return "unsigned int"; }
+    constexpr static std::string_view name() { return std::string_view("unsigned int"); }
 };
 template <>
 struct TypeName<long, void> {
-    constexpr static std::string name() { return "long"; }
+    constexpr static std::string_view name() { return std::string_view("long"); }
 };
 template <>
 struct TypeName<unsigned long, void> {
-    constexpr static std::string name() { return "unsigned long"; }
+    constexpr static std::string_view name() { return std::string_view("unsigned long"); }
 };
 template <>
 struct TypeName<long long, void> {
-    constexpr static std::string name() { return "long long"; }
+    constexpr static std::string_view name() { return std::string_view("long long"); }
 };
 template <>
 struct TypeName<unsigned long long, void> {
-    constexpr static std::string name() { return "unsigned long long"; }
+    constexpr static std::string_view name() { return std::string_view("unsigned long long"); }
 };
 template <>
 struct TypeName<float, void> {
-    constexpr static std::string name() { return "float"; }
+    constexpr static std::string_view name() { return std::string_view("float"); }
 };
 template <>
 struct TypeName<double, void> {
-    constexpr static std::string name() { return "double"; }
+    constexpr static std::string_view name() { return std::string_view("double"); }
 };
 template <typename T>
 struct TypeName<T*, void> {
-    constexpr static std::string name() { return TypeName<T>::name() + "*"; }
+    constexpr static std::string_view name() { return join_v<TypeName<T>::name(), std::string_view("*")>; }
 };
 template <typename T>
 struct TypeName<T&, void> {
-    constexpr static std::string name() { return TypeName<T>::name() + "&"; }
+    constexpr static std::string_view name() { return join_v<TypeName<T>::name(), std::string_view("&")>; }
 };
 template <typename T>
 struct TypeName<const T&, void> {
-    constexpr static std::string name() { return "const " + TypeName<T>::name() + "&"; }
+    constexpr static std::string_view name() {
+        return join_v<std::string_view("const "), TypeName<T>::name(), std::string_view("&")>;
+    }
 };
 template <typename T>
 struct TypeName<T&&, void> {
-    constexpr static std::string name() { return TypeName<T>::name() + "&&"; }
+    constexpr static std::string_view name() { return join_v<TypeName<T>::name(), std::string_view("&&")>; }
 };
 template <typename T>
 struct TypeName<const T, void> {
-    constexpr static std::string name() { return "const " + TypeName<T>::name(); }
+    constexpr static std::string_view name() { return join_v<std::string_view("const "), TypeName<T>::name()>; }
 };
 
 template <typename T, ConstexprString... ArgNames>
