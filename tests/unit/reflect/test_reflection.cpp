@@ -91,7 +91,8 @@ struct Test3 {
 
     struct Neko {
         constexpr static auto value = // NOLINT
-            Array([](auto&& self) -> auto& { return self.prr.member1; }, &Test3::member2);
+            Array(make_tags<Tags{.fixedLength = true}>([](auto&& self) -> auto& { return self.prr.member1; }),
+                  make_tags<Tags{.rawString = true}>(&Test3::member2));
     };
 };
 
@@ -102,8 +103,9 @@ TEST(Reflection, RefObjectArray) {
     static_assert(detail::is_local_ref_array<Test3>, "Test3 must be local_ref_array");
     static_assert(!detail::is_local_ref_value<Test3>, "Test3 must not be local_ref_value");
     Test3 test{.prr = {.member1 = 234}, .member2 = "3453"};
-    Reflect<Test3>::forEach(test, []<typename T>(T& field) {
+    Reflect<Test3>::forEach(test, []<typename T>(T& field, const Tags& tags) {
         std::cout << field << std::endl;
+        std::cout << tags.fixedLength << " " << tags.flat << " " << tags.rawString << " " << tags.skipable << std::endl;
         if constexpr (std::is_arithmetic_v<T>) {
             field += 10;
         } else {
@@ -119,7 +121,7 @@ struct Test4 {
     int member2 = 125;
 
     struct Neko {
-        constexpr static auto value = make_tag<Tag{.flat = true}>(&Test4::member1); // NOLINT
+        constexpr static auto value = make_tags<Tags{.flat = true}>(&Test4::member1); // NOLINT
     };
 };
 

@@ -183,7 +183,6 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
         return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
                           make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id)) &
                serializer.finishNode();
-        ;
     }
     NEKO_SERIALIZER(jsonrpc, method, params, id)
 };

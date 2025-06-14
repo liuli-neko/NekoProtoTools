@@ -191,7 +191,7 @@ struct MemberMetadata {
     constexpr static bool IsMemberPointer = std::is_member_object_pointer_v<raw_type>;
     constexpr static bool IsOk            = IsRef || IsLambda || IsMemberPointer;
 
-    constexpr static Tag tag = {};
+    constexpr static Tags tags = {}; // NOLINT
     template <typename V>
     constexpr static decltype(auto) value(V&& obj) {
         return std::forward<V>(obj);
@@ -208,7 +208,7 @@ struct MemberMetadata<T, U, std::enable_if_t<is_tagged_value_v<T>>> {
     constexpr static bool IsMemberPointer = std::is_member_object_pointer_v<raw_type>;
     constexpr static bool IsOk            = IsRef || IsLambda || IsMemberPointer;
 
-    constexpr static Tag tag = std::decay_t<T>::tag;
+    constexpr static Tags tags = std::decay_t<T>::tags; // NOLINT
     template <typename V>
     constexpr static decltype(auto) value(V&& obj) {
         return std::forward<V>(obj).value;
@@ -312,6 +312,9 @@ template <typename T, typename ObjT>
 constexpr decltype(auto) value_ref(T&& dt, ObjT& obj) noexcept {
     return MemberMetadata<std::decay_t<T>, ObjT>::value(dt)(obj);
 }
+
+template <typename T, typename ObjT>
+constexpr static Tags value_tags = MemberMetadata<std::decay_t<T>, ObjT>::tags; // NOLINT
 
 template <typename T>
 constexpr static bool is_ref_by_local_v = //  NOLINT
@@ -561,6 +564,25 @@ struct Reflect {
 
     template <typename U, typename CallAbleT>
         requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
+    static void forEachWithoutNameTags(U&& obj, CallAbleT&& func) noexcept {
+        if constexpr (detail::has_values_meta<T>) {
+            decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
+            if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
+                [&values, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
+                    ((func(detail::value_ref(std::get<Is>(values), obj),
+                           detail::value_tags<decltype(std::get<Is>(values)), decltype(obj)>)),
+                     ...);
+                }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
+            } else {
+                func(detail::value_ref(values, obj), detail::value_tags<decltype(values), decltype(obj)>);
+            }
+        } else {
+            static_assert(detail::has_values_meta<T>, "type has no values meta");
+        }
+    }
+
+    template <typename U, typename CallAbleT>
+        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
     static void forEachWithName(U&& obj, CallAbleT&& func) noexcept {
         if constexpr (detail::has_values_meta<T> && detail::has_names_meta<T>) {
             auto names            = detail::ReflectHelper<T>::getNames();
@@ -575,6 +597,30 @@ struct Reflect {
             } else {
                 static_assert(1 == std::tuple_size_v<std::decay_t<decltype(names)>>, "values and names size mismatch");
                 func(detail::value_ref(values, obj), names[0]);
+            }
+        } else {
+            static_assert(detail::has_values_meta<T> && detail::has_names_meta<T>, "type has no values or names meta");
+        }
+    }
+
+    template <typename U, typename CallAbleT>
+        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
+    static void forEachWithNameTags(U&& obj, CallAbleT&& func) noexcept {
+        if constexpr (detail::has_values_meta<T> && detail::has_names_meta<T>) {
+            auto names            = detail::ReflectHelper<T>::getNames();
+            decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
+            if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
+                static_assert(std::tuple_size_v<std::decay_t<decltype(values)>> ==
+                                  std::tuple_size_v<std::decay_t<decltype(names)>>,
+                              "values and names size mismatch");
+                [&values, &names, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
+                    ((func(detail::value_ref(std::get<Is>(values), obj), names[Is],
+                           detail::value_tags<decltype(std::get<Is>(values)), decltype(obj)>)),
+                     ...);
+                }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
+            } else {
+                static_assert(1 == std::tuple_size_v<std::decay_t<decltype(names)>>, "values and names size mismatch");
+                func(detail::value_ref(values, obj), names[0], detail::value_tags<decltype(values), decltype(obj)>);
             }
         } else {
             static_assert(detail::has_values_meta<T> && detail::has_names_meta<T>, "type has no values or names meta");
@@ -597,6 +643,24 @@ struct Reflect {
         }
     static void forEach(U&& obj, CallAbleT&& func) noexcept {
         forEachWithoutName(obj, func);
+    }
+
+    template <typename U, typename CallAbleT>
+        requires requires(U&& obj, CallAbleT&& func, const Tags& tags) {
+            forEachWithNameTags(obj, func);
+            func(std::declval<int&>(), std::declval<std::string_view>(), std::declval<const Tags&>());
+        }
+    static void forEach(U&& obj, CallAbleT&& func) noexcept {
+        forEachWithNameTags(obj, func);
+    }
+
+    template <typename U, typename CallAbleT>
+        requires requires(U&& obj, CallAbleT&& func, const Tags& tags) {
+            forEachWithoutNameTags(obj, func);
+            func(std::declval<int&>(), std::declval<const Tags&>());
+        }
+    static void forEach(U&& obj, CallAbleT&& func) noexcept {
+        forEachWithoutNameTags(obj, func);
     }
 
     static constexpr auto size() noexcept {
