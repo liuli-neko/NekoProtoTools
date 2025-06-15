@@ -1065,19 +1065,20 @@ TEST_F(JsonSerializerTest, JsonSchema) {
     static_assert(detail::has_values_meta<TestP>, "ZTypeTest2 should have values meta");
     static_assert(detail::has_values_meta<JsonSchema>, "JsonSchema should have values meta");
     TestP proto;
-    auto schema = generate_schema<TestP>(proto);
+    JsonSchema schema;
+    generate_schema<TestP>(proto, schema);
     static_assert(detail::has_values_meta<decltype(schema)>, "JsonSchema should have values meta");
     static_assert(traits::has_function_save<decltype(schema), PrintSerializer>, "JsonSchema should have save function");
     static_assert(!traits::has_method_save<decltype(schema), PrintSerializer>,
                   "JsonSchema should not have save method");
 
-    std::vector<char> mBuffer;
-    RapidJsonOutputSerializer<std::vector<char>> output(mBuffer);
+    std::vector<char> buffer;
+    RapidJsonOutputSerializer<std::vector<char>> output(buffer);
     output(schema);
     output.end();
-    mBuffer.push_back('\0');
+    buffer.push_back('\0');
 
-    NEKO_LOG_DEBUG("unit test", "{}", mBuffer.data());
+    NEKO_LOG_DEBUG("unit test", "{}", buffer.data());
 }
 
 int main(int argc, char** argv) {

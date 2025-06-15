@@ -93,52 +93,52 @@ struct Meta<DefinedFormats> {
 
 // https://json-schema.org/draft-07/schema#
 struct JsonSchema final {
-    std::optional<std::string> type{};
-    std::optional<std::string> schema{};
-    std::optional<std::variant<bool, std::shared_ptr<JsonSchema>>> additionalProperties{}; // map
+    std::optional<std::string> type{std::nullopt};
+    std::optional<std::string> schema{std::nullopt};
+    std::variant<std::monostate, bool, std::unique_ptr<JsonSchema>> additionalProperties{}; // map
     // std::optional<std::map<std::string, JsonSchema, std::less<>>> defs{};
-    std::optional<std::vector<JsonSchema>> oneOf{};
-    std::optional<std::vector<std::string>> required{};
+    std::optional<std::vector<JsonSchema>> oneOf{std::nullopt};
+    std::optional<std::vector<std::string>> required{std::nullopt};
     // std::optional<std::vector<std::string>> examples{};
 
-    std::optional<std::string> ref{};
+    std::optional<std::string> ref{std::nullopt};
     using schema_number = std::optional<std::variant<int64_t, uint64_t, double>>;
     using schema_any    = std::variant<std::monostate, bool, int64_t, uint64_t, double, std::string>;
     // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
     // std::optional<std::string> title{};
-    std::optional<std::string> description{};
-    std::optional<schema_any> defaultValue{};
-    std::optional<bool> deprecated{};
-    std::optional<bool> readOnly{};
-    std::optional<bool> writeOnly{};
+    std::optional<std::string> description{std::nullopt};
+    std::optional<schema_any> defaultValue{std::nullopt};
+    std::optional<bool> deprecated{std::nullopt};
+    std::optional<bool> readOnly{std::nullopt};
+    std::optional<bool> writeOnly{std::nullopt};
     // hereafter validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
-    std::optional<schema_any> constant{};
+    std::optional<schema_any> constant{std::nullopt};
     // string only keywords
-    std::optional<uint64_t> minLength{};
-    std::optional<uint64_t> maxLength{};
-    std::optional<std::string> pattern{};
+    std::optional<uint64_t> minLength{std::nullopt};
+    std::optional<uint64_t> maxLength{std::nullopt};
+    std::optional<std::string> pattern{std::nullopt};
     // https://www.learnjsonschema.com/2020-12/format-annotation/format/
-    std::optional<DefinedFormats> format{};
+    std::optional<DefinedFormats> format{std::nullopt};
     // number only keywords
-    schema_number minimum{};
-    schema_number maximum{};
-    schema_number exclusiveMinimum{};
-    schema_number exclusiveMaximum{};
-    schema_number multipleOf{};
+    schema_number minimum{std::nullopt};
+    schema_number maximum{std::nullopt};
+    schema_number exclusiveMinimum{std::nullopt};
+    schema_number exclusiveMaximum{std::nullopt};
+    schema_number multipleOf{std::nullopt};
     // object only keywords
-    std::optional<std::map<std::string, JsonSchema>> properties{}; // object
-    std::optional<uint64_t> minProperties{};
-    std::optional<uint64_t> maxProperties{};
+    std::optional<std::map<std::string, JsonSchema>> properties{std::nullopt}; // object
+    std::optional<uint64_t> minProperties{std::nullopt};
+    std::optional<uint64_t> maxProperties{std::nullopt};
     // array only keywords
-    std::optional<std::variant<std::shared_ptr<JsonSchema>, std::vector<JsonSchema>>> items{}; // array
-    std::optional<bool> additionalItems{};
-    std::optional<uint64_t> minItems{};
-    std::optional<uint64_t> maxItems{};
-    std::optional<uint64_t> minContains{};
-    std::optional<uint64_t> maxContains{};
-    std::optional<bool> uniqueItems{};
+    std::variant<std::monostate, std::unique_ptr<JsonSchema>, std::vector<JsonSchema>> items{}; // array
+    std::optional<bool> additionalItems{std::nullopt};
+    std::optional<uint64_t> minItems{std::nullopt};
+    std::optional<uint64_t> maxItems{std::nullopt};
+    std::optional<uint64_t> minContains{std::nullopt};
+    std::optional<uint64_t> maxContains{std::nullopt};
+    std::optional<bool> uniqueItems{std::nullopt};
     // properties
-    std::optional<std::vector<std::string>> enumeration{}; // enum
+    std::optional<std::vector<std::string>> enumeration{std::nullopt}; // enum
 
     struct Neko {
         using T = JsonSchema;
@@ -228,87 +228,139 @@ struct SchemaGenerator;
 
 // Helper function to make it easy to call
 template <typename T>
-JsonSchema generate_schema(const std::decay_t<T>& obj) {
-    auto schema   = SchemaGenerator<std::decay_t<T>>::get(obj);
-    schema.schema = "http://json-schema.org/draft-07/schema#";
-    return schema;
+bool generate_schema(const std::decay_t<T>& obj, JsonSchema& def) {
+    def.schema = "http://json-schema.org/draft-07/schema#";
+    return SchemaGenerator<std::decay_t<T>>::get(obj, def);
 }
 
 // --- Specializations for primitive types ---
 template <typename T>
     requires std::is_signed_v<T> && (!std::is_enum_v<T>) && std::is_integral_v<T>
 struct SchemaGenerator<T, void> {
-    static JsonSchema get(const T& obj) {
-        return {.type         = "integer",
-                .defaultValue = obj,
-                .minimum      = std::numeric_limits<T>::min(),
-                .maximum      = std::numeric_limits<T>::max()};
+    static bool get(const T& obj, JsonSchema& def) {
+        def.type = "integer";
+        if (!def.defaultValue) {
+            def.defaultValue = obj;
+        }
+        if (!def.minimum) {
+            def.minimum = std::numeric_limits<T>::min();
+        }
+        if (!def.maximum) {
+            def.maximum = std::numeric_limits<T>::max();
+        }
+        return true;
     }
 };
 
 template <typename T>
     requires std::is_unsigned_v<T> && (!std::is_enum_v<T>) && std::is_integral_v<T>
 struct SchemaGenerator<T, void> {
-    static JsonSchema get(const T& obj) {
-        return {.type = "integer", .defaultValue = obj, .minimum = 0, .maximum = std::numeric_limits<T>::max()};
+    static bool get(const T& obj, JsonSchema& def) {
+        def.type = "integer";
+        if (!def.defaultValue) {
+            def.defaultValue = obj;
+        }
+        if (!def.minimum) {
+            def.minimum = 0;
+        }
+        if (!def.maximum) {
+            def.maximum = std::numeric_limits<T>::max();
+        }
+        return true;
     }
 };
 
 template <typename T>
     requires std::is_enum_v<T>
 struct SchemaGenerator<T, void> {
-    static JsonSchema get([[maybe_unused]] const T& obj) {
+    static bool get([[maybe_unused]] const T& obj, JsonSchema& def) {
         const auto& vm = Reflect<T>::valueMap();
         std::vector<std::string> names;
         for (const auto& [key, value] : vm) {
             names.push_back(std::string(value));
         }
-        if (auto it = vm.find(obj); it != vm.end()) {
-            return {.type = "string", .defaultValue = std::string(it->second), .enumeration = names};
+        def.type        = "string";
+        def.enumeration = names;
+        if (auto it = vm.find(obj); it != vm.end() && !def.defaultValue) {
+            def.defaultValue = std::string(it->second);
         }
-        return {.type = "string", .enumeration = names};
+        return true;
     }
 };
 
 template <typename T>
     requires std::is_floating_point_v<T>
 struct SchemaGenerator<T, void> {
-    static JsonSchema get(const T& obj) {
-        return {.type         = "number",
-                .defaultValue = obj,
-                .minimum      = std::numeric_limits<T>::min(),
-                .maximum      = std::numeric_limits<T>::max()};
+    static bool get(const T& obj, JsonSchema& def) {
+        def.type = "number";
+        if (!def.defaultValue) {
+            def.defaultValue = obj;
+        }
+        if (!def.minimum) {
+            def.minimum = std::numeric_limits<T>::min();
+        }
+        if (!def.maximum) {
+            def.maximum = std::numeric_limits<T>::max();
+        }
+        return true;
     }
 };
 
 template <>
 struct SchemaGenerator<bool, void> {
-    static JsonSchema get(bool obj) { return {.type = "boolean", .defaultValue = obj}; }
+    static bool get(bool obj, JsonSchema& def) {
+        def.type = "boolean";
+        if (!def.defaultValue) {
+            def.defaultValue = obj;
+        }
+        return true;
+    }
 };
 
 template <>
 struct SchemaGenerator<std::string, void> {
-    static JsonSchema get(const std::string& obj) { return {.type = "string", .defaultValue = obj}; }
+    static bool get(const std::string& obj, JsonSchema& def) {
+        def.type = "string";
+        if (!def.defaultValue) {
+            def.defaultValue = obj;
+        }
+        return true;
+    }
 };
 
 template <>
 struct SchemaGenerator<std::nullptr_t, void> {
-    static JsonSchema get(std::nullptr_t) { return {.type = "null"}; }
+    static bool get(std::nullptr_t, JsonSchema& def) {
+        def.type = "null";
+        return true;
+    }
 };
 
 template <typename T>
 struct SchemaGenerator<std::atomic<T>, void> {
-    static JsonSchema get(const std::atomic<T>& obj) { return SchemaGenerator<T>::get(obj.load()); }
+    static bool get(const std::atomic<T>& obj, JsonSchema& def) { return SchemaGenerator<T>::get(obj.load(), def); }
 };
 
 template <typename T>
 struct SchemaGenerator<std::shared_ptr<T>, void> {
-    static JsonSchema get([[maybe_unused]] const std::shared_ptr<T>& obj) { return SchemaGenerator<T>::get(T{}); }
+    static bool get([[maybe_unused]] const std::shared_ptr<T>& obj, JsonSchema& def) {
+        if (!obj) {
+            def.defaultValue = std::monostate{};
+            return SchemaGenerator<T>::get(T{}, def);
+        }
+        return SchemaGenerator<T>::get(*obj, def);
+    }
 };
 
 template <typename T>
 struct SchemaGenerator<std::unique_ptr<T>, void> {
-    static JsonSchema get([[maybe_unused]] const std::unique_ptr<T>& obj) { return SchemaGenerator<T>::get(T{}); }
+    static bool get([[maybe_unused]] const std::unique_ptr<T>& obj, JsonSchema& def) {
+        if (!obj) {
+            def.defaultValue = std::monostate{};
+            return SchemaGenerator<T>::get(T{}, def);
+        }
+        return SchemaGenerator<T>::get(*obj, def);
+    }
 };
 
 // --- Partial specializations for containers ---
@@ -316,95 +368,141 @@ struct SchemaGenerator<std::unique_ptr<T>, void> {
 // For containers.
 
 template <template <typename...> class Array, typename V, typename... Ts>
-JsonSchema generate_array_schema([[maybe_unused]] const Array<V, Ts...>& obj, int size) {
-    JsonSchema schema;
-    schema.type  = "array";
-    schema.items = std::make_unique<JsonSchema>(SchemaGenerator<V>::get(V{}));
-    if (size > 0) {
-        schema.maxItems = size;
-        schema.minItems = size;
+bool generate_array_schema([[maybe_unused]] const Array<V, Ts...>& obj, int size, JsonSchema& def) {
+    def.type = "array";
+    bool ret = true;
+    if (!std::holds_alternative<std::unique_ptr<JsonSchema>>(def.items)) {
+        def.items = std::make_unique<JsonSchema>();
     }
-    return schema;
+    auto& item = std::get<std::unique_ptr<JsonSchema>>(def.items);
+    if (item == nullptr) {
+        def.items = std::make_unique<JsonSchema>();
+    }
+    ret = SchemaGenerator<V>::get(V{}, *item);
+    if (size > 0) {
+        if (!def.minItems.has_value()) {
+            def.minItems = size;
+        }
+        if (!def.maxItems.has_value() || (int)def.maxItems.value() < size) {
+            def.maxItems = size;
+        }
+    }
+    return ret;
 }
 
 template <typename T>
 struct SchemaGenerator<std::vector<T>, void> {
-    static JsonSchema get([[maybe_unused]] const std::vector<T>& obj) { return generate_array_schema(obj, -1); }
+    static bool get([[maybe_unused]] const std::vector<T>& obj, JsonSchema& def) {
+        return generate_array_schema(obj, -1, def);
+    }
 };
 
 template <typename T, std::size_t N>
 struct SchemaGenerator<std::array<T, N>, void> {
-    static JsonSchema get([[maybe_unused]] const std::array<T, N>& obj) {
-        return generate_array_schema(std::vector<T>{}, N);
+    static bool get([[maybe_unused]] const std::array<T, N>& obj, JsonSchema& def) {
+        return generate_array_schema(std::vector<T>{}, N, def);
     }
 };
 
 template <typename T>
 struct SchemaGenerator<std::set<T>, void> {
-    static JsonSchema get([[maybe_unused]] const std::set<T>& obj) { return generate_array_schema(obj, -1); }
+    static bool get([[maybe_unused]] const std::set<T>& obj, JsonSchema& def) {
+        return generate_array_schema(obj, -1, def);
+    }
 };
 
 template <typename T>
 struct SchemaGenerator<std::list<T>, void> {
-    static JsonSchema get([[maybe_unused]] const std::list<T>& obj) { return generate_array_schema(obj, -1); }
+    static bool get([[maybe_unused]] const std::list<T>& obj, JsonSchema& def) {
+        return generate_array_schema(obj, -1, def);
+    }
 };
 
 template <typename T>
 struct SchemaGenerator<std::unordered_set<T>, void> {
-    static JsonSchema get([[maybe_unused]] const std::unordered_set<T>& obj) { return generate_array_schema(obj, -1); }
+    static bool get([[maybe_unused]] const std::unordered_set<T>& obj, JsonSchema& def) {
+        return generate_array_schema(obj, -1, def);
+    }
 };
 
 template <typename T>
 struct SchemaGenerator<std::multiset<T>, void> {
-    static JsonSchema get([[maybe_unused]] const std::multiset<T>& obj) { return generate_array_schema(obj, -1); }
+    static bool get([[maybe_unused]] const std::multiset<T>& obj, JsonSchema& def) {
+        return generate_array_schema(obj, -1, def);
+    }
 };
 
 template <typename T>
 struct SchemaGenerator<std::unordered_multiset<T>, void> {
-    static JsonSchema get([[maybe_unused]] const std::unordered_multiset<T>& obj) {
-        return generate_array_schema(obj, -1);
+    static bool get([[maybe_unused]] const std::unordered_multiset<T>& obj, JsonSchema& def) {
+        return generate_array_schema(obj, -1, def);
     }
 };
 
 template <typename... Ts>
 struct SchemaGenerator<std::tuple<Ts...>> {
-    static JsonSchema get([[maybe_unused]] const std::tuple<Ts...>& obj) {
-        JsonSchema schema;
-        schema.type = "array";
+    static bool get([[maybe_unused]] const std::tuple<Ts...>& obj, JsonSchema& def) {
+        def.type = "array";
 
-        // 创建一个用于存储每个元素 schema 的 vector
-        std::vector<JsonSchema> itemSchemas;
-
+        bool ret = true;
         // 使用 C++17 折叠表达式遍历所有类型 Ts...
         // 对于每个类型 T，调用 SchemaGenerator<T>::get(obj) 并将结果存入 vector
-        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            (itemSchemas.push_back(SchemaGenerator<std::decay_t<Ts>>::get(std::get<Is>(obj))), ...);
+        if (!std::holds_alternative<std::vector<JsonSchema>>(def.items)) {
+            def.items = std::vector<JsonSchema>();
+        }
+        auto& items = std::get<std::vector<JsonSchema>>(def.items);
+        items.resize(sizeof...(Ts));
+        ret = [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            return (SchemaGenerator<std::decay_t<Ts>>::get(std::get<Is>(obj), items[Is]) && ...);
         }(std::make_index_sequence<sizeof...(Ts)>());
-
-        schema.items           = std::move(itemSchemas);
-        schema.additionalItems = false;
+        def.additionalItems = false;
 
         // 设置数组的长度限制，确保其大小是固定的
         constexpr size_t tuple_size = sizeof...(Ts);
-        schema.minItems             = tuple_size;
-        schema.maxItems             = tuple_size;
+        def.minItems                = tuple_size;
+        def.maxItems                = tuple_size;
 
-        return schema;
+        return ret;
     }
 };
 
 template <typename T>
     requires detail::has_values_meta<T> && (!detail::has_names_meta<T>)
 struct SchemaGenerator<T, void> {
-    static JsonSchema get(const T& obj) {
-        JsonSchema schema;
-        schema.type = "array";
-        std::vector<JsonSchema> itemSchemas;
-        Reflect<T>::forEachWithoutName(obj, [&](auto& member) mutable {
-            using value_type = decltype(member);
-            itemSchemas.push_back(SchemaGenerator<std::decay_t<value_type>>::get(member));
-        });
-        return schema;
+    static bool get(const T& obj, JsonSchema& def) {
+        def.type = "array";
+        if (Reflect<T>::size() == 0) {
+            return true;
+        }
+        bool ret = true;
+        if (Reflect<T>::size() == 1) {
+            if (!std::holds_alternative<std::unique_ptr<JsonSchema>>(def.items)) {
+                def.items = std::make_unique<JsonSchema>();
+            }
+            auto& item = std::get<std::unique_ptr<JsonSchema>>(def.items);
+            if (item == nullptr) {
+                item = std::make_unique<JsonSchema>();
+            }
+            Reflect<T>::forEachWithoutName(obj, [&](auto& member) mutable {
+                using value_type = decltype(member);
+                ret              = SchemaGenerator<std::decay_t<value_type>>::get(member, *item) && ret;
+            });
+        } else {
+            if (!std::holds_alternative<std::vector<JsonSchema>>(def.items)) {
+                def.items = std::vector<JsonSchema>();
+            }
+            auto& item = std::get<std::vector<JsonSchema>>(def.items);
+            item.resize(Reflect<T>::size());
+            int idx = 0;
+            Reflect<T>::forEachWithoutName(obj, [&](auto& member) mutable {
+                using value_type = decltype(member);
+                ret              = SchemaGenerator<std::decay_t<value_type>>::get(member, item[idx++]) && ret;
+            });
+        }
+        def.additionalItems = false;
+        def.minItems        = Reflect<T>::size();
+        def.maxItems        = Reflect<T>::size();
+        return ret;
     }
 };
 
@@ -412,8 +510,8 @@ struct SchemaGenerator<T, void> {
 // The schema for optional<T> is the same as for T, but it affects the `required` field of the parent struct.
 template <typename T>
 struct SchemaGenerator<std::optional<T>, void> {
-    static JsonSchema get(const std::optional<T>& obj) {
-        return SchemaGenerator<std::decay_t<T>>::get(obj.has_value() ? obj.value() : T{});
+    static bool get(const std::optional<T>& obj, JsonSchema& def) {
+        return SchemaGenerator<std::decay_t<T>>::get(obj.has_value() ? obj.value() : T{}, def);
     }
 };
 
@@ -422,26 +520,33 @@ template <typename T>
     requires std::is_class_v<T> &&
              (!is_minimal_serializable<T>::value) && detail::has_values_meta<T> && detail::has_names_meta<T>
 struct SchemaGenerator<T, void> {
-    static JsonSchema get(const T& obj) {
-        JsonSchema schema;
-        schema.type       = "object";
-        schema.properties = std::map<std::string, JsonSchema>();
-        schema.required   = std::vector<std::string>();
-
+    static bool get(const T& obj, JsonSchema& def) {
+        def.type = "object";
+        if (!def.properties.has_value()) {
+            def.properties = std::map<std::string, JsonSchema>();
+        }
+        auto required = def.required.has_value() ? *std::move(def.required) : std::vector<std::string>();
+        bool ret      = true;
         // Use the reflection helper
         Reflect<T>::forEachWithName(obj, [&](auto& member, std::string_view name) {
             using ValueType = decltype(member);
-
-            // Recursively generate schema for the member
-            (*schema.properties)[std::string(name)] = SchemaGenerator<std::decay_t<ValueType>>::get(member);
+            auto mname      = std::string(name);
+            // Recursively generate def for the member
+            ret = SchemaGenerator<std::decay_t<ValueType>>::get(member, (*def.properties)[mname]) && ret;
 
             // If the member is not an std::optional, it's required.
             if constexpr (!detail::is_optional<ValueType>::value) {
-                schema.required->push_back(std::string(name));
+                required.push_back(std::string(name));
             }
         });
 
-        return schema;
+        // 给required去重
+        std::sort(required.begin(), required.end());
+        required.erase(std::unique(required.begin(), required.end()), required.end());
+
+        def.required = required;
+
+        return ret;
     }
 };
 
@@ -452,70 +557,86 @@ template <>
 struct is_string_like<std::string_view> : std::true_type {};
 
 template <template <typename...> class MapT, typename K, typename V, typename... Ts>
-static JsonSchema generate_map_schema([[maybe_unused]] const MapT<K, V, Ts...>& obj) {
+static bool generate_map_schema([[maybe_unused]] const MapT<K, V, Ts...>& obj, JsonSchema& def) {
     // 使用 C++17 的 if constexpr 进行编译期分支
     if constexpr (is_string_like<K>::value) {
         // Case 1: 键是 std::string，映射到 JSON object
-        JsonSchema schema;
-        schema.type                 = "object";
-        schema.additionalProperties = std::make_unique<JsonSchema>(SchemaGenerator<std::decay_t<V>>::get(V{}));
-        return schema;
+        def.type = "object";
+        if (!std::holds_alternative<std::unique_ptr<JsonSchema>>(def.additionalProperties)) {
+            def.additionalProperties = std::make_unique<JsonSchema>();
+        }
+        auto& additionalProperties = std::get<std::unique_ptr<JsonSchema>>(def.additionalProperties);
+        if (!additionalProperties) {
+            additionalProperties = std::make_unique<JsonSchema>();
+        }
+        return SchemaGenerator<std::decay_t<V>>::get(V{}, *additionalProperties);
     } else {
         // Case 2: 键不是 std::string，映射到键值对数组
-        JsonSchema schema;
-        schema.type = "array";
+        def.type = "array";
 
         // 定义数组元素的 schema：一个包含 'key' 和 'value' 的对象
         JsonSchema itemSchema;
-        itemSchema.type       = "object";
-        itemSchema.properties = std::map<std::string, JsonSchema>{
-            {"key", SchemaGenerator<std::decay_t<K>>::get(K{})}, {"value", SchemaGenerator<std::decay_t<V>>::get(V{})}};
+        itemSchema.type = "object";
+        if (!std::holds_alternative<std::unique_ptr<JsonSchema>>(def.items)) {
+            def.items = std::make_unique<JsonSchema>();
+        }
+        auto& item = std::get<std::unique_ptr<JsonSchema>>(def.items);
+        if (item == nullptr) {
+            item = std::make_unique<JsonSchema>();
+        }
+        if (!item->properties.has_value()) {
+            item->properties = std::map<std::string, JsonSchema>{};
+        }
+        auto& properties    = item->properties.value();
         itemSchema.required = {"key", "value"};
-
-        schema.items = std::make_unique<JsonSchema>(std::move(itemSchema));
-        return schema;
+        return SchemaGenerator<std::decay_t<K>>::get(K{}, properties["key"]) &&
+               SchemaGenerator<std::decay_t<V>>::get(V{}, properties["value"]);
     }
 }
 
 template <typename K, typename V>
 struct SchemaGenerator<std::map<K, V>, void> {
-    static JsonSchema get(const std::map<K, V>& obj) { return generate_map_schema(obj); }
+    static bool get(const std::map<K, V>& obj, JsonSchema& def) { return generate_map_schema(obj, def); }
 };
 
 template <typename K, typename V>
 struct SchemaGenerator<std::unordered_map<K, V>, void> {
-    static JsonSchema get(const std::unordered_map<K, V>& obj) { return generate_map_schema(obj); }
+    static bool get(const std::unordered_map<K, V>& obj, JsonSchema& def) { return generate_map_schema(obj, def); }
 };
 
 template <typename K, typename V>
 struct SchemaGenerator<std::multimap<K, V>, void> {
-    static JsonSchema get(const std::multimap<K, V>& obj) { return generate_map_schema(obj); }
+    static bool get(const std::multimap<K, V>& obj, JsonSchema& def) { return generate_map_schema(obj, def); }
 };
 
 template <typename K, typename V>
 struct SchemaGenerator<std::unordered_multimap<K, V>, void> {
-    static JsonSchema get(const std::unordered_multimap<K, V>& obj) { return generate_map_schema(obj); }
+    static bool get(const std::unordered_multimap<K, V>& obj, JsonSchema& def) { return generate_map_schema(obj, def); }
 };
 
 template <>
 struct SchemaGenerator<std::monostate, void> {
-    static JsonSchema get(const std::monostate& /*unused*/) {
-        JsonSchema schema;
-        schema.type = "null";
-        return schema;
+    static bool get(const std::monostate& /*unused*/, JsonSchema& def) {
+        def.type = "null";
+        return true;
     }
 };
 
 template <typename... Ts>
 struct SchemaGenerator<std::variant<Ts...>, void> {
-    static JsonSchema get([[maybe_unused]] const std::variant<Ts...>& var) {
-        JsonSchema schema;
+    static bool get([[maybe_unused]] const std::variant<Ts...>& var, JsonSchema& def) {
+        bool ret = true;
         // 创建一个 vector 用于存储每个候选项的 schema
         std::vector<JsonSchema> subSchemas;
-        // 使用 C++17 折叠表达式，为参数包中每个类型生成 schema 并存入 vector
-        (subSchemas.push_back(SchemaGenerator<std::decay_t<Ts>>::get(Ts{})), ...);
-        schema.oneOf = std::move(subSchemas);
-        return schema;
+        if (!def.oneOf.has_value()) {
+            def.oneOf = std::vector<JsonSchema>();
+        }
+        auto& oneOf = def.oneOf.value();
+        oneOf.resize(sizeof...(Ts));
+        ret = [&]<size_t... Is>(std::index_sequence<Is...>) {
+            return (SchemaGenerator<std::decay_t<Ts>>::get(Ts{}, oneOf[Is]) && ...);
+        };
+        return ret;
     }
 };
 NEKO_END_NAMESPACE

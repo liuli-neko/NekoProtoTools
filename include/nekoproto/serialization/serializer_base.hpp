@@ -161,8 +161,6 @@ public:                                                                         
         auto tuple = std::tie(__VA_ARGS__);                                                                            \
         return std::get<N>(tuple);                                                                                     \
     }                                                                                                                  \
-    friend struct Neko;                                                                                                \
-                                                                                                                       \
     struct Neko {                                                                                                      \
         constexpr static std::array names = NEKO_NAMESPACE::detail::_make_names_impl<#__VA_ARGS__>::names;             \
         constexpr static auto values      = []<std::size_t... Is>(std::index_sequence<Is...>) {                        \
