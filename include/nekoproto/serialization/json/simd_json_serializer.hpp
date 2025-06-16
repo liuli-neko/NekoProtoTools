@@ -805,9 +805,13 @@ public:
                     return true;
                 }
 #endif
-                typename traits::optional_like_type<T>::type result;
-                mLastResult = operator()(result);
-                traits::optional_like_type<T>::set_value(value.value, std::move(result));
+                if constexpr (std::is_default_constructible_v<typename traits::optional_like_type<T>::type>) {
+                    typename traits::optional_like_type<T>::type temp;
+                    mLastResult = (*this)(temp);
+                    traits::optional_like_type<T>::set_value(value.value, std::move(temp));
+                } else {
+                    mLastResult = (*this)(traits::optional_like_type<T>::get_value(value.value));
+                }
 #if defined(NEKO_VERBOSE_LOGS)
                 if (mLastResult) {
                     NEKO_LOG_INFO("JsonSerializer", "optional field {} get value success.",

@@ -18,6 +18,8 @@
 #include <string_view>
 #endif
 
+#include "json_serializer.hpp"
+
 NEKO_BEGIN_NAMESPACE
 
 class PrintSerializer : public detail::OutputSerializer<PrintSerializer> {
@@ -143,5 +145,16 @@ inline std::string serializable_to_string(T&& value) NEKO_NOEXCEPT {
     print.end();
     return buffer;
 };
+
+#ifndef NEKO_PROTO_NO_JSON_SERIALIZER
+template <typename T>
+inline std::string to_json_string(T&& value) {
+    std::vector<char> buffer;
+    JsonSerializer::OutputSerializer json(buffer);
+    json(value);
+    json.end();
+    return std::string(buffer.begin(), buffer.end());
+}
+#endif
 
 NEKO_END_NAMESPACE

@@ -202,8 +202,8 @@ private:
         requires(!traits::has_function_load<T, SerializerType>) && (!traits::has_method_load<T, SerializerType>)
     bool _processImpl(T& /*unused*/) NEKO_NOEXCEPT {
         static_assert(traits::has_function_load<T, SerializerType>,
-                      "can not find any function to serialize this Type, must save method"
-                      "or save function.");
+                      "can not find any function to serialize this Type, must load method"
+                      "or load function.");
         return false;
     }
 
