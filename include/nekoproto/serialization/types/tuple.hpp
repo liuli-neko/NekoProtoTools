@@ -49,12 +49,12 @@ struct UnfoldTupleHelper2<SerializerT, T, 0, void> {
 
 template <typename SerializerT, typename... Ts>
 inline bool unfold_tuple_value(SerializerT& sa, std::tuple<Ts...>& value) {
-    return UnfoldTupleHelper2<SerializerT, std::tuple<Ts...>, sizeof...(Ts) - 1>::unfoldValue(sa, value);
+    return UnfoldTupleHelper2<SerializerT, std::tuple<Ts...>, (int)sizeof...(Ts) - 1>::unfoldValue(sa, value);
 }
 
 template <typename SerializerT, typename... Ts>
 inline bool unfold_tuple_value(SerializerT& sa, const std::tuple<Ts...>& value) {
-    return UnfoldTupleHelper1<SerializerT, std::tuple<Ts...>, sizeof...(Ts) - 1>::unfoldValue(sa, value);
+    return UnfoldTupleHelper1<SerializerT, std::tuple<Ts...>, (int)sizeof...(Ts) - 1>::unfoldValue(sa, value);
 }
 } // namespace detail
 
@@ -73,7 +73,7 @@ inline bool load(SerializerT& sa, std::tuple<Ts...>& value) {
     if (!ret) {
         NEKO_LOG_INFO("xxx", "why");
     }
-    ret           = ret && sa(make_size_tag(size));
+    ret = ret && sa(make_size_tag(size));
     if (size != sizeof...(Ts)) {
         NEKO_LOG_ERROR("proto", "tuple size mismatch, expected: {}, got: {}", sizeof...(Ts), size);
         sa.finishNode();
