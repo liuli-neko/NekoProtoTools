@@ -527,10 +527,12 @@ public:
 
     bool loadValue(detail::RapidJsonValue& value) NEKO_NOEXCEPT {
         if (mCurrentItem == nullptr) {
-            return false;
+            value = detail::RapidJsonValue(mDocument);
+        } else {
+            value = detail::RapidJsonValue((*mCurrentItem).value());
+            ++(*mCurrentItem);
         }
         mLastResult = true;
-        value       = detail::RapidJsonValue((*mCurrentItem).value());
         return true;
     }
 

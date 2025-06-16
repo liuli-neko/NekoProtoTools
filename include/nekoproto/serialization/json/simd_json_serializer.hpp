@@ -186,8 +186,10 @@ struct json_output_buffer_type<T, typename std::enable_if<std::is_base_of<std::o
 class SimdJsonValue {
 public:
     SimdJsonValue() = default;
-    explicit SimdJsonValue(const RawJsonValue& value) { mValue = std::make_shared<RawJsonValue>(value); }
-    explicit SimdJsonValue(const JsonValue& value) {
+    explicit SimdJsonValue(const RawJsonValue& value, std::shared_ptr<simd::JsonParser> parser) : mParser(parser) {
+        mValue = std::make_shared<RawJsonValue>(value);
+    }
+    explicit SimdJsonValue(const JsonValue& value, std::shared_ptr<simd::JsonParser> parser) : mParser(parser) {
         if (value.error() == simdjson::error_code::SUCCESS) {
             mValue = std::make_shared<RawJsonValue>(value.value_unsafe());
         }
@@ -227,7 +229,7 @@ public:
         if (isObject()) {
             auto value = mValue->get_object().at_key(std::string_view(name));
             if (value.error() == simdjson::error_code::SUCCESS) {
-                return SimdJsonValue(value.value());
+                return SimdJsonValue(value.value(), mParser);
             }
         }
         return {};
@@ -237,7 +239,7 @@ public:
         if (isArray() && index < size()) {
             auto array = mValue->get_array();
             if (array.error() == simdjson::error_code::SUCCESS) {
-                return SimdJsonValue(array.value().at(index));
+                return SimdJsonValue(array.value().at(index), mParser);
             }
             return {};
         }
@@ -249,7 +251,7 @@ public:
                     index--;
                     item++;
                 }
-                return SimdJsonValue(item.value());
+                return SimdJsonValue(item.value(), mParser);
             }
         }
         return {};
@@ -257,6 +259,8 @@ public:
 
 private:
     std::shared_ptr<RawJsonValue> mValue;
+
+    std::shared_ptr<simd::JsonParser> mParser; // for keep json value alive
 };
 } // namespace simd
 } // namespace detail
@@ -634,7 +638,7 @@ public:
 
     explicit SimdJsonInputSerializer(const char* buf, std::size_t size) NEKO_NOEXCEPT
         : detail::InputSerializer<SimdJsonInputSerializer>(this),
-          mItemStack() {
+          mItemStack(), mParser(std::make_shared<detail::simd::JsonParser>()) {
         while (size > 0 && buf[size - 1] == '\0') {
             size--;
         }
@@ -643,7 +647,7 @@ public:
             mLastResult = true;
             return;
         }
-        auto error = mParser.parse(buf, size).get(mRoot);
+        auto error = mParser->parse(buf, size).get(mRoot);
         if (error != 0U) {
             NEKO_LOG_INFO("JsonSerializer", "simdjson parser error: {}", simdjson::error_message(error));
             mLastResult = false;
@@ -761,11 +765,12 @@ public:
 
     bool loadValue(detail::simd::SimdJsonValue& value) NEKO_NOEXCEPT {
         if (mCurrentItem == nullptr) {
-            return false;
+            value = detail::simd::SimdJsonValue(mRoot, mParser);
+        } else {
+            value = detail::simd::SimdJsonValue((*mCurrentItem).value().value(), mParser);
+            ++(*mCurrentItem);
         }
         mLastResult = true;
-        value       = detail::simd::SimdJsonValue((*mCurrentItem).value().value());
-        ++(*mCurrentItem);
         return true;
     }
 
@@ -924,7 +929,7 @@ private:
     std::vector<detail::simd::ConstJsonIterator> mItemStack;
     detail::simd::ConstJsonIterator* mCurrentItem;
     detail::simd::RawJsonValue mRoot;
-    detail::simd::JsonParser mParser;
+    std::shared_ptr<detail::simd::JsonParser> mParser;
     bool mLastResult = true;
 };
 
