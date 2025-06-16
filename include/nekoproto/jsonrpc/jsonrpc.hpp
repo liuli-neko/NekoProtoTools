@@ -211,14 +211,15 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
     std::string method;
     ParamsTupleType params;
     std::optional<JsonRpcIdType> id;
+    bool hasParams = false;
 
     template <typename SerializerT>
     bool save(SerializerT& serializer) const NEKO_NOEXCEPT {
         serializer.startObject(-1);
         if constexpr (sizeof...(ArgNames) == 0) {
-            return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                              NEKO_PROTO_NAME_VALUE_PAIR(params), NEKO_PROTO_NAME_VALUE_PAIR(id)) &
-                   serializer.endObject();
+            bool ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
+                                  NEKO_PROTO_NAME_VALUE_PAIR(id), NEKO_PROTO_NAME_VALUE_PAIR(params));
+            return serializer.endObject() && ret;
         } else {
             traits::SerializerHelperObject<const ParamsTupleType, ArgNames...> mParamsHelper(params);
             auto ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
@@ -234,14 +235,15 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
     bool load(SerializerT& serializer) NEKO_NOEXCEPT {
         serializer.startNode();
         if constexpr (sizeof...(ArgNames) == 0) {
-            return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                              NEKO_PROTO_NAME_VALUE_PAIR(params), NEKO_PROTO_NAME_VALUE_PAIR(id)) &
-                   serializer.finishNode();
+            bool ret  = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
+                                   NEKO_PROTO_NAME_VALUE_PAIR(id));
+            hasParams = serializer(NEKO_PROTO_NAME_VALUE_PAIR(params));
+            return serializer.finishNode() && ret;
         } else {
             traits::SerializerHelperObject<ParamsTupleType, ArgNames...> mParamsHelper(params);
-            bool ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                                  make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id));
-            serializer(make_name_value_pair("params", mParamsHelper));
+            bool ret  = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
+                                   make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id));
+            hasParams = serializer(make_name_value_pair("params", mParamsHelper));
 
             return serializer.finishNode() && ret;
         }
@@ -305,11 +307,7 @@ public:
     static constexpr std::string_view Name = MethodName.view();
 
     static RequestType request(const JsonRpcIdType& id, ParamsTupleType&& params = {}) {
-        if constexpr (RpcMethodTraits<T>::NumParams == 0) {
-            return RequestType{.method = MethodName.c_str(), .params = {}, .id = id};
-        } else {
-            return RequestType{.method = MethodName.c_str(), .params = std::forward<ParamsTupleType>(params), .id = id};
-        }
+        return RequestType{.method = MethodName.c_str(), .params = std::forward<ParamsTupleType>(params), .id = id};
     }
 
     static ResponseType response(const JsonRpcIdType& id, const MethodTraits::ReturnType& result) {
@@ -387,11 +385,7 @@ public:
     }
 
     static RequestType request(const JsonRpcIdType& id, ParamsTupleType&& params = {}) {
-        if constexpr (RpcMethodTraits<T>::NumParams == 0) {
-            return RequestType{.method = gName.c_str(), .params = {}, .id = id};
-        } else {
-            return RequestType{.method = gName.c_str(), .params = std::forward<ParamsTupleType>(params), .id = id};
-        }
+        return RequestType{.method = gName.c_str(), .params = std::forward<ParamsTupleType>(params), .id = id};
     }
 
     static ResponseType response(const JsonRpcIdType& id, const MethodTraits::ReturnType& result) {
