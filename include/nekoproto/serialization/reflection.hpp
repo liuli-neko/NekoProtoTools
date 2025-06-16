@@ -60,13 +60,21 @@ template <typename T, class Obj>
 concept is_member_ref_function = requires(T val, Obj& obj) { std::is_lvalue_reference<decltype(val(obj))>::value; };
 
 template <typename T>
-struct is_std_tuple : std::false_type {};
+struct is_std_tuple_imp : std::false_type {}; // NOLINT
+template <typename... Ts>
+struct is_std_tuple_imp<std::tuple<Ts...>> : std::true_type {};
 
 template <typename... Ts>
-struct is_std_tuple<std::tuple<Ts...>> : std::true_type {};
+constexpr bool is_std_tuple() {
+    if constexpr (sizeof...(Ts) == 1) {
+        return is_std_tuple_imp<std::tuple_element_t<0, std::tuple<Ts...>>>::value;
+    } else {
+        return false;
+    }
+}
 
-template <typename T>
-inline constexpr bool is_std_tuple_v = is_std_tuple<std::remove_cvref_t<T>>::value;
+template <typename... Ts>
+inline constexpr bool is_std_tuple_v = is_std_tuple<Ts...>(); // NOLINT
 } // namespace detail
 
 template <typename T, std::size_t N>
@@ -228,11 +236,11 @@ concept is_meta_ref_value = requires {
 };
 
 template <typename A, typename T, class enable = void>
-struct is_all_meta_ref_value : std::false_type {};
+struct is_all_meta_ref_value : std::false_type {}; // NOLINT
 
 template <typename A, typename... Args>
 struct is_all_meta_ref_value<A, std::tuple<Args...>, void> {
-    constexpr static bool value = (MemberMetadata<Args, A>::IsOk && ...);
+    constexpr static bool value = (MemberMetadata<Args, A>::IsOk && ...); // NOLINT
 };
 
 template <typename T>
@@ -475,7 +483,7 @@ concept has_name_member = requires {
 
 template <typename T>
 struct ReflectHelper {
-    static auto getNames() {
+    static constexpr auto getNames() {
         if constexpr (detail::has_name_function<T>) {
             return detail::MetaPrivate<T>::names();
         } else if constexpr (detail::has_name_member<T>) {
@@ -485,14 +493,14 @@ struct ReflectHelper {
         }
     }
     template <typename U>
-    static decltype(auto) getValues(U&& obj) {
+    static constexpr decltype(auto) getValues(U&& obj) {
         if constexpr (detail::has_value_function_one<T>) {
             return detail::MetaPrivate<T>::value(std::forward<U>(obj));
         } else {
             return getValues();
         }
     }
-    static decltype(auto) getValues() {
+    static constexpr decltype(auto) getValues() {
         if constexpr (detail::has_value_function<T>) {
             return detail::MetaPrivate<T>::value();
         } else if constexpr (detail::has_value_member<T>) {
@@ -547,7 +555,7 @@ template <typename T, class enable = void>
 struct Reflect {
     template <typename U, typename CallAbleT>
         requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
-    static void forEachWithoutName(U&& obj, CallAbleT&& func) noexcept {
+    static constexpr void forEachWithoutName(U&& obj, CallAbleT&& func) noexcept {
         if constexpr (detail::has_values_meta<T>) {
             decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
             if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
@@ -564,7 +572,7 @@ struct Reflect {
 
     template <typename U, typename CallAbleT>
         requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
-    static void forEachWithoutNameTags(U&& obj, CallAbleT&& func) noexcept {
+    static constexpr void forEachWithoutNameTags(U&& obj, CallAbleT&& func) noexcept {
         if constexpr (detail::has_values_meta<T>) {
             decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
             if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
@@ -583,7 +591,7 @@ struct Reflect {
 
     template <typename U, typename CallAbleT>
         requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
-    static void forEachWithName(U&& obj, CallAbleT&& func) noexcept {
+    static constexpr void forEachWithName(U&& obj, CallAbleT&& func) noexcept {
         if constexpr (detail::has_values_meta<T> && detail::has_names_meta<T>) {
             auto names            = detail::ReflectHelper<T>::getNames();
             decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
@@ -605,7 +613,7 @@ struct Reflect {
 
     template <typename U, typename CallAbleT>
         requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
-    static void forEachWithNameTags(U&& obj, CallAbleT&& func) noexcept {
+    static constexpr void forEachWithNameTags(U&& obj, CallAbleT&& func) noexcept {
         if constexpr (detail::has_values_meta<T> && detail::has_names_meta<T>) {
             auto names            = detail::ReflectHelper<T>::getNames();
             decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
@@ -632,7 +640,7 @@ struct Reflect {
             forEachWithName(obj, func);
             func(std::declval<int&>(), std::declval<std::string_view>());
         }
-    static void forEach(U&& obj, CallAbleT&& func) noexcept {
+    static constexpr void forEach(U&& obj, CallAbleT&& func) noexcept {
         forEachWithName(obj, func);
     }
 
@@ -641,7 +649,7 @@ struct Reflect {
             forEachWithoutName(obj, func);
             func(std::declval<int&>());
         }
-    static void forEach(U&& obj, CallAbleT&& func) noexcept {
+    static constexpr void forEach(U&& obj, CallAbleT&& func) noexcept {
         forEachWithoutName(obj, func);
     }
 
@@ -650,7 +658,7 @@ struct Reflect {
             forEachWithNameTags(obj, func);
             func(std::declval<int&>(), std::declval<std::string_view>(), std::declval<const Tags&>());
         }
-    static void forEach(U&& obj, CallAbleT&& func) noexcept {
+    static constexpr void forEach(U&& obj, CallAbleT&& func) noexcept {
         forEachWithNameTags(obj, func);
     }
 
@@ -659,12 +667,14 @@ struct Reflect {
             forEachWithoutNameTags(obj, func);
             func(std::declval<int&>(), std::declval<const Tags&>());
         }
-    static void forEach(U&& obj, CallAbleT&& func) noexcept {
+    static constexpr void forEach(U&& obj, CallAbleT&& func) noexcept {
         forEachWithoutNameTags(obj, func);
     }
 
     static constexpr auto size() noexcept {
-        if constexpr (detail::has_values_meta<T>) {
+        if constexpr (detail::has_names_meta<T>) {
+            return detail::ReflectHelper<T>::getNames().size();
+        } else if constexpr (detail::has_values_meta<T>) {
             if constexpr (detail::has_value_function_one<T>) {
                 return detail::member_count_v<T>;
             } else {
@@ -675,6 +685,8 @@ struct Reflect {
                     return 1;
                 }
             }
+        } else {
+            return 0;
         }
     }
 

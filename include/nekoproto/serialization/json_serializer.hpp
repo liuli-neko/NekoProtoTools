@@ -22,4 +22,6 @@ NEKO_END_NAMESPACE
 NEKO_BEGIN_NAMESPACE
 using JsonSerializer = SimdJsonSerializer;
 NEKO_END_NAMESPACE
+#else
+#define NEKO_PROTO_NO_JSON_SERIALIZER
 #endif

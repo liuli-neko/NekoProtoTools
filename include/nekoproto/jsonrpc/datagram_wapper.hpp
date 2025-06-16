@@ -89,7 +89,7 @@ public:
     virtual auto isListening() -> bool                                                                 = 0;
 };
 
-template <typename T, std::size_t N = 1500>
+template <typename T, class enable = void>
 class DatagramClient;
 /**
  * @brief 数据包接收，负责拆包，默认为最大长度1500的UDP包
@@ -98,7 +98,7 @@ class DatagramClient;
  * @tparam N
  */
 template <>
-class DatagramClient<ILIAS_NAMESPACE::UdpClient, 1500>
+class DatagramClient<ILIAS_NAMESPACE::UdpClient, void>
     : public DatagramBase, public DatagramClientBase, public DatagramServerBase {
 public:
     DatagramClient() { memset(buffer.data(), 0, 1500); }
@@ -212,7 +212,7 @@ public:
  * @tparam N
  */
 template <>
-class DatagramClient<ILIAS_NAMESPACE::TcpClient, 1500> : public DatagramBase, public DatagramClientBase {
+class DatagramClient<ILIAS_NAMESPACE::TcpClient, void> : public DatagramBase, public DatagramClientBase {
 public:
     DatagramClient() = default;
     DatagramClient(ILIAS_NAMESPACE::TcpClient&& client) : client(std::move(client)) {}
@@ -315,7 +315,7 @@ public:
 };
 
 template <>
-class DatagramClient<ILIAS_NAMESPACE::TcpListener, 1500> : public DatagramBase, public DatagramServerBase {
+class DatagramClient<ILIAS_NAMESPACE::TcpListener, void> : public DatagramBase, public DatagramServerBase {
 public:
     DatagramClient() {}
 

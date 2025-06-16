@@ -26,19 +26,77 @@ namespace detail {
 template <typename T, class enable = void>
 class RpcMethodTraits;
 
+template <typename... Args>
+constexpr bool is_automatic_expansion_able() {
+    if constexpr (sizeof...(Args) == 1) {
+        return has_values_meta<std::remove_cvref_t<std::tuple_element_t<0, std::tuple<Args...>>>> &&
+               has_names_meta<std::remove_cvref_t<std::tuple_element_t<0, std::tuple<Args...>>>>;
+    } else {
+        return false;
+    }
+}
+
+template <typename... Args>
+constexpr bool is_automatic_expansion_able_v = is_automatic_expansion_able<Args...>(); // NOLINT
+
+template <typename RetT, typename Arg>
+    requires is_automatic_expansion_able_v<Arg> && traits::IsSerializable<std::remove_cvref_t<RetT>>::value
+class RpcMethodTraits<RetT(Arg), void> {
+public:
+    using ParamsTupleType = std::remove_cvref_t<Arg>;
+    using ReturnType =
+        std::optional<std::conditional_t<std::is_void_v<RetT>, std::nullptr_t, std::remove_cvref_t<RetT>>>;
+    using FunctionType                             = std::function<RetT(Arg)>;
+    using RawReturnType                            = RetT;
+    using RawParamsType                            = std::tuple<Arg>;
+    using CoroutinesFuncType                       = std::function<ILIAS_NAMESPACE::IoTask<RawReturnType>(Arg)>;
+    constexpr static int NumParams                 = 1;
+    constexpr static int ParamsSize                = Reflect<Arg>::size();
+    constexpr static bool IsAutomaticExpansionAble = true;
+    constexpr static bool IsTopTuple               = false;
+
+    auto operator()(Arg arg) const -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
+        if (mCoFunction) {
+            co_return co_await mCoFunction(std::forward<Arg>(arg));
+        }
+        co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MethodNotBind);
+    }
+
+    auto notification(Arg arg) const -> ILIAS_NAMESPACE::IoTask<void> {
+        std::unique_ptr<bool, std::function<void(bool*)>> raii((bool*)(mIsNotification = true),
+                                                               [this](bool*) { mIsNotification = false; });
+        if (mCoFunction) {
+            if (auto ret = co_await mCoFunction(std::forward<Arg>(arg)); !ret) {
+                co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+            }
+        }
+        co_return {};
+    }
+
+    auto isNotification() const -> bool { return mIsNotification; }
+
+protected:
+    CoroutinesFuncType mCoFunction;
+    mutable bool mIsNotification = false;
+};
+
 template <typename RetT, typename... Args>
-    requires traits::IsSerializable<std::tuple<std::remove_cvref_t<Args>...>>::value &&
-             traits::IsSerializable<std::remove_cvref_t<RetT>>::value
+    requires(!is_automatic_expansion_able_v<Args...>) &&
+            (!is_std_tuple_v<Args...>) && traits::IsSerializable<std::tuple<std::remove_cvref_t<Args>...>>::value
+            && traits::IsSerializable<std::remove_cvref_t<RetT>>::value
 class RpcMethodTraits<RetT(Args...), void> {
 public:
     using ParamsTupleType = std::tuple<std::remove_cvref_t<Args>...>;
     using ReturnType =
         std::optional<std::conditional_t<std::is_void_v<RetT>, std::nullptr_t, std::remove_cvref_t<RetT>>>;
-    using FunctionType             = std::function<RetT(Args...)>;
-    using RawReturnType            = RetT;
-    using RawParamsType            = std::tuple<Args...>;
-    using CoroutinesFuncType       = std::function<ILIAS_NAMESPACE::IoTask<RawReturnType>(Args...)>;
-    constexpr static int NumParams = sizeof...(Args);
+    using FunctionType                             = std::function<RetT(Args...)>;
+    using RawReturnType                            = RetT;
+    using RawParamsType                            = std::tuple<Args...>;
+    using CoroutinesFuncType                       = std::function<ILIAS_NAMESPACE::IoTask<RawReturnType>(Args...)>;
+    constexpr static int NumParams                 = sizeof...(Args);
+    constexpr static int ParamsSize                = sizeof...(Args);
+    constexpr static bool IsAutomaticExpansionAble = false;
+    constexpr static bool IsTopTuple               = false;
 
     auto operator()(Args... args) const -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
         if (mCoFunction) {
@@ -64,32 +122,36 @@ protected:
     CoroutinesFuncType mCoFunction;
     mutable bool mIsNotification = false;
 };
-
-template <typename RetT>
-    requires traits::IsSerializable<std::remove_cvref_t<RetT>>::value
-class RpcMethodTraits<RetT(void), void> {
+template <typename RetT, typename Arg>
+    requires(!is_automatic_expansion_able_v<Arg>) && is_std_tuple_v<Arg> &&
+            traits::IsSerializable<std::remove_cvref_t<Arg>>::value &&
+            traits::IsSerializable<std::remove_cvref_t<RetT>>::value
+class RpcMethodTraits<RetT(Arg), void> {
 public:
-    using ParamsTupleType = std::optional<std::array<int, 0>>;
+    using ParamsTupleType = std::remove_cvref_t<Arg>;
     using ReturnType =
         std::optional<std::conditional_t<std::is_void_v<RetT>, std::nullptr_t, std::remove_cvref_t<RetT>>>;
-    using FunctionType             = std::function<RetT()>;
-    using RawReturnType            = RetT;
-    using RawParamsType            = std::tuple<>;
-    using CoroutinesFuncType       = std::function<ILIAS_NAMESPACE::IoTask<RawReturnType>()>;
-    constexpr static int NumParams = 0;
+    using FunctionType                             = std::function<RetT(Arg)>;
+    using RawReturnType                            = RetT;
+    using RawParamsType                            = std::tuple<Arg>;
+    using CoroutinesFuncType                       = std::function<ILIAS_NAMESPACE::IoTask<RawReturnType>(Arg)>;
+    constexpr static int NumParams                 = 1;
+    constexpr static int ParamsSize                = std::tuple_size_v<Arg>;
+    constexpr static bool IsAutomaticExpansionAble = false;
+    constexpr static bool IsTopTuple               = true;
 
-    auto operator()() const noexcept -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
+    auto operator()(Arg arg) const -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
         if (mCoFunction) {
-            co_return co_await mCoFunction();
+            co_return co_await mCoFunction(std::forward<Arg>(arg));
         }
         co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MethodNotBind);
     }
 
-    auto notification() const -> ILIAS_NAMESPACE::IoTask<> {
+    auto notification(Arg arg) const -> ILIAS_NAMESPACE::IoTask<void> {
         std::unique_ptr<bool, std::function<void(bool*)>> raii((bool*)(mIsNotification = true),
                                                                [this](bool*) { mIsNotification = false; });
         if (mCoFunction) {
-            if (auto ret = co_await mCoFunction(); !ret) {
+            if (auto ret = co_await mCoFunction(std::forward<Arg>(arg)); !ret) {
                 co_return ILIAS_NAMESPACE::Unexpected(ret.error());
             }
         }
@@ -153,36 +215,36 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
     template <typename SerializerT>
     bool save(SerializerT& serializer) const NEKO_NOEXCEPT {
         serializer.startObject(-1);
-        if constexpr (sizeof...(ArgNames) == 0 && RpcMethodTraits<Args...>::NumParams == 1) {
-            if constexpr (!is_minimal_serializable<
-                              std::tuple_element_t<0, typename RpcMethodTraits<Args...>::RawParamsType>>::value) {
-                return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                                  make_name_value_pair("params", std::get<0>(params)), NEKO_PROTO_NAME_VALUE_PAIR(id)) &
-                       serializer.endObject();
+        if constexpr (sizeof...(ArgNames) == 0) {
+            return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
+                              NEKO_PROTO_NAME_VALUE_PAIR(params), NEKO_PROTO_NAME_VALUE_PAIR(id)) &
+                   serializer.endObject();
+        } else {
+            traits::SerializerHelperObject<const ParamsTupleType, ArgNames...> mParamsHelper(params);
+            auto ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
+                                  NEKO_PROTO_NAME_VALUE_PAIR(id));
+            if (RpcMethodTraits<Args...>::NumParams > 0 && RpcMethodTraits<Args...>::ParamsSize > 0) {
+                serializer(make_name_value_pair("params", mParamsHelper));
             }
+            return serializer.endObject() && ret;
         }
-        traits::SerializerHelperObject<const ParamsTupleType, ArgNames...> mParamsHelper{params};
-        return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                          make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id)) &
-               serializer.endObject();
     }
 
     template <typename SerializerT>
     bool load(SerializerT& serializer) NEKO_NOEXCEPT {
         serializer.startNode();
-        if constexpr (sizeof...(ArgNames) == 0 && RpcMethodTraits<Args...>::NumParams == 1) {
-            if constexpr (!is_minimal_serializable<
-                              std::tuple_element_t<0, typename RpcMethodTraits<Args...>::RawParamsType>>::value) {
+        if constexpr (sizeof...(ArgNames) == 0) {
+            return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
+                              NEKO_PROTO_NAME_VALUE_PAIR(params), NEKO_PROTO_NAME_VALUE_PAIR(id)) &
+                   serializer.finishNode();
+        } else {
+            traits::SerializerHelperObject<ParamsTupleType, ArgNames...> mParamsHelper(params);
+            bool ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
+                                  make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id));
+            serializer(make_name_value_pair("params", mParamsHelper));
 
-                return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                                  make_name_value_pair("params", std::get<0>(params)), NEKO_PROTO_NAME_VALUE_PAIR(id)) &
-                       serializer.finishNode();
-            }
+            return serializer.finishNode() && ret;
         }
-        traits::SerializerHelperObject<ParamsTupleType, ArgNames...> mParamsHelper{params};
-        return serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                          make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id)) &
-               serializer.finishNode();
     }
     NEKO_SERIALIZER(jsonrpc, method, params, id)
 };
@@ -243,7 +305,11 @@ public:
     static constexpr std::string_view Name = MethodName.view();
 
     static RequestType request(const JsonRpcIdType& id, ParamsTupleType&& params = {}) {
-        return RequestType{.method = MethodName.c_str(), .params = std::forward<ParamsTupleType>(params), .id = id};
+        if constexpr (RpcMethodTraits<T>::NumParams == 0) {
+            return RequestType{.method = MethodName.c_str(), .params = {}, .id = id};
+        } else {
+            return RequestType{.method = MethodName.c_str(), .params = std::forward<ParamsTupleType>(params), .id = id};
+        }
     }
 
     static ResponseType response(const JsonRpcIdType& id, const MethodTraits::ReturnType& result) {
@@ -321,7 +387,11 @@ public:
     }
 
     static RequestType request(const JsonRpcIdType& id, ParamsTupleType&& params = {}) {
-        return RequestType{.method = gName.c_str(), .params = std::forward<ParamsTupleType>(params), .id = id};
+        if constexpr (RpcMethodTraits<T>::NumParams == 0) {
+            return RequestType{.method = gName.c_str(), .params = {}, .id = id};
+        } else {
+            return RequestType{.method = gName.c_str(), .params = std::forward<ParamsTupleType>(params), .id = id};
+        }
     }
 
     static ResponseType response(const JsonRpcIdType& id, const MethodTraits::ReturnType& result) {
@@ -477,8 +547,10 @@ private:
             co_return _handleError<T>(out, std::move(method), (int64_t)JsonRpcError::InvalidRequest,
                                       JsonRpcErrorCategory::instance().message((int64_t)JsonRpcError::InvalidRequest));
         }
-        if constexpr (traits::optional_like_type<typename T::ParamsTupleType>::value) {
+        if constexpr (T::NumParams == 0) {
             co_return _processMethodReturn<T>(co_await metadata(), out, std::move(method));
+        } else if constexpr (T::IsAutomaticExpansionAble || T::IsTopTuple) {
+            co_return _processMethodReturn<T>(co_await metadata(request.params), out, std::move(method));
         } else {
             co_return _processMethodReturn<T>(co_await std::apply(metadata, request.params), out, std::move(method));
         }
@@ -571,6 +643,8 @@ private:
     struct {
         RpcMethod<std::vector<std::string>(), "rpc.get_method_list"> getMethodList;
         RpcMethod<std::vector<std::string>(), "rpc.get_method_info_list"> getMethodInfoList;
+        static_assert(!detail::is_automatic_expansion_able_v<std::string>, "why");
+        static_assert(traits::IsSerializable<std::string>::value, "why");
         RpcMethod<std::string(std::string), "rpc.get_method_info", "method_name"> getMethodInfo;
         RpcMethod<std::vector<std::string>(), "rpc.get_bind_method_list"> getBindedMethodList;
     } mRpc;
@@ -874,11 +948,20 @@ private:
                 request = std::decay_t<T>::request(mId++);
             }
         } else {
-            if (notification) {
-                request    = std::decay_t<T>::request(nullptr, std::forward_as_tuple(args...));
-                request.id = std::nullopt;
+            if constexpr (std::decay_t<T>::IsAutomaticExpansionAble || std::decay_t<T>::IsTopTuple) {
+                if (notification) {
+                    request    = std::decay_t<T>::request(nullptr, std::forward<Args>(args)...);
+                    request.id = std::nullopt;
+                } else {
+                    request = std::decay_t<T>::request(mId++, std::forward<Args>(args)...);
+                }
             } else {
-                request = std::decay_t<T>::request(mId++, std::forward_as_tuple(args...));
+                if (notification) {
+                    request    = std::decay_t<T>::request(nullptr, std::forward_as_tuple(args...));
+                    request.id = std::nullopt;
+                } else {
+                    request = std::decay_t<T>::request(mId++, std::forward_as_tuple(args...));
+                }
             }
         }
         mBuffer.clear();
