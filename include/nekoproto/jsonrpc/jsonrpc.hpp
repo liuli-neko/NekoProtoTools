@@ -198,7 +198,7 @@ concept RpcMethodT = requires() { std::is_constructible_v<typename RpcMethodTrai
  * params","Internal error").
  *
  */
-using JsonRpcIdType = std::variant<std::nullptr_t, uint64_t, std::string>;
+using JsonRpcIdType = std::variant<std::monostate, uint64_t, std::string>;
 template <typename T, ConstexprString... ArgNames>
 struct JsonRpcRequest2;
 template <typename... Args, ConstexprString... ArgNames>
@@ -210,7 +210,7 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
     std::optional<std::string> jsonrpc = "2.0";
     std::string method;
     ParamsTupleType params;
-    std::optional<JsonRpcIdType> id;
+    JsonRpcIdType id;
     bool hasParams = false;
 
     template <typename SerializerT>
@@ -224,7 +224,7 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
             traits::SerializerHelperObject<const ParamsTupleType, ArgNames...> mParamsHelper(params);
             auto ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
                                   NEKO_PROTO_NAME_VALUE_PAIR(id));
-            if (RpcMethodTraits<Args...>::NumParams > 0 && RpcMethodTraits<Args...>::ParamsSize > 0) {
+            if constexpr (RpcMethodTraits<Args...>::NumParams > 0 && RpcMethodTraits<Args...>::ParamsSize > 0) {
                 serializer(make_name_value_pair("params", mParamsHelper));
             }
             return serializer.endObject() && ret;
@@ -254,7 +254,7 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
 struct JsonRpcRequestMethod {
     std::optional<std::string> jsonrpc;
     std::string method;
-    std::optional<JsonRpcIdType> id;
+    JsonRpcIdType id;
     NEKO_SERIALIZER(jsonrpc, method, id)
 };
 
@@ -432,7 +432,6 @@ struct RpcMethodErrorHelper {
 class JsonRpcServerImp {
 private:
     auto _makeBatch(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out, int batchSize) {
-        std::vector<ILIAS_NAMESPACE::Task<>> tasks;
         for (int ix = 0; ix < batchSize; ++ix) {
             JsonRpcRequestMethod method;
             if (!in(method)) {
@@ -442,9 +441,14 @@ private:
                 NEKO_LOG_ERROR("jsonrpc", "unsupport jsonrpc version! {}", method.jsonrpc.value());
                 break;
             }
+            auto id = method.id;
+            mCurrentIds.emplace_back(id);
             in.rollbackItem();
             if (auto it = mHandlers.find(method.method); it != mHandlers.end()) {
-                tasks.emplace_back(it->second(in, out, std::move(method)));
+                ilias::ScopedWaitHandle handle = mTaskScope.spawn(it->second(in, out, std::move(method)));
+                if (!std::holds_alternative<std::monostate>(id)) {
+                    mCancelHandles[id] = std::move(handle);
+                }
             } else {
                 NEKO_LOG_WARN("jsonrpc", "method {} not found!", method.method);
                 _handleError<RpcMethodErrorHelper>(
@@ -452,11 +456,10 @@ private:
                     JsonRpcErrorCategory::instance().message((int)JsonRpcError::MethodNotFound));
             }
         }
-        return ILIAS_NAMESPACE::whenAll(std::move(tasks));
     }
 
 public:
-    JsonRpcServerImp() {}
+    JsonRpcServerImp(ILIAS_NAMESPACE::IoContext& ctx) : mTaskScope(ctx) { mTaskScope.setAutoCancel(true); }
 
     template <typename T>
     auto registerRpcMethod(T& metadata) -> void {
@@ -502,7 +505,10 @@ public:
             in(make_size_tag(batchSize));
             out.startArray(batchSize);
         }
-        co_await _makeBatch(in, out, (int)batchSize);
+        _makeBatch(in, out, (int)batchSize);
+        co_await mTaskScope;
+        mCurrentIds.clear();
+        mCancelHandles.clear();
         if (batchRequest) {
             in.finishNode();
             out.endArray();
@@ -519,6 +525,14 @@ public:
         co_return buffer;
     }
 
+    void cancel(JsonRpcIdType id) {
+        if (auto it = mCancelHandles.find(id); it != mCancelHandles.end()) {
+            it->second.cancel();
+        }
+    }
+
+    void cancelAll() { mTaskScope.cancel(); }
+
     auto receiveLoop(DatagramClientBase* client) -> ILIAS_NAMESPACE::Task<void> {
         while (client != nullptr) {
             if (auto buffer = co_await client->recv(); buffer && buffer->size() > 0) {
@@ -532,6 +546,8 @@ public:
             }
         }
     }
+
+    auto getCurrentIds() const -> const std::vector<JsonRpcIdType>& { return mCurrentIds; }
 
 private:
     template <typename T>
@@ -563,20 +579,20 @@ private:
 
     template <typename T, typename RetT>
     auto _handleSuccess(JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method, RetT&& ret) -> void {
-        if (!method.id.has_value()) { // notification
+        if (std::holds_alternative<std::monostate>(method.id)) { // notification
             return;
         }
-        if (!method.jsonrpc.has_value() && method.id.value().index() == 0) { // notification in jsonrpc 1.0
+        if (!method.jsonrpc.has_value() && method.id.index() == 1) { // notification in jsonrpc 1.0
             return;
         }
         std::vector<char> buffer;
         if constexpr (std::is_void_v<typename T::RawReturnType>) {
-            if (!out(T::response(method.id.value(), nullptr))) {
+            if (!out(T::response(method.id, nullptr))) {
                 NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
                 return;
             }
         } else {
-            if (!out(T::response(method.id.value(), std::forward<RetT>(ret)))) {
+            if (!out(T::response(method.id, std::forward<RetT>(ret)))) {
                 NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
                 return;
             }
@@ -586,13 +602,13 @@ private:
     template <typename T>
     auto _handleError(JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method, int64_t code,
                       std::string message) -> void {
-        if (!method.id.has_value()) { // notification
+        if (std::holds_alternative<std::monostate>(method.id)) { // notification
             return;
         }
-        if (!method.jsonrpc.has_value() && method.id.value().index() == 0) { // notification in jsonrpc 1.0
+        if (!method.jsonrpc.has_value() && method.id.index() == 1) { // notification in jsonrpc 1.0
             return;
         }
-        if (!out(T::response(method.id.value(), {code, message}))) {
+        if (!out(T::response(method.id, {code, message}))) {
             NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
             return;
         }
@@ -617,11 +633,27 @@ private:
     }
 
 private:
+    std::vector<detail::JsonRpcIdType> mCurrentIds;
+    std::map<JsonRpcIdType, ILIAS_NAMESPACE::ScopedWaitHandle<>> mCancelHandles;
+    ILIAS_NAMESPACE::TaskScope mTaskScope;
     std::map<std::string_view, std::function<ILIAS_NAMESPACE::Task<void>(JsonSerializer::InputSerializer& in,
                                                                          JsonSerializer::OutputSerializer& out,
                                                                          JsonRpcRequestMethod method)>>
         mHandlers;
 };
+
+std::string to_string(JsonRpcIdType id) {
+    switch (id.index()) {
+    case 0:
+        return "null";
+    case 1:
+        return std::to_string(std::get<1>(id));
+    case 2:
+        return std::get<2>(id);
+    default:
+        return "unknown";
+    }
+}
 
 } // namespace detail
 
@@ -644,7 +676,7 @@ private:
     } mRpc;
 
 public:
-    JsonRpcServer(ILIAS_NAMESPACE::IoContext& ctx) : mScop(ctx) {
+    JsonRpcServer(ILIAS_NAMESPACE::IoContext& ctx) : mScop(ctx), mImp(ctx) {
         mScop.setAutoCancel(true);
         _init();
     }
@@ -670,6 +702,10 @@ public:
     auto isListening() const -> bool { return mServer != nullptr && mServer->isListening(); }
 
     auto wait() -> ILIAS_NAMESPACE::Task<void> { co_await mScop; }
+    auto cancel(uint64_t id) -> void { mImp.cancel(id); }
+    auto cancel(const std::string& id) -> void { mImp.cancel(id); }
+    auto cancelAll() -> void { mImp.cancelAll(); }
+    auto getCurrentIds() const -> const std::vector<detail::JsonRpcIdType>& { return mImp.getCurrentIds(); }
 
     template <typename StreamType>
     auto start(std::string_view url) -> ILIAS_NAMESPACE::IoTask<ILIAS_NAMESPACE::Error> {
@@ -908,7 +944,7 @@ private:
             if (!metadata.isNotification()) {
                 typename std::decay_t<T>::ResponseType respone;
                 if (auto ret = co_await mClient->recv(); ret) {
-                    if (auto ret1 = _recvResponse<T>(ret.value(), respone, request.id.value()); !ret1) {
+                    if (auto ret1 = _recvResponse<T>(ret.value(), respone, request.id); !ret1) {
                         co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
                     } else {
                         if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
@@ -936,23 +972,23 @@ private:
         -> ILIAS_NAMESPACE::Result<void> {
         if constexpr (traits::optional_like_type<typename std::decay_t<T>::ParamsTupleType>::value) {
             if (notification) {
-                request    = std::decay_t<T>::request(nullptr);
-                request.id = std::nullopt;
+                request    = std::decay_t<T>::request(std::monostate{});
+                request.id = std::monostate{};
             } else {
                 request = std::decay_t<T>::request(mId++);
             }
         } else {
             if constexpr (std::decay_t<T>::IsAutomaticExpansionAble || std::decay_t<T>::IsTopTuple) {
                 if (notification) {
-                    request    = std::decay_t<T>::request(nullptr, std::forward<Args>(args)...);
-                    request.id = std::nullopt;
+                    request    = std::decay_t<T>::request(std::monostate{}, std::forward<Args>(args)...);
+                    request.id = std::monostate{};
                 } else {
                     request = std::decay_t<T>::request(mId++, std::forward<Args>(args)...);
                 }
             } else {
                 if (notification) {
-                    request    = std::decay_t<T>::request(nullptr, std::forward_as_tuple(args...));
-                    request.id = std::nullopt;
+                    request    = std::decay_t<T>::request(std::monostate{}, std::forward_as_tuple(args...));
+                    request.id = std::monostate{};
                 } else {
                     request = std::decay_t<T>::request(mId++, std::forward_as_tuple(args...));
                 }
@@ -976,8 +1012,8 @@ private:
         if (auto in = JsonSerializer::InputSerializer(reinterpret_cast<const char*>(buffer.data()), buffer.size());
             in(response)) {
             if (response.id != id) {
-                NEKO_LOG_ERROR("jsonrpc", "id mismatch: {} != {}", std::get<uint64_t>(response.id),
-                               std::get<uint64_t>(id));
+                NEKO_LOG_ERROR("jsonrpc", "id mismatch: {} != {}", detail::to_string(response.id),
+                               detail::to_string(id));
                 return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ResponseIdNotMatch);
             }
             if (response.error.has_value()) {

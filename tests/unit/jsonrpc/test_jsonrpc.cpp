@@ -400,6 +400,15 @@ TEST_F(JsonRpcTest, Basic) {
     ASSERT_TRUE(methodInfoList.has_value());
     EXPECT_EQ(methodInfoList.value().size(), 16);
 
+    server.bindMethod<>("test112", std::function([]() -> ILIAS_NAMESPACE::IoTask<void> {
+                            co_await ilias::sleep(std::chrono::milliseconds(5000));
+                            co_return {};
+                        }));
+    ilias_wait ILIAS_NAMESPACE::whenAll(client.callRemote<void>("test112"), [&server]() -> ILIAS_NAMESPACE::Task<> {
+        co_await ilias::sleep(std::chrono::milliseconds(500));
+        server.cancelAll();
+        co_return;
+    }());
     client.close();
     server.close();
 }
