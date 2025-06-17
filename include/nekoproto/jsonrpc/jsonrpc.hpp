@@ -669,7 +669,7 @@ public:
     }
     auto isListening() const -> bool { return mServer != nullptr && mServer->isListening(); }
 
-    auto wait() -> ILIAS_NAMESPACE::Task<void> { co_await mScop.wait(); }
+    auto wait() -> ILIAS_NAMESPACE::Task<void> { co_await mScop; }
 
     template <typename StreamType>
     auto start(std::string_view url) -> ILIAS_NAMESPACE::IoTask<ILIAS_NAMESPACE::Error> {
