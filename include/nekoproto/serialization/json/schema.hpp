@@ -105,7 +105,7 @@ struct JsonSchema final {
     using schema_number = std::optional<std::variant<int64_t, uint64_t, double>>;
     using schema_any    = std::variant<std::monostate, bool, int64_t, uint64_t, double, std::string>;
     // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
-    // std::optional<std::string> title{};
+    std::optional<std::string> title{};
     std::optional<std::string> description{std::nullopt};
     std::optional<schema_any> defaultValue{std::nullopt};
     std::optional<bool> deprecated{std::nullopt};
@@ -155,7 +155,7 @@ struct JsonSchema final {
                 "required", //
                 // "examples",         //
                 "$ref", //
-                // "title",            //
+                "title",            //
                 "description",      //
                 "default",          //
                 "deprecated",       //
@@ -194,7 +194,7 @@ struct JsonSchema final {
                 &T::required, //
                 // &T::examples,             //
                 &T::ref, //
-                // &T::title,                //
+                &T::title,                //
                 &T::description,      //
                 &T::defaultValue,     //
                 &T::deprecated,       //
