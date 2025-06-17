@@ -101,26 +101,26 @@ template <>
 class DatagramClient<ILIAS_NAMESPACE::UdpClient, void>
     : public DatagramBase, public DatagramClientBase, public DatagramServerBase {
 public:
-    DatagramClient() { memset(buffer.data(), 0, 1500); }
+    DatagramClient() { memset(mBuffer.data(), 0, 1500); }
 
     auto recv() -> ILIAS_NAMESPACE::IoTask<std::span<std::byte>> override {
-        if (!client) {
+        if (!mClient) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
         }
         if (mIsCancel) {
             co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
         }
-        auto ret =
-            co_await (client.recvfrom({buffer.data(), buffer.size()}, endpoint) | ILIAS_NAMESPACE::ignoreCancellation);
+        auto ret = co_await (mClient.recvfrom({mBuffer.data(), mBuffer.size()}, mEndpoint) |
+                             ILIAS_NAMESPACE::ignoreCancellation);
         if (ret) {
-            co_return std::span<std::byte>{buffer.data(), ret.value()};
+            co_return std::span<std::byte>{mBuffer.data(), ret.value()};
         } else {
             co_return ILIAS_NAMESPACE::Unexpected<ILIAS_NAMESPACE::Error>(ret.error());
         }
     }
 
     auto send(std::span<const std::byte> data) -> ILIAS_NAMESPACE::IoTask<void> override {
-        if (!client) {
+        if (!mClient) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
         }
         if (mIsCancel) {
@@ -129,10 +129,10 @@ public:
         if (data.size() >= 1500) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MessageToolLarge);
         }
-        auto ret  = co_await (client.sendto(data, endpoint) | ILIAS_NAMESPACE::ignoreCancellation);
+        auto ret  = co_await (mClient.sendto(data, mEndpoint) | ILIAS_NAMESPACE::ignoreCancellation);
         auto send = ret.value_or(0);
         while (ret && send < data.size()) {
-            ret = co_await (client.sendto({data.data() + send, data.size() - send}, endpoint) |
+            ret = co_await (mClient.sendto({data.data() + send, data.size() - send}, mEndpoint) |
                             ILIAS_NAMESPACE::ignoreCancellation);
             if (ret && ret.value() > 0) {
                 send += ret.value();
@@ -147,16 +147,16 @@ public:
     }
 
     auto close() -> void override {
-        if (client) {
-            client.close();
+        if (mClient) {
+            mClient.close();
         }
         mIsCancel = false;
     }
 
     auto cancel() -> void override {
         mIsCancel = true;
-        if (client) {
-            client.cancel();
+        if (mClient) {
+            mClient.cancel();
         }
     }
 
@@ -178,30 +178,31 @@ public:
             co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::InvalidArgument);
         }
         if (auto ret = co_await ILIAS_NAMESPACE::UdpClient::make(bindIpendpoint->family()); ret) {
-            client = std::move(ret.value());
+            mClient = std::move(ret.value());
         } else {
             co_return ILIAS_NAMESPACE::Unexpected(ret.error());
         }
-        client.setOption(ILIAS_NAMESPACE::sockopt::ReuseAddress(1));
-        if (auto ret = client.bind(bindIpendpoint.value()); !ret) {
-            client.close();
+        mClient.setOption(ILIAS_NAMESPACE::sockopt::ReuseAddress(1));
+        if (auto ret = mClient.bind(bindIpendpoint.value()); !ret) {
+            mClient.close();
             co_return ILIAS_NAMESPACE::Unexpected(ret.error());
         }
-        endpoint = remoteIpendpoint.value();
+        mEndpoint = remoteIpendpoint.value();
         co_return {};
     }
 
-    auto isConnected() -> bool override { return (bool)client; }
-    auto isListening() -> bool override { return (bool)client; }
+    auto isConnected() -> bool override { return (bool)mClient; }
+    auto isListening() -> bool override { return (bool)mClient; }
 
     auto accept()
         -> ILIAS_NAMESPACE::IoTask<std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>> override {
         co_return std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>(this, [](DatagramClientBase*) {});
     }
 
-    ILIAS_NAMESPACE::UdpClient client;
-    ILIAS_NAMESPACE::IPEndpoint endpoint;
-    std::array<std::byte, 1500> buffer;
+private:
+    ILIAS_NAMESPACE::UdpClient mClient;
+    ILIAS_NAMESPACE::IPEndpoint mEndpoint;
+    std::array<std::byte, 1500> mBuffer;
     bool mIsCancel = false;
 };
 
@@ -215,73 +216,73 @@ template <>
 class DatagramClient<ILIAS_NAMESPACE::TcpClient, void> : public DatagramBase, public DatagramClientBase {
 public:
     DatagramClient() = default;
-    DatagramClient(ILIAS_NAMESPACE::TcpClient&& client) : client(std::move(client)) {}
+    DatagramClient(ILIAS_NAMESPACE::TcpClient&& client) : mClient(std::move(client)) {}
 
     auto recv() -> ILIAS_NAMESPACE::IoTask<std::span<std::byte>> override {
-        if (!client) {
+        if (!mClient) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
         }
         if (mIsCancel) {
             co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
         }
         uint32_t size = 0;
-        if (auto ret = co_await (client.readAll({reinterpret_cast<std::byte*>(&size), sizeof(size)}) |
+        if (auto ret = co_await (mClient.readAll({reinterpret_cast<std::byte*>(&size), sizeof(size)}) |
                                  ILIAS_NAMESPACE::ignoreCancellation);
             !ret) {
             co_return ILIAS_NAMESPACE::Unexpected(ret.error());
         } else if (ret.value() == sizeof(size)) {
             size = ILIAS_NAMESPACE::networkToHost(size);
         } else {
-            client.close();
+            mClient.close();
             co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Unknown);
         }
-        if (buffer.size() < size) {
-            buffer.resize(size);
+        if (mBuffer.size() < size) {
+            mBuffer.resize(size);
         }
-        auto ret = co_await (client.readAll({buffer.data(), size}) | ILIAS_NAMESPACE::ignoreCancellation);
+        auto ret = co_await (mClient.readAll({mBuffer.data(), size}) | ILIAS_NAMESPACE::ignoreCancellation);
         if (ret && ret.value() == size) {
-            co_return std::span<std::byte>{reinterpret_cast<std::byte*>(buffer.data()), size};
+            co_return std::span<std::byte>{reinterpret_cast<std::byte*>(mBuffer.data()), size};
         } else {
-            client.close();
+            mClient.close();
             co_return ILIAS_NAMESPACE::Unexpected(ret.error_or(ILIAS_NAMESPACE::Error::Unknown));
         }
     }
 
     auto send(std::span<const std::byte> data) -> ILIAS_NAMESPACE::IoTask<void> override {
-        if (!client) {
+        if (!mClient) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
         }
         if (mIsCancel) {
             co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
         }
         auto size = ILIAS_NAMESPACE::hostToNetwork((uint32_t)data.size());
-        if (auto ret = co_await (client.writeAll({reinterpret_cast<std::byte*>(&size), sizeof(size)}) |
+        if (auto ret = co_await (mClient.writeAll({reinterpret_cast<std::byte*>(&size), sizeof(size)}) |
                                  ILIAS_NAMESPACE::ignoreCancellation);
             !ret) {
-            client.close();
+            mClient.close();
             co_return ILIAS_NAMESPACE::Unexpected(ret.error());
         } else if (ret.value() != sizeof(size)) {
-            client.close();
+            mClient.close();
             co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Unknown);
         }
-        auto ret = co_await (client.writeAll(data) | ILIAS_NAMESPACE::ignoreCancellation);
+        auto ret = co_await (mClient.writeAll(data) | ILIAS_NAMESPACE::ignoreCancellation);
         if (!ret || ret.value() != data.size()) {
-            client.close();
+            mClient.close();
             co_return ILIAS_NAMESPACE::Unexpected(ret.error_or(ILIAS_NAMESPACE::Error::Unknown));
         }
         co_return {};
     }
     auto close() -> void override {
-        if (client) {
-            client.close();
+        if (mClient) {
+            mClient.close();
         }
         mIsCancel = false;
     }
 
     auto cancel() -> void override {
         mIsCancel = true;
-        if (client) {
-            client.cancel();
+        if (mClient) {
+            mClient.cancel();
         }
     }
 
@@ -297,7 +298,7 @@ public:
         }
         if (auto ret = co_await ILIAS_NAMESPACE::TcpClient::make(ipendpoint->family()); ret) {
             if (auto ret1 = co_await ret.value().connect(ipendpoint.value()); ret1) {
-                client = std::move(ret.value());
+                mClient = std::move(ret.value());
                 co_return {};
             } else {
                 co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
@@ -307,10 +308,11 @@ public:
         }
     }
 
-    auto isConnected() -> bool override { return (bool)client; }
+    auto isConnected() -> bool override { return (bool)mClient; }
 
-    ILIAS_NAMESPACE::TcpClient client;
-    std::vector<std::byte> buffer;
+private:
+    ILIAS_NAMESPACE::TcpClient mClient;
+    std::vector<std::byte> mBuffer;
     bool mIsCancel = false;
 };
 
@@ -320,20 +322,20 @@ public:
     DatagramClient() {}
 
     auto close() -> void override {
-        if (listener) {
-            listener.close();
+        if (mListener) {
+            mListener.close();
         }
         mIsCancel = false;
     }
 
     auto cancel() -> void override {
         mIsCancel = true;
-        if (listener) {
-            listener.cancel();
+        if (mListener) {
+            mListener.cancel();
         }
     }
 
-    auto isListening() -> bool override { return (bool)listener; }
+    auto isListening() -> bool override { return (bool)mListener; }
 
     auto checkProtocol(Type type, std::string_view url) -> bool override {
         return !(url.substr(0, 6) != "tcp://") && type == Type::Server;
@@ -348,7 +350,7 @@ public:
         if (auto ret = co_await ILIAS_NAMESPACE::TcpListener::make(ipendpoint->family()); ret) {
             ret.value().setOption(ILIAS_NAMESPACE::sockopt::ReuseAddress(1));
             if (auto ret1 = ret.value().bind(ipendpoint.value()); ret1) {
-                listener = std::move(ret.value());
+                mListener = std::move(ret.value());
                 co_return {};
             } else {
                 co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
@@ -360,13 +362,13 @@ public:
 
     auto accept()
         -> ILIAS_NAMESPACE::IoTask<std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>> override {
-        if (!listener) {
+        if (!mListener) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
         }
         if (mIsCancel) {
             co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
         }
-        if (auto ret = co_await listener.accept(); ret) {
+        if (auto ret = co_await mListener.accept(); ret) {
             co_return std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>(
                 new DatagramClient<ILIAS_NAMESPACE::TcpClient>(std::move(ret.value().first)),
                 +[](DatagramClientBase* ptr) { delete ptr; });
@@ -375,8 +377,9 @@ public:
         }
     }
 
-    ILIAS_NAMESPACE::TcpListener listener;
-    std::vector<std::byte> buffer;
+private:
+    ILIAS_NAMESPACE::TcpListener mListener;
+    std::vector<std::byte> mBuffer;
     bool mIsCancel = false;
 };
 

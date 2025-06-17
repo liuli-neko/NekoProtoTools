@@ -29,14 +29,14 @@ NEKO_END_NAMESPACE
 #if !defined(NEKO_PROTO_NO_JSON_SERIALIZER)
 NEKO_BEGIN_NAMESPACE
 template <typename T>
-JsonSerializer::JsonValue from_object(const T& obj) {
+JsonSerializer::JsonValue to_json_value(const T& obj) {
     JsonSerializer::JsonValue json;
     std::vector<char> buffer;
-    NEKO_NAMESPACE::JsonSerializer::OutputSerializer out(buffer);
+    JsonSerializer::OutputSerializer out(buffer);
     out(obj);
     out.end();
     NEKO_LOG_INFO("mcp server", "Tool call info: {}", std::string_view{buffer.data(), buffer.size()});
-    NEKO_NAMESPACE::JsonSerializer::InputSerializer in(buffer.data(), buffer.size());
+    JsonSerializer::InputSerializer in(buffer.data(), buffer.size());
     in(json);
     return json;
 }
