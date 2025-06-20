@@ -347,7 +347,11 @@ public:
     template <typename U>
         requires std::is_convertible_v<U, FunctionType> || std::is_convertible_v<U, CoroutinesFuncType>
     RpcMethodDynamic operator=(const U& func) {
-        return set(std::function(func));
+        if constexpr (std::is_bind_expression_v<U>) {
+            return set(func);
+        } else {
+            return set(std::function(func));
+        }
     }
 
     RpcMethodDynamic set(const FunctionType& func) {
