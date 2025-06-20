@@ -287,67 +287,7 @@ struct JsonRpcResponse<void> {
     NEKO_SERIALIZER(jsonrpc, error, id)
 };
 
-template <RpcMethodT T, ConstexprString MethodName, ConstexprString... ArgNames>
-class RpcMethod : public RpcMethodTraits<T> {
-    static_assert(sizeof...(ArgNames) == 0 || RpcMethodTraits<T>::NumParams == sizeof...(ArgNames),
-                  "RpcMethodTraits: The number of parameters and names do not match.");
-
-public:
-    using MethodType   = T;
-    using MethodTraits = RpcMethodTraits<T>;
-    using typename MethodTraits::CoroutinesFuncType;
-    using typename MethodTraits::FunctionType;
-    using typename MethodTraits::ParamsTupleType;
-    using typename MethodTraits::RawParamsType;
-    using typename MethodTraits::RawReturnType;
-    using typename MethodTraits::ReturnType;
-    using RequestType  = JsonRpcRequest2<MethodTraits, ArgNames...>;
-    using ResponseType = JsonRpcResponse<MethodTraits>;
-
-    static constexpr std::string_view Name = MethodName.view();
-
-    static RequestType request(const JsonRpcIdType& id, ParamsTupleType&& params = {}) {
-        return RequestType{.method = MethodName.c_str(), .params = std::forward<ParamsTupleType>(params), .id = id};
-    }
-
-    static ResponseType response(const JsonRpcIdType& id, const MethodTraits::ReturnType& result) {
-        return ResponseType{.result = result, .error = {}, .id = id};
-    }
-
-    static ResponseType response(const JsonRpcIdType& id, const JsonRpcErrorResponse& error) {
-        return ResponseType{.result = {}, .error = error, .id = id};
-    }
-
-    RpcMethod operator=(const FunctionType& func) {
-        this->mCoFunction = [func](auto... args) -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
-            if constexpr (std::is_void_v<RawReturnType>) {
-                func(args...);
-                co_return {};
-            } else {
-                co_return func(args...);
-            }
-        };
-        return *this;
-    }
-
-    RpcMethod operator=(const CoroutinesFuncType& func) {
-        this->mCoFunction = func;
-        return *this;
-    }
-
-    void clear() { this->mCoFunction = nullptr; }
-
-    operator bool() const { return this->mCoFunction != nullptr; }
-
-    std::string description = []() {
-        return std::string(traits::TypeName<RawReturnType>::name()) + " " + std::string(Name) + "(" +
-               std::string(traits::parameter_to_string<RawParamsType>(
-                   std::make_index_sequence<std::tuple_size_v<RawParamsType>>{},
-                   traits::ArgNamesHelper<ArgNames...>{})) +
-               ")";
-    }();
-};
-
+// TODO: 与RpcMethod合并一下
 template <RpcMethodT T, ConstexprString... ArgNames>
 class RpcMethodDynamic : public RpcMethodTraits<T> {
     static_assert(sizeof...(ArgNames) == 0 || RpcMethodTraits<T>::NumParams == sizeof...(ArgNames),
@@ -365,8 +305,18 @@ public:
     using RequestType  = JsonRpcRequest2<MethodTraits, ArgNames...>;
     using ResponseType = JsonRpcResponse<MethodTraits>;
 
-    RpcMethodDynamic(std::string_view name, FunctionType func, bool isNotification = false) {
-        gName             = name;
+    RpcMethodDynamic(std::string_view name, bool isNotification = false) {
+        mName                 = std::string(name);
+        this->mIsNotification = isNotification;
+        description =
+            std::string(traits::TypeName<RawReturnType>::name()) + " " + std::string(name) + "(" +
+            std::string(traits::parameter_to_string<RawParamsType>(
+                std::make_index_sequence<std::tuple_size_v<RawParamsType>>{}, traits::ArgNamesHelper<ArgNames...>{})) +
+            ")";
+    }
+
+    RpcMethodDynamic(std::string_view name, FunctionType func, bool isNotification = false)
+        : RpcMethodDynamic(name, isNotification) {
         this->mCoFunction = [func](auto... args) -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
             if constexpr (std::is_void_v<RawReturnType>) {
                 func(args...);
@@ -375,17 +325,15 @@ public:
                 co_return func(args...);
             }
         };
-        this->mIsNotification = isNotification;
     }
 
-    RpcMethodDynamic(std::string_view name, CoroutinesFuncType func, bool isNotification = false) {
-        gName                 = name;
-        this->mCoFunction     = func;
-        this->mIsNotification = isNotification;
+    RpcMethodDynamic(std::string_view name, CoroutinesFuncType func, bool isNotification = false)
+        : RpcMethodDynamic(name, isNotification) {
+        this->mCoFunction = func;
     }
 
-    static RequestType request(const JsonRpcIdType& id, ParamsTupleType&& params = {}) {
-        return RequestType{.method = gName.c_str(), .params = std::forward<ParamsTupleType>(params), .id = id};
+    RequestType request(const JsonRpcIdType& id, ParamsTupleType&& params = {}) {
+        return RequestType{.method = mName.c_str(), .params = std::forward<ParamsTupleType>(params), .id = id};
     }
 
     static ResponseType response(const JsonRpcIdType& id, const MethodTraits::ReturnType& result) {
@@ -396,7 +344,13 @@ public:
         return ResponseType{.result = {}, .error = error, .id = id};
     }
 
-    RpcMethodDynamic operator=(const FunctionType& func) {
+    template <typename U>
+        requires std::is_convertible_v<U, FunctionType> || std::is_convertible_v<U, CoroutinesFuncType>
+    RpcMethodDynamic operator=(const U& func) {
+        return set(std::function(func));
+    }
+
+    RpcMethodDynamic set(const FunctionType& func) {
         this->mCoFunction = [func](auto... args) -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
             if constexpr (std::is_void_v<RawReturnType>) {
                 func(args...);
@@ -408,25 +362,86 @@ public:
         return *this;
     }
 
-    RpcMethodDynamic operator=(const CoroutinesFuncType& func) {
+    RpcMethodDynamic set(const CoroutinesFuncType& func) {
         this->mCoFunction = func;
         return *this;
     }
 
     void clear() { this->mCoFunction = nullptr; }
 
+    const std::string& name() { return mName; }
+
+    std::string description;
+
 private:
-    static std::string gName;
+    std::string mName;
 };
 
-template <RpcMethodT T, ConstexprString... ArgNames>
-std::string RpcMethodDynamic<T, ArgNames...>::gName;
+template <RpcMethodT T, ConstexprString MethodName, ConstexprString... ArgNames>
+class RpcMethod : public RpcMethodDynamic<T, ArgNames...> {
+public:
+    using MethodType   = T;
+    using MethodTraits = RpcMethodTraits<T>;
+    using typename MethodTraits::CoroutinesFuncType;
+    using typename MethodTraits::FunctionType;
+    using typename MethodTraits::ParamsTupleType;
+    using typename MethodTraits::RawParamsType;
+    using typename MethodTraits::RawReturnType;
+    using typename MethodTraits::ReturnType;
+    using RequestType  = JsonRpcRequest2<MethodTraits, ArgNames...>;
+    using ResponseType = JsonRpcResponse<MethodTraits>;
+
+    RpcMethod() : RpcMethodDynamic<T, ArgNames...>(MethodName.view()) {}
+    using RpcMethodDynamic<T, ArgNames...>::operator=;
+    operator bool() const { return this->mCoFunction != nullptr; }
+};
 
 struct RpcMethodErrorHelper {
     using ResponseType = JsonRpcResponse<RpcMethodTraits<void(void)>>;
     static ResponseType response(const JsonRpcIdType& id, const JsonRpcErrorResponse& error) {
         return ResponseType{.result = {}, .error = error, .id = id};
     }
+};
+
+class JsonRpcServerImp;
+class RpcMethodWrapper {
+public:
+    RpcMethodWrapper()                                                              = default;
+    RpcMethodWrapper(RpcMethodWrapper&&)                                            = default;
+    virtual auto call(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
+                      JsonRpcRequestMethod&& method) -> ILIAS_NAMESPACE::Task<void> = 0;
+    auto operator()(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
+                    JsonRpcRequestMethod&& method) {
+        return call(in, out, std::move(method));
+    }
+};
+
+template <typename T>
+struct RpcMethodTypeHelper {
+    using MethodType = T;
+};
+
+template <typename T>
+struct RpcMethodTypeHelper<T*> {
+    using MethodType = T;
+};
+
+template <typename T>
+struct RpcMethodTypeHelper<std::unique_ptr<T>> {
+    using MethodType = T;
+};
+
+template <typename T>
+class RpcMethodWrapperImpl : public RpcMethodWrapper {
+public:
+    using MethodType = typename RpcMethodTypeHelper<T>::MethodType;
+    RpcMethodWrapperImpl(T methodData, JsonRpcServerImp* self) : mMethodData(std::move(methodData)), mSelf(self) {}
+    auto call(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod&& method)
+        -> ILIAS_NAMESPACE::Task<void> override;
+
+private:
+    T mMethodData;
+    JsonRpcServerImp* mSelf = nullptr;
 };
 
 class JsonRpcServerImp {
@@ -445,7 +460,7 @@ private:
             mCurrentIds.emplace_back(id);
             in.rollbackItem();
             if (auto it = mHandlers.find(method.method); it != mHandlers.end()) {
-                ilias::ScopedWaitHandle handle = mTaskScope.spawn(it->second(in, out, std::move(method)));
+                ilias::ScopedWaitHandle handle = mTaskScope.spawn((*it->second)(in, out, std::move(method)));
                 if (!std::holds_alternative<std::monostate>(id)) {
                     mCancelHandles[id] = std::move(handle);
                 }
@@ -463,17 +478,11 @@ public:
 
     template <typename T>
     auto registerRpcMethod(T& metadata) -> void {
-        if (auto item = mHandlers.find(T::Name); item != mHandlers.end()) {
-            NEKO_LOG_ERROR("jsonrpc", "Method {} exist!!!", T::Name);
+        if (auto item = mHandlers.find(metadata.name()); item != mHandlers.end()) {
+            NEKO_LOG_ERROR("jsonrpc", "Method {} exist!!!", metadata.name());
             return;
         }
-        mHandlers[T::Name] = [&metadata, this](JsonSerializer::InputSerializer& in,
-                                               JsonSerializer::OutputSerializer& out,
-                                               JsonRpcRequestMethod method) -> ILIAS_NAMESPACE::Task<void> {
-            typename T::RequestType request;
-            auto success = in(request);
-            return _handle<T>(success, request, out, std::move(method), metadata);
-        };
+        mHandlers[metadata.name()] = std::make_unique<RpcMethodWrapperImpl<T*>>(&metadata, this);
     }
 
     template <typename RetT, typename... Args, ConstexprString... ArgNames>
@@ -551,34 +560,31 @@ public:
 
 private:
     template <typename T>
-    auto _handle(bool success, auto request, auto& out, auto method, auto& metadata) -> ILIAS_NAMESPACE::Task<void> {
+    auto _handle(bool success, auto request, auto& out, auto method, T& metadata) -> ILIAS_NAMESPACE::Task<void> {
         if (!success) {
             NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc request");
             co_return _handleError<T>(out, std::move(method), (int64_t)JsonRpcError::InvalidRequest,
                                       JsonRpcErrorCategory::instance().message((int64_t)JsonRpcError::InvalidRequest));
         }
         if constexpr (T::NumParams == 0) {
-            co_return _processMethodReturn<T>(co_await metadata(), out, std::move(method));
+            co_return _processMethodReturn<T>(metadata, co_await metadata(), out, std::move(method));
         } else if constexpr (T::IsAutomaticExpansionAble || T::IsTopTuple) {
-            co_return _processMethodReturn<T>(co_await metadata(request.params), out, std::move(method));
+            co_return _processMethodReturn<T>(metadata, co_await metadata(request.params), out, std::move(method));
         } else {
-            co_return _processMethodReturn<T>(co_await std::apply(metadata, request.params), out, std::move(method));
+            co_return _processMethodReturn<T>(metadata, co_await std::apply(metadata, request.params), out,
+                                              std::move(method));
         }
     }
     // RpcMethodDynamic<RetT(Args...), ArgNames...>
     template <typename T, typename Callable>
     auto _registerRpcMethod(std::string_view name, std::function<Callable> func) -> void {
-        mHandlers[name] = [metadata = T(name, func), this](JsonSerializer::InputSerializer& in,
-                                                           JsonSerializer::OutputSerializer& out,
-                                                           JsonRpcRequestMethod method) -> ILIAS_NAMESPACE::Task<void> {
-            typename T::RequestType request;
-            auto success = in(request);
-            return _handle<T>(success, request, out, std::move(method), metadata);
-        };
+        mHandlers[name] =
+            std::make_unique<RpcMethodWrapperImpl<std::unique_ptr<T>>>(std::make_unique<T>(name, func), this);
     }
 
     template <typename T, typename RetT>
-    auto _handleSuccess(JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method, RetT&& ret) -> void {
+    auto _handleSuccess(T& methodData, JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method, RetT&& ret)
+        -> void {
         if (std::holds_alternative<std::monostate>(method.id)) { // notification
             return;
         }
@@ -587,12 +593,12 @@ private:
         }
         std::vector<char> buffer;
         if constexpr (std::is_void_v<typename T::RawReturnType>) {
-            if (!out(T::response(method.id, nullptr))) {
+            if (!out(methodData.response(method.id, nullptr))) {
                 NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
                 return;
             }
         } else {
-            if (!out(T::response(method.id, std::forward<RetT>(ret)))) {
+            if (!out(methodData.response(method.id, std::forward<RetT>(ret)))) {
                 NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
                 return;
             }
@@ -615,17 +621,18 @@ private:
     }
 
     template <typename T>
-    auto _processMethodReturn(ILIAS_NAMESPACE::Result<typename T::RawReturnType> result,
+    auto _processMethodReturn(T& methodData, ILIAS_NAMESPACE::Result<typename T::RawReturnType> result,
                               JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method) -> void {
         if constexpr (std::is_void_v<typename T::RawReturnType>) {
             if (result) {
-                return _handleSuccess<T, std::nullptr_t>(out, std::move(method), nullptr);
+                return _handleSuccess<T, std::nullptr_t>(methodData, out, std::move(method), nullptr);
             }
             NEKO_LOG_ERROR("jsonrpc", "method {} failed to execute, {}", method.method, result.error().message());
             return _handleError<T>(out, std::move(method), result.error().value(), result.error().message());
         } else {
             if (result) {
-                return _handleSuccess<T, typename T::RawReturnType>(out, std::move(method), std::move(result.value()));
+                return _handleSuccess<T, typename T::RawReturnType>(methodData, out, std::move(method),
+                                                                    std::move(result.value()));
             }
             NEKO_LOG_WARN("jsonrpc", "method {} failed to execute, {}", method.method, result.error().message());
             return _handleError<T>(out, std::move(method), result.error().value(), result.error().message());
@@ -636,10 +643,18 @@ private:
     std::vector<detail::JsonRpcIdType> mCurrentIds;
     std::map<JsonRpcIdType, ILIAS_NAMESPACE::ScopedWaitHandle<>> mCancelHandles;
     ILIAS_NAMESPACE::TaskScope mTaskScope;
-    std::map<std::string_view, std::function<ILIAS_NAMESPACE::Task<void>(JsonSerializer::InputSerializer& in,
-                                                                         JsonSerializer::OutputSerializer& out,
-                                                                         JsonRpcRequestMethod method)>>
-        mHandlers;
+    std::map<std::string_view, std::unique_ptr<RpcMethodWrapper>> mHandlers;
+
+    template <typename T>
+    friend class RpcMethodWrapperImpl;
+};
+
+template <typename T>
+auto RpcMethodWrapperImpl<T>::call(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
+                                   JsonRpcRequestMethod&& method) -> ILIAS_NAMESPACE::Task<void> {
+    typename MethodType::RequestType request;
+    auto success = in(request);
+    return mSelf->_handle(success, request, out, std::move(method), *mMethodData);
 };
 
 std::string to_string(JsonRpcIdType id) {
@@ -669,8 +684,6 @@ private:
     struct {
         RpcMethod<std::vector<std::string>(), "rpc.get_method_list"> getMethodList;
         RpcMethod<std::vector<std::string>(), "rpc.get_method_info_list"> getMethodInfoList;
-        static_assert(!detail::is_automatic_expansion_able_v<std::string>, "why");
-        static_assert(traits::IsSerializable<std::string>::value, "why");
         RpcMethod<std::string(std::string), "rpc.get_method_info", "method_name"> getMethodInfo;
         RpcMethod<std::vector<std::string>(), "rpc.get_bind_method_list"> getBindedMethodList;
     } mRpc;
@@ -807,41 +820,41 @@ private:
                 bool isBinded() const override { return static_cast<bool>(*rawData); }
                 T* rawData;
             };
-            auto metadata                            = std::make_unique<MethodMetadata>();
-            metadata->rawData                        = &rpcMethodMetadata;
-            mMethodMetadatas[rpcMethodMetadata.Name] = std::move(metadata);
+            auto metadata                              = std::make_unique<MethodMetadata>();
+            metadata->rawData                          = &rpcMethodMetadata;
+            mMethodMetadatas[rpcMethodMetadata.name()] = std::move(metadata);
             mImp.registerRpcMethod(rpcMethodMetadata);
         };
         Reflect<ProtocolT>::forEachWithoutName(mProtocol, registerRpcMethod);
         Reflect<decltype(mRpc)>::forEachWithoutName(mRpc, registerRpcMethod);
-        mRpc.getMethodInfo = [this](std::string methodName) -> std::string {
+        mRpc.getMethodInfo = [this](std::string methodName) -> ilias::IoTask<std::string> {
             if (auto it = methodMetadatas().find(methodName); it != methodMetadatas().end()) {
-                return std::string(it->second->description());
+                co_return std::string(it->second->description());
             }
-            return std::string("Method not found!");
+            co_return std::string("Method not found!");
         };
-        mRpc.getMethodInfoList = [this]() -> std::vector<std::string> {
+        mRpc.getMethodInfoList = [this]() -> ilias::IoTask<std::vector<std::string>> {
             std::vector<std::string> methodDesList;
             for (auto& item : methodMetadatas()) {
                 methodDesList.emplace_back(item.second->description());
             }
-            return methodDesList;
+            co_return methodDesList;
         };
-        mRpc.getMethodList = [this]() -> std::vector<std::string> {
+        mRpc.getMethodList = [this]() -> ilias::IoTask<std::vector<std::string>> {
             std::vector<std::string> methodList;
             for (auto& item : methodMetadatas()) {
                 methodList.emplace_back(item.first);
             }
-            return methodList;
+            co_return methodList;
         };
-        mRpc.getBindedMethodList = [this]() -> std::vector<std::string> {
+        mRpc.getBindedMethodList = [this]() -> ilias::IoTask<std::vector<std::string>> {
             std::vector<std::string> methodList;
             for (auto& item : methodMetadatas()) {
                 if (item.second->isBinded()) {
                     methodList.emplace_back(item.first);
                 }
             }
-            return methodList;
+            co_return methodList;
         };
     }
 
@@ -931,7 +944,8 @@ private:
         }
         if (auto grid = co_await mMutex.uniqueLock(); grid) {
             typename std::decay_t<T>::RequestType request;
-            if (auto ret = _sendRequest<T, Args...>(metadata.isNotification(), request, std::forward<Args>(args)...);
+            if (auto ret =
+                    _sendRequest<T, Args...>(metadata, metadata.isNotification(), request, std::forward<Args>(args)...);
                 ret) {
                 if (auto ret1 = co_await mClient->send({reinterpret_cast<std::byte*>(mBuffer.data()), mBuffer.size()});
                     !ret1) {
@@ -968,29 +982,29 @@ private:
     }
 
     template <typename T, typename... Args>
-    auto _sendRequest(bool notification, typename std::decay_t<T>::RequestType& request, Args... args)
+    auto _sendRequest(T& methodData, bool notification, typename std::decay_t<T>::RequestType& request, Args... args)
         -> ILIAS_NAMESPACE::Result<void> {
         if constexpr (traits::optional_like_type<typename std::decay_t<T>::ParamsTupleType>::value) {
             if (notification) {
-                request    = std::decay_t<T>::request(std::monostate{});
+                request    = methodData.request(std::monostate{});
                 request.id = std::monostate{};
             } else {
-                request = std::decay_t<T>::request(mId++);
+                request = methodData.request(mId++);
             }
         } else {
             if constexpr (std::decay_t<T>::IsAutomaticExpansionAble || std::decay_t<T>::IsTopTuple) {
                 if (notification) {
-                    request    = std::decay_t<T>::request(std::monostate{}, std::forward<Args>(args)...);
+                    request    = methodData.request(std::monostate{}, std::forward<Args>(args)...);
                     request.id = std::monostate{};
                 } else {
-                    request = std::decay_t<T>::request(mId++, std::forward<Args>(args)...);
+                    request = methodData.request(mId++, std::forward<Args>(args)...);
                 }
             } else {
                 if (notification) {
-                    request    = std::decay_t<T>::request(std::monostate{}, std::forward_as_tuple(args...));
+                    request    = methodData.request(std::monostate{}, std::forward_as_tuple(args...));
                     request.id = std::monostate{};
                 } else {
-                    request = std::decay_t<T>::request(mId++, std::forward_as_tuple(args...));
+                    request = methodData.request(mId++, std::forward_as_tuple(args...));
                 }
             }
         }
