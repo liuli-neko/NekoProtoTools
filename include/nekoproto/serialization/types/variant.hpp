@@ -23,7 +23,7 @@ struct unfold_variant_helper { // NOLINT(readability-identifier-naming)
     static bool unfoldValueImp1(Serializer& sa, std::variant<Ts...>& value) {
         T tvalue = {};
         if (sa(tvalue)) {
-            value = tvalue;
+            value = std::move(tvalue);
             return true;
         }
         return false;

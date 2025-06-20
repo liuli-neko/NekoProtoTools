@@ -70,25 +70,32 @@ TEST_F(JsonRpcTest, BindAndCall) {
     ilias_wait client.connect("tcp://127.0.0.1:12335");
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
-    server->test2 = [](int a1, int b1) { std::cout << a1 << " " << b1 << std::endl; };
-    server->test3 = []() { std::cout << "this is test3!" << std::endl; };
-    server->test4 = []() { return 114514; };
-    server->test5 = [](std::string a1, double b1) -> std::string { return a1 + std::to_string(b1); };
-    server->test6 = [](std::tuple<int, double, bool> a1) -> std::string {
-        return std::to_string(std::get<0>(a1)) + std::to_string(std::get<1>(a1)) + std::to_string(std::get<2>(a1));
+    server->test2 = [](int a1, int b1) -> ilias::IoTask<> {
+        std::cout << a1 << " " << b1 << std::endl;
+        co_return {};
+    };
+    server->test3 = []() -> ilias::IoTask<> {
+        std::cout << "this is test3!" << std::endl;
+        co_return {};
+    };
+    server->test4 = []() -> ilias::IoTask<int> { co_return 114514; };
+    server->test5 = [](std::string a1, double b1) -> ilias::IoTask<std::string> { co_return a1 + std::to_string(b1); };
+    server->test6 = [](std::tuple<int, double, bool> a1) -> ilias::IoTask<std::string> {
+        co_return std::to_string(std::get<0>(a1)) + std::to_string(std::get<1>(a1)) + std::to_string(std::get<2>(a1));
     };
     server->test8 = [](std::nullptr_t /*unused*/) -> ilias::IoTask<int> { co_return 114514; };
-    server->test9 = [](std::vector<bool> a1) -> std::vector<int> {
+    server->test9 = [](std::vector<bool> a1) -> ilias::IoTask<std::vector<int>> {
         std::vector<int> res;
         int dd = 1;
         for (auto&& val : a1) {
             res.push_back(val ? dd : 0);
             dd <<= 1;
         }
-        return res;
+        co_return res;
     };
-    server->test10 = [](int tt) -> Copytest { return Copytest{tt + 114514}; };
-    server.bindMethod("test11", std::function([](int aa) -> std::string { return std::to_string(aa); }));
+    server->test10 = [](int tt) -> ilias::IoTask<Copytest> { co_return Copytest{tt + 114514}; };
+    server.bindMethod("test11",
+                      std::function([](int aa) -> ilias::IoTask<std::string> { co_return std::to_string(aa); }));
 
     {
         auto res = (ilias_wait client->test1(1, 2));
@@ -152,24 +159,30 @@ TEST_F(JsonRpcTest, BindAndCallUdp) {
     ilias_wait client.connect("udp://127.0.0.1:12336-127.0.0.1:12335");
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
-    server->test2 = [](int a1, int b1) { std::cout << a1 << " " << b1 << std::endl; };
-    server->test3 = []() { std::cout << "this is test3!" << std::endl; };
-    server->test4 = []() { return 114514; };
-    server->test5 = [](std::string a1, double b1) -> std::string { return a1 + std::to_string(b1); };
-    server->test6 = [](std::tuple<int, double, bool> a1) -> std::string {
-        return std::to_string(std::get<0>(a1)) + std::to_string(std::get<1>(a1)) + std::to_string(std::get<2>(a1));
+    server->test2 = [](int a1, int b1) -> ilias::IoTask<> {
+        std::cout << a1 << " " << b1 << std::endl;
+        co_return {};
+    };
+    server->test3 = []() -> ilias::IoTask<> {
+        std::cout << "this is test3!" << std::endl;
+        co_return {};
+    };
+    server->test4 = []() -> ilias::IoTask<int> { co_return 114514; };
+    server->test5 = [](std::string a1, double b1) -> ilias::IoTask<std::string> { co_return a1 + std::to_string(b1); };
+    server->test6 = [](std::tuple<int, double, bool> a1) -> ilias::IoTask<std::string> {
+        co_return std::to_string(std::get<0>(a1)) + std::to_string(std::get<1>(a1)) + std::to_string(std::get<2>(a1));
     };
     server->test8 = [](std::nullptr_t /*unused*/) -> ilias::IoTask<int> { co_return 114514; };
-    server->test9 = [](std::vector<bool> a1) -> std::vector<int> {
+    server->test9 = [](std::vector<bool> a1) -> ilias::IoTask<std::vector<int>> {
         std::vector<int> res;
         int dd = 1;
         for (auto&& val : a1) {
             res.push_back(val ? dd : 0);
             dd <<= 1;
         }
-        return res;
+        co_return res;
     };
-    server->test10 = [](int tt) -> Copytest { return Copytest{tt + 114514}; };
+    server->test10 = [](int tt) -> ilias::IoTask<Copytest> { co_return Copytest{tt + 114514}; };
     server->test11 = [](MXXParams params) -> ilias::IoTask<std::string> {
         co_return std::to_string(params.param1) + params.param2 + std::to_string(params.param3.size());
     };
@@ -260,8 +273,14 @@ TEST_F(JsonRpcTest, Batch) {
         co_await ILIAS_NAMESPACE::sleep(std::chrono::milliseconds(10));
         co_return a1 + b1;
     };
-    server->test2 = [](int a1, int b1) { std::cout << a1 << " " << b1 << std::endl; };
-    server->test3 = []() { std::cout << "this is test3!" << std::endl; };
+    server->test2 = [](int a1, int b1) -> ilias::IoTask<> {
+        std::cout << a1 << " " << b1 << std::endl;
+        co_return {};
+    };
+    server->test3 = []() -> ilias::IoTask<> {
+        std::cout << "this is test3!" << std::endl;
+        co_return {};
+    };
 
     auto ret = ilias_wait server.callMethod(R"([
             {"jsonrpc":"2.0", "method":"test1", "params":[1,2], "id":1},
@@ -279,14 +298,22 @@ TEST_F(JsonRpcTest, Notification) {
     ilias_wait client.connect("udp://127.0.0.1:12336-127.0.0.1:12335");
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
-    server->test2 = [](int a1, int b1) { std::cout << a1 << " " << b1 << std::endl; };
-    server->test3 = []() { std::cout << "this is test3!" << std::endl; };
-    server->test4 = []() {
-        std::cout << "this is test4!" << std::endl;
-        return 0;
+    server->test2 = [](int a1, int b1) -> ilias::IoTask<> {
+        std::cout << a1 << " " << b1 << std::endl;
+        co_return {};
     };
-    server.bindMethod("test11",
-                      std::function([](int aa) -> void { std::cout << "test11 called with " << aa << std::endl; }));
+    server->test3 = []() -> ilias::IoTask<> {
+        std::cout << "this is test3!" << std::endl;
+        co_return {};
+    };
+    server->test4 = []() -> ilias::IoTask<int> {
+        std::cout << "this is test4!" << std::endl;
+        co_return 0;
+    };
+    server.bindMethod("test11", std::function([](int aa) -> ilias::IoTask<> {
+                          std::cout << "test11 called with " << aa << std::endl;
+                          co_return {};
+                      }));
 
     ilias_wait client->test1.notification(1, 2);
     ilias_wait client->test2.notification(1, 2);
@@ -308,7 +335,8 @@ TEST_F(JsonRpcTest, Basic) {
     ilias_wait client.connect("udp://127.0.0.1:12336-127.0.0.1:12335");
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
-    server.bindMethod<"aa", "bb">("test11", std::function([](int aa, int bb) -> int { return (aa * 10) + bb; }));
+    server.bindMethod<"aa", "bb">(
+        "test11", std::function([](int aa, int bb) -> ilias::IoTask<int> { co_return (aa * 10) + bb; }));
 
     auto methods = ilias_wait client.callRemote<std::vector<std::string>>("rpc.get_method_list");
     ASSERT_TRUE(methods.has_value());
