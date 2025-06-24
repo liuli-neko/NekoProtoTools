@@ -50,6 +50,10 @@ function autofunc.auto_add_packages(target)
         target:add("packages", "cereal", {public = true})
     end
 
+    if has_config("use_io_uring") then
+        target:add("defines", "ILIAS_USE_IO_URING", {public = true})
+    end
+
 end
 
 function main()

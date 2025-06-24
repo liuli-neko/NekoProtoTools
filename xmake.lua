@@ -116,6 +116,13 @@ option("custom_namespace")
     set_category("advanced")
 option_end()
 
+option("use_io_uring")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Make ilias use io_uring backend")
+    set_category("advanced")
+option_end()
+
 
 if has_config("enable_simdjson") then
     add_requires("simdjson v3.9.3", {configs = { shared = is_kind("shared")}})
