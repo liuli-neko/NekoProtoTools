@@ -94,9 +94,8 @@ TEST_F(JsonRpcTest, BindAndCall) {
         co_return res;
     };
     server->test10 = [](int tt) -> ilias::IoTask<Copytest> { co_return Copytest{tt + 114514}; };
-    server.bindMethod("test11",
-                      std::function([](int aa) -> ilias::IoTask<std::string> { co_return std::to_string(aa); }));
-
+    server.bindMethod("test11", NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<std::string>(int)>(
+                                    [](int aa) -> ilias::IoTask<std::string> { co_return std::to_string(aa); }));
     {
         auto res = (ilias_wait client->test1(1, 2));
         EXPECT_TRUE(res.has_value());
@@ -186,8 +185,8 @@ TEST_F(JsonRpcTest, BindAndCallUdp) {
     server->test11 = [](MXXParams params) -> ilias::IoTask<std::string> {
         co_return std::to_string(params.param1) + params.param2 + std::to_string(params.param3.size());
     };
-    server.bindMethod("test11",
-                      std::function([](int aa) -> ilias::IoTask<std::string> { co_return std::to_string(aa); }));
+    server.bindMethod("test11", NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<std::string>(int)>(
+                                    [](int aa) -> ilias::IoTask<std::string> { co_return std::to_string(aa); }));
 
     {
         auto res = (ilias_wait client->test1(1, 2));
@@ -310,7 +309,7 @@ TEST_F(JsonRpcTest, Notification) {
         std::cout << "this is test4!" << std::endl;
         co_return 0;
     };
-    server.bindMethod("test11", std::function([](int aa) -> ilias::IoTask<> {
+    server.bindMethod("test11", NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<>(int)>([](int aa) -> ilias::IoTask<> {
                           std::cout << "test11 called with " << aa << std::endl;
                           co_return {};
                       }));
@@ -335,8 +334,9 @@ TEST_F(JsonRpcTest, Basic) {
     ilias_wait client.connect("udp://127.0.0.1:12336-127.0.0.1:12335");
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
-    server.bindMethod<"aa", "bb">(
-        "test11", std::function([](int aa, int bb) -> ilias::IoTask<int> { co_return (aa * 10) + bb; }));
+    server.bindMethod<"aa", "bb">("test11",
+                                  NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<int>(int, int)>(
+                                      [](int aa, int bb) -> ilias::IoTask<int> { co_return (aa * 10) + bb; }));
 
     auto methods = ilias_wait client.callRemote<std::vector<std::string>>("rpc.get_method_list");
     ASSERT_TRUE(methods.has_value());
@@ -428,7 +428,8 @@ TEST_F(JsonRpcTest, Basic) {
     ASSERT_TRUE(methodInfoList.has_value());
     EXPECT_EQ(methodInfoList.value().size(), 16);
 
-    server.bindMethod<>("test112", std::function([]() -> ILIAS_NAMESPACE::IoTask<void> {
+    server.bindMethod<>("test112",
+                        NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<>()>([]() -> ILIAS_NAMESPACE::IoTask<void> {
                             co_await ilias::sleep(std::chrono::milliseconds(5000));
                             co_return {};
                         }));
