@@ -541,7 +541,7 @@ public:
         _registerRpcMethod<RpcMethodDynamic<RetT(Args...), ArgNames...>>(name, std::move(func));
     }
 
-    auto processRequest(const char* data, std::size_t size, DatagramClientBase* client) noexcept
+    auto processRequest(const char* data, std::size_t size, IMessageStreamClient* client) noexcept
         -> ILIAS_NAMESPACE::Task<std::vector<char>> {
         std::vector<char> buffer;
         JsonSerializer::OutputSerializer out(buffer);
@@ -586,7 +586,7 @@ public:
 
     void cancelAll() { mTaskScope.cancel(); }
 
-    auto receiveLoop(DatagramClientBase* client) noexcept -> ILIAS_NAMESPACE::Task<void> {
+    auto receiveLoop(IMessageStreamClient* client) noexcept -> ILIAS_NAMESPACE::Task<void> {
         while (client != nullptr) {
             if (auto buffer = co_await client->recv(); buffer && buffer->size() > 0) {
                 co_await processRequest(reinterpret_cast<const char*>(buffer->data()), buffer->size(), client);
@@ -739,18 +739,18 @@ public:
     auto operator->() const noexcept { return &mProtocol; }
     auto close() noexcept -> void {
         for (auto& client : mClients) {
-            dynamic_cast<DatagramBase*>(client.get())->cancel();
+            dynamic_cast<IMessageStream*>(client.get())->cancel();
         }
         if (mServer != nullptr) {
-            dynamic_cast<DatagramBase*>(mServer.get())->cancel();
+            dynamic_cast<IMessageStream*>(mServer.get())->cancel();
         }
         mScop.cancel();
         mScop.wait();
         for (auto& client : mClients) {
-            dynamic_cast<DatagramBase*>(client.get())->close();
+            dynamic_cast<IMessageStream*>(client.get())->close();
         }
         if (mServer != nullptr) {
-            dynamic_cast<DatagramBase*>(mServer.get())->close();
+            dynamic_cast<IMessageStream*>(mServer.get())->close();
         }
     }
     auto isListening() const noexcept -> bool { return mServer != nullptr && mServer->isListening(); }
@@ -763,8 +763,8 @@ public:
 
     template <typename StreamType>
     auto start(std::string_view url) noexcept -> ILIAS_NAMESPACE::IoTask<ILIAS_NAMESPACE::Error> {
-        auto server = std::make_unique<DatagramClient<StreamType>>();
-        if (server->checkProtocol(DatagramClient<StreamType>::Type::Server, url)) {
+        auto server = std::make_unique<MessageStream<StreamType>>();
+        if (server->checkProtocol(MessageStream<StreamType>::Type::Server, url)) {
             if (auto ret = co_await server->start(url); ret) {
                 mServer = std::move(server);
                 mScop.spawn(_acceptLoop());
@@ -869,8 +869,8 @@ private:
 private:
     ProtocolT mProtocol;
     detail::JsonRpcServerImp mImp;
-    std::unique_ptr<DatagramServerBase> mServer;
-    std::list<std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>> mClients;
+    std::unique_ptr<IMessageStreamServer> mServer;
+    std::list<std::unique_ptr<IMessageStreamClient, void (*)(IMessageStreamClient*)>> mClients;
     std::map<std::string_view, std::unique_ptr<MethodData>> mMethodDatas;
     ILIAS_NAMESPACE::TaskScope mScop;
 };
@@ -886,10 +886,10 @@ public:
     auto operator->() const noexcept { return &mProtocol; }
     auto close() noexcept -> void {
         if (mClient != nullptr) {
-            dynamic_cast<DatagramBase*>(mClient.get())->cancel();
+            dynamic_cast<IMessageStream*>(mClient.get())->cancel();
         }
         if (mClient != nullptr) {
-            dynamic_cast<DatagramBase*>(mClient.get())->close();
+            dynamic_cast<IMessageStream*>(mClient.get())->close();
         }
     }
 
@@ -897,8 +897,8 @@ public:
 
     template <typename StreamType>
     auto connect(std::string_view url) noexcept -> ILIAS_NAMESPACE::IoTask<ILIAS_NAMESPACE::Error> {
-        auto client = std::make_unique<DatagramClient<StreamType>>();
-        if (client->checkProtocol(DatagramClient<StreamType>::Type::Client, url)) {
+        auto client = std::make_unique<MessageStream<StreamType>>();
+        if (client->checkProtocol(MessageStream<StreamType>::Type::Client, url)) {
             if (auto ret = co_await client->start(url); ret) {
                 mClient = std::move(client);
                 co_return ILIAS_NAMESPACE::Error::Ok;
@@ -1060,8 +1060,8 @@ private:
 
 private:
     ProtocolT mProtocol;
-    std::unique_ptr<DatagramClientBase> mClient = nullptr;
-    uint64_t mId                                = 0;
+    std::unique_ptr<IMessageStreamClient> mClient = nullptr;
+    uint64_t mId                                  = 0;
     std::vector<char> mBuffer;
     ILIAS_NAMESPACE::Mutex mMutex;
 };

@@ -433,11 +433,13 @@ TEST_F(JsonRpcTest, Basic) {
                             co_await ilias::sleep(std::chrono::milliseconds(5000));
                             co_return {};
                         }));
-    ilias_wait ILIAS_NAMESPACE::whenAll(client.callRemote<void>("test112"), [&server]() -> ILIAS_NAMESPACE::Task<> {
-        co_await ilias::sleep(std::chrono::milliseconds(1000));
-        server.cancelAll();
-        co_return;
-    }());
+    ilias_wait ILIAS_NAMESPACE::whenAll(
+        [&server]() -> ILIAS_NAMESPACE::Task<> {
+            co_await ilias::sleep(std::chrono::milliseconds(1000));
+            server.cancelAll();
+            co_return;
+        }(),
+        client.callRemote<void>("test112"));
     client.close();
     server.close();
 }
