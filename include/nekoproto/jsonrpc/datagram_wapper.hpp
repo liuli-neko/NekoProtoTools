@@ -25,12 +25,12 @@
 
 NEKO_BEGIN_NAMESPACE
 
-class DatagramBase {
+class IMessageStream {
 public:
     enum class Type { Server, Client };
     /**
      * @brief check if the url is valid
-     * if return true, whill use this DatagramClient to connect
+     * if return true, whill use this MessageStreamClient to connect
      * @param url url like "tcp://127.0.0.1:8080", Can be customized, but the protocol must be put first to prevent
      * overlap
      * @return true
@@ -51,9 +51,9 @@ public:
     virtual auto cancel() -> void = 0;
 };
 
-class DatagramClientBase {
+class IMessageStreamClient {
 public:
-    virtual ~DatagramClientBase() = default;
+    virtual ~IMessageStreamClient() = default;
     /**
      * @brief recv data from remote
      * must a valid jsonrpc request or response
@@ -76,21 +76,21 @@ public:
     virtual auto isConnected() -> bool = 0;
 };
 
-class DatagramServerBase {
+class IMessageStreamServer {
 public:
-    virtual ~DatagramServerBase() = default;
+    virtual ~IMessageStreamServer() = default;
     /**
      * @brief listen loop
      * you must make sure it return when the server is closed.
-     * @return ILIAS_NAMESPACE::IoTask<std::unique_ptr<DatagramClientBase, void(DatagramClientBase*)>>
+     * @return ILIAS_NAMESPACE::IoTask<std::unique_ptr<IMessageStreamClient, void(IMessageStreamClient*)>>
      */
     virtual auto accept()
-        -> ILIAS_NAMESPACE::IoTask<std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>> = 0;
-    virtual auto isListening() -> bool                                                                 = 0;
+        -> ILIAS_NAMESPACE::IoTask<std::unique_ptr<IMessageStreamClient, void (*)(IMessageStreamClient*)>> = 0;
+    virtual auto isListening() -> bool                                                                     = 0;
 };
 
 template <typename T, class enable = void>
-class DatagramClient;
+class MessageStream;
 /**
  * @brief 数据包接收，负责拆包，默认为最大长度1500的UDP包
  *
@@ -98,10 +98,10 @@ class DatagramClient;
  * @tparam N
  */
 template <>
-class DatagramClient<ILIAS_NAMESPACE::UdpClient, void>
-    : public DatagramBase, public DatagramClientBase, public DatagramServerBase {
+class MessageStream<ILIAS_NAMESPACE::UdpClient, void>
+    : public IMessageStream, public IMessageStreamClient, public IMessageStreamServer {
 public:
-    DatagramClient() { memset(mBuffer.data(), 0, 1500); }
+    MessageStream() { memset(mBuffer.data(), 0, 1500); }
 
     auto recv() -> ILIAS_NAMESPACE::IoTask<std::span<std::byte>> override {
         if (!mClient) {
@@ -195,8 +195,9 @@ public:
     auto isListening() -> bool override { return (bool)mClient; }
 
     auto accept()
-        -> ILIAS_NAMESPACE::IoTask<std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>> override {
-        co_return std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>(this, [](DatagramClientBase*) {});
+        -> ILIAS_NAMESPACE::IoTask<std::unique_ptr<IMessageStreamClient, void (*)(IMessageStreamClient*)>> override {
+        co_return std::unique_ptr<IMessageStreamClient, void (*)(IMessageStreamClient*)>(this,
+                                                                                         [](IMessageStreamClient*) {});
     }
 
 private:
@@ -213,10 +214,10 @@ private:
  * @tparam N
  */
 template <>
-class DatagramClient<ILIAS_NAMESPACE::TcpClient, void> : public DatagramBase, public DatagramClientBase {
+class MessageStream<ILIAS_NAMESPACE::TcpClient, void> : public IMessageStream, public IMessageStreamClient {
 public:
-    DatagramClient() = default;
-    DatagramClient(ILIAS_NAMESPACE::TcpClient&& client) : mClient(std::move(client)) {}
+    MessageStream() = default;
+    MessageStream(ILIAS_NAMESPACE::TcpClient&& client) : mClient(std::move(client)) {}
 
     auto recv() -> ILIAS_NAMESPACE::IoTask<std::span<std::byte>> override {
         if (!mClient) {
@@ -317,9 +318,9 @@ private:
 };
 
 template <>
-class DatagramClient<ILIAS_NAMESPACE::TcpListener, void> : public DatagramBase, public DatagramServerBase {
+class MessageStream<ILIAS_NAMESPACE::TcpListener, void> : public IMessageStream, public IMessageStreamServer {
 public:
-    DatagramClient() {}
+    MessageStream() {}
 
     auto close() -> void override {
         if (mListener) {
@@ -361,7 +362,7 @@ public:
     }
 
     auto accept()
-        -> ILIAS_NAMESPACE::IoTask<std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>> override {
+        -> ILIAS_NAMESPACE::IoTask<std::unique_ptr<IMessageStreamClient, void (*)(IMessageStreamClient*)>> override {
         if (!mListener) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
         }
@@ -369,9 +370,9 @@ public:
             co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Canceled);
         }
         if (auto ret = co_await mListener.accept(); ret) {
-            co_return std::unique_ptr<DatagramClientBase, void (*)(DatagramClientBase*)>(
-                new DatagramClient<ILIAS_NAMESPACE::TcpClient>(std::move(ret.value().first)),
-                +[](DatagramClientBase* ptr) { delete ptr; });
+            co_return std::unique_ptr<IMessageStreamClient, void (*)(IMessageStreamClient*)>(
+                new MessageStream<ILIAS_NAMESPACE::TcpClient>(std::move(ret.value().first)),
+                +[](IMessageStreamClient* ptr) { delete ptr; });
         } else {
             co_return ILIAS_NAMESPACE::Unexpected(ret.error());
         }
