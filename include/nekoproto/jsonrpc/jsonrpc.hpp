@@ -17,9 +17,9 @@
 #include <type_traits>
 #include <utility> // std::index_sequence, std::make_index_sequence
 
-#include "nekoproto/jsonrpc/datagram_wapper.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_error.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_traits.hpp"
+#include "nekoproto/jsonrpc/message_stream_wrapper.hpp"
 
 NEKO_BEGIN_NAMESPACE
 namespace detail {
@@ -541,7 +541,7 @@ public:
         _registerRpcMethod<RpcMethodDynamic<RetT(Args...), ArgNames...>>(name, std::move(func));
     }
 
-    auto processRequest(const char* data, std::size_t size, IMessageStreamClient* client) noexcept
+    auto processRequest(const char* data, std::size_t size, detail::IMessageStream* client) noexcept
         -> ILIAS_NAMESPACE::Task<std::vector<char>> {
         std::vector<char> buffer;
         JsonSerializer::OutputSerializer out(buffer);
@@ -586,15 +586,12 @@ public:
 
     void cancelAll() { mTaskScope.cancel(); }
 
-    auto receiveLoop(IMessageStreamClient* client) noexcept -> ILIAS_NAMESPACE::Task<void> {
+    auto receiveLoop(detail::IMessageStream* client) noexcept -> ILIAS_NAMESPACE::Task<void> {
         while (client != nullptr) {
-            if (auto buffer = co_await client->recv(); buffer && buffer->size() > 0) {
-                co_await processRequest(reinterpret_cast<const char*>(buffer->data()), buffer->size(), client);
+            std::vector<std::byte> buffer;
+            if (auto ret = co_await client->recv(buffer); ret && buffer.size() > 0) {
+                co_await processRequest(reinterpret_cast<const char*>(buffer.data()), buffer.size(), client);
             } else {
-                if (buffer.error_or(ILIAS_NAMESPACE::Error::Unknown) != ILIAS_NAMESPACE::Error::Canceled) {
-                    NEKO_LOG_WARN("jsonrpc", "client disconnected, {}",
-                                  buffer.error_or(ILIAS_NAMESPACE::Error::ConnectionReset).message());
-                }
                 break;
             }
         }
@@ -738,22 +735,22 @@ public:
     auto operator->() noexcept { return &mProtocol; }
     auto operator->() const noexcept { return &mProtocol; }
     auto close() noexcept -> void {
-        for (auto& client : mClients) {
-            dynamic_cast<IMessageStream*>(client.get())->cancel();
+        for (auto& client : mTransports) {
+            client->cancel();
         }
         if (mServer != nullptr) {
-            dynamic_cast<IMessageStream*>(mServer.get())->cancel();
+            mServer->cancel();
         }
         mScop.cancel();
         mScop.wait();
-        for (auto& client : mClients) {
-            dynamic_cast<IMessageStream*>(client.get())->close();
+        for (auto& client : mTransports) {
+            client->close();
         }
         if (mServer != nullptr) {
-            dynamic_cast<IMessageStream*>(mServer.get())->close();
+            mServer->close();
         }
+        mServer.reset();
     }
-    auto isListening() const noexcept -> bool { return mServer != nullptr && mServer->isListening(); }
 
     auto wait() -> ILIAS_NAMESPACE::Task<void> { co_await mScop; }
     auto cancel(uint64_t id) noexcept -> void { mImp.cancel(id); }
@@ -761,32 +758,32 @@ public:
     auto cancelAll() noexcept -> void { mImp.cancelAll(); }
     auto getCurrentIds() const noexcept -> const std::vector<detail::JsonRpcIdType>& { return mImp.getCurrentIds(); }
 
-    template <typename StreamType>
-    auto start(std::string_view url) noexcept -> ILIAS_NAMESPACE::IoTask<ILIAS_NAMESPACE::Error> {
-        auto server = std::make_unique<MessageStream<StreamType>>();
-        if (server->checkProtocol(MessageStream<StreamType>::Type::Server, url)) {
-            if (auto ret = co_await server->start(url); ret) {
-                mServer = std::move(server);
-                mScop.spawn(_acceptLoop());
-                co_return ILIAS_NAMESPACE::Error::Ok;
-            } else {
-                NEKO_LOG_ERROR("jsonrpc", "client start failed, {}", ret.error().message());
-                co_return ret.error();
-            }
+    template <typename ClientT>
+        requires MessageStreamClient<ClientT> || std::is_same_v<ClientT, std::unique_ptr<detail::IMessageStream>>
+    auto addTransport(ClientT client) noexcept -> void {
+        auto item = mTransports.begin();
+        if constexpr (std::is_same_v<ClientT, std::unique_ptr<detail::IMessageStream>>) {
+            item = mTransports.emplace(mTransports.end(), std::move(client));
         } else {
-            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::InvalidArgument);
+            item = mTransports.emplace(mTransports.end(),
+                                       std::make_unique<detail::MessageStreamWrapper<ClientT>>(std::move(client)));
         }
+        mScop.spawn([this, item]() -> ILIAS_NAMESPACE::Task<void> {
+            co_await mImp.receiveLoop((*item).get());
+            mTransports.erase(item);
+        });
     }
 
-    auto start(std::string_view url) noexcept -> ILIAS_NAMESPACE::Task<bool> {
-        if (auto ret = co_await start<ILIAS_NAMESPACE::TcpListener>(url); ret) {
-            co_return ret.value() == ILIAS_NAMESPACE::Error::Ok;
+    template <typename ListenerT>
+        requires MessageStreamListener<ListenerT> ||
+                 std::is_same_v<ListenerT, std::unique_ptr<detail::IMessageListener>>
+    auto setListener(ListenerT listener) noexcept -> void {
+        if constexpr (std::is_same_v<ListenerT, std::unique_ptr<detail::IMessageListener>>) {
+            mServer = std::move(listener);
+        } else {
+            mServer = std::make_unique<detail::MessageListenerWrapper<ListenerT>>(std::move(listener));
+            mScop.spawn(_acceptLoop());
         }
-        if (auto ret = co_await start<ILIAS_NAMESPACE::UdpClient>(url); ret) {
-            co_return ret.value() == ILIAS_NAMESPACE::Error::Ok;
-        }
-        NEKO_LOG_ERROR("jsonrpc", "Unsupported protocol: {}", url);
-        co_return false;
     }
 
     template <ConstexprString... ArgNames, typename RetT, typename... Args>
@@ -814,14 +811,10 @@ private:
     auto _acceptLoop() noexcept -> ILIAS_NAMESPACE::Task<> {
         while (mServer != nullptr) {
             if (auto ret = co_await mServer->accept(); ret) {
-                if (mClients.size() > 0 && mClients.back() == ret.value()) {
+                if (mTransports.size() > 0 && mTransports.back() == ret.value()) {
                     break;
                 }
-                auto item = mClients.emplace(mClients.end(), std::move(ret.value()));
-                mScop.spawn([this, item]() -> ILIAS_NAMESPACE::Task<void> {
-                    co_await mImp.receiveLoop((*item).get());
-                    mClients.erase(item);
-                });
+                co_await addTransport(std::move(ret.value()));
             } else {
                 if (ret.error() != ILIAS_NAMESPACE::Error::Canceled) {
                     NEKO_LOG_WARN("jsonrpc", "accepting exit wit: {}", ret.error().message());
@@ -869,8 +862,8 @@ private:
 private:
     ProtocolT mProtocol;
     detail::JsonRpcServerImp mImp;
-    std::unique_ptr<IMessageStreamServer> mServer;
-    std::list<std::unique_ptr<IMessageStreamClient, void (*)(IMessageStreamClient*)>> mClients;
+    std::unique_ptr<detail::IMessageListener> mServer;
+    std::list<std::unique_ptr<detail::IMessageStream>> mTransports;
     std::map<std::string_view, std::unique_ptr<MethodData>> mMethodDatas;
     ILIAS_NAMESPACE::TaskScope mScop;
 };
@@ -885,41 +878,24 @@ public:
     ~JsonRpcClient() { close(); }
     auto operator->() const noexcept { return &mProtocol; }
     auto close() noexcept -> void {
-        if (mClient != nullptr) {
-            dynamic_cast<IMessageStream*>(mClient.get())->cancel();
+        if (mTransport != nullptr) {
+            mTransport->cancel();
         }
-        if (mClient != nullptr) {
-            dynamic_cast<IMessageStream*>(mClient.get())->close();
+        if (mTransport != nullptr) {
+            mTransport->close();
         }
     }
 
-    auto isConnected() const noexcept -> bool { return mClient != nullptr && mClient->isConnected(); }
+    auto isConnected() const noexcept -> bool { return mTransport != nullptr; }
 
-    template <typename StreamType>
-    auto connect(std::string_view url) noexcept -> ILIAS_NAMESPACE::IoTask<ILIAS_NAMESPACE::Error> {
-        auto client = std::make_unique<MessageStream<StreamType>>();
-        if (client->checkProtocol(MessageStream<StreamType>::Type::Client, url)) {
-            if (auto ret = co_await client->start(url); ret) {
-                mClient = std::move(client);
-                co_return ILIAS_NAMESPACE::Error::Ok;
-            } else {
-                NEKO_LOG_ERROR("jsonrpc", "client start failed, {}", ret.error().message());
-                co_return ret.error();
-            }
+    template <typename T>
+        requires MessageStreamClient<T> || std::is_same_v<T, std::unique_ptr<detail::IMessageStream>>
+    auto setTransport(T client) noexcept -> void {
+        if constexpr (std::is_same_v<T, std::unique_ptr<detail::IMessageStream>>) {
+            mTransport = std::move(client);
         } else {
-            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::InvalidArgument);
+            mTransport = std::make_unique<detail::MessageStreamWrapper<T>>(std::move(client));
         }
-    }
-
-    auto connect(std::string_view url) noexcept -> ILIAS_NAMESPACE::Task<bool> {
-        if (auto ret = co_await connect<ILIAS_NAMESPACE::TcpClient>(url); ret) {
-            co_return ret == ILIAS_NAMESPACE::Error::Ok;
-        }
-        if (auto ret = co_await connect<ILIAS_NAMESPACE::UdpClient>(url); ret) {
-            co_return ret == ILIAS_NAMESPACE::Error::Ok;
-        }
-        NEKO_LOG_ERROR("jsonrpc", "Unsupported protocol: {}", url);
-        co_return false;
     }
 
     template <typename RetT, ConstexprString... ArgNames, typename... Args>
@@ -948,7 +924,7 @@ private:
     template <typename T, typename... Args>
     auto _callRemote(T& metadata, Args... args) noexcept
         -> ILIAS_NAMESPACE::IoTask<typename std::decay_t<T>::RawReturnType> {
-        if (mClient == nullptr) {
+        if (mTransport == nullptr) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
         }
         if (auto grid = co_await mMutex.uniqueLock(); grid) {
@@ -956,7 +932,8 @@ private:
             if (auto ret =
                     _sendRequest<T, Args...>(metadata, metadata.isNotification(), request, std::forward<Args>(args)...);
                 ret) {
-                if (auto ret1 = co_await mClient->send({reinterpret_cast<std::byte*>(mBuffer.data()), mBuffer.size()});
+                if (auto ret1 =
+                        co_await mTransport->send({reinterpret_cast<std::byte*>(mBuffer.data()), mBuffer.size()});
                     !ret1) {
                     NEKO_LOG_ERROR("jsonrpc", "send {} request failed", request.method);
                     co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
@@ -966,8 +943,9 @@ private:
             }
             if (!metadata.isNotification()) {
                 typename std::decay_t<T>::ResponseType respone;
-                if (auto ret = co_await mClient->recv(); ret) {
-                    if (auto ret1 = _recvResponse<T>(ret.value(), respone, request.id); !ret1) {
+                std::vector<std::byte> buffer;
+                if (auto ret = co_await mTransport->recv(buffer); ret) {
+                    if (auto ret1 = _recvResponse<T>(buffer, respone, request.id); !ret1) {
                         co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
                     } else {
                         if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
@@ -1060,8 +1038,8 @@ private:
 
 private:
     ProtocolT mProtocol;
-    std::unique_ptr<IMessageStreamClient> mClient = nullptr;
-    uint64_t mId                                  = 0;
+    std::unique_ptr<detail::IMessageStream> mTransport = nullptr;
+    uint64_t mId                                       = 0;
     std::vector<char> mBuffer;
     ILIAS_NAMESPACE::Mutex mMutex;
 };
