@@ -814,7 +814,7 @@ private:
                 if (mTransports.size() > 0 && mTransports.back() == ret.value()) {
                     break;
                 }
-                co_await addTransport(std::move(ret.value()));
+                addTransport(std::move(ret.value()));
             } else {
                 if (ret.error() != ILIAS_NAMESPACE::Error::Canceled) {
                     NEKO_LOG_WARN("jsonrpc", "accepting exit wit: {}", ret.error().message());
