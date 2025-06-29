@@ -152,12 +152,12 @@ NEKO_END_NAMESPACE
 #define NEKO_SERIALIZER(...)                                                                                           \
 public:                                                                                                                \
     template <int N>                                                                                                   \
-    auto& _neko_get_n_member_reference() {                                                                             \
+    auto& _neko_get_n_member_reference() noexcept {                                                                    \
         auto tuple = std::tie(__VA_ARGS__);                                                                            \
         return std::get<N>(tuple);                                                                                     \
     }                                                                                                                  \
     template <int N>                                                                                                   \
-    const auto& _neko_get_n_member_reference() const {                                                                 \
+    const auto& _neko_get_n_member_reference() const noexcept {                                                        \
         auto tuple = std::tie(__VA_ARGS__);                                                                            \
         return std::get<N>(tuple);                                                                                     \
     }                                                                                                                  \

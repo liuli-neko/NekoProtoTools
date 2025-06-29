@@ -66,8 +66,10 @@ TEST_F(JsonRpcTest, BindAndCall) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    ilias_wait server.start("tcp://127.0.0.1:12335");
-    ilias_wait client.connect("tcp://127.0.0.1:12335");
+    auto listener = (ilias_wait detail::make_tcp_stream_server("tcp://127.0.0.1:12335")).value();
+    server.setListener(std::move(listener));
+    auto tcpclient = (ilias_wait detail::make_tcp_stream_client("tcp://127.0.0.1:12335")).value();
+    client.setTransport(std::move(tcpclient));
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server->test2 = [](int a1, int b1) -> ilias::IoTask<> {
@@ -154,8 +156,11 @@ TEST_F(JsonRpcTest, BindAndCallUdp) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    ilias_wait server.start("udp://127.0.0.1:12335-127.0.0.1:12336");
-    ilias_wait client.connect("udp://127.0.0.1:12336-127.0.0.1:12335");
+    auto udptp1 = (ilias_wait detail::make_udp_stream_client("udp://127.0.0.1:12335-127.0.0.1:12336")).value();
+    auto udptp2 = (ilias_wait detail::make_udp_stream_client("udp://127.0.0.1:12336-127.0.0.1:12335")).value();
+
+    server.addTransport(std::move(udptp1));
+    client.setTransport(std::move(udptp2));
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server->test2 = [](int a1, int b1) -> ilias::IoTask<> {
@@ -293,8 +298,11 @@ TEST_F(JsonRpcTest, Notification) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    ilias_wait server.start("udp://127.0.0.1:12335-127.0.0.1:12336");
-    ilias_wait client.connect("udp://127.0.0.1:12336-127.0.0.1:12335");
+    auto udptp1 = (ilias_wait detail::make_udp_stream_client("udp://127.0.0.1:12335-127.0.0.1:12336")).value();
+    auto udptp2 = (ilias_wait detail::make_udp_stream_client("udp://127.0.0.1:12336-127.0.0.1:12335")).value();
+
+    server.addTransport(std::move(udptp1));
+    client.setTransport(std::move(udptp2));
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server->test2 = [](int a1, int b1) -> ilias::IoTask<> {
@@ -330,8 +338,11 @@ TEST_F(JsonRpcTest, Basic) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    ilias_wait server.start("udp://127.0.0.1:12335-127.0.0.1:12336");
-    ilias_wait client.connect("udp://127.0.0.1:12336-127.0.0.1:12335");
+    auto udptp1 = (ilias_wait detail::make_udp_stream_client("udp://127.0.0.1:12335-127.0.0.1:12336")).value();
+    auto udptp2 = (ilias_wait detail::make_udp_stream_client("udp://127.0.0.1:12336-127.0.0.1:12335")).value();
+
+    server.addTransport(std::move(udptp1));
+    client.setTransport(std::move(udptp2));
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server.bindMethod<"aa", "bb">("test11",
