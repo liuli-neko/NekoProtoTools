@@ -420,6 +420,7 @@ class RpcMethodWrapper {
 public:
     RpcMethodWrapper()                                                                       = default;
     RpcMethodWrapper(RpcMethodWrapper&&)                                                     = default;
+    virtual ~RpcMethodWrapper()                                                              = default;
     virtual auto call(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
                       JsonRpcRequestMethod&& method) noexcept -> ILIAS_NAMESPACE::Task<void> = 0;
     auto operator()(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
@@ -559,7 +560,9 @@ public:
             out.startArray(batchSize);
         }
         _makeBatch(in, out, (int)batchSize);
-        co_await mTaskScope;
+        if (mTaskScope.runningTasks() > 0) {
+            co_await mTaskScope;
+        }
         mCurrentIds.clear();
         mCancelHandles.clear();
         if (batchRequest) {
