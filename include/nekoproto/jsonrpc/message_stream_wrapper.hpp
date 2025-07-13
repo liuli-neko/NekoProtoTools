@@ -55,6 +55,18 @@ concept MessageStreamListener = requires(T server) {
 };
 
 namespace detail {
+using ILIAS_NAMESPACE::Error;
+using ILIAS_NAMESPACE::IoTask;
+using ILIAS_NAMESPACE::IPEndpoint;
+using ILIAS_NAMESPACE::Task;
+using IliasTcpClient   = ILIAS_NAMESPACE::TcpClient;
+using IliasTcpListener = ILIAS_NAMESPACE::TcpListener;
+using IliasUdpClient   = ILIAS_NAMESPACE::UdpClient;
+using ILIAS_NAMESPACE::hostToNetwork;
+using ILIAS_NAMESPACE::ignoreCancellation;
+using ILIAS_NAMESPACE::networkToHost;
+using ILIAS_NAMESPACE::Unexpected;
+
 template <typename T, class enable = void>
 class MessageStream;
 
@@ -70,18 +82,17 @@ struct TcpListener {};
 template <>
 class MessageStream<UdpStream, void> {
 public:
-    MessageStream(ILIAS_NAMESPACE::UdpClient&& client, ILIAS_NAMESPACE::IPEndpoint endpoint)
-        : mClient(std::move(client)), mEndpoint(endpoint) {}
+    MessageStream(IliasUdpClient&& client, IPEndpoint endpoint) : mClient(std::move(client)), mEndpoint(endpoint) {}
 
-    auto recv(std::vector<std::byte>& buffer) -> ILIAS_NAMESPACE::IoTask<> {
+    auto recv(std::vector<std::byte>& buffer) -> IoTask<> {
         if (!mClient) {
-            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
+            co_return Unexpected(JsonRpcError::ClientNotInit);
         }
         int current = buffer.size();
         buffer.resize(current + 1500);
         while (true) {
             auto ret = co_await (mClient.recvfrom({buffer.data() + current, buffer.size() - current}, mEndpoint) |
-                                 ILIAS_NAMESPACE::ignoreCancellation);
+                                 ignoreCancellation);
             if (ret && ret.value() + current == buffer.size()) { // UDP单个包理论上不会超过1500
                 current = buffer.size();
                 buffer.resize(current + 1500);
@@ -89,23 +100,22 @@ public:
                 buffer.resize(ret.value() + current);
                 co_return {};
             } else {
-                co_return ILIAS_NAMESPACE::Unexpected<ILIAS_NAMESPACE::Error>(ret.error());
+                co_return Unexpected<Error>(ret.error());
             }
         }
     }
 
-    auto send(std::span<const std::byte> data) -> ILIAS_NAMESPACE::IoTask<> {
+    auto send(std::span<const std::byte> data) -> IoTask<> {
         if (!mClient) {
-            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
+            co_return Unexpected(JsonRpcError::ClientNotInit);
         }
         if (data.size() >= 1500) {
-            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MessageToolLarge);
+            co_return Unexpected(JsonRpcError::MessageToolLarge);
         }
-        auto ret  = co_await (mClient.sendto(data, mEndpoint) | ILIAS_NAMESPACE::ignoreCancellation);
+        auto ret  = co_await (mClient.sendto(data, mEndpoint) | ignoreCancellation);
         auto send = ret.value_or(0);
         while (ret && send < data.size()) {
-            ret = co_await (mClient.sendto({data.data() + send, data.size() - send}, mEndpoint) |
-                            ILIAS_NAMESPACE::ignoreCancellation);
+            ret = co_await (mClient.sendto({data.data() + send, data.size() - send}, mEndpoint) | ignoreCancellation);
             if (ret && ret.value() > 0) {
                 send += ret.value();
             } else {
@@ -113,7 +123,7 @@ public:
             }
         }
         if (!ret) {
-            co_return ILIAS_NAMESPACE::Unexpected<ILIAS_NAMESPACE::Error>(ret.error());
+            co_return Unexpected<Error>(ret.error());
         }
         co_return {};
     }
@@ -131,8 +141,8 @@ public:
     }
 
 private:
-    ILIAS_NAMESPACE::UdpClient mClient;
-    ILIAS_NAMESPACE::IPEndpoint mEndpoint;
+    IliasUdpClient mClient;
+    IPEndpoint mEndpoint;
 };
 
 /**
@@ -145,53 +155,53 @@ template <>
 class MessageStream<TcpStream, void> {
 public:
     MessageStream() = default;
-    MessageStream(ILIAS_NAMESPACE::TcpClient&& client) : mClient(std::move(client)) {}
+    MessageStream(IliasTcpClient&& client) : mClient(std::move(client)) {}
 
-    auto recv(std::vector<std::byte>& buffer) -> ILIAS_NAMESPACE::IoTask<> {
+    auto recv(std::vector<std::byte>& buffer) -> IoTask<> {
         if (!mClient) {
-            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
+            co_return Unexpected(JsonRpcError::ClientNotInit);
         }
         uint32_t size = 0;
-        if (auto ret = co_await (mClient.readAll({reinterpret_cast<std::byte*>(&size), sizeof(size)}) |
-                                 ILIAS_NAMESPACE::ignoreCancellation);
+        if (auto ret =
+                co_await (mClient.readAll({reinterpret_cast<std::byte*>(&size), sizeof(size)}) | ignoreCancellation);
             !ret) {
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+            co_return Unexpected(ret.error());
         } else if (ret.value() == sizeof(size)) {
-            size = ILIAS_NAMESPACE::networkToHost(size);
+            size = networkToHost(size);
         } else {
             mClient.close();
-            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Unknown);
+            co_return Unexpected(Error::Unknown);
         }
         if (buffer.size() < size) {
             buffer.resize(size);
         }
-        auto ret = co_await (mClient.readAll({buffer.data(), size}) | ILIAS_NAMESPACE::ignoreCancellation);
+        auto ret = co_await (mClient.readAll({buffer.data(), size}) | ignoreCancellation);
         if (ret && ret.value() == size) {
             co_return {};
         } else {
             mClient.close();
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error_or(ILIAS_NAMESPACE::Error::Unknown));
+            co_return Unexpected(ret.error_or(Error::Unknown));
         }
     }
 
-    auto send(std::span<const std::byte> data) -> ILIAS_NAMESPACE::IoTask<void> {
+    auto send(std::span<const std::byte> data) -> IoTask<void> {
         if (!mClient) {
-            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
+            co_return Unexpected(JsonRpcError::ClientNotInit);
         }
-        auto size = ILIAS_NAMESPACE::hostToNetwork((uint32_t)data.size());
-        if (auto ret = co_await (mClient.writeAll({reinterpret_cast<std::byte*>(&size), sizeof(size)}) |
-                                 ILIAS_NAMESPACE::ignoreCancellation);
+        auto size = hostToNetwork((uint32_t)data.size());
+        if (auto ret =
+                co_await (mClient.writeAll({reinterpret_cast<std::byte*>(&size), sizeof(size)}) | ignoreCancellation);
             !ret) {
             mClient.close();
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+            co_return Unexpected(ret.error());
         } else if (ret.value() != sizeof(size)) {
             mClient.close();
-            co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::Unknown);
+            co_return Unexpected(Error::Unknown);
         }
-        auto ret = co_await (mClient.writeAll(data) | ILIAS_NAMESPACE::ignoreCancellation);
+        auto ret = co_await (mClient.writeAll(data) | ignoreCancellation);
         if (!ret || ret.value() != data.size()) {
             mClient.close();
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error_or(ILIAS_NAMESPACE::Error::Unknown));
+            co_return Unexpected(ret.error_or(Error::Unknown));
         }
         co_return {};
     }
@@ -208,13 +218,13 @@ public:
     }
 
 private:
-    ILIAS_NAMESPACE::TcpClient mClient;
+    IliasTcpClient mClient;
 };
 
 template <>
 class MessageStream<TcpListener, void> {
 public:
-    MessageStream(ILIAS_NAMESPACE::TcpListener&& listener) : mListener(std::move(listener)) {}
+    MessageStream(IliasTcpListener&& listener) : mListener(std::move(listener)) {}
 
     auto close() -> void {
         if (mListener) {
@@ -228,98 +238,152 @@ public:
         }
     }
 
-    auto accept() -> ILIAS_NAMESPACE::IoTask<MessageStream<TcpStream>> {
+    auto accept() -> IoTask<MessageStream<TcpStream>> {
         if (!mListener) {
-            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
+            co_return Unexpected(JsonRpcError::ClientNotInit);
         }
         if (auto ret = co_await mListener.accept(); ret) {
             co_return MessageStream<TcpStream>(std::move(ret.value().first));
         } else {
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+            co_return Unexpected(ret.error());
         }
     }
 
 private:
-    ILIAS_NAMESPACE::TcpListener mListener;
+    IliasTcpListener mListener;
 };
 
-// tcp://127.0.0.1:8080
-auto make_tcp_stream_client(std::string_view url) -> ILIAS_NAMESPACE::IoTask<MessageStream<TcpStream>> {
-    auto ipendpoint = ILIAS_NAMESPACE::IPEndpoint::fromString(url.substr(6));
-    if (!ipendpoint) {
-        co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::InvalidArgument);
-    }
-    if (auto ret = co_await ILIAS_NAMESPACE::TcpClient::make(ipendpoint->family()); ret) {
-        if (auto ret1 = co_await ret.value().connect(ipendpoint.value()); ret1) {
+auto make_tcp_stream_client(IPEndpoint ipendpoint) -> IoTask<MessageStream<TcpStream>> {
+    if (auto ret = co_await IliasTcpClient::make(ipendpoint.family()); ret) {
+        if (auto ret1 = co_await ret.value().connect(ipendpoint); ret1) {
             co_return MessageStream<TcpStream>(std::move(ret.value()));
         } else {
-            co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
+            co_return Unexpected(ret1.error());
         }
     } else {
-        co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+        co_return Unexpected(ret.error());
     }
+}
+
+// tcp://127.0.0.1:8080
+// 127.0.0.1:8080
+auto make_tcp_stream_client(std::string_view url) -> IoTask<MessageStream<TcpStream>> {
+    std::string_view ipstr;
+    if (url.substr(0, 6) == "tcp://") {
+        ipstr = url.substr(6);
+    } else {
+        ipstr = url;
+    }
+    auto ipendpoint = IPEndpoint::fromString(ipstr);
+    if (!ipendpoint) {
+        co_return Unexpected(Error::InvalidArgument);
+    }
+    co_return co_await make_tcp_stream_client(ipendpoint.value());
+}
+
+auto make_tcp_stream_client(const char* url) -> IoTask<MessageStream<TcpStream>> {
+    return make_tcp_stream_client(std::string_view(url));
+}
+
+auto make_tcp_stream_client(const std::string& url) -> IoTask<MessageStream<TcpStream>> {
+    return make_tcp_stream_client(std::string_view(url));
+}
+
+auto make_udp_stream_client(IPEndpoint bindIpendpoint, IPEndpoint remoteIpendpoint)
+    -> IoTask<MessageStream<UdpStream>> {
+    IliasUdpClient client;
+    if (auto ret = co_await IliasUdpClient::make(bindIpendpoint.family()); ret) {
+        client = std::move(ret.value());
+    } else {
+        co_return Unexpected(ret.error());
+    }
+    client.setOption(ILIAS_NAMESPACE::sockopt::ReuseAddress(1));
+    if (auto ret = client.bind(bindIpendpoint); !ret) {
+        client.close();
+        co_return Unexpected(ret.error());
+    }
+    co_return MessageStream<UdpStream>(std::move(client), remoteIpendpoint);
 }
 
 // like udp://127.0.0.1:12345-127.0.0.1:12346
-auto make_udp_stream_client(std::string_view url) -> ILIAS_NAMESPACE::IoTask<MessageStream<UdpStream>> {
-    auto bindRemoteIp = url.substr(6);
-    auto pos          = bindRemoteIp.find('-');
-    if (pos == std::string_view::npos) {
-        co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::InvalidArgument);
-    }
-    auto bindIpendpoint   = ILIAS_NAMESPACE::IPEndpoint::fromString(bindRemoteIp.substr(0, pos));
-    auto remoteIpendpoint = ILIAS_NAMESPACE::IPEndpoint::fromString(bindRemoteIp.substr(pos + 1));
-    if (!bindIpendpoint || !remoteIpendpoint) {
-        co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::InvalidArgument);
-    }
-    ILIAS_NAMESPACE::UdpClient client;
-    if (auto ret = co_await ILIAS_NAMESPACE::UdpClient::make(bindIpendpoint->family()); ret) {
-        client = std::move(ret.value());
+// 127.0.0.1:12345-127.0.0.1:12346
+auto make_udp_stream_client(std::string_view url) -> IoTask<MessageStream<UdpStream>> {
+    std::string_view bindRemoteIp;
+    if (url.substr(0, 6) == "udp://") {
+        bindRemoteIp = url.substr(6);
     } else {
-        co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+        bindRemoteIp = url;
     }
-    client.setOption(ILIAS_NAMESPACE::sockopt::ReuseAddress(1));
-    if (auto ret = client.bind(bindIpendpoint.value()); !ret) {
-        client.close();
-        co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+    auto pos = bindRemoteIp.find('-');
+    if (pos == std::string_view::npos) {
+        co_return Unexpected(Error::InvalidArgument);
     }
-    co_return MessageStream<UdpStream>(std::move(client), remoteIpendpoint.value());
+    auto bindIpendpoint   = IPEndpoint::fromString(bindRemoteIp.substr(0, pos));
+    auto remoteIpendpoint = IPEndpoint::fromString(bindRemoteIp.substr(pos + 1));
+    if (!bindIpendpoint || !remoteIpendpoint) {
+        co_return Unexpected(Error::InvalidArgument);
+    }
+    co_return co_await make_udp_stream_client(bindIpendpoint.value(), remoteIpendpoint.value());
 }
 
-auto make_tcp_stream_server(std::string_view url) -> ILIAS_NAMESPACE::IoTask<MessageStream<TcpListener>> {
-    auto ipendpoint = ILIAS_NAMESPACE::IPEndpoint::fromString(url.substr(6));
-    if (!ipendpoint) {
-        co_return ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::Error::InvalidArgument);
-    }
-    if (auto ret = co_await ILIAS_NAMESPACE::TcpListener::make(ipendpoint->family()); ret) {
+auto make_udp_stream_client(const char* url) -> IoTask<MessageStream<UdpStream>> {
+    return make_udp_stream_client(std::string_view(url));
+}
+
+auto make_udp_stream_client(const std::string& url) -> IoTask<MessageStream<UdpStream>> {
+    co_return co_await make_udp_stream_client(std::string_view(url));
+}
+
+auto make_tcp_stream_server(IPEndpoint ipendpoint) -> IoTask<MessageStream<TcpListener>> {
+    if (auto ret = co_await IliasTcpListener::make(ipendpoint.family()); ret) {
         ret.value().setOption(ILIAS_NAMESPACE::sockopt::ReuseAddress(1));
-        if (auto ret1 = ret.value().bind(ipendpoint.value()); ret1) {
+        if (auto ret1 = ret.value().bind(ipendpoint); ret1) {
             co_return MessageStream<TcpListener>(std::move(ret.value()));
         } else {
-            co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
+            co_return Unexpected(ret1.error());
         }
     } else {
-        co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+        co_return Unexpected(ret.error());
     }
 }
 
+auto make_tcp_stream_server(std::string_view url) -> IoTask<MessageStream<TcpListener>> {
+    std::string_view ipstr;
+    if (url.substr(0, 6) == "tcp://") {
+        ipstr = url.substr(6);
+    } else {
+        ipstr = url;
+    }
+    auto ipendpoint = IPEndpoint::fromString(ipstr);
+    if (!ipendpoint) {
+        co_return Unexpected(Error::InvalidArgument);
+    }
+    co_return co_await make_tcp_stream_server(ipendpoint.value());
+}
+
+auto make_tcp_stream_server(const char* url) -> IoTask<MessageStream<TcpListener>> {
+    return make_tcp_stream_server(std::string_view(url));
+}
+auto make_tcp_stream_server(const std::string& url) -> IoTask<MessageStream<TcpListener>> {
+    return make_tcp_stream_server(std::string_view(url));
+}
 class IMessageStream {
 public:
     IMessageStream()          = default;
     virtual ~IMessageStream() = default;
 
-    virtual auto recv(std::vector<std::byte>& buffer) -> ILIAS_NAMESPACE::IoTask<>    = 0;
-    virtual auto send(std::span<const std::byte> buffer) -> ILIAS_NAMESPACE::IoTask<> = 0;
-    virtual auto close() -> void                                                      = 0;
-    virtual auto cancel() -> void                                                     = 0;
+    virtual auto recv(std::vector<std::byte>& buffer) -> IoTask<>    = 0;
+    virtual auto send(std::span<const std::byte> buffer) -> IoTask<> = 0;
+    virtual auto close() -> void                                     = 0;
+    virtual auto cancel() -> void                                    = 0;
 };
 
 template <MessageStreamClient T>
 class MessageStreamWrapper : public IMessageStream {
 public:
     MessageStreamWrapper(T&& client) : mClient(std::move(client)) {}
-    auto recv(std::vector<std::byte>& buffer) -> ILIAS_NAMESPACE::IoTask<> override { return mClient.recv(buffer); }
-    auto send(std::span<const std::byte> buffer) -> ILIAS_NAMESPACE::IoTask<> override { return mClient.send(buffer); }
+    auto recv(std::vector<std::byte>& buffer) -> IoTask<> override { return mClient.recv(buffer); }
+    auto send(std::span<const std::byte> buffer) -> IoTask<> override { return mClient.send(buffer); }
     auto close() -> void override { return mClient.close(); }
     auto cancel() -> void override { return mClient.cancel(); }
 
@@ -332,16 +396,16 @@ public:
     IMessageListener()          = default;
     virtual ~IMessageListener() = default;
 
-    virtual auto accept() -> ILIAS_NAMESPACE::IoTask<std::unique_ptr<IMessageStream>> = 0;
-    virtual auto close() -> void                                                      = 0;
-    virtual auto cancel() -> void                                                     = 0;
+    virtual auto accept() -> IoTask<std::unique_ptr<IMessageStream>> = 0;
+    virtual auto close() -> void                                     = 0;
+    virtual auto cancel() -> void                                    = 0;
 };
 
 template <MessageStreamListener T>
 class MessageListenerWrapper : public IMessageListener {
 public:
     MessageListenerWrapper(T&& listener) : mListener(std::move(listener)) {}
-    auto accept() -> ILIAS_NAMESPACE::IoTask<std::unique_ptr<IMessageStream>> override {
+    auto accept() -> IoTask<std::unique_ptr<IMessageStream>> override {
         if (auto ret = co_await mListener.accept(); ret) {
             using ClientT = std::decay_t<decltype(*ret)>;
             if constexpr (std::is_same_v<ClientT, std::unique_ptr<IMessageStream>>) {
@@ -350,7 +414,7 @@ public:
                 co_return std::make_unique<MessageStreamWrapper<ClientT>>(std::move(*ret));
             }
         } else {
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+            co_return Unexpected(ret.error());
         }
     }
     auto close() -> void override { return mListener.close(); }
