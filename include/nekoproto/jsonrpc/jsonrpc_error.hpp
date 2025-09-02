@@ -10,8 +10,11 @@
  */
 #pragma once
 
-#include <ilias/error.hpp>
+#include <ilias/io/error.hpp>
+#include <system_error>
+#include <type_traits>
 
+#include "nekoproto/global/config.h"
 #include "nekoproto/global/global.hpp"
 
 NEKO_BEGIN_NAMESPACE
@@ -34,11 +37,11 @@ enum class JsonRpcError {
     InternalError  = -32603, // Internal error Internal JSON-RPC error.
 };
 
-class JsonRpcErrorCategory : public ILIAS_NAMESPACE::ErrorCategory {
+class JsonRpcErrorCategory : public std::error_category {
 public:
     static JsonRpcErrorCategory& instance();
-    auto message(int64_t value) const -> std::string override;
-    auto name() const -> std::string_view override { return "jsonrpc"; }
+    auto message(int value) const noexcept -> std::string override;
+    auto name() const noexcept -> const char* override { return "jsonrpc"; }
 };
 
 inline JsonRpcErrorCategory& JsonRpcErrorCategory::instance() {
@@ -46,7 +49,7 @@ inline JsonRpcErrorCategory& JsonRpcErrorCategory::instance() {
     return kInstance;
 }
 
-inline auto JsonRpcErrorCategory::message(int64_t value) const -> std::string {
+inline auto JsonRpcErrorCategory::message(int value) const noexcept -> std::string {
     switch ((JsonRpcError)value) {
     case JsonRpcError::Ok:
         return "Ok";
@@ -72,5 +75,10 @@ inline auto JsonRpcErrorCategory::message(int64_t value) const -> std::string {
 }
 
 ILIAS_DECLARE_ERROR(JsonRpcError, JsonRpcErrorCategory); // NOLINT
-
+inline auto make_error_code(JsonRpcError value) noexcept -> std::error_code {
+    return std::error_code(static_cast<int>(value), JsonRpcErrorCategory::instance());
+}
 NEKO_END_NAMESPACE
+
+template <>
+struct std::is_error_code_enum<NEKO_NAMESPACE::JsonRpcError> : std::true_type {};

@@ -11,12 +11,15 @@
 #pragma once
 
 #include <functional>
+#include <ilias/task/group.hpp>
 #include <ilias/task/when_all.hpp>
 #include <memory>
+#include <system_error>
 #include <tuple>
 #include <type_traits>
 #include <utility> // std::index_sequence, std::make_index_sequence
 
+#include "ilias/task/task.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_error.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_traits.hpp"
 #include "nekoproto/jsonrpc/message_stream_wrapper.hpp"
@@ -487,7 +490,7 @@ private:
             mCurrentIds.emplace_back(id);
             in.rollbackItem();
             if (auto it = mHandlers.find(method.method); it != mHandlers.end()) {
-                ilias::ScopedWaitHandle handle = mTaskScope.spawn((*it->second)(in, out, std::move(method)));
+                auto handle = mTaskScope.spawn((*it->second)(in, out, std::move(method)));
                 if (!std::holds_alternative<std::monostate>(id)) {
                     mCancelHandles[id] = std::move(handle);
                 }
@@ -501,8 +504,11 @@ private:
     }
 
 public:
-    JsonRpcServerImp(ILIAS_NAMESPACE::IoContext& ctx) : mTaskScope(ctx) { mTaskScope.setAutoCancel(true); }
-
+    JsonRpcServerImp(ILIAS_NAMESPACE::IoContext& ctx) : mTaskScope() {}
+    ~JsonRpcServerImp() {
+        mTaskScope.stop();
+        mTaskScope.waitAll().wait();
+    }
     template <typename T>
     auto registerRpcMethod(T& metadata) noexcept -> void {
         if (auto item = mHandlers.find(metadata.name()); item != mHandlers.end()) {
@@ -560,9 +566,7 @@ public:
             out.startArray(batchSize);
         }
         _makeBatch(in, out, (int)batchSize);
-        if (mTaskScope.runningTasks() > 0) {
-            co_await mTaskScope;
-        }
+        co_await mTaskScope.waitAll();
         mCurrentIds.clear();
         mCancelHandles.clear();
         if (batchRequest) {
@@ -574,7 +578,7 @@ public:
         }
         if (client != nullptr) {
             auto ret = co_await client->send({reinterpret_cast<std::byte*>(buffer.data()), buffer.size()});
-            if (ret.error_or(ILIAS_NAMESPACE::Error::Unknown) == JsonRpcError::MessageToolLarge) {
+            if (ret.error_or(ILIAS_NAMESPACE::IoError::Unknown) == JsonRpcError::MessageToolLarge) {
                 NEKO_LOG_ERROR("jsonrpc", "message too large!");
             }
         }
@@ -583,11 +587,15 @@ public:
 
     void cancel(JsonRpcIdType id) noexcept {
         if (auto it = mCancelHandles.find(id); it != mCancelHandles.end()) {
-            it->second.cancel();
+            it->second.stop();
         }
     }
 
-    void cancelAll() { mTaskScope.cancel(); }
+    void cancelAll() {
+        if (!mTaskScope.empty()) {
+            mTaskScope.stop();
+        }
+    }
 
     auto receiveLoop(detail::IMessageStream* client) noexcept -> ILIAS_NAMESPACE::Task<void> {
         while (client != nullptr) {
@@ -666,7 +674,7 @@ private:
     }
 
     template <typename T>
-    auto _processMethodReturn(T& methodData, ILIAS_NAMESPACE::Result<typename T::RawReturnType> result,
+    auto _processMethodReturn(T& methodData, ILIAS_NAMESPACE::Result<typename T::RawReturnType, std::error_code> result,
                               JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method) noexcept -> void {
         if constexpr (std::is_void_v<typename T::RawReturnType>) {
             if (result) {
@@ -686,8 +694,8 @@ private:
 
 private:
     std::vector<detail::JsonRpcIdType> mCurrentIds;
-    std::map<JsonRpcIdType, ILIAS_NAMESPACE::ScopedWaitHandle<>> mCancelHandles;
-    ILIAS_NAMESPACE::TaskScope mTaskScope;
+    std::map<JsonRpcIdType, ILIAS_NAMESPACE::StopHandle> mCancelHandles;
+    ILIAS_NAMESPACE::TaskGroup<void> mTaskScope;
     std::map<std::string_view, std::unique_ptr<RpcMethodWrapper>> mHandlers;
 
     template <typename T>
@@ -730,11 +738,11 @@ private:
     } mRpc;
 
 public:
-    JsonRpcServer(ILIAS_NAMESPACE::IoContext& ctx) : mScop(ctx), mImp(ctx) {
-        mScop.setAutoCancel(true);
-        _init();
+    JsonRpcServer(ILIAS_NAMESPACE::IoContext& ctx) : mScop(), mImp(ctx) { _init(); }
+    ~JsonRpcServer() {
+        close();
+        wait().wait();
     }
-    ~JsonRpcServer() { close(); }
     auto operator->() noexcept { return &mProtocol; }
     auto operator->() const noexcept { return &mProtocol; }
     auto close() noexcept -> void {
@@ -744,18 +752,16 @@ public:
         if (mServer != nullptr) {
             mServer->cancel();
         }
-        mScop.cancel();
-        mScop.wait();
+        mScop.stop();
         for (auto& client : mTransports) {
             client->close();
         }
         if (mServer != nullptr) {
             mServer->close();
         }
-        mServer.reset();
     }
 
-    auto wait() -> ILIAS_NAMESPACE::Task<void> { co_await mScop; }
+    auto wait() -> ILIAS_NAMESPACE::Task<void> { co_await mScop.waitAll(); }
     auto cancel(uint64_t id) noexcept -> void { mImp.cancel(id); }
     auto cancel(const std::string& id) noexcept -> void { mImp.cancel(id); }
     auto cancelAll() noexcept -> void { mImp.cancelAll(); }
@@ -785,8 +791,8 @@ public:
             mServer = std::move(listener);
         } else {
             mServer = std::make_unique<detail::MessageListenerWrapper<ListenerT>>(std::move(listener));
-            mScop.spawn(_acceptLoop());
         }
+        mScop.spawn(_acceptLoop());
     }
 
     template <ConstexprString... ArgNames, typename RetT, typename... Args>
@@ -811,7 +817,7 @@ public:
     auto methodDatas(std::string_view name) noexcept -> MethodData { return mImp.methodDatas(name); }
 
 private:
-    auto _acceptLoop() noexcept -> ILIAS_NAMESPACE::Task<> {
+    auto _acceptLoop() noexcept -> ILIAS_NAMESPACE::Task<void> {
         while (mServer != nullptr) {
             if (auto ret = co_await mServer->accept(); ret) {
                 if (mTransports.size() > 0 && mTransports.back() == ret.value()) {
@@ -819,8 +825,8 @@ private:
                 }
                 addTransport(std::move(ret.value()));
             } else {
-                if (ret.error() != ILIAS_NAMESPACE::Error::Canceled) {
-                    NEKO_LOG_WARN("jsonrpc", "accepting exit wit: {}", ret.error().message());
+                if (ret.error() != ILIAS_NAMESPACE::IoError::Canceled) {
+                    NEKO_LOG_WARN("jsonrpc", "accepting exit with: {}", ret.error().message());
                 }
                 break;
             }
@@ -868,7 +874,7 @@ private:
     std::unique_ptr<detail::IMessageListener> mServer;
     std::list<std::unique_ptr<detail::IMessageStream>> mTransports;
     std::map<std::string_view, std::unique_ptr<MethodData>> mMethodDatas;
-    ILIAS_NAMESPACE::TaskScope mScop;
+    ILIAS_NAMESPACE::TaskGroup<void> mScop;
 };
 
 template <typename ProtocolT>
@@ -930,50 +936,45 @@ private:
         if (mTransport == nullptr) {
             co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
         }
-        if (auto grid = co_await mMutex.uniqueLock(); grid) {
-            typename std::decay_t<T>::RequestType request;
-            if (auto ret =
-                    _sendRequest<T, Args...>(metadata, metadata.isNotification(), request, std::forward<Args>(args)...);
-                ret) {
-                if (auto ret1 =
-                        co_await mTransport->send({reinterpret_cast<std::byte*>(mBuffer.data()), mBuffer.size()});
-                    !ret1) {
-                    NEKO_LOG_ERROR("jsonrpc", "send {} request failed", request.method);
-                    co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
-                }
-            } else {
-                co_return ILIAS_NAMESPACE::Unexpected(ret.error());
-            }
-            if (!metadata.isNotification()) {
-                typename std::decay_t<T>::ResponseType respone;
-                std::vector<std::byte> buffer;
-                if (auto ret = co_await mTransport->recv(buffer); ret) {
-                    if (auto ret1 = _recvResponse<T>(buffer, respone, request.id); !ret1) {
-                        co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
-                    } else {
-                        if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
-                            co_return {};
-                        } else {
-                            co_return ret1.value();
-                        }
-                    }
-                } else {
-                    NEKO_LOG_ERROR("jsonrpc", "Error: {}", ret.error().message());
-                    co_return ILIAS_NAMESPACE::Unexpected(ret.error());
-                }
-            } else {
-                co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::Ok);
+        auto grid = co_await mMutex.lock();
+        typename std::decay_t<T>::RequestType request;
+        if (auto ret =
+                _sendRequest<T, Args...>(metadata, metadata.isNotification(), request, std::forward<Args>(args)...);
+            ret) {
+            if (auto ret1 = co_await mTransport->send({reinterpret_cast<std::byte*>(mBuffer.data()), mBuffer.size()});
+                !ret1) {
+                NEKO_LOG_ERROR("jsonrpc", "send {} request failed", request.method);
+                co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
             }
         } else {
-            NEKO_LOG_ERROR("jsonrpc", "Error: {}", grid.error().message());
-            co_return ILIAS_NAMESPACE::Unexpected(grid.error());
+            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+        }
+        if (!metadata.isNotification()) {
+            typename std::decay_t<T>::ResponseType respone;
+            std::vector<std::byte> buffer;
+            if (auto ret = co_await mTransport->recv(buffer); ret) {
+                if (auto ret1 = _recvResponse<T>(buffer, respone, request.id); !ret1) {
+                    co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
+                } else {
+                    if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
+                        co_return {};
+                    } else {
+                        co_return ret1.value();
+                    }
+                }
+            } else {
+                NEKO_LOG_ERROR("jsonrpc", "Error: {}", ret.error().message());
+                co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+            }
+        } else {
+            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::Ok);
         }
         co_return {};
     }
 
     template <typename T, typename... Args>
     auto _sendRequest(T& methodData, bool notification, typename std::decay_t<T>::RequestType& request,
-                      Args... args) noexcept -> ILIAS_NAMESPACE::Result<void> {
+                      Args... args) noexcept -> ILIAS_NAMESPACE::Result<void, std::error_code> {
         if constexpr (traits::optional_like_type<typename std::decay_t<T>::ParamsTupleType>::value) {
             if (notification) {
                 request    = methodData.request(std::monostate{});
@@ -1011,7 +1012,7 @@ private:
     template <typename T>
     auto _recvResponse(std::span<std::byte> buffer, typename std::decay_t<T>::ResponseType& response,
                        detail::JsonRpcIdType& id) noexcept
-        -> ILIAS_NAMESPACE::Result<typename std::decay_t<T>::RawReturnType> {
+        -> ILIAS_NAMESPACE::Result<typename std::decay_t<T>::RawReturnType, std::error_code> {
         NEKO_LOG_INFO("jsonrpc", "recv response: {}",
                       std::string_view{reinterpret_cast<const char*>(buffer.data()), buffer.size()});
         if (auto in = JsonSerializer::InputSerializer(reinterpret_cast<const char*>(buffer.data()), buffer.size());
@@ -1025,8 +1026,8 @@ private:
                 detail::JsonRpcErrorResponse err = response.error.value();
                 NEKO_LOG_WARN("jsonrpc", "Error({}): {}", err.code, err.message);
                 return ILIAS_NAMESPACE::Unexpected(err.code > 0
-                                                       ? ILIAS_NAMESPACE::Error(ILIAS_NAMESPACE::Error::Code(err.code))
-                                                       : ILIAS_NAMESPACE::Error(JsonRpcError(err.code)));
+                                                       ? std::error_code(ILIAS_NAMESPACE::IoError::Code(err.code))
+                                                       : std::error_code(JsonRpcError(err.code)));
             }
             if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
                 return {};

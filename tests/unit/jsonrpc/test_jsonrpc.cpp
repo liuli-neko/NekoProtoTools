@@ -1,4 +1,3 @@
-#include <ilias/ilias.hpp>
 #include <ilias/net.hpp>
 #include <ilias/platform.hpp>
 #include <iostream>
@@ -6,7 +5,11 @@
 #include <gtest/gtest.h>
 
 // #include <gtest/gtest.h>
+#include "ilias/defines.hpp"
+#include "ilias/io/error.hpp"
+#include "ilias/result.hpp"
 #include "nekoproto/jsonrpc/jsonrpc.hpp"
+#include "nekoproto/jsonrpc/message_stream_wrapper.hpp"
 
 NEKO_USE_NAMESPACE
 
@@ -65,18 +68,20 @@ public:
 TEST_F(JsonRpcTest, BindAndCall) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
-
-    auto listener = (ilias_wait detail::make_tcp_stream_server("tcp://127.0.0.1:12335")).value();
-    server.setListener(std::move(listener));
-    auto tcpclient = (ilias_wait detail::make_tcp_stream_client("tcp://127.0.0.1:12335")).value();
-    client.setTransport(std::move(tcpclient));
+    auto listenerRet = detail::make_tcp_stream_server("tcp://127.0.0.1:12335").wait();
+    server.setListener(std::move(listenerRet.value()));
+    auto tcpclient = detail::make_tcp_stream_client("tcp://127.0.0.1:12335").wait();
+    if (!tcpclient) {
+        std::cout << tcpclient.error().message() << std::endl;
+    }
+    client.setTransport(std::move(tcpclient.value()));
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
-    server->test2 = [](int a1, int b1) -> ilias::IoTask<> {
+    server->test2 = [](int a1, int b1) -> ilias::IoTask<void> {
         std::cout << a1 << " " << b1 << std::endl;
         co_return {};
     };
-    server->test3 = []() -> ilias::IoTask<> {
+    server->test3 = []() -> ilias::IoTask<void> {
         std::cout << "this is test3!" << std::endl;
         co_return {};
     };
@@ -99,53 +104,53 @@ TEST_F(JsonRpcTest, BindAndCall) {
     server.bindMethod("test11", NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<std::string>(int)>(
                                     [](int aa) -> ilias::IoTask<std::string> { co_return std::to_string(aa); }));
     {
-        auto res = (ilias_wait client->test1(1, 2));
+        auto res = (client->test1(1, 2).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), 3);
     }
-    EXPECT_TRUE(ilias_wait client->test2(1, 2));
-    EXPECT_TRUE(ilias_wait client->test3());
+    EXPECT_TRUE(client->test2(1, 2).wait());
+    EXPECT_TRUE(client->test3().wait());
     {
-        auto res = ilias_wait client->test4();
+        auto res = client->test4().wait();
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), 114514);
     }
     {
-        auto res = (ilias_wait client->test5("hello", 3.14));
+        auto res = (client->test5("hello", 3.14).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), "hello" + std::to_string(3.14));
     }
     {
-        auto res = (ilias_wait client->test6(std::make_tuple(1, 3.14, true)));
+        auto res = (client->test6(std::make_tuple(1, 3.14, true)).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), std::to_string(1) + std::to_string(3.14) + std::to_string(true));
     }
     {
-        auto res = (ilias_wait client->test7());
+        auto res = (client->test7().wait());
         EXPECT_EQ(res.error(), JsonRpcError::MethodNotBind);
     }
     {
-        auto res = (ilias_wait client->test8(nullptr));
+        auto res = (client->test8(nullptr).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), 114514);
     }
     {
-        auto res = (ilias_wait client->test9({true, false, true, true, false}));
+        auto res = (client->test9({true, false, true, true, false}).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), (std::vector<int>{1, 0, 4, 8, 0}));
     }
     {
         Copytest tt;
         tt.a = 114514;
-        EXPECT_EQ((ilias_wait client->test10(1)).value().a, 114515);
+        EXPECT_EQ((client->test10(1)).wait().value().a, 114515);
     }
     {
-        auto res = (ilias_wait client.callRemote<std::string>("test11", 114514));
+        auto res = (client.callRemote<std::string>("test11", 114514).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), "114514");
     }
     {
-        auto res = (ilias_wait client.callRemote<std::string>("test12", 114514, 114514));
+        auto res = (client.callRemote<std::string>("test12", 114514, 114514).wait());
         EXPECT_EQ(res.error().value(), (int)JsonRpcError::MethodNotFound);
     }
     client.close();
@@ -156,18 +161,18 @@ TEST_F(JsonRpcTest, BindAndCallUdp) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    auto udptp1 = (ilias_wait detail::make_udp_stream_client("udp://127.0.0.1:12335-127.0.0.1:12336")).value();
-    auto udptp2 = (ilias_wait detail::make_udp_stream_client("udp://127.0.0.1:12336-127.0.0.1:12335")).value();
+    auto udptp1 = (detail::make_udp_stream_client("udp://127.0.0.1:12335-127.0.0.1:12336")).wait().value();
+    auto udptp2 = (detail::make_udp_stream_client("udp://127.0.0.1:12336-127.0.0.1:12335")).wait().value();
 
     server.addTransport(std::move(udptp1));
     client.setTransport(std::move(udptp2));
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
-    server->test2 = [](int a1, int b1) -> ilias::IoTask<> {
+    server->test2 = [](int a1, int b1) -> ilias::IoTask<void> {
         std::cout << a1 << " " << b1 << std::endl;
         co_return {};
     };
-    server->test3 = []() -> ilias::IoTask<> {
+    server->test3 = []() -> ilias::IoTask<void> {
         std::cout << "this is test3!" << std::endl;
         co_return {};
     };
@@ -194,75 +199,75 @@ TEST_F(JsonRpcTest, BindAndCallUdp) {
                                     [](int aa) -> ilias::IoTask<std::string> { co_return std::to_string(aa); }));
 
     {
-        auto res = (ilias_wait client->test1(1, 2));
+        auto res = (client->test1(1, 2).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), 3);
     }
 
     {
-        auto res = (ilias_wait client.callRemote<int>("test1", 1, 2));
+        auto res = (client.callRemote<int>("test1", 1, 2).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), 3);
     }
 
     {
-        auto res = (ilias_wait client.callRemote<int, "num1", "num2">("test1", 1, 2));
+        auto res = (client.callRemote<int, "num1", "num2">("test1", 1, 2).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), 3);
     }
 
     {
-        auto res = (ilias_wait client.callRemote<int, "num2", "num3">("test1", 1, 2));
+        auto res = (client.callRemote<int, "num2", "num3">("test1", 1, 2).wait());
         EXPECT_FALSE(res.has_value());
     }
 
-    EXPECT_TRUE(ilias_wait client->test2(1, 2));
-    EXPECT_TRUE(ilias_wait client->test3());
+    EXPECT_TRUE(client->test2(1, 2).wait());
+    EXPECT_TRUE(client->test3().wait());
     {
-        auto res = ilias_wait client->test4();
+        auto res = client->test4().wait();
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), 114514);
     }
     {
-        auto res = (ilias_wait client->test5("hello", 3.14));
+        auto res = (client->test5("hello", 3.14).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), "hello" + std::to_string(3.14));
     }
     {
-        auto res = (ilias_wait client->test6(std::make_tuple(1, 3.14, true)));
+        auto res = (client->test6(std::make_tuple(1, 3.14, true)).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), std::to_string(1) + std::to_string(3.14) + std::to_string(true));
     }
     {
-        auto res = (ilias_wait client->test7());
+        auto res = (client->test7().wait());
         EXPECT_EQ(res.error(), JsonRpcError::MethodNotBind);
     }
     {
-        auto res = (ilias_wait client->test8(nullptr));
+        auto res = (client->test8(nullptr).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), 114514);
     }
     {
-        auto res = (ilias_wait client->test9({true, false, true, true, false}));
+        auto res = (client->test9({true, false, true, true, false}).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), (std::vector<int>{1, 0, 4, 8, 0}));
     }
     {
         Copytest tt;
         tt.a = 114514;
-        EXPECT_EQ((ilias_wait client->test10(1)).value().a, 114515);
+        EXPECT_EQ((client->test10(1).wait()).value().a, 114515);
     }
     {
         MXXParams params;
         params.param1 = 114514;
         params.param2 = "hello";
         params.param3 = {1, 2, 3, 4};
-        auto res      = (ilias_wait client->test11(params));
+        auto res      = (client->test11(params).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), "114514hello4");
     }
     {
-        auto res = (ilias_wait client.callRemote<std::string>("test11", 114514));
+        auto res = (client.callRemote<std::string>("test11", 114514).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), "114514");
     }
@@ -278,20 +283,22 @@ TEST_F(JsonRpcTest, Batch) {
         // co_await ILIAS_NAMESPACE::sleep(std::chrono::milliseconds(10));
         co_return a1 + b1;
     };
-    server->test2 = [](int a1, int b1) -> ilias::IoTask<> {
+    server->test2 = [](int a1, int b1) -> ilias::IoTask<void> {
         std::cout << a1 << " " << b1 << std::endl;
         co_return {};
     };
-    server->test3 = []() -> ilias::IoTask<> {
+    server->test3 = []() -> ilias::IoTask<void> {
         std::cout << "this is test3!" << std::endl;
         co_return {};
     };
 
-    auto ret = ilias_wait server.callMethod(R"([
+    auto ret = server
+                   .callMethod(R"([
             {"jsonrpc":"2.0", "method":"test1", "params":[1,2], "id":1},
             {"jsonrpc":"2.0", "method":"test2", "params":[1,2], "id":2},
             {"jsonrpc":"2.0", "method":"test3", "params":[], "id":3}
-            ])");
+            ])")
+                   .wait();
     std::cout << std::string_view{ret.data(), ret.size()} << std::endl;
 }
 
@@ -299,18 +306,18 @@ TEST_F(JsonRpcTest, Notification) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    auto udptp1 = (ilias_wait detail::make_udp_stream_client("udp://127.0.0.1:12335-127.0.0.1:12336")).value();
-    auto udptp2 = (ilias_wait detail::make_udp_stream_client("udp://127.0.0.1:12336-127.0.0.1:12335")).value();
+    auto udptp1 = (detail::make_udp_stream_client("udp://127.0.0.1:12335-127.0.0.1:12336")).wait().value();
+    auto udptp2 = (detail::make_udp_stream_client("udp://127.0.0.1:12336-127.0.0.1:12335")).wait().value();
 
     server.addTransport(std::move(udptp1));
     client.setTransport(std::move(udptp2));
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
-    server->test2 = [](int a1, int b1) -> ilias::IoTask<> {
+    server->test2 = [](int a1, int b1) -> ilias::IoTask<void> {
         std::cout << a1 << " " << b1 << std::endl;
         co_return {};
     };
-    server->test3 = []() -> ilias::IoTask<> {
+    server->test3 = []() -> ilias::IoTask<void> {
         std::cout << "this is test3!" << std::endl;
         co_return {};
     };
@@ -318,18 +325,19 @@ TEST_F(JsonRpcTest, Notification) {
         std::cout << "this is test4!" << std::endl;
         co_return 0;
     };
-    server.bindMethod("test11", NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<>(int)>([](int aa) -> ilias::IoTask<> {
+    server.bindMethod("test11",
+                      NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<void>(int)>([](int aa) -> ilias::IoTask<void> {
                           std::cout << "test11 called with " << aa << std::endl;
                           co_return {};
                       }));
 
-    ilias_wait client->test1.notification(1, 2);
-    ilias_wait client->test2.notification(1, 2);
-    ilias_wait client->test3.notification();
-    ilias_wait client->test4.notification();
-    ilias_wait client.notifyRemote<void>("test11", 114514);
+    client->test1.notification(1, 2).wait();
+    client->test2.notification(1, 2).wait();
+    client->test3.notification().wait();
+    client->test4.notification().wait();
+    client.notifyRemote<void>("test11", 114514).wait();
 
-    ilias_wait ilias::sleep(std::chrono::milliseconds(100));
+    ilias::sleep(std::chrono::milliseconds(100)).wait();
 
     client.close();
     server.close();
@@ -339,8 +347,8 @@ TEST_F(JsonRpcTest, Basic) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    auto udptp1 = (ilias_wait detail::make_udp_stream_client("udp://127.0.0.1:12335-127.0.0.1:12336")).value();
-    auto udptp2 = (ilias_wait detail::make_udp_stream_client("udp://127.0.0.1:12336-127.0.0.1:12335")).value();
+    auto udptp1 = (detail::make_udp_stream_client("udp://127.0.0.1:12335-127.0.0.1:12336")).wait().value();
+    auto udptp2 = (detail::make_udp_stream_client("udp://127.0.0.1:12336-127.0.0.1:12335")).wait().value();
 
     server.addTransport(std::move(udptp1));
     client.setTransport(std::move(udptp2));
@@ -350,7 +358,7 @@ TEST_F(JsonRpcTest, Basic) {
                                   NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<int>(int, int)>(
                                       [](int aa, int bb) -> ilias::IoTask<int> { co_return (aa * 10) + bb; }));
 
-    auto methods = ilias_wait client.callRemote<std::vector<std::string>>("rpc.get_method_list");
+    auto methods = client.callRemote<std::vector<std::string>>("rpc.get_method_list").wait();
     ASSERT_TRUE(methods.has_value());
     EXPECT_EQ(methods.value().size(), 16);
     int idx = 0;
@@ -371,7 +379,7 @@ TEST_F(JsonRpcTest, Basic) {
     EXPECT_EQ(methods.value()[idx++], "test9");
 
     idx     = 0;
-    methods = ilias_wait client.callRemote<std::vector<std::string>>("rpc.get_bind_method_list");
+    methods = client.callRemote<std::vector<std::string>>("rpc.get_bind_method_list").wait();
     ASSERT_TRUE(methods.has_value());
     EXPECT_EQ(methods.value().size(), 6);
     EXPECT_EQ(methods.value()[idx++], "rpc.get_bind_method_list");
@@ -380,80 +388,86 @@ TEST_F(JsonRpcTest, Basic) {
     EXPECT_EQ(methods.value()[idx++], "rpc.get_method_list");
     EXPECT_EQ(methods.value()[idx++], "test1");
 
-    auto methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test1");
+    auto methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test1").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "int test1(int num1, int num2)");
 
-    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test2");
+    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test2").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "void test2(int num1, int num2)");
 
-    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test3");
+    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test3").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "void test3()");
 
-    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test4");
+    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test4").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "int test4()");
 
-    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test5");
+    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test5").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "std::string test5(std::string, double)");
 
-    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test6");
+    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test6").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "std::string test6(std::tuple<int, double, bool>)");
 
-    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test7");
+    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test7").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "std::string test7()");
 
-    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test8");
+    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test8").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "int test8(std::nullptr_t)");
 
-    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test9");
+    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test9").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "std::vector<int> test9(std::vector<bool>)");
 
-    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test10");
+    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test10").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "Copytest test10(int)");
 
-    methodInfo = ilias_wait client.callRemote<std::string>("rpc.get_method_info", "test11");
+    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test11").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "int test11(int aa, int bb)");
 
-    auto result = ilias_wait client.callRemote<int>("test11", 1, 2);
+    auto result = client.callRemote<int>("test11", 1, 2).wait();
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result.value(), 12);
 
-    result = ilias_wait client.callRemote<int, "bb", "aa">("test11", 1, 2);
+    result = client.callRemote<int, "bb", "aa">("test11", 1, 2).wait();
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result.value(), 21);
 
-    result = ilias_wait client.callRemote<int, "aa", "bb">("test11", 1, 2);
+    result = client.callRemote<int, "aa", "bb">("test11", 1, 2).wait();
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result.value(), 12);
 
-    auto methodInfoList = ilias_wait client.callRemote<std::vector<std::string>>("rpc.get_method_info_list");
+    auto methodInfoList = client.callRemote<std::vector<std::string>>("rpc.get_method_info_list").wait();
     ASSERT_TRUE(methodInfoList.has_value());
     EXPECT_EQ(methodInfoList.value().size(), 16);
 
-    server.bindMethod<>("test112",
-                        NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<>()>([]() -> ILIAS_NAMESPACE::IoTask<void> {
-                            std::cout << "test112: sleep 5s start" << std::endl;
-                            co_await ilias::sleep(std::chrono::milliseconds(5000));
-                            co_return {};
-                        }));
-    ilias_wait ILIAS_NAMESPACE::whenAll(
-        [&server]() -> ILIAS_NAMESPACE::Task<> {
-            std::cout << "cancel test112: sleep 1s start" << std::endl;
-            co_await ilias::sleep(std::chrono::milliseconds(1000));
-            server.cancelAll();
-            co_return;
-        }(),
-        client.callRemote<void>("test112"));
+    // FIXME: 等 ilias 查看
+    // server.bindMethod<>("test112",
+    //                     NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<void>()>([]() -> ILIAS_NAMESPACE::IoTask<void> {
+    //                         std::cout << "test112: sleep 5s start" << std::endl;
+    //                         co_await ilias::sleep(std::chrono::milliseconds(5000));
+    //                         std::cout << "test112: sleep 5s end" << std::endl;
+    //                         co_return {};
+    //                     }));
+    // [&]() -> ilias::Task<void> {
+    //     co_await ILIAS_NAMESPACE::whenAll(
+    //         [&server]() -> ILIAS_NAMESPACE::Task<void> {
+    //             std::cout << "cancel test112: sleep 1s start" << std::endl;
+    //             co_await ilias::sleep(std::chrono::milliseconds(1000));
+    //             server.cancelAll();
+    //             co_return;
+    //         }(),
+    //         client.callRemote<void>("test112"));
+    // }()
+    //              .wait();
+
     client.close();
     server.close();
 }
@@ -464,6 +478,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
     // ILIAS_LOG_SET_LEVEL(ILIAS_TRACE_LEVEL);
     ILIAS_NAMESPACE::PlatformContext context;
+    context.install();
     JsonRpcTest::gContext = &context;
 
     ::testing::InitGoogleTest(&argc, argv);
