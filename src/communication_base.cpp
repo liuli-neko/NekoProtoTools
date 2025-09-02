@@ -10,8 +10,8 @@
  */
 #include "nekoproto/communication/communication_base.hpp"
 
-#include <ilias/detail/expected.hpp>
 #include <ilias/task.hpp>
+#include <system_error>
 
 using namespace ILIAS_NAMESPACE;
 
@@ -22,9 +22,9 @@ auto ErrorCategory::instance() -> const ErrorCategory& {
     return kInstance;
 }
 
-auto ErrorCategory::name() const -> std::string_view { return "NekoCommunicationError"; }
+auto ErrorCategory::name() const noexcept -> const char* { return "NekoCommunicationError"; }
 
-auto ErrorCategory::equivalent(int64_t self, const ILIAS_NAMESPACE::Error& other) const -> bool {
+auto ErrorCategory::equivalent(int self, const std::error_condition& other) const noexcept -> bool {
     return other.category().name() == name() && self == static_cast<uint32_t>(other.value());
 }
 

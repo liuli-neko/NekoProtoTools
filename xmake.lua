@@ -145,7 +145,7 @@ if has_config("enable_fmt") then
 end
 
 if has_config("enable_communication") or has_config("enable_jsonrpc") then
-    add_requires("ilias", {configs = { shared = is_kind("shared")}})
+    add_requires("ilias dev", {configs = { shared = is_kind("shared"), cpp20 = true}})
 end
 
 if has_config("enable_tests") then

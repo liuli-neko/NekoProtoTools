@@ -13,16 +13,19 @@
 
 #include <errno.h>
 
-#include <ilias/detail/expected.hpp>
-#include <ilias/ilias.hpp>
+#include <ilias/defines.hpp>
 #include <ilias/io/dyn_traits.hpp>
 #include <ilias/io/traits.hpp>
 #include <ilias/net.hpp>
 #include <ilias/platform.hpp>
 #include <ilias/task.hpp>
 #include <set>
+#include <system_error>
 
-#include "detail/thread_await.hpp"
+#include "ilias/result.hpp"
+#include "ilias/task/task.hpp"
+#include "ilias/task/utils.hpp"
+#include "nekoproto/global/global.hpp"
 #include "nekoproto/proto/proto_base.hpp"
 #include "nekoproto/serialization/binary_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
@@ -119,7 +122,8 @@ private:
 };
 static_assert(std::is_class_v<decltype(RawDataMessage::Neko::values)>, "value");
 static_assert(detail::is_std_tuple_v<std::decay_t<decltype(RawDataMessage::Neko::values)>>, "tuple");
-static_assert(detail::is_all_meta_ref_value<RawDataMessage, std::decay_t<decltype(RawDataMessage::Neko::values)>>::value, "0");
+static_assert(
+    detail::is_all_meta_ref_value<RawDataMessage, std::decay_t<decltype(RawDataMessage::Neko::values)>>::value, "0");
 static_assert(detail::is_local_ref_values<RawDataMessage>, "static ");
 static_assert(detail::has_names_meta<RawDataMessage>, "names? why");
 static_assert(detail::has_values_meta<RawDataMessage>, "why ");
@@ -141,16 +145,16 @@ static_assert(detail::has_values_meta<RawDataMessage>, "why ");
 enum class ErrorCode { NEKO_CHANNEL_ERROR_CODE_TABLE };
 #undef NEKO_CHANNEL_ERROR
 
-class NEKO_PROTO_API ErrorCategory : public ILIAS_NAMESPACE::ErrorCategory {
+class NEKO_PROTO_API ErrorCategory : public std::error_category {
 public:
     static auto instance() -> const ErrorCategory&;
-    auto message(int64_t value) const -> std::string override;
-    auto name() const -> std::string_view override;
-    auto equivalent(int64_t self, const ILIAS_NAMESPACE::Error& other) const -> bool override;
+    auto message(int value) const -> std::string override;
+    auto name() const noexcept -> const char* override;
+    auto equivalent(int value, const std::error_condition& other) const noexcept -> bool override;
 };
 ILIAS_DECLARE_ERROR(ErrorCode, ErrorCategory);
 
-inline auto ErrorCategory::message(int64_t value) const -> std::string {
+inline auto ErrorCategory::message(int value) const -> std::string {
     switch (value) {
 #define NEKO_CHANNEL_ERROR(name, code, message, _)                                                                     \
     case code:                                                                                                         \
@@ -163,6 +167,16 @@ inline auto ErrorCategory::message(int64_t value) const -> std::string {
 }
 
 #undef NEKO_CHANNEL_ERROR_CODE_TABLE
+
+inline auto make_error_code(ErrorCode code) -> std::error_code {
+    return std::error_code(static_cast<int>(code), ErrorCategory::instance());
+}
+NEKO_END_NAMESPACE
+
+template <>
+struct std::is_error_code_enum<NEKO_NAMESPACE::ErrorCode> : std::true_type {};
+
+NEKO_BEGIN_NAMESPACE
 
 enum class StreamFlag {
     None                = 0,
@@ -191,10 +205,10 @@ class ProtoStreamClient {
     template <typename U>
     using IoTask = ILIAS_NAMESPACE::IoTask<U>;
     template <typename U>
-    using Result = ILIAS_NAMESPACE::Result<U>;
+    using Result = ILIAS_NAMESPACE::Result<U, std::error_code>;
     template <typename U>
     using Unexpected  = ILIAS_NAMESPACE::Unexpected<U>;
-    using Error       = ILIAS_NAMESPACE::Error;
+    using Error       = std::error_code;
     using SystemError = ILIAS_NAMESPACE::SystemError;
 
 public:
@@ -266,7 +280,7 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
 
     // verify proto factory
     if (isVerify) {
-        auto ret = co_await (_sendVersion() | ILIAS_NAMESPACE::ignoreCancellation);
+        auto ret = co_await (_sendVersion() | ILIAS_NAMESPACE::unstoppable());
         if (!ret) {
             NEKO_LOG_WARN("Communication", "send to verification version failed!");
             co_return Unexpected<Error>(ret.error());
@@ -278,16 +292,16 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
         messageData.resize(MessageHeader::size());
     }
     if (isThread) {
-        co_await detail::ThreadAwaiter<bool>{std::bind(
-            static_cast<bool (IProto::*)(std::vector<char>&) const>(&IProto::toData), &message, std::ref(messageData))};
+        co_await ILIAS_NAMESPACE::blocking(std::bind(
+            static_cast<bool (IProto::*)(std::vector<char>&) const>(&IProto::toData), &message, std::ref(messageData)));
     } else {
         message.toData(messageData);
     }
     if (messageData.empty() || (!isSlice && messageData.size() == MessageHeader::size())) {
-        co_return Unexpected<Error>(Error(ErrorCode::NoData));
+        co_return Unexpected<Error>(ErrorCode::NoData);
     }
     if (messageData.size() > std::numeric_limits<uint32_t>::max()) {
-        co_return Unexpected<Error>(Error::MessageTooLarge);
+        co_return Unexpected<Error>(ILIAS_NAMESPACE::IoError::MessageTooLarge);
     }
     if (isSlice) {
         // slice data
@@ -295,10 +309,10 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
         auto header     = MessageHeader((uint32_t)messageData.size(), message.type(), MessageType::SliceHeader);
         std::vector<char> headerData;
         if (!header.makeProto().toData(headerData)) {
-            co_return Unexpected<Error>(Error(ErrorCode::SerializationError));
+            co_return Unexpected<Error>(ErrorCode::SerializationError);
         }
         auto ret = co_await (_sendRaw({reinterpret_cast<std::byte*>(headerData.data()), headerData.size()}) |
-                             ILIAS_NAMESPACE::ignoreCancellation);
+                             ILIAS_NAMESPACE::unstoppable());
         NEKO_LOG_INFO("Communication", "Sending slice header, protocol: {}, size: {}", message.type(),
                       messageData.size());
         while (true) {
@@ -306,13 +320,13 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
                 std::min(static_cast<uint32_t>(messageData.size()) - offset, gSliceSize - MessageHeader::size());
             NEKO_ASSERT(sliceSize > 0, "Communication", "Slice size is 0");
             if (!ret) {
-                if (ret.error() == Error::Canceled) {
-                    co_await (_sendCancel(message.type()) | ILIAS_NAMESPACE::ignoreCancellation);
+                if (ret.error() == ILIAS_NAMESPACE::IoError::Canceled) {
+                    co_await (_sendCancel(message.type()) | ILIAS_NAMESPACE::unstoppable());
                 }
                 co_return Unexpected<Error>(ret.error());
             }
             ret = co_await (_sendSlice({reinterpret_cast<std::byte*>(messageData.data() + offset), sliceSize}, offset) |
-                            ILIAS_NAMESPACE::ignoreCancellation);
+                            ILIAS_NAMESPACE::unstoppable());
             offset += sliceSize;
             if (offset >= messageData.size()) {
                 break;
@@ -332,7 +346,7 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
         NEKO_LOG_INFO("Communication", "Send header: message type: Complete proto type: {} length: {}", header.data,
                       header.length);
         co_return co_await (_sendRaw({reinterpret_cast<std::byte*>(messageData.data()), messageData.size()}) |
-                            ILIAS_NAMESPACE::ignoreCancellation);
+                            ILIAS_NAMESPACE::unstoppable());
     }
 }
 
@@ -356,7 +370,7 @@ inline auto ProtoStreamClient<T>::recv(StreamFlag flag) -> IoTask<IProto> {
         // receive header
         mHeader = MessageHeader();
         std::vector<std::byte> messageHeader(MessageHeader::size());
-        auto ret = co_await (_recvRaw(messageHeader) | ILIAS_NAMESPACE::ignoreCancellation);
+        auto ret = co_await (_recvRaw(messageHeader) | ILIAS_NAMESPACE::unstoppable());
         if (!ret) {
             co_return Unexpected<Error>(ret.error());
         }
@@ -370,12 +384,12 @@ inline auto ProtoStreamClient<T>::recv(StreamFlag flag) -> IoTask<IProto> {
             mBuffer.clear();
             mMessage        = {};
             mSliceSizeCount = 0;
-            co_return Unexpected<Error>(Error::Canceled);
+            co_return Unexpected<Error>(ILIAS_NAMESPACE::IoError::Canceled);
         }
         case MessageType::VersionVerification: {
             NEKO_LOG_INFO("Communication", "recv header: message type: VersionVerification, lenght: {}",
                           mHeader.length);
-            auto ret2 = co_await (_recvVersion(mHeader) | ILIAS_NAMESPACE::ignoreCancellation);
+            auto ret2 = co_await (_recvVersion(mHeader) | ILIAS_NAMESPACE::unstoppable());
             if (!ret2) {
                 co_return Unexpected<Error>(ret2.error());
             }
@@ -386,7 +400,7 @@ inline auto ProtoStreamClient<T>::recv(StreamFlag flag) -> IoTask<IProto> {
                           mHeader.data, mHeader.length);
             mMessage = _createProto(mHeader.data);
             mBuffer.resize(mHeader.length);
-            auto ret2 = co_await (_recvRaw(mBuffer) | ILIAS_NAMESPACE::ignoreCancellation);
+            auto ret2 = co_await (_recvRaw(mBuffer) | ILIAS_NAMESPACE::unstoppable());
             if (!ret2) {
                 co_return Unexpected<Error>(ret2.error());
             }
@@ -441,10 +455,10 @@ inline auto ProtoStreamClient<T>::recv(StreamFlag flag) -> IoTask<IProto> {
         co_return Unexpected<Error>(Error(ErrorCode::UnrecognizedMessage));
     }
     if (static_cast<int>(flag & StreamFlag::SerializerInThread) != 0) {
-        auto ret = co_await detail::ThreadAwaiter<bool>(
+        auto ret = co_await ILIAS_NAMESPACE::blocking(
             std::bind(&IProto::fromData, &mMessage, reinterpret_cast<char*>(mBuffer.data()), mBuffer.size()));
-        if (!ret && !ret.value()) {
-            co_return Unexpected<Error>(ret.error_or(Error(ErrorCode::InvalidProtoData)));
+        if (!ret) {
+            co_return Unexpected<Error>(Error(ErrorCode::InvalidProtoData));
         }
     } else {
         if (!mMessage.fromData(reinterpret_cast<char*>(mBuffer.data()), mBuffer.size())) {
@@ -461,7 +475,7 @@ inline auto ProtoStreamClient<T>::_recvRaw(std::span<std::byte> buf) -> ILIAS_NA
         Result<std::size_t> ret = co_await mStreamClient.read({buf.data() + readsize, buf.size() - readsize});
         if (ret) {
             if (ret.value() == 0) {
-                co_return Unexpected<Error>(Error::ConnectionReset);
+                co_return Unexpected<Error>(ILIAS_NAMESPACE::IoError::ConnectionReset);
             }
             readsize += (uint32_t)ret.value();
 #ifdef _WIN32
@@ -620,7 +634,7 @@ inline auto ProtoStreamClient<T>::_sendRaw(std::span<std::byte> data) -> IoTask<
         Result<std::size_t> ret = co_await mStreamClient.write({data.data() + sended, data.size() - sended});
         if (ret) {
             if (ret.value() == 0) {
-                co_return Unexpected<Error>(Error::ConnectionReset);
+                co_return Unexpected<Error>(ILIAS_NAMESPACE::IoError::ConnectionReset);
             }
             sended += (uint32_t)ret.value();
 #ifdef _WIN32
@@ -648,11 +662,11 @@ class ProtoDatagramClient {
     template <typename U>
     using IoTask = ILIAS_NAMESPACE::IoTask<U>;
     template <typename U>
-    using Result     = ILIAS_NAMESPACE::Result<U>;
+    using Result     = ILIAS_NAMESPACE::Result<U, std::error_code>;
     using IPEndpoint = ILIAS_NAMESPACE::IPEndpoint;
     template <typename U>
     using Unexpected  = ILIAS_NAMESPACE::Unexpected<U>;
-    using Error       = ILIAS_NAMESPACE::Error;
+    using Error       = std::error_code;
     using SystemError = ILIAS_NAMESPACE::SystemError;
 
 public:
@@ -734,17 +748,17 @@ inline auto ProtoDatagramClient<T>::send(const IProto& message, const IPEndpoint
     }
     // verify proto factory
     if (isVerify) {
-        auto ret = co_await (_sendVersion(endpoint) | ILIAS_NAMESPACE::ignoreCancellation);
+        auto ret = co_await (_sendVersion(endpoint) | ILIAS_NAMESPACE::unstoppable());
         if (!ret) {
-            NEKO_LOG_WARN("Communication", "send to verification version failed! error: {}", ret.error().toString());
+            NEKO_LOG_WARN("Communication", "send to verification version failed! error: {}", ret.error().message());
         }
     }
     // proto to data
     std::vector<char> messageData;
     messageData.resize(MessageHeader::size(), 0);
     if (isThread) {
-        co_await detail::ThreadAwaiter<bool>{std::bind(
-            static_cast<bool (IProto::*)(std::vector<char>&) const>(&IProto::toData), &message, std::ref(messageData))};
+        co_await ILIAS_NAMESPACE::blocking(std::bind(
+            static_cast<bool (IProto::*)(std::vector<char>&) const>(&IProto::toData), &message, std::ref(messageData)));
     } else {
         message.toData(messageData);
     }
@@ -752,7 +766,7 @@ inline auto ProtoDatagramClient<T>::send(const IProto& message, const IPEndpoint
         co_return Unexpected<Error>(Error(ErrorCode::NoData));
     }
     if (messageData.size() > 65527) {
-        co_return Unexpected<Error>(Error::MessageTooLarge);
+        co_return Unexpected<Error>(ILIAS_NAMESPACE::IoError::MessageTooLarge);
     }
     // complete data
     auto header =
@@ -767,13 +781,13 @@ inline auto ProtoDatagramClient<T>::send(const IProto& message, const IPEndpoint
                   header.length);
     auto ret = co_await (
         mDatagramClient.sendto({reinterpret_cast<std::byte*>(messageData.data()), messageData.size()}, endpoint) |
-        ILIAS_NAMESPACE::ignoreCancellation);
+        ILIAS_NAMESPACE::unstoppable());
     if (!ret) {
         co_return Unexpected<Error>(ret.error());
     }
     if (ret.value() != messageData.size()) {
         NEKO_LOG_ERROR("Communication", "Send data error, expect: {} -actual: {}", messageData.size(), ret.value());
-        co_return Unexpected<Error>(Error::MessageTooLarge);
+        co_return Unexpected<Error>(ILIAS_NAMESPACE::IoError::MessageTooLarge);
     }
     co_return Result<void>();
 }
@@ -798,13 +812,14 @@ inline auto ProtoDatagramClient<T>::recv(StreamFlag flag) -> IoTask<std::pair<IP
     uint32_t recvSize = 0;
     while (!isComplete) {
         mBuffer.resize(gUdpMaxSize, std::byte(0));
-        auto ret = co_await (mDatagramClient.recvfrom(mBuffer, endpoint) | ILIAS_NAMESPACE::ignoreCancellation);
+        auto ret = co_await (mDatagramClient.recvfrom(mBuffer) | ILIAS_NAMESPACE::unstoppable());
         // receive header
         if (!ret) {
-            NEKO_LOG_ERROR("Communication", "Recv message header error: {}", ret.error().toString());
+            NEKO_LOG_ERROR("Communication", "Recv message header error: {}", ret.error().message());
             co_return Unexpected<Error>(ret.error());
         }
-        recvSize = (uint32_t)ret.value();
+        recvSize = (uint32_t)ret.value().first;
+        endpoint = ret.value().second;
         if (recvSize < (uint32_t)MessageHeader::size()) {
             NEKO_LOG_ERROR("Communication", "Recv message header error: recv size({}) < MessageHeader::size({})",
                            recvSize, MessageHeader::size());
@@ -820,7 +835,7 @@ inline auto ProtoDatagramClient<T>::recv(StreamFlag flag) -> IoTask<std::pair<IP
         case MessageType::VersionVerification: {
             NEKO_LOG_INFO("Communication", "recv header: message type: VersionVerification, lenght: {}",
                           mHeader.length);
-            auto ret2 = co_await (_recvVersion(mHeader) | ILIAS_NAMESPACE::ignoreCancellation);
+            auto ret2 = co_await (_recvVersion(mHeader) | ILIAS_NAMESPACE::unstoppable());
             if (!ret2) {
                 co_return Unexpected<Error>(ret2.error());
             }
@@ -831,12 +846,12 @@ inline auto ProtoDatagramClient<T>::recv(StreamFlag flag) -> IoTask<std::pair<IP
                           mHeader.length);
             mMessage = _createProto(mHeader.data);
             if (!ret) {
-                NEKO_LOG_ERROR("Communication", "Recv message data error: {}", ret.error().toString());
+                NEKO_LOG_ERROR("Communication", "Recv message data error: {}", ret.error().message());
                 co_return Unexpected<Error>(ret.error());
             }
-            if (ret.value() - MessageHeader::size() != mHeader.length) {
+            if (ret.value().first - MessageHeader::size() != mHeader.length) {
                 NEKO_LOG_ERROR("Communication", "Recv message length mismatch: {} != {}",
-                               ret.value() - MessageHeader::size(), mHeader.length);
+                               ret.value().first - MessageHeader::size(), mHeader.length);
                 co_return Unexpected<Error>(Error(ErrorCode::InvalidProtoData));
             }
             isComplete = true;
@@ -864,11 +879,11 @@ inline auto ProtoDatagramClient<T>::recv(StreamFlag flag) -> IoTask<std::pair<IP
         co_return Unexpected<Error>(Error(ErrorCode::UnrecognizedMessage));
     }
     if (static_cast<int>(flag & StreamFlag::SerializerInThread) != 0) {
-        auto ret = co_await detail::ThreadAwaiter<bool>(
+        auto ret = co_await ILIAS_NAMESPACE::blocking(
             std::bind(&IProto::fromData, &mMessage, reinterpret_cast<char*>(mBuffer.data() + MessageHeader::size()),
                       recvSize - MessageHeader::size()));
-        if (!ret && !ret.value()) {
-            co_return Unexpected<Error>(ret.error_or(Error(ErrorCode::InvalidProtoData)));
+        if (!ret) {
+            co_return Unexpected<Error>(Error(ErrorCode::InvalidProtoData));
         }
     } else {
         if (!mMessage.fromData(reinterpret_cast<char*>(mBuffer.data() + MessageHeader::size()),
