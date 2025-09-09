@@ -89,7 +89,7 @@
 #define NEKO_PROTO_API
 #endif
 
-#define NEKO_PP_NARG(...) NEKO_PP_NARG_(__VA_ARGS__, NEKO_PP_RSEQ_N())
+#define NEKO_PP_NARG(...)  NEKO_PP_NARG_(__VA_ARGS__, NEKO_PP_RSEQ_N())
 #define NEKO_PP_NARG_(...) NEKO_PP_ARG_N(__VA_ARGS__)
 // clang-format off
 #define NEKO_PP_ARG_N(                                  \
@@ -388,7 +388,7 @@
 #define NEKO_PP_REPEAT_126(var, s, macro) NEKO_PP_REPEAT_125(var, s, macro) s() macro(var, 126)
 #define NEKO_PP_REPEAT_127(var, s, macro) NEKO_PP_REPEAT_126(var, s, macro) s() macro(var, 127)
 #define NEKO_PP_REPEAT_128(var, s, macro) NEKO_PP_REPEAT_127(var, s, macro) s() macro(var, 128)
-#define NEKO_PP_CALL(macro, num) macro(num)
+#define NEKO_PP_CALL(macro, num)          macro(num)
 
 #define NEKO_PP_LIST_PARAMS(var, N)    NEKO_PP_PASTE(NEKO_PP_LIST_, N)(var, NEKO_PP_SEP_COMMA, NEKO_PP_PASTE)
 #define NEKO_PP_REPEAT_MACRO(macro, N) NEKO_PP_PASTE(NEKO_PP_REPEAT_, N)(macro, NEKO_PP_SEP_EMPTY, NEKO_PP_CALL)

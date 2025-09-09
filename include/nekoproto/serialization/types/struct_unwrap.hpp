@@ -12,7 +12,6 @@
 #include <cstring>
 
 #include "../private/helpers.hpp"
-#include "../reflection.hpp"
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 #include "nekoproto/global/log.hpp"

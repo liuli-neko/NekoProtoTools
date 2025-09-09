@@ -205,7 +205,8 @@ struct Test7 {
     std::optional<int> member1;
     int member2;
     std::string member3;
-    std::optional<std::string> member4;
+    std::string member4;
+    int member5; // msvc has bug with optional
 };
 
 TEST(Reflection, Optional) {
