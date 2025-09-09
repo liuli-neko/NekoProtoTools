@@ -145,7 +145,8 @@ if has_config("enable_fmt") then
 end
 
 if has_config("enable_communication") or has_config("enable_jsonrpc") then
-    add_requires("ilias dev", {configs = { shared = is_kind("shared"), cpp20 = true}})
+    add_requires("ilias", {version = "dev", configs = { shared = is_kind("shared"), cpp20 = true}})
+    add_requireconfs("**.ilias", {version = "dev", configs = { shared = is_kind("shared"), cpp20 = true}})
 end
 
 if has_config("enable_tests") then
@@ -165,7 +166,7 @@ if is_plat("linux") then
 end
 
 if is_plat("windows") then 
-    add_cxxflags("/bigobj")
+    add_cxxflags("/bigobj", "/Zc:preprocessor")
 end
 
 target("NekoSerializer")
