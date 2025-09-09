@@ -1,9 +1,12 @@
 #include <gtest/gtest.h>
 
+#include "nekoproto/global/reflect.hpp"
 #include "nekoproto/serialization/private/tags.hpp"
 #include "nekoproto/serialization/private/traits.hpp"
 #include "nekoproto/serialization/reflection.hpp"
+#include "nekoproto/serialization/types/optional.hpp"
 #include "nekoproto/serialization/types/struct_unwrap.hpp"
+#include "nekoproto/serialization/types/vector.hpp"
 
 #include <iostream>
 NEKO_USE_NAMESPACE
@@ -196,6 +199,47 @@ TEST(Reflection, ConstObject) {
         .member3 = 3,
     };
     Reflect<Test1>::forEach(test, [](auto&& field) { std::cout << field << std::endl; });
+}
+
+struct Test7 {
+    std::optional<int> member1;
+    int member2;
+    std::string member3;
+    std::optional<std::string> member4;
+};
+
+TEST(Reflection, Optional) {
+    Test7 test{.member1 = 1, .member2 = 2, .member3 = "3", .member4 = "5"};
+    // clang-format off
+    Reflect<Test7>::forEach(test, Overloads{
+        [](std::optional<int>& field, std::string_view name) {
+            if (field.has_value()) {
+                std::cout << name << ": " << field.value() << std::endl;
+                *field += 10;
+            } else {
+                std::cout << name << ": " << "null" << std::endl;
+            }
+        },
+        [](int& field, std::string_view name) {
+            std::cout << name << ": " << field << std::endl;
+            field += 10;
+        },
+        [](std::string& field, std::string_view name) {
+            std::cout << name << ": " << field << std::endl;
+            field += "5";
+        },
+        [](std::optional<std::string>& field, std::string_view name) {
+            if (field.has_value()) {
+                std::cout << name << ": " << field.value() << std::endl;
+                *field += "5";
+            } else {
+                std::cout << name << ": " << "null" << std::endl;
+            }
+        }});
+    // clang-format on
+    EXPECT_EQ(*test.member1, 11);
+    EXPECT_EQ(test.member2, 12);
+    EXPECT_EQ(test.member3, "35");
 }
 
 int main(int argc, char** argv) {

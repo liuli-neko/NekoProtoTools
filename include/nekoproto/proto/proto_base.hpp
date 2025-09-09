@@ -75,7 +75,6 @@
 NEKO_BEGIN_NAMESPACE
 class NEKO_PROTO_API ProtoFactory;
 namespace detail {
-class NEKO_PROTO_API AbstractProto;
 NEKO_PROTO_API
 auto static_init_funcs(const NEKO_STRING_VIEW&, std::function<void(ProtoFactory*)>)
     -> std::map<NEKO_STRING_VIEW, std::function<void(ProtoFactory*)>>&;

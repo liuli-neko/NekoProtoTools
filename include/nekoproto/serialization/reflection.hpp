@@ -550,6 +550,11 @@ private:
 };
 
 } // namespace detail
+template <class... Ts>
+struct Overloads : public Ts... {
+    using Ts::operator()...;
+    Overloads(Ts... args) : Ts(args)... {}
+};
 
 template <typename T, class enable = void>
 struct Reflect {
@@ -599,9 +604,11 @@ struct Reflect {
                 static_assert(std::tuple_size_v<std::decay_t<decltype(values)>> ==
                                   std::tuple_size_v<std::decay_t<decltype(names)>>,
                               "values and names size mismatch");
-                [&values, &names, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
+                []<std::size_t... Is>(auto&& values, auto&& names, auto&& func, auto&& obj,
+                                      std::index_sequence<Is...>) mutable {
                     ((func(detail::value_ref(std::get<Is>(values), obj), names[Is])), ...);
-                }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
+                }(values, names, func, obj,
+                  std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
             } else {
                 static_assert(1 == std::tuple_size_v<std::decay_t<decltype(names)>>, "values and names size mismatch");
                 func(detail::value_ref(values, obj), names[0]);
@@ -701,7 +708,7 @@ struct Reflect {
     static auto name(int index) noexcept {
         if constexpr (detail::has_names_meta<T>) {
             auto names = detail::ReflectHelper<T>::getNames();
-            if (index < 0 || index >= names.size()) {
+            if (index < 0 || index >= static_cast<int>(names.size())) {
                 NEKO_LOG_ERROR("reflection", "index out of range");
                 return std::string_view{};
             }
@@ -789,7 +796,7 @@ struct Reflect<T, std::enable_if_t<std::is_enum_v<T>>> {
                 detail::neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
             constexpr auto KEnumArrSize = KEnumArr.size();
             std::array<std::string_view, KEnumArrSize> names{};
-            for (int i = 0; i < KEnumArrSize; ++i) {
+            for (int i = 0; i < static_cast<int>(KEnumArrSize); ++i) {
                 names[i] = KEnumArr[i].second;
             }
             return names;
@@ -803,7 +810,7 @@ struct Reflect<T, std::enable_if_t<std::is_enum_v<T>>> {
                 detail::neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
             constexpr auto KEnumArrSize = KEnumArr.size();
             std::array<T, KEnumArrSize> values{};
-            for (int i = 0; i < KEnumArrSize; ++i) {
+            for (int i = 0; i < static_cast<int>(KEnumArrSize); ++i) {
                 values[i] = KEnumArr[i].first;
             }
             return values;
@@ -826,7 +833,7 @@ struct Reflect<T, std::enable_if_t<std::is_enum_v<T>>> {
             auto map = std::map<T, std::string_view>{};
             auto ns  = names();
             auto vs  = values();
-            for (int i = 0; i < ns.size(); ++i) {
+            for (int i = 0; i < static_cast<int>(ns.size()); ++i) {
                 map[vs[i]] = ns[i];
             }
             return map;

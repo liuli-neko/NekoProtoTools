@@ -16,10 +16,11 @@
 #include <array>
 #include <map>
 #include <optional>
-#include <set>
-#include <unordered_set>
+#include <list>
+#include <memory>
 #include <variant>
 #include <vector>
+#include <unordered_set>
 
 #include "nekoproto/serialization/private/helpers.hpp"
 #include "nekoproto/serialization/reflection.hpp"

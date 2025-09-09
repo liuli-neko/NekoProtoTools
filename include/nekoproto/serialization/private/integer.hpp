@@ -85,7 +85,7 @@ struct IntegerDecoder {
 
 template <typename T>
 inline int IntegerEncoder::encode(T&& value, std::vector<char>& outputBuffer, uint8_t bitsOffset) {
-    NEKO_ASSERT(bitsOffset < 8 && bitsOffset >= 0, "serializer", "bitsOffset must be between 0 and 8");
+    NEKO_ASSERT(bitsOffset < 8, "serializer", "bitsOffset must be between 0 and 8");
     if (outputBuffer.empty()) {
         outputBuffer.emplace_back(0);
     }
@@ -108,7 +108,7 @@ inline int IntegerEncoder::encode(T&& value, std::vector<char>& outputBuffer, ui
 
 template <typename T>
 inline int IntegerDecoder::decode(const uint8_t* buffer, int size, T& value, uint8_t bitsOffset) {
-    NEKO_ASSERT(bitsOffset < 8 && bitsOffset >= 0, "serializer", "bitsOffset must be between 0 and 8");
+    NEKO_ASSERT(bitsOffset < 8, "serializer", "bitsOffset must be between 0 and 8");
     NEKO_ASSERT(size > 0, "serializer", "buffer must not be empty");
 
     uint8_t byte{static_cast<uint8_t>((1U << (8 - bitsOffset)) - 1U)};

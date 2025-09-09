@@ -7,6 +7,7 @@
 
 #include "nekoproto/serialization/types/enum.hpp"
 #include "nekoproto/serialization/types/vector.hpp"
+#include "nekoproto/serialization/types/struct_unwrap.hpp"
 #include "nekoproto/serialization/xml_serializer.hpp"
 
 const char* gXmlData = R"(<breakfast_menu>

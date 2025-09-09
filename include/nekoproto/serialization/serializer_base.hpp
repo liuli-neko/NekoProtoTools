@@ -56,37 +56,13 @@
 #pragma once
 
 #include <array>
-#include <string>
-#include <vector>
 
 #include "nekoproto/global/global.hpp"
-#include "nekoproto/global/log.hpp"
-#include "private/helpers.hpp"
-#include "types/struct_unwrap.hpp"
+#include "nekoproto/global/string_literal.hpp"
 
 NEKO_BEGIN_NAMESPACE
 // NOLINTBEGIN
 namespace detail {
-inline constexpr int _members_size() NEKO_NOEXCEPT { // NOLINT(readability-identifier-naming)
-    return 0;
-}
-inline constexpr int _members_size(std::string_view names) NEKO_NOEXCEPT { // NOLINT(readability-identifier-naming)
-    if (names.empty()) {
-        return 0;
-    }
-    int count         = 0;
-    std::size_t begin = 0;
-    std::size_t end   = names.find_first_of(',', begin + 1);
-    while (end != std::string::npos) {
-        begin = end + 1;
-        end   = names.find_first_of(',', begin + 1);
-        count++;
-    }
-    if (begin != names.size()) {
-        count++;
-    }
-    return count;
-}
 template <int N>
 inline constexpr std::array<std::string_view, N>
 _parse_names(std::string_view names) NEKO_NOEXCEPT { // NOLINT(readability-identifier-naming)
@@ -115,10 +91,9 @@ _parse_names(std::string_view names) NEKO_NOEXCEPT { // NOLINT(readability-ident
     }
 }
 
-template <ConstexprString NamesStr>
+template <ConstexprString NamesStr, size_t N>
 struct _make_names_impl {
-    constexpr static int size         = _members_size(NamesStr.view());
-    constexpr static std::array names = _parse_names<size>(NamesStr.view());
+    constexpr static std::array names = _parse_names<N>(NamesStr.view());
 };
 } // namespace detail
 
@@ -162,9 +137,10 @@ public:                                                                         
         return std::get<N>(tuple);                                                                                     \
     }                                                                                                                  \
     struct Neko {                                                                                                      \
-        constexpr static std::array names = NEKO_NAMESPACE::detail::_make_names_impl<#__VA_ARGS__>::names;             \
-        constexpr static auto values      = []<std::size_t... Is>(std::index_sequence<Is...>) {                        \
-            return std::tuple{                                                                                    \
-                ([](auto&& self) -> auto& { return self.template _neko_get_n_member_reference<Is>(); })...};      \
-        }(std::make_index_sequence<NEKO_NAMESPACE::detail::_members_size(#__VA_ARGS__)>{});                            \
+        constexpr static std::array names =                                                                            \
+            NEKO_NAMESPACE::detail::_make_names_impl<#__VA_ARGS__, NEKO_VA_ARGS_SIZE(__VA_ARGS__)>::names;             \
+        constexpr static auto values = []<std::size_t... Is>(std::index_sequence<Is...>) {                             \
+            return std::tuple{                                                                                         \
+                ([](auto&& self) -> auto& { return self.template _neko_get_n_member_reference<Is>(); })...};           \
+        }(std::make_index_sequence<NEKO_VA_ARGS_SIZE(__VA_ARGS__)>{});                                                 \
     };
