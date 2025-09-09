@@ -504,7 +504,7 @@ private:
     }
 
 public:
-    JsonRpcServerImp(ILIAS_NAMESPACE::IoContext& ctx) : mTaskScope() {}
+    JsonRpcServerImp([[maybe_unused]] ILIAS_NAMESPACE::IoContext& ctx) : mTaskScope() {}
     ~JsonRpcServerImp() {
         mTaskScope.stop();
         mTaskScope.waitAll().wait();
@@ -738,7 +738,7 @@ private:
     } mRpc;
 
 public:
-    JsonRpcServer(ILIAS_NAMESPACE::IoContext& ctx) : mScop(), mImp(ctx) { _init(); }
+    JsonRpcServer(ILIAS_NAMESPACE::IoContext& ctx) : mImp(ctx), mScop() { _init(); }
     ~JsonRpcServer() {
         close();
         wait().wait();

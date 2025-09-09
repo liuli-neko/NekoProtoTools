@@ -155,6 +155,9 @@ end
 
 if is_mode("debug") then
     add_defines("NEKO_PROTO_LOG_CONTEXT")
+    if is_plat("linux") then
+        add_cxxflags("-ftemplate-backtrace-limit=0")
+    end
 end 
 
 if is_plat("linux") then

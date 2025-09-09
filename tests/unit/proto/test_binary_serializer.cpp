@@ -5,6 +5,7 @@
 #include "nekoproto/serialization/types/map.hpp"
 #include "nekoproto/serialization/types/tuple.hpp"
 #include "nekoproto/serialization/types/vector.hpp"
+#include "nekoproto/serialization/types/struct_unwrap.hpp"
 
 #include <gtest/gtest.h>
 #include <vector>

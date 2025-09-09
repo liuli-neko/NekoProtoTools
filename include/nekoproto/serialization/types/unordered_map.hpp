@@ -12,7 +12,7 @@
 #include <type_traits>
 #include <unordered_map>
 
-#include "../serializer_base.hpp"
+#include "../private/helpers.hpp"
 
 NEKO_BEGIN_NAMESPACE
 

@@ -64,7 +64,7 @@ std::string to_string(const T& values) {
 }
 
 ILIAS_NAMESPACE::IoTask<void>
-client_loop(ILIAS_NAMESPACE::IoContext& ioContext,
+client_loop([[maybe_unused]] ILIAS_NAMESPACE::IoContext& ioContext,
             ProtoFactory& protoFactory, // NOLINT(readability-function-cognitive-complexity)
             StreamFlag sendFlag, StreamFlag recvFlag) {
     NEKO_LOG_DEBUG("unit test", "Client connect to service");
@@ -154,8 +154,8 @@ ILIAS_NAMESPACE::IoTask<void> handle_loop(ProtoStreamClient<TcpClient>&& pClient
     co_return co_await client.close();
 }
 
-ILIAS_NAMESPACE::IoTask<void> server_loop(IoContext& ioContext, ProtoFactory& protoFactor, StreamFlag sendFlag,
-                                          StreamFlag recvFlag) {
+ILIAS_NAMESPACE::IoTask<void> server_loop([[maybe_unused]] IoContext& ioContext, ProtoFactory& protoFactor,
+                                          StreamFlag sendFlag, StreamFlag recvFlag) {
     NEKO_LOG_DEBUG("unit test", "serverLoop");
     auto retl = co_await TcpListener::bind(IPEndpoint("127.0.0.1", 12345));
     if (!retl) {
@@ -185,8 +185,8 @@ ILIAS_NAMESPACE::IoTask<void> test(IoContext& ioContext, ProtoFactory& protoFact
     co_return {};
 }
 
-ILIAS_NAMESPACE::IoTask<void> udp_client(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlags,
-                                         StreamFlag recvFlags, const IPEndpoint& bindPoint,
+ILIAS_NAMESPACE::IoTask<void> udp_client([[maybe_unused]] IoContext& ioContext, ProtoFactory& protoFactory,
+                                         StreamFlag sendFlags, StreamFlag recvFlags, const IPEndpoint& bindPoint,
                                          const IPEndpoint& endpoint) {
     NEKO_LOG_DEBUG("unit test", "testing udp client ...");
     auto udpclient = ILIAS_NAMESPACE::Socket::make(AF_INET, SOCK_DGRAM, 0).value();
@@ -241,13 +241,13 @@ ILIAS_NAMESPACE::IoTask<void> udp_client(IoContext& ioContext, ProtoFactory& pro
         EXPECT_EQ(protoTable.protoTable.size(), 1);
         EXPECT_STREQ(protoTable.protoTable.begin()->second.c_str(), "Message");
     }
-    client.close();
+    co_await client.close();
     NEKO_LOG_DEBUG("unit test", "udp test finished");
     co_return {};
 }
 
-ILIAS_NAMESPACE::IoTask<void> udp_client_peer(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlags,
-                                              StreamFlag recvFlags, const IPEndpoint& bindPoint,
+ILIAS_NAMESPACE::IoTask<void> udp_client_peer([[maybe_unused]] IoContext& ioContext, ProtoFactory& protoFactory,
+                                              StreamFlag sendFlags, StreamFlag recvFlags, const IPEndpoint& bindPoint,
                                               const IPEndpoint& endpoint) {
     NEKO_LOG_DEBUG("unit test", "testing udp client ...");
     auto udpclient = ILIAS_NAMESPACE::Socket::make(AF_INET, SOCK_DGRAM, 0).value();
@@ -301,7 +301,7 @@ ILIAS_NAMESPACE::IoTask<void> udp_client_peer(IoContext& ioContext, ProtoFactory
         EXPECT_EQ(protoTable.protoTable.size(), 1);
         EXPECT_STREQ(protoTable.protoTable.begin()->second.c_str(), "Message");
     }
-    client.close();
+    co_await client.close();
     NEKO_LOG_DEBUG("unit test", "udp test finished");
     co_return {};
 }

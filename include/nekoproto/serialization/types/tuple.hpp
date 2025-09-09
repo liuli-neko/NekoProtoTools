@@ -11,7 +11,8 @@
 #pragma once
 #include <tuple>
 
-#include "../serializer_base.hpp"
+#include "../private/helpers.hpp"
+#include "nekoproto/global/log.hpp"
 
 NEKO_BEGIN_NAMESPACE
 namespace detail {

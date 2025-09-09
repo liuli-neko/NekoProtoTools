@@ -10,9 +10,8 @@
  */
 #pragma once
 #include <map>
-#include <type_traits>
 
-#include "../serializer_base.hpp"
+#include "../private/helpers.hpp"
 
 NEKO_BEGIN_NAMESPACE
 

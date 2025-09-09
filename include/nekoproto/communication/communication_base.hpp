@@ -71,9 +71,9 @@ enum MessageType {
  */
 class NEKO_PROTO_API MessageHeader {
 public:
-    inline MessageHeader(uint32_t length = 0, int32_t data = 0, uint16_t messageType = 0)
+    MessageHeader(uint32_t length = 0, int32_t data = 0, uint16_t messageType = 0)
         : length(length), data(data), messageType(messageType) {}
-    inline static int size() { return 10; }
+    static int size() { return 10; }
     uint32_t length = 0; // 4 : the length of the message, no't contain the header
     int32_t data    = 0; // 4 : the proto type of this message in Complete message or the slice index in Slice message
     uint16_t messageType = 0; // 2 : the type of this message
@@ -91,7 +91,7 @@ public:
 
     NEKO_DECLARE_PROTOCOL(MessageHeader, BinarySerializer)
 private:
-    inline static int specifyType() { return 1; } // NOLINT(readability-identifier-naming)
+    static int specifyType() { return 1; } // NOLINT(readability-identifier-naming)
     friend class detail::proto_method_access;
 };
 
@@ -102,12 +102,12 @@ struct ProtocolTable {
     NEKO_SERIALIZER(protocolFactoryVersion, protoTable)
     NEKO_DECLARE_PROTOCOL(ProtocolTable, BinarySerializer)
 private:
-    inline static int specifyType() { return 2; } // NOLINT(readability-identifier-naming)
+    static int specifyType() { return 2; } // NOLINT(readability-identifier-naming)
     friend class detail::proto_method_access;
 };
 
 struct RawDataMessage {
-    inline RawDataMessage(uint32_t length = 0, int32_t type = 0, const std::string& name = "unknown")
+    RawDataMessage(uint32_t length = 0, int32_t type = 0, const std::string& name = "unknown")
         : length(length), type(type), name(name) {}
     uint32_t length = 0;
     int32_t type    = 0;
@@ -116,7 +116,7 @@ struct RawDataMessage {
 
     NEKO_SERIALIZER(length, type, name, data)
     NEKO_DECLARE_PROTOCOL(RawDataMessage, BinarySerializer)
-    inline static int specifyType() { return 3; } // NOLINT(readability-identifier-naming)
+    static int specifyType() { return 3; } // NOLINT(readability-identifier-naming)
 private:
     friend class detail::proto_method_access;
 };
@@ -297,7 +297,7 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
     } else {
         message.toData(messageData);
     }
-    if (messageData.empty() || (!isSlice && messageData.size() == MessageHeader::size())) {
+    if (messageData.empty() || (!isSlice && static_cast<int>(messageData.size()) == MessageHeader::size())) {
         co_return Unexpected<Error>(ErrorCode::NoData);
     }
     if (messageData.size() > std::numeric_limits<uint32_t>::max()) {
@@ -341,7 +341,8 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
         if (!header.makeProto().toData(headerData)) {
             co_return Unexpected<Error>(Error(ErrorCode::SerializationError));
         }
-        NEKO_ASSERT(headerData.size() == MessageHeader::size(), "Communication", "Header size is not correct");
+        NEKO_ASSERT(static_cast<int>(headerData.size()) == MessageHeader::size(), "Communication",
+                    "Header size is not correct");
         memcpy(messageData.data(), headerData.data(), headerData.size());
         NEKO_LOG_INFO("Communication", "Send header: message type: Complete proto type: {} length: {}", header.data,
                       header.length);
@@ -471,7 +472,7 @@ inline auto ProtoStreamClient<T>::recv(StreamFlag flag) -> IoTask<IProto> {
 template <ILIAS_NAMESPACE::StreamClient T>
 inline auto ProtoStreamClient<T>::_recvRaw(std::span<std::byte> buf) -> ILIAS_NAMESPACE::IoTask<void> {
     int readsize = 0;
-    while (readsize < buf.size()) {
+    while (readsize < static_cast<int>(buf.size())) {
         Result<std::size_t> ret = co_await mStreamClient.read({buf.data() + readsize, buf.size() - readsize});
         if (ret) {
             if (ret.value() == 0) {
@@ -517,8 +518,8 @@ inline auto ProtoStreamClient<T>::_sendVersion() -> IoTask<void> {
         co_return Unexpected<Error>(Error(ErrorCode::SerializationError));
     }
     memcpy(data.data(), headerData.data(), headerData.size());
-    NEKO_ASSERT(headerData.size() == MessageHeader::size(), "Coummunication", "header size({}) mismatch",
-                headerData.size());
+    NEKO_ASSERT(static_cast<int>(headerData.size()) == MessageHeader::size(), "Coummunication",
+                "header size({}) mismatch", headerData.size());
     NEKO_ASSERT(data.size() == headerData.size() + header.length, "Coummunication",
                 "data size({}) mismatch. header size({}) + data lenght({})", data.size(), headerData.size(),
                 header.length);
@@ -587,6 +588,9 @@ inline auto ProtoStreamClient<T>::_sendCancel(const uint32_t data) -> IoTask<voi
         co_return Unexpected<Error>(Error(ErrorCode::SerializationError));
     }
     auto ret = co_await _sendRaw({reinterpret_cast<std::byte*>(headerData.data()), headerData.size()});
+    if (!ret) {
+        co_return Unexpected<Error>(ret.error());
+    }
     co_return Result<void>();
 }
 
@@ -630,7 +634,7 @@ inline auto ProtoStreamClient<T>::getProtoTable() const -> const ProtocolTable& 
 template <ILIAS_NAMESPACE::StreamClient T>
 inline auto ProtoStreamClient<T>::_sendRaw(std::span<std::byte> data) -> IoTask<void> {
     int sended = 0;
-    while (sended < data.size()) {
+    while (sended < static_cast<int>(data.size())) {
         Result<std::size_t> ret = co_await mStreamClient.write({data.data() + sended, data.size() - sended});
         if (ret) {
             if (ret.value() == 0) {
@@ -762,7 +766,7 @@ inline auto ProtoDatagramClient<T>::send(const IProto& message, const IPEndpoint
     } else {
         message.toData(messageData);
     }
-    if (messageData.empty() || messageData.size() == MessageHeader::size()) {
+    if (messageData.empty() || static_cast<int>(messageData.size()) == MessageHeader::size()) {
         co_return Unexpected<Error>(Error(ErrorCode::NoData));
     }
     if (messageData.size() > 65527) {
@@ -775,7 +779,7 @@ inline auto ProtoDatagramClient<T>::send(const IProto& message, const IPEndpoint
     if (!header.makeProto().toData(headerData)) {
         co_return Unexpected<Error>(Error(ErrorCode::SerializationError));
     }
-    NEKO_ASSERT(headerData.size() == MessageHeader::size(), "Communication", "Header size error");
+    NEKO_ASSERT(static_cast<int>(headerData.size()) == MessageHeader::size(), "Communication", "Header size error");
     memcpy(messageData.data(), headerData.data(), headerData.size());
     NEKO_LOG_INFO("Communication", "Send header: message type: Complete proto type: {} size: {}", header.data,
                   header.length);
@@ -940,7 +944,7 @@ inline auto ProtoDatagramClient<T>::_sendVersion(const IPEndpoint& endpoint) -> 
         co_return Unexpected<Error>(Error(ErrorCode::SerializationError));
     }
     memcpy(data.data(), headerData.data(), headerData.size());
-    NEKO_ASSERT(headerData.size() == MessageHeader::size(), "Coummunication", "header size({}) mismatch",
+    NEKO_ASSERT(static_cast<int>(headerData.size()) == MessageHeader::size(), "Coummunication", "header size({}) mismatch",
                 headerData.size());
     NEKO_ASSERT(data.size() == headerData.size() + header.length, "Coummunication",
                 "data size({}) mismatch. header size({}) + data lenght({})", data.size(), headerData.size(),

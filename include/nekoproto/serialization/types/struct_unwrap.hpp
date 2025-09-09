@@ -11,12 +11,11 @@
 #pragma once
 #include <cstring>
 
-#include "../json_serializer.hpp"
 #include "../private/helpers.hpp"
 #include "../reflection.hpp"
-#include "../serializer_base.hpp"
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/serialization/reflection.hpp"
+#include "nekoproto/global/log.hpp"
 
 NEKO_BEGIN_NAMESPACE
 

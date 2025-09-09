@@ -485,8 +485,8 @@ public:
     explicit RapidJsonInputSerializer(BufferT& stream) NEKO_NOEXCEPT
         : detail::InputSerializer<RapidJsonInputSerializer>(this),
           mDocument(),
-          mStream(new rapidjson::BasicIStreamWrapper<BufferT>(stream)),
-          mItemStack() {
+          mItemStack(),
+          mStream(new rapidjson::BasicIStreamWrapper<BufferT>(stream)) {
         mDocument.ParseStream(*mStream);
         mLastResult = mDocument.GetParseError() == rapidjson::kParseErrorNone;
     }

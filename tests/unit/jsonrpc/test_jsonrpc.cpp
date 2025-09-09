@@ -448,25 +448,24 @@ TEST_F(JsonRpcTest, Basic) {
     ASSERT_TRUE(methodInfoList.has_value());
     EXPECT_EQ(methodInfoList.value().size(), 16);
 
-    // FIXME: 等 ilias 查看
-    // server.bindMethod<>("test112",
-    //                     NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<void>()>([]() -> ILIAS_NAMESPACE::IoTask<void> {
-    //                         std::cout << "test112: sleep 5s start" << std::endl;
-    //                         co_await ilias::sleep(std::chrono::milliseconds(5000));
-    //                         std::cout << "test112: sleep 5s end" << std::endl;
-    //                         co_return {};
-    //                     }));
-    // [&]() -> ilias::Task<void> {
-    //     co_await ILIAS_NAMESPACE::whenAll(
-    //         [&server]() -> ILIAS_NAMESPACE::Task<void> {
-    //             std::cout << "cancel test112: sleep 1s start" << std::endl;
-    //             co_await ilias::sleep(std::chrono::milliseconds(1000));
-    //             server.cancelAll();
-    //             co_return;
-    //         }(),
-    //         client.callRemote<void>("test112"));
-    // }()
-    //              .wait();
+    server.bindMethod<>("test112",
+                        NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<void>()>([]() -> ILIAS_NAMESPACE::IoTask<void> {
+                            std::cout << "test112: sleep 5s start" << std::endl;
+                            co_await ilias::sleep(std::chrono::milliseconds(5000));
+                            std::cout << "test112: sleep 5s end" << std::endl;
+                            co_return {};
+                        }));
+    [&]() -> ilias::Task<void> {
+        co_await ILIAS_NAMESPACE::whenAll(
+            [&server]() -> ILIAS_NAMESPACE::Task<void> {
+                std::cout << "cancel test112: sleep 1s start" << std::endl;
+                co_await ilias::sleep(std::chrono::milliseconds(1000));
+                server.cancelAll();
+                co_return;
+            }(),
+            client.callRemote<void>("test112"));
+    }()
+                 .wait();
 
     client.close();
     server.close();

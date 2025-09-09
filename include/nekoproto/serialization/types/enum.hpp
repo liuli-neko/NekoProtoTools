@@ -12,9 +12,8 @@
 
 #include <string>
 
-#include "../private/helpers.hpp"
-#include "../serializer_base.hpp"
 #include "nekoproto/global/global.hpp"
+#include "nekoproto/serialization/reflection.hpp"
 
 NEKO_BEGIN_NAMESPACE
 

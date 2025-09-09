@@ -14,7 +14,7 @@ std::string make_enum_string(const std::string& fmt) {
     auto names  = Reflect<T>::names();
     auto values = Reflect<T>::values();
     std::string ret;
-    for (int idx = 0; idx < names.size(); ++idx) {
+    for (int idx = 0; idx < static_cast<int>(names.size()); ++idx) {
         if (names[idx].size() > 0) {
             std::string tfmt = fmt;
             tfmt.replace(tfmt.find("{enum}"), 6, names[idx]);

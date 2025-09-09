@@ -24,8 +24,8 @@ auto ErrorCategory::instance() -> const ErrorCategory& {
 
 auto ErrorCategory::name() const noexcept -> const char* { return "NekoCommunicationError"; }
 
-auto ErrorCategory::equivalent(int self, const std::error_condition& other) const noexcept -> bool {
-    return other.category().name() == name() && self == static_cast<uint32_t>(other.value());
+auto ErrorCategory::equivalent(int value, const std::error_condition& other) const noexcept -> bool {
+    return other.category().name() == name() && value == other.value();
 }
 
 NEKO_END_NAMESPACE

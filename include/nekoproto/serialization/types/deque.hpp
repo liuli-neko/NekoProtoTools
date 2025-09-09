@@ -11,7 +11,7 @@
 #pragma once
 #include <deque>
 
-#include "../serializer_base.hpp"
+#include "../private/helpers.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
