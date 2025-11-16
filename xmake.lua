@@ -145,8 +145,8 @@ if has_config("enable_fmt") then
 end
 
 if has_config("enable_communication") or has_config("enable_jsonrpc") then
-    add_requires("ilias", {version = "dev", configs = { shared = is_kind("shared"), cpp20 = true}})
-    add_requireconfs("**.ilias", {version = "dev", configs = { shared = is_kind("shared"), cpp20 = true}})
+    add_requires("ilias", {version = "0.3.2", configs = { shared = is_kind("shared"), cpp20 = true}})
+    add_requireconfs("**.ilias", {version = "0.3.2", configs = { shared = is_kind("shared"), cpp20 = true}})
 end
 
 if has_config("enable_tests") then
