@@ -11,6 +11,7 @@
 #pragma once
 
 #include <functional>
+#include <ilias/sync/oneshot.hpp>
 #include <ilias/task/group.hpp>
 #include <ilias/task/when_all.hpp>
 #include <memory>
@@ -210,6 +211,20 @@ concept RpcMethodT = requires() { std::is_constructible_v<typename RpcMethodTrai
  *
  */
 using JsonRpcIdType = std::variant<std::monostate, uint64_t, std::string>;
+
+std::string to_string(JsonRpcIdType id) {
+    switch (id.index()) {
+    case 0:
+        return "null";
+    case 1:
+        return std::to_string(std::get<1>(id));
+    case 2:
+        return std::get<2>(id);
+    default:
+        return "unknown";
+    }
+}
+
 template <typename T, ConstexprString... ArgNames>
 struct JsonRpcRequest2;
 template <typename... Args, ConstexprString... ArgNames>
@@ -490,10 +505,8 @@ private:
             mCurrentIds.emplace_back(id);
             in.rollbackItem();
             if (auto it = mHandlers.find(method.method); it != mHandlers.end()) {
-                auto handle = mTaskScope.spawn((*it->second)(in, out, std::move(method)));
-                if (!std::holds_alternative<std::monostate>(id)) {
-                    mCancelHandles[id] = std::move(handle);
-                }
+                NEKO_LOG_INFO("jsonrpc", "spawn taskhandle for method {} with id {}", method.method, to_string(id));
+                mTaskScope.spawn((*it->second)(in, out, std::move(method)));
             } else {
                 NEKO_LOG_WARN("jsonrpc", "method {} not found!", method.method);
                 _handleError<RpcMethodErrorHelper>(
@@ -506,7 +519,7 @@ private:
 public:
     JsonRpcServerImp([[maybe_unused]] ILIAS_NAMESPACE::IoContext& ctx) : mTaskScope() {}
     ~JsonRpcServerImp() {
-        mTaskScope.stop();
+        cancelAll();
         mTaskScope.waitAll().wait();
     }
     template <typename T>
@@ -567,6 +580,7 @@ public:
         }
         _makeBatch(in, out, (int)batchSize);
         co_await mTaskScope.waitAll();
+        NEKO_LOG_INFO("jsonrpc", "Finished processing batch request, batch size {}", batchSize);
         mCurrentIds.clear();
         mCancelHandles.clear();
         if (batchRequest) {
@@ -576,7 +590,9 @@ public:
         if (batchSize > 0) {
             out.end();
         }
-        if (client != nullptr) {
+        if (client != nullptr && buffer.size() > 3) {
+            NEKO_LOG_INFO("jsonrpc", "sending {} bytes : {}", buffer.size(),
+                          std::string_view{buffer.data(), buffer.size()});
             auto ret = co_await client->send({reinterpret_cast<std::byte*>(buffer.data()), buffer.size()});
             if (ret.error_or(ILIAS_NAMESPACE::IoError::Unknown) == JsonRpcError::MessageToolLarge) {
                 NEKO_LOG_ERROR("jsonrpc", "message too large!");
@@ -586,22 +602,29 @@ public:
     }
 
     void cancel(JsonRpcIdType id) noexcept {
+        NEKO_LOG_INFO("jsonrpc", "cancelling id {}", to_string(id));
         if (auto it = mCancelHandles.find(id); it != mCancelHandles.end()) {
             it->second.stop();
+        } else {
+            NEKO_LOG_WARN("jsonrpc", "id not found");
         }
     }
 
     void cancelAll() {
-        if (!mTaskScope.empty()) {
-            mTaskScope.stop();
+        NEKO_LOG_INFO("jsonrpc", "cancelling all {}", mCancelHandles.size());
+        for (auto& [id, handle] : mCancelHandles) {
+            NEKO_LOG_INFO("jsonrpc", "cancelling id {}", to_string(id));
+            handle.stop();
         }
+        mCancelHandles.clear();
     }
 
     auto receiveLoop(detail::IMessageStream* client) noexcept -> ILIAS_NAMESPACE::Task<void> {
         while (client != nullptr) {
             std::vector<std::byte> buffer;
             if (auto ret = co_await client->recv(buffer); ret && buffer.size() > 0) {
-                co_await processRequest(reinterpret_cast<const char*>(buffer.data()), buffer.size(), client);
+                co_await (processRequest(reinterpret_cast<const char*>(buffer.data()), buffer.size(), client) |
+                          ILIAS_NAMESPACE::unstoppable());
             } else {
                 break;
             }
@@ -611,6 +634,31 @@ public:
     auto getCurrentIds() const noexcept -> const std::vector<JsonRpcIdType>& { return mCurrentIds; }
 
 private:
+    template <typename T, typename... Args>
+    auto _makeCancelable(T& metadata, JsonRpcIdType& id, Args&&... args) noexcept
+        -> ILIAS_NAMESPACE::Task<ILIAS_NAMESPACE::Result<typename T::RawReturnType, std::error_code>> {
+        using RawReturnType = typename T::RawReturnType;
+        auto [sender, receiver] =
+            ILIAS_NAMESPACE::oneshot::channel<ILIAS_NAMESPACE::Result<RawReturnType, std::error_code>>();
+        auto handle = mTaskScope.spawn(
+            [](ILIAS_NAMESPACE::oneshot::Sender<ILIAS_NAMESPACE::Result<RawReturnType, std::error_code>> sender,
+               T& metadata, Args&&... args) -> ILIAS_NAMESPACE::Task<void> {
+                auto token = co_await ILIAS_NAMESPACE::this_coro::stopToken();
+                std::stop_callback callback(token, [&]() { sender.close(); });
+                auto result = co_await metadata(std::forward<Args>(args)...);
+                sender.send(std::move(result));
+                co_return;
+            }(std::move(sender), metadata, std::forward<Args>(args)...));
+        if (!std::holds_alternative<std::monostate>(id)) {
+            mCancelHandles[id] = std::move(handle);
+        }
+        NEKO_LOG_INFO("jsonrpc", "spawned task {}", to_string(id));
+        auto ret = co_await std::move(receiver);
+        NEKO_LOG_INFO("jsonrpc", "after task {}", to_string(id));
+        co_return ret.has_value() ? std::move(ret.value())
+                                  : ILIAS_NAMESPACE::Result<RawReturnType, std::error_code>(
+                                        ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::SystemError::Canceled));
+    }
     template <typename T>
     auto _handle(bool success, auto request, auto& out, auto method, T& metadata) noexcept
         -> ILIAS_NAMESPACE::Task<void> {
@@ -620,12 +668,20 @@ private:
                                       JsonRpcErrorCategory::instance().message((int64_t)JsonRpcError::InvalidRequest));
         }
         if constexpr (T::NumParams == 0) {
-            co_return _processMethodReturn<T>(metadata, co_await metadata(), out, std::move(method));
-        } else if constexpr (T::IsAutomaticExpansionAble || T::IsTopTuple) {
-            co_return _processMethodReturn<T>(metadata, co_await metadata(request.params), out, std::move(method));
-        } else {
-            co_return _processMethodReturn<T>(metadata, co_await std::apply(metadata, request.params), out,
+            co_return _processMethodReturn<T>(metadata, co_await _makeCancelable(metadata, method.id), out,
                                               std::move(method));
+        } else if constexpr (T::IsAutomaticExpansionAble || T::IsTopTuple) {
+            co_return _processMethodReturn<T>(metadata, co_await _makeCancelable(metadata, method.id, request.params),
+                                              out, std::move(method));
+        } else {
+            co_return _processMethodReturn<T>(metadata,
+                                              co_await std::apply(
+                                                  [this](auto&&... args) -> decltype(auto) {
+                                                      return this->_makeCancelable(
+                                                          std::forward<decltype(args)>(args)...);
+                                                  },
+                                                  std::tuple_cat(std::tie(metadata, method.id), request.params)),
+                                              out, std::move(method));
         }
     }
     // RpcMethodDynamic<RetT(Args...), ArgNames...>
@@ -644,7 +700,6 @@ private:
         if (!method.jsonrpc.has_value() && method.id.index() == 1) { // notification in jsonrpc 1.0
             return;
         }
-        std::vector<char> buffer;
         if constexpr (std::is_void_v<typename T::RawReturnType>) {
             if (!out(methodData.response(method.id, nullptr))) {
                 NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
@@ -710,19 +765,6 @@ auto RpcMethodWrapperImpl<T>::call(JsonSerializer::InputSerializer& in, JsonSeri
     return mSelf->_handle(success, request, out, std::move(method), *mMethodData);
 };
 
-std::string to_string(JsonRpcIdType id) {
-    switch (id.index()) {
-    case 0:
-        return "null";
-    case 1:
-        return std::to_string(std::get<1>(id));
-    case 2:
-        return std::get<2>(id);
-    default:
-        return "unknown";
-    }
-}
-
 } // namespace detail
 
 using detail::RpcMethod;
@@ -746,6 +788,7 @@ public:
     auto operator->() noexcept { return &mProtocol; }
     auto operator->() const noexcept { return &mProtocol; }
     auto close() noexcept -> void {
+        NEKO_LOG_INFO("jsonrpc", "close");
         for (auto& client : mTransports) {
             client->cancel();
         }
@@ -778,7 +821,9 @@ public:
                                        std::make_unique<detail::MessageStreamWrapper<ClientT>>(std::move(client)));
         }
         mScop.spawn([this, item]() -> ILIAS_NAMESPACE::Task<void> {
+            NEKO_LOG_INFO("jsonrpc", "Starting receive loop({}) for transport", ((void*)item->get()));
             co_await mImp.receiveLoop((*item).get());
+            NEKO_LOG_INFO("jsonrpc", "Stoped receive loop({}) for transport", ((void*)item->get()));
             mTransports.erase(item);
         });
     }
