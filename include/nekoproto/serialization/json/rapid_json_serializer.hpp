@@ -394,6 +394,7 @@ public:
     }
     template <typename T>
     bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
+        NEKO_LOG_INFO("JsonSerializer", "saveValue: {}", std::string_view{value.name, value.nameLen});
         if constexpr (traits::optional_like_type<T>::value) {
             if (traits::optional_like_type<T>::has_value(value.value)) {
                 return mWriter.Key(value.name, (int)value.nameLen) &&
