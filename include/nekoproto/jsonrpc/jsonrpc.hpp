@@ -634,31 +634,6 @@ public:
     auto getCurrentIds() const noexcept -> const std::vector<JsonRpcIdType>& { return mCurrentIds; }
 
 private:
-    template <typename T, typename... Args>
-    auto _makeCancelable(T& metadata, JsonRpcIdType& id, Args&&... args) noexcept
-        -> ILIAS_NAMESPACE::Task<ILIAS_NAMESPACE::Result<typename T::RawReturnType, std::error_code>> {
-        using RawReturnType = typename T::RawReturnType;
-        auto [sender, receiver] =
-            ILIAS_NAMESPACE::oneshot::channel<ILIAS_NAMESPACE::Result<RawReturnType, std::error_code>>();
-        auto handle = mTaskScope.spawn(
-            [](ILIAS_NAMESPACE::oneshot::Sender<ILIAS_NAMESPACE::Result<RawReturnType, std::error_code>> sender,
-               T& metadata, Args&&... args) -> ILIAS_NAMESPACE::Task<void> {
-                auto token = co_await ILIAS_NAMESPACE::this_coro::stopToken();
-                std::stop_callback callback(token, [&]() { sender.close(); });
-                auto result = co_await metadata(std::forward<Args>(args)...);
-                sender.send(std::move(result));
-                co_return;
-            }(std::move(sender), metadata, std::forward<Args>(args)...));
-        if (!std::holds_alternative<std::monostate>(id)) {
-            mCancelHandles[id] = std::move(handle);
-        }
-        NEKO_LOG_INFO("jsonrpc", "spawned task {}", to_string(id));
-        auto ret = co_await std::move(receiver);
-        NEKO_LOG_INFO("jsonrpc", "after task {}", to_string(id));
-        co_return ret.has_value() ? std::move(ret.value())
-                                  : ILIAS_NAMESPACE::Result<RawReturnType, std::error_code>(
-                                        ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::SystemError::Canceled));
-    }
     template <typename T>
     auto _handle(bool success, auto request, auto& out, auto method, T& metadata) noexcept
         -> ILIAS_NAMESPACE::Task<void> {
@@ -667,21 +642,27 @@ private:
             co_return _handleError<T>(out, std::move(method), (int64_t)JsonRpcError::InvalidRequest,
                                       JsonRpcErrorCategory::instance().message((int64_t)JsonRpcError::InvalidRequest));
         }
-        if constexpr (T::NumParams == 0) {
-            co_return _processMethodReturn<T>(metadata, co_await _makeCancelable(metadata, method.id), out,
-                                              std::move(method));
-        } else if constexpr (T::IsAutomaticExpansionAble || T::IsTopTuple) {
-            co_return _processMethodReturn<T>(metadata, co_await _makeCancelable(metadata, method.id, request.params),
-                                              out, std::move(method));
-        } else {
-            co_return _processMethodReturn<T>(metadata,
-                                              co_await std::apply(
-                                                  [this](auto&&... args) -> decltype(auto) {
-                                                      return this->_makeCancelable(
-                                                          std::forward<decltype(args)>(args)...);
-                                                  },
-                                                  std::tuple_cat(std::tie(metadata, method.id), request.params)),
-                                              out, std::move(method));
+        auto handle =
+            mTaskScope.spawn([&, this, request = std::move(request), method = method]() -> ILIAS_NAMESPACE::Task<void> {
+                ILIAS_NAMESPACE::Result<typename T::RawReturnType, std::error_code> result =
+                    ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::SystemError::Canceled);
+                auto onfinally = [&]() -> ILIAS_NAMESPACE::Task<void> {
+                    co_return _processMethodReturn<T>(metadata, std::move(result), out, std::move(method));
+                };
+                co_await ([&result, request = std::move(request)](T& metadata) -> ILIAS_NAMESPACE::Task<void> {
+                    if constexpr (T::NumParams == 0) {
+                        result = co_await metadata();
+                    } else if constexpr (T::IsAutomaticExpansionAble || T::IsTopTuple) {
+                        result = co_await metadata(std::move(request.params));
+                    } else {
+                        result = co_await std::apply(metadata, std::move(request.params));
+                    }
+                    co_return;
+                }(metadata) | ILIAS_NAMESPACE::finally(onfinally));
+                co_return;
+            });
+        if (!std::holds_alternative<std::monostate>(method.id)) {
+            mCancelHandles[method.id] = std::move(handle);
         }
     }
     // RpcMethodDynamic<RetT(Args...), ArgNames...>
