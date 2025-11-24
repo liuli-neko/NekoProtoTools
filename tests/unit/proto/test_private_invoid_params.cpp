@@ -4,20 +4,20 @@
 // #define private   public // for test private member
 
 #include "nekoproto/proto/proto_base.hpp"
-#include "nekoproto/serialization/binary_serializer.hpp"
+#include "nekoproto/serialization/binary_serializer.hpp" // IWYU pragma: export
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
-#include "nekoproto/serialization/to_string.hpp"
-#include "nekoproto/serialization/types/array.hpp"
-#include "nekoproto/serialization/types/binary_data.hpp"
-#include "nekoproto/serialization/types/enum.hpp"
-#include "nekoproto/serialization/types/list.hpp"
-#include "nekoproto/serialization/types/map.hpp"
-#include "nekoproto/serialization/types/set.hpp"
-#include "nekoproto/serialization/types/struct_unwrap.hpp"
-#include "nekoproto/serialization/types/tuple.hpp"
-#include "nekoproto/serialization/types/variant.hpp"
-#include "nekoproto/serialization/types/vector.hpp"
+#include "nekoproto/serialization/to_string.hpp"           // IWYU pragma: export
+#include "nekoproto/serialization/types/array.hpp"         // IWYU pragma: export
+#include "nekoproto/serialization/types/binary_data.hpp"   // IWYU pragma: export
+#include "nekoproto/serialization/types/enum.hpp"          // IWYU pragma: export
+#include "nekoproto/serialization/types/list.hpp"          // IWYU pragma: export
+#include "nekoproto/serialization/types/map.hpp"           // IWYU pragma: export
+#include "nekoproto/serialization/types/set.hpp"           // IWYU pragma: export
+#include "nekoproto/serialization/types/struct_unwrap.hpp" // IWYU pragma: export
+#include "nekoproto/serialization/types/tuple.hpp"         // IWYU pragma: export
+#include "nekoproto/serialization/types/variant.hpp"       // IWYU pragma: export
+#include "nekoproto/serialization/types/vector.hpp"        // IWYU pragma: export
 
 NEKO_USE_NAMESPACE
 

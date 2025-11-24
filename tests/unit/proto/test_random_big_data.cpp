@@ -9,9 +9,9 @@
 #if NEKO_PROTO_ENABLE_SIMDJSON
 #include "nekoproto/serialization/json/simd_json_serializer.hpp"
 #endif
-#include "nekoproto/serialization/to_string.hpp"
-#include "nekoproto/serialization/types/map.hpp"
-#include "nekoproto/serialization/types/vector.hpp"
+#include "nekoproto/serialization/to_string.hpp"    // IWYU pragma: export
+#include "nekoproto/serialization/types/map.hpp"    // IWYU pragma: export
+#include "nekoproto/serialization/types/vector.hpp" // IWYU pragma: export
 
 NEKO_USE_NAMESPACE
 struct TestStruct1 {
@@ -339,10 +339,5 @@ TEST(BigProtoTest, SimdJsonSerializer) {
     EXPECT_EQ(proto1.f3.f15, proto2.f3.f15);
 }
 #endif
-int main(int argc, char** argv) {
-    std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
-    testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+
+#include "../common/common_main.cpp.in" // IWYU pragma: export

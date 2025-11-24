@@ -1,11 +1,11 @@
 #include "nekoproto/serialization/binary_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
-#include "nekoproto/serialization/types/array.hpp"
-#include "nekoproto/serialization/types/list.hpp"
-#include "nekoproto/serialization/types/map.hpp"
-#include "nekoproto/serialization/types/tuple.hpp"
-#include "nekoproto/serialization/types/vector.hpp"
-#include "nekoproto/serialization/types/struct_unwrap.hpp"
+#include "nekoproto/serialization/types/array.hpp"         // IWYU pragma: export
+#include "nekoproto/serialization/types/list.hpp"          // IWYU pragma: export
+#include "nekoproto/serialization/types/map.hpp"           // IWYU pragma: export
+#include "nekoproto/serialization/types/struct_unwrap.hpp" // IWYU pragma: export
+#include "nekoproto/serialization/types/tuple.hpp"         // IWYU pragma: export
+#include "nekoproto/serialization/types/vector.hpp"        // IWYU pragma: export
 
 #include <gtest/gtest.h>
 #include <vector>
@@ -106,9 +106,5 @@ TEST(BinarySerializer, Serialize2) {
     EXPECT_EQ(p2.g, (std::array<int, 5>({12, 13, 14, 15, 16})));
     EXPECT_EQ(p2.h, (std::tuple<int, std::string>({12, std::string("hello, this is a test string")})));
 }
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
-    NEKO_LOG_INFO("test", "this is a test log");
-    return RUN_ALL_TESTS();
-}
+
+#include "../common/common_main.cpp.in" // IWYU pragma: export

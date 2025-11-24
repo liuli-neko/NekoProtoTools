@@ -92,6 +92,11 @@ struct Base64Covert {
             return false;
         }
 
+        if (datalen == 0) {
+            buf.clear();
+            return true;
+        }
+
         int len          = (int)(datalen / 4) * 3;
         const auto* cptr = data;
         while (data[datalen - 1] == '=') {

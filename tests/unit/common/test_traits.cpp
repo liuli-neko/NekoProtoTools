@@ -4,9 +4,9 @@
 
 #include "nekoproto/serialization/json/simd_json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
-#include "nekoproto/serialization/types/optional.hpp"
-#include "nekoproto/serialization/types/struct_unwrap.hpp"
-#include "nekoproto/serialization/types/vector.hpp"
+#include "nekoproto/serialization/types/optional.hpp"      // IWYU pragma: export
+#include "nekoproto/serialization/types/struct_unwrap.hpp" // IWYU pragma: export
+#include "nekoproto/serialization/types/vector.hpp"        // IWYU pragma: export
 
 NEKO_USE_NAMESPACE
 struct TestStruct {
@@ -57,8 +57,4 @@ TEST(TraitsTest, simdjson) {
     EXPECT_EQ(ts.d.value(), ts2.d.value());
 }
 
-int main(int argc, char** argv) {
-    std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
-    testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+#include "../common/common_main.cpp.in" // IWYU pragma: export

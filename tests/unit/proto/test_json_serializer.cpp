@@ -1,10 +1,8 @@
 #include <fstream>
 #include <gtest/gtest.h>
-#include <iostream>
-#include <locale>
 
 #include "nekoproto/proto/proto_base.hpp"
-#include "nekoproto/serialization/binary_serializer.hpp"
+#include "nekoproto/serialization/binary_serializer.hpp" // IWYU pragma: export
 #include "nekoproto/serialization/json/schema.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
@@ -1081,12 +1079,6 @@ TEST_F(JsonSerializerTest, JsonSchema) {
     NEKO_LOG_DEBUG("unit test", "{}", buffer.data());
 }
 
-int main(int argc, char** argv) {
-    std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
-    std::setlocale(LC_ALL, "en_US.UTF-8");
-    testing::InitGoogleTest(&argc, argv);
-    ProtoFactory factor(1, 0, 0);
-    return RUN_ALL_TESTS();
-}
+#define CUSTOM_MAIN ProtoFactory factor(1, 0, 0);
+
+#include "../common/common_main.cpp.in" // IWYU pragma: export

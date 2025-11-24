@@ -1,20 +1,20 @@
 #include <gtest/gtest.h>
 
 #include "nekoproto/proto/proto_base.hpp"
-#include "nekoproto/serialization/binary_serializer.hpp"
+#include "nekoproto/serialization/binary_serializer.hpp" // IWYU pragma: export
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/to_string.hpp"
-#include "nekoproto/serialization/types/array.hpp"
-#include "nekoproto/serialization/types/binary_data.hpp"
-#include "nekoproto/serialization/types/enum.hpp"
-#include "nekoproto/serialization/types/list.hpp"
-#include "nekoproto/serialization/types/map.hpp"
-#include "nekoproto/serialization/types/set.hpp"
-#include "nekoproto/serialization/types/struct_unwrap.hpp"
-#include "nekoproto/serialization/types/tuple.hpp"
-#include "nekoproto/serialization/types/variant.hpp"
-#include "nekoproto/serialization/types/vector.hpp"
+#include "nekoproto/serialization/types/array.hpp"         // IWYU pragma: export
+#include "nekoproto/serialization/types/binary_data.hpp"   // IWYU pragma: export
+#include "nekoproto/serialization/types/enum.hpp"          // IWYU pragma: export
+#include "nekoproto/serialization/types/list.hpp"          // IWYU pragma: export
+#include "nekoproto/serialization/types/map.hpp"           // IWYU pragma: export
+#include "nekoproto/serialization/types/set.hpp"           // IWYU pragma: export
+#include "nekoproto/serialization/types/struct_unwrap.hpp" // IWYU pragma: export
+#include "nekoproto/serialization/types/tuple.hpp"         // IWYU pragma: export
+#include "nekoproto/serialization/types/variant.hpp"       // IWYU pragma: export
+#include "nekoproto/serialization/types/vector.hpp"        // IWYU pragma: export
 
 NEKO_USE_NAMESPACE
 
@@ -983,10 +983,4 @@ TEST(RandomProtoTest, EnumTest) {
                       "\"TestEnumBG8AC30\",\"e\":\"TestEnumBG8AC40\",\"f\":\"TestEnumBG8AC50\",\"g\":60,\"h\":61}");
 }
 
-int main(int argc, char** argv) {
-    std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
-    testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+#include "../common/common_main.cpp.in" // IWYU pragma: export

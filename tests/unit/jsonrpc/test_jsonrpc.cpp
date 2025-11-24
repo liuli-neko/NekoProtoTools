@@ -4,10 +4,10 @@
 
 #include <gtest/gtest.h>
 
-// #include <gtest/gtest.h>
 #include "ilias/defines.hpp"
 #include "ilias/io/error.hpp"
-#include "ilias/result.hpp"
+#include "ilias/result.hpp" // IWYU pragma: export
+#include "nekoproto/global/global.hpp"
 #include "nekoproto/jsonrpc/jsonrpc.hpp"
 #include "nekoproto/jsonrpc/message_stream_wrapper.hpp"
 
@@ -68,9 +68,10 @@ public:
 TEST_F(JsonRpcTest, BindAndCall) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
-    auto listenerRet = detail::make_tcp_stream_server("tcp://127.0.0.1:12335").wait();
+    auto listenerRet =
+        detail::make_tcp_stream_server("tcp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS)).wait();
     server.setListener(std::move(listenerRet.value()));
-    auto tcpclient = detail::make_tcp_stream_client("tcp://127.0.0.1:12335").wait();
+    auto tcpclient = detail::make_tcp_stream_client("tcp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS)).wait();
     if (!tcpclient) {
         std::cout << tcpclient.error().message() << std::endl;
     }
@@ -161,8 +162,14 @@ TEST_F(JsonRpcTest, BindAndCallUdp) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    auto udptp1 = (detail::make_udp_stream_client("udp://127.0.0.1:12335-127.0.0.1:12336")).wait().value();
-    auto udptp2 = (detail::make_udp_stream_client("udp://127.0.0.1:12336-127.0.0.1:12335")).wait().value();
+    auto udptp1 = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS) +
+                                                  "-127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS)))
+                      .wait()
+                      .value();
+    auto udptp2 = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS) +
+                                                  "-127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS)))
+                      .wait()
+                      .value();
 
     server.addTransport(std::move(udptp1));
     client.setTransport(std::move(udptp2));
@@ -306,8 +313,14 @@ TEST_F(JsonRpcTest, Notification) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    auto udptp1 = (detail::make_udp_stream_client("udp://127.0.0.1:12335-127.0.0.1:12336")).wait().value();
-    auto udptp2 = (detail::make_udp_stream_client("udp://127.0.0.1:12336-127.0.0.1:12335")).wait().value();
+    auto udptp1 = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS) +
+                                                  "-127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS)))
+                      .wait()
+                      .value();
+    auto udptp2 = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS) +
+                                                  "-127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS)))
+                      .wait()
+                      .value();
 
     server.addTransport(std::move(udptp1));
     client.setTransport(std::move(udptp2));
@@ -347,8 +360,14 @@ TEST_F(JsonRpcTest, Basic) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    auto udptp1 = (detail::make_udp_stream_client("udp://127.0.0.1:12335-127.0.0.1:12336")).wait().value();
-    auto udptp2 = (detail::make_udp_stream_client("udp://127.0.0.1:12336-127.0.0.1:12335")).wait().value();
+    auto udptp1 = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS) +
+                                                  "-127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS)))
+                      .wait()
+                      .value();
+    auto udptp2 = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS) +
+                                                  "-127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS)))
+                      .wait()
+                      .value();
 
     server.addTransport(std::move(udptp1));
     client.setTransport(std::move(udptp2));
@@ -473,13 +492,9 @@ TEST_F(JsonRpcTest, Basic) {
 
 ILIAS_NAMESPACE::PlatformContext* JsonRpcTest::gContext = nullptr;
 
-int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
-    // ILIAS_LOG_SET_LEVEL(ILIAS_TRACE_LEVEL);
-    ILIAS_NAMESPACE::PlatformContext context;
-    context.install();
+#define CUSTOM_MAIN                                                                                                    \
+    ILIAS_NAMESPACE::PlatformContext context;                                                                          \
+    context.install();                                                                                                 \
     JsonRpcTest::gContext = &context;
 
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+#include "../common/common_main.cpp.in" // IWYU pragma: export
