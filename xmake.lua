@@ -1,6 +1,6 @@
 set_project("neko-proto-tools")
 add_rules("mode.debug", "mode.release", "mode.releasedbg", "mode.coverage", "mode.asan")
-set_version("0.2.5", {build = "%Y%m%d%H%M"})
+set_version("0.2.6", {build = "%Y%m%d%H%M"})
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 set_warnings("allextra")
 set_policy("package.cmake_generator.ninja", true)
@@ -150,7 +150,7 @@ if has_config("enable_communication") or has_config("enable_jsonrpc") then
 end
 
 if has_config("enable_tests") then
-    add_requires("gtest")
+    add_requires("gtest", "cpptrace")
     includes("tests")
 end
 

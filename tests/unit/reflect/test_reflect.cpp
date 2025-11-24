@@ -42,7 +42,4 @@ TEST(ReflectTest, TestReflect) {
                  "a_struct_in_nested_namespace");
 }
 
-int main(int argc, char** argv) {
-    testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+#include "../common/common_main.cpp.in" // IWYU pragma: export

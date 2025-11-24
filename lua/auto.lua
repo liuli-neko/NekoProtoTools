@@ -44,6 +44,7 @@ function autofunc.auto_add_packages(target)
     
     if has_config("enable_tests") then
         target:add("packages", "gtest", {public = true})
+        target:add("packages", "cpptrace", {public = true})
     end
     
     if has_config("cereal_test") then

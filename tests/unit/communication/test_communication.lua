@@ -4,7 +4,17 @@ if has_config("enable_communication") then
         set_default(false)
         add_includedirs("$(projectdir)/include")
         add_defines("NEKO_PROTO_STATIC")
-        add_tests("cpp20", {run_timeout = 5000, languages = "c++20"})
+        local cpp_versions = {"c++20", "c++23"}
+        for i = 1, #cpp_versions do
+            add_tests(string.gsub(cpp_versions[i], '+', 'p', 2), 
+                        {group = "communication", 
+                         kind = "binary", 
+                         files = {"../../../src/communication_base.cpp", 
+                                  "../../../src/proto_base.cpp", 
+                                  "test_communication.cpp"}, 
+                         languages = cpp_versions[i], 
+                         run_timeout = 5000})
+        end
         set_group("communication")
         add_files("$(projectdir)/src/communication_base.cpp")
         add_files("$(projectdir)/src/proto_base.cpp")

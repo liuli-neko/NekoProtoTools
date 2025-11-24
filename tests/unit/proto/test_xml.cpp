@@ -94,9 +94,5 @@ TEST(XML, Parse) {
     EXPECT_EQ(breakfastMenu.breakfast_menu[4].calories, 950);
 }
 #endif
-int main(int argc, char** argv) {
-    testing::InitGoogleTest(&argc, argv);
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
-    return RUN_ALL_TESTS();
-}
+
+#include "../common/common_main.cpp.in" // IWYU pragma: export

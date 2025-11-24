@@ -1,0 +1,23 @@
+#pragma once
+
+#include <gtest/gtest.h>
+
+#include "./backtrace.hpp"
+#include "nekoproto/global/global.hpp"
+#include "nekoproto/global/log.hpp"
+#include <locale> // IWYU pragma: export
+
+#ifndef CUSTOM_MAIN
+#define CUSTOM_MAIN
+#endif
+
+int main(int argc, char** argv) {
+    cpptrace::init();
+    ::testing::InitGoogleTest(&argc, argv);
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
+    std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
+    std::setlocale(LC_ALL, "en_US.UTF-8");
+    CUSTOM_MAIN
+    return RUN_ALL_TESTS();
+}

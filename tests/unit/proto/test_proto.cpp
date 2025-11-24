@@ -429,12 +429,4 @@ TEST_F(ProtoTest, AllType) {
     EXPECT_STREQ(gZTypeTestStr, data.data());
 }
 
-int main(int argc, char** argv) {
-    std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
-
-    NEKO_LOG_DEBUG("test", "{}", make_enum_string<TEnum>("{enum}:{num},"));
-    testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+#include "../common/common_main.cpp.in" // IWYU pragma: export

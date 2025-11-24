@@ -23,16 +23,15 @@
 #define NEKO_BEGIN_NAMESPACE namespace NEKO_NAMESPACE {
 #define NEKO_END_NAMESPACE   }
 #define NEKO_USE_NAMESPACE   using namespace NEKO_NAMESPACE;
-
-#if __cplusplus >= 202002L || _MSVC_LANG >= 202002L
-#define NEKO_CPP_PLUS 20
-#include <version>
-#elif __cplusplus >= 201703L || _MSVC_LANG >= 201703L
-#define NEKO_CPP_PLUS 17
-#elif __cplusplus >= 201402L || _MSVC_LANG >= 201402L
-#define NEKO_CPP_PLUS 14
-#elif __cplusplus >= 201103L || _MSVC_LANG >= 201103L
-#define NEKO_CPP_PLUS 11
+#if defined(_MSVC_LANG) && _MSVC_LANG > __cplusplus
+    #define _NEKO_CPP_RAW_VER _MSVC_LANG
+#else
+    #define _NEKO_CPP_RAW_VER __cplusplus
+#endif
+#if _NEKO_CPP_RAW_VER >= 201103L
+    #define NEKO_CPP_PLUS ((_NEKO_CPP_RAW_VER / 100) % 100)
+#else
+    #define NEKO_CPP_PLUS 10
 #endif
 
 #if defined(__GNUC__) || defined(__MINGW32__)
