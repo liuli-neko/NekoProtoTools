@@ -6,6 +6,10 @@
 #include <cstdlib>
 #include <csignal>
 
+#ifdef _MSC_VER
+#include <windows.h>
+#endif
+
 namespace cpptrace {
 
 inline void dump() { cpptrace::generate_trace().print(); }
@@ -49,7 +53,6 @@ void signal_handler(int sig) {
 }
 
 #if defined(_MSC_VER)
-#include <windows.h>
 // Windows SEH 处理函数
 LONG WINAPI WindowsExceptionHandler(EXCEPTION_POINTERS* ExceptionInfo) {
     // 防止递归崩溃
