@@ -68,7 +68,7 @@ client_loop([[maybe_unused]] ILIAS_NAMESPACE::IoContext& ioContext,
             ProtoFactory& protoFactory, // NOLINT(readability-function-cognitive-complexity)
             StreamFlag sendFlag, StreamFlag recvFlag) {
     NEKO_LOG_DEBUG("unit test", "Client connect to service");
-    auto ret = co_await TcpClient::connect(IPEndpoint("127.0.0.1", 10345 + NEKO_CPP_PLUS));
+    auto ret = co_await TcpClient::connect(IPEndpoint("127.0.0.1", 10345));
     if (!ret) {
         co_return Unexpected(ret.error());
     }
@@ -157,7 +157,7 @@ ILIAS_NAMESPACE::IoTask<void> handle_loop(ProtoStreamClient<TcpClient>&& pClient
 ILIAS_NAMESPACE::IoTask<void> server_loop([[maybe_unused]] IoContext& ioContext, ProtoFactory& protoFactor,
                                           StreamFlag sendFlag, StreamFlag recvFlag) {
     NEKO_LOG_DEBUG("unit test", "serverLoop");
-    auto retl = co_await TcpListener::bind(IPEndpoint("127.0.0.1", 10345 + NEKO_CPP_PLUS));
+    auto retl = co_await TcpListener::bind(IPEndpoint("127.0.0.1", 10345));
     if (!retl) {
         NEKO_LOG_DEBUG("unit test", "bind failed: {}", retl.error().message());
         co_return Unexpected(retl.error());
@@ -308,8 +308,8 @@ ILIAS_NAMESPACE::IoTask<void> udp_client_peer([[maybe_unused]] IoContext& ioCont
 
 ILIAS_NAMESPACE::IoTask<void> udp_test(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlags,
                                        StreamFlag recvFlags) {
-    uint16_t port1 = ((rand() * 1000 + NEKO_CPP_PLUS) % 1000) + 10000;
-    uint16_t port2 = ((rand() * 1000 + NEKO_CPP_PLUS) % 1000) + 10000;
+    uint16_t port1 = (rand() % 1000) + 10000;
+    uint16_t port2 = (rand() % 1000) + 10000;
     auto [ret1, ret2] =
         co_await whenAll(udp_client_peer(ioContext, protoFactory, sendFlags, recvFlags, IPEndpoint("127.0.0.1", port1),
                                          IPEndpoint("127.0.0.1", port2)),
