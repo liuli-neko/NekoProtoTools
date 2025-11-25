@@ -210,7 +210,7 @@ struct Test7 {
 };
 
 TEST(Reflection, Optional) {
-    Test7 test{.member1 = 1, .member2 = 2, .member3 = "3", .member4 = "5"};
+    Test7 test{.member1 = 1, .member2 = 2, .member3 = "3", .member4 = "5", .member5 = 6};
     // clang-format off
     Reflect<Test7>::forEach(test, Overloads{
         [](std::optional<int>& field, std::string_view name) {

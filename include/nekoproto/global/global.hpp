@@ -28,10 +28,13 @@
 #else
     #define _NEKO_CPP_RAW_VER __cplusplus
 #endif
+#define _NEKO_CPP_RAW_VER_YEAR ((_NEKO_CPP_RAW_VER / 100) % 100)
 #if _NEKO_CPP_RAW_VER >= 201103L
-    #define NEKO_CPP_PLUS ((_NEKO_CPP_RAW_VER / 100) % 100)
+    #define NEKO_CPP_PLUS (_NEKO_CPP_RAW_VER_YEAR - _NEKO_CPP_RAW_VER_YEAR % 3 + 2)
+    #define NEKO_CPP_PRELIMARY (_NEKO_CPP_RAW_VER_YEAR % 3 != 2)
 #else
-    #define NEKO_CPP_PLUS 10
+    #define NEKO_CPP_PLUS 1
+    #define NEKO_CPP_PRELIMARY 1
 #endif
 
 #if defined(__GNUC__) || defined(__MINGW32__)

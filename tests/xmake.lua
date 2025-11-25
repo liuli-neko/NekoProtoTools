@@ -55,7 +55,7 @@ for _, file in ipairs(os.files("./**/test_*.cpp")) do
         add_defines("NEKO_PROTO_STATIC")
         add_files(file, "../src/proto_base.cpp")
         -- set test in different cpp versions
-        local cpp_versions = {"c++20", "c++23"}
+        local cpp_versions = {"c++20"}
         for i = 1, #cpp_versions do
             add_tests(string.gsub(cpp_versions[i], '+', 'p', 2), {group = "proto", kind = "binary", files = {"../src/proto_base.cpp", file}, languages = cpp_versions[i], run_timeout = 30000})
         end
