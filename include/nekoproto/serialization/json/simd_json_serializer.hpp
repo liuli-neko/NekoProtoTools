@@ -672,7 +672,7 @@ public:
         if (mCurrentItem == nullptr) {
             return false;
         }
-        int64_t ret;
+        int64_t ret = 0;
         mLastResult = (*mCurrentItem).value().get_int64().get(ret) == simdjson::error_code::SUCCESS;
         if (mLastResult) {
             value = static_cast<T>(ret);
