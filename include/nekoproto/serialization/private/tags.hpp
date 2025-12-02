@@ -51,4 +51,17 @@ struct is_tagged_value<const TaggedValue<Tags, Inner>&> : std::true_type {};
 template <typename T>
 inline constexpr bool is_tagged_value_v = is_tagged_value<std::remove_cvref_t<T>>::value; // NOLINT
 
+template <typename T, class enable = void>
+struct unwrap_tags {
+    using type = T;
+};
+
+template <typename T>
+struct unwrap_tags<T, std::enable_if_t<is_tagged_value_v<T>>> {
+    using type = typename T::raw_type;
+};
+
+template <typename T>
+using unwrap_tags_t = typename unwrap_tags<T>::type;
+
 NEKO_END_NAMESPACE

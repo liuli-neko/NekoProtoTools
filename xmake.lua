@@ -154,7 +154,7 @@ if has_config("enable_tests") then
     includes("tests")
 end
 
-if is_mode("debug") then
+if is_mode("debug") or is_mode("asan") then
     add_defines("NEKO_PROTO_LOG_CONTEXT")
     if is_plat("linux") then
         add_cxxflags("-ftemplate-backtrace-limit=0")

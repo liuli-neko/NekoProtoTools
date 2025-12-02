@@ -75,6 +75,30 @@ constexpr bool is_std_tuple() {
 
 template <typename... Ts>
 inline constexpr bool is_std_tuple_v = is_std_tuple<Ts...>(); // NOLINT
+
+template <typename Accessor, typename Context, typename = void>
+struct resolve_field_type {
+    using type = std::decay_t<Accessor>;
+};
+
+template <typename Accessor, typename Context>
+struct resolve_field_type<Accessor, Context, std::void_t<std::invoke_result_t<Accessor, Context&>>> {
+    using type = std::decay_t<std::invoke_result_t<Accessor, Context&>>;
+};
+
+template <typename Tuple, typename Context>
+struct tuple_unwrap;
+
+template <typename... Args, typename Context>
+struct tuple_unwrap<std::tuple<Args...>, Context> {
+    using type = std::tuple<typename resolve_field_type<unwrap_tags_t<Args>, Context>::type...>;
+};
+
+template <typename Tuple, typename Context>
+using tuple_unwrap_t = typename tuple_unwrap<Tuple, Context>::type;
+
+template <typename T, typename Context>
+using tuple_unwrap_t = typename tuple_unwrap<T, Context>::type;
 } // namespace detail
 
 template <typename T, std::size_t N>
@@ -558,6 +582,24 @@ struct Overloads : public Ts... {
 
 template <typename T, class enable = void>
 struct Reflect {
+private:
+    static constexpr auto _types() {
+        if constexpr (detail::has_values_meta<T>) {
+            using values_type =
+                std::decay_t<decltype(detail::ReflectHelper<T>::getValues(std::declval<std::decay_t<T>&>()))>;
+            using ContextType = std::decay_t<T>;
+            if constexpr (detail::is_std_tuple_v<values_type>) {
+                return (detail::tuple_unwrap_t<values_type, ContextType>*)nullptr;
+            } else {
+                return (std::tuple<
+                        typename detail::resolve_field_type<unwrap_tags_t<values_type>, ContextType>::type>*)nullptr;
+            }
+        } else {
+            return (std::tuple<>*)nullptr;
+        }
+    }
+
+public:
     template <typename U, typename CallAbleT>
         requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
     static constexpr void forEachWithoutName(U&& obj, CallAbleT&& func) noexcept {
@@ -697,7 +739,7 @@ struct Reflect {
         }
     }
 
-    static decltype(auto) names() noexcept {
+    static constexpr decltype(auto) names() noexcept {
         if constexpr (detail::has_names_meta<T>) {
             return detail::ReflectHelper<T>::getNames();
         } else {
@@ -705,7 +747,7 @@ struct Reflect {
         }
     }
 
-    static auto name(int index) noexcept {
+    static constexpr auto name(int index) noexcept {
         if constexpr (detail::has_names_meta<T>) {
             auto names = detail::ReflectHelper<T>::getNames();
             if (index < 0 || index >= static_cast<int>(names.size())) {
@@ -718,7 +760,7 @@ struct Reflect {
         }
     }
 
-    static decltype(auto) className() noexcept { return detail::class_nameof<T>; }
+    static constexpr decltype(auto) className() noexcept { return detail::class_nameof<T>; }
 
     template <std::size_t N, typename U>
         requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
@@ -784,6 +826,10 @@ struct Reflect {
             static_assert(detail::has_values_meta<T> && detail::has_names_meta<T>, "no values or names meta");
         }
     }
+
+    using value_types = std::remove_pointer_t<decltype(_types())>;
+    static constexpr int value_count = std::tuple_size<value_types>::value; // NOLINT
+    
 };
 
 template <typename T>
@@ -842,9 +888,9 @@ struct Reflect<T, std::enable_if_t<std::is_enum_v<T>>> {
     }
     static constexpr auto className() noexcept { return detail::class_nameof<T>; }
     static constexpr auto size() noexcept { return names().size(); }
-    static auto value(std::string_view name) noexcept {
-        static auto kEnums = values();
-        static auto kNames = names();
+    static constexpr auto value(std::string_view name) noexcept {
+        auto kEnums = values();
+        auto kNames = names();
         for (int i = 0; i < (int)size(); ++i) {
             if (kNames[i] == name) {
                 return kEnums[i];
@@ -853,9 +899,9 @@ struct Reflect<T, std::enable_if_t<std::is_enum_v<T>>> {
         NEKO_LOG_ERROR("reflection", "name not found");
         return T{}; // FIXME: this is not a good way to handle this
     }
-    static auto name(T value) noexcept {
-        static auto kNames = names();
-        static auto kEnums = values();
+    static constexpr auto name(T value) noexcept {
+        auto kNames = names();
+        auto kEnums = values();
         for (int i = 0; i < (int)size(); ++i) {
             if (kEnums[i] == value) {
                 return kNames[i];

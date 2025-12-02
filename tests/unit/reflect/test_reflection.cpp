@@ -9,6 +9,7 @@
 #include "nekoproto/serialization/types/vector.hpp"
 
 #include <iostream>
+#include <typeinfo>
 NEKO_USE_NAMESPACE
 
 struct Test1 {
@@ -30,6 +31,7 @@ TEST(Reflection, Test) {
     static_assert(!detail::is_local_ref_object<Test1>, "Test1 must not be local_ref_object");
     static_assert(!detail::is_local_ref_array<Test1>, "Test1 must not be local_ref_array");
     static_assert(!detail::is_local_ref_value<Test1>, "Test1 must not be local_ref_value");
+    static_assert(std::is_same_v<Reflect<Test1>::value_types, std::tuple<int, int, int>>, "Test1 must have 3 members");
     Test1 test{.member1 = 23, .member2 = 12, .member3 = 45};
 
     Reflect<Test1>::forEach(test, [](auto& field) {
@@ -71,6 +73,8 @@ TEST(Reflection, RefObjectValue) {
         std::cout << field << std::endl;
         field += 10;
     });
+    static_assert(std::is_same_v<Reflect<Test2>::value_types, std::tuple<int, int, int, int>>,
+                  "Test2 must have 4 members");
     Reflect<Test2>::forEach(
         test, [](auto& field, std::string_view name) { std::cout << name << ": " << field << std::endl; });
     EXPECT_EQ(test.member1, 33);
@@ -105,6 +109,8 @@ TEST(Reflection, RefObjectArray) {
     static_assert(!detail::is_local_ref_object<Test3>, "Test3 must not be local_ref_object");
     static_assert(detail::is_local_ref_array<Test3>, "Test3 must be local_ref_array");
     static_assert(!detail::is_local_ref_value<Test3>, "Test3 must not be local_ref_value");
+    static_assert(std::is_same_v<Reflect<Test3>::value_types, std::tuple<int, std::string>>,
+                  "Test3 must have 2 members");
     Test3 test{.prr = {.member1 = 234}, .member2 = "3453"};
     Reflect<Test3>::forEach(test, []<typename T>(T& field, const Tags& tags) {
         std::cout << field << std::endl;
@@ -149,6 +155,9 @@ TEST(Reflection, RefObjectSingle) {
     static_assert(!detail::is_local_ref_object<Test5>, "Test5 must not be local_ref_object");
     static_assert(!detail::is_local_ref_array<Test5>, "Test5 must not be local_ref_array");
     static_assert(detail::is_local_ref_value<Test5>, "Test5 must be local_ref_value");
+    static_assert(std::is_same_v<Reflect<Test4>::value_types, std::tuple<int>>, "Test4 must have 1 members");
+    static_assert(std::is_same_v<Reflect<Test5>::value_types, std::tuple<int>>, "Test5 must have 1 members");
+
     Test4 test{.member1 = 23, .member2 = 12};
     Reflect<Test4>::forEach(test, [](auto& field) {
         std::cout << field << std::endl;
@@ -184,6 +193,7 @@ TEST(Reflection, Local) {
     static_assert(!detail::is_local_ref_array<Test6>, "Test6 must not be local_ref_array");
     static_assert(!detail::is_local_ref_value<Test6>, "Test6 must not be local_ref_value");
     Test6 test{.member1 = 23, .member2 = 12};
+    static_assert(std::is_same_v<Reflect<Test6>::value_types, std::tuple<int, int>>, "Test6 must have 2 members");
     Reflect<Test6>::forEach(test, [](auto& field, std::string_view name) {
         std::cout << name << ": " << field << std::endl;
         field += 10;
@@ -212,6 +222,8 @@ struct Test7 {
 TEST(Reflection, Optional) {
     Test7 test{.member1 = 1, .member2 = 2, .member3 = "3", .member4 = "5", .member5 = 6};
     // clang-format off
+    static_assert(std::is_same_v<Reflect<Test7>::value_types, std::tuple<std::optional<int>, int, std::string, std::string, int>>, "Test7 must have 5 members");
+    NEKO_LOG_INFO("test", "types : {}", typeid(Reflect<Test7>::value_types).name());
     Reflect<Test7>::forEach(test, Overloads{
         [](std::optional<int>& field, std::string_view name) {
             if (field.has_value()) {
