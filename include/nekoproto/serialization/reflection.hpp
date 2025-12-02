@@ -17,6 +17,7 @@
 #include <any>
 #include <array>
 #include <map>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <utility> // For std::index_sequence
@@ -77,7 +78,7 @@ template <typename... Ts>
 inline constexpr bool is_std_tuple_v = is_std_tuple<Ts...>(); // NOLINT
 
 template <typename Accessor, typename Context, typename = void>
-struct resolve_field_type {
+struct resolve_field_type { // NOLINT
     using type = std::decay_t<Accessor>;
 };
 
@@ -95,10 +96,18 @@ struct tuple_unwrap<std::tuple<Args...>, Context> {
 };
 
 template <typename Tuple, typename Context>
+struct tuple_tags_unwrap;
+
+template <typename... Args, typename Context>
+struct tuple_tags_unwrap<std::tuple<Args...>, Context> {
+    constexpr static auto value = std::make_tuple(unwrap_tags_v<Args>...); // NOLINT
+};
+
+template <typename Tuple, typename Context>
 using tuple_unwrap_t = typename tuple_unwrap<Tuple, Context>::type;
 
-template <typename T, typename Context>
-using tuple_unwrap_t = typename tuple_unwrap<T, Context>::type;
+template <typename Tuple, typename Context>
+static constexpr auto tuple_tags_unwrap_v = tuple_tags_unwrap<Tuple, Context>::value; // NOLINT
 } // namespace detail
 
 template <typename T, std::size_t N>
@@ -215,7 +224,7 @@ struct is_ref_enumerate<Enumerate<T, N>, void> : std::true_type {};
 
 template <typename T, typename U, class enable = void>
 struct MemberMetadata {
-    using raw_type                        = T;
+    using raw_type                        = unwrap_tags_t<T>;
     using parent_type                     = U;
     constexpr static bool IsRef           = std::is_reference_v<raw_type>;
     constexpr static bool IsLRef          = std::is_lvalue_reference_v<raw_type>;
@@ -223,27 +232,14 @@ struct MemberMetadata {
     constexpr static bool IsMemberPointer = std::is_member_object_pointer_v<raw_type>;
     constexpr static bool IsOk            = IsRef || IsLambda || IsMemberPointer;
 
-    constexpr static Tags tags = {}; // NOLINT
+    constexpr static auto tags = unwrap_tags_v<T>; // NOLINT
     template <typename V>
     constexpr static decltype(auto) value(V&& obj) {
-        return std::forward<V>(obj);
-    }
-};
-
-template <typename T, typename U>
-struct MemberMetadata<T, U, std::enable_if_t<is_tagged_value_v<T>>> {
-    using raw_type                        = typename std::decay_t<T>::raw_type;
-    using parent_type                     = U;
-    constexpr static bool IsRef           = std::is_reference_v<raw_type>;
-    constexpr static bool IsLRef          = std::is_lvalue_reference_v<raw_type>;
-    constexpr static bool IsLambda        = is_member_ref_function<raw_type, U>;
-    constexpr static bool IsMemberPointer = std::is_member_object_pointer_v<raw_type>;
-    constexpr static bool IsOk            = IsRef || IsLambda || IsMemberPointer;
-
-    constexpr static Tags tags = std::decay_t<T>::tags; // NOLINT
-    template <typename V>
-    constexpr static decltype(auto) value(V&& obj) {
-        return std::forward<V>(obj).value;
+        if constexpr (is_tagged_value_v<T>) {
+            return std::forward<V>(obj).value;
+        } else {
+            return std::forward<V>(obj);
+        }
     }
 };
 
@@ -344,9 +340,6 @@ template <typename T, typename ObjT>
 constexpr decltype(auto) value_ref(T&& dt, ObjT& obj) noexcept {
     return MemberMetadata<std::decay_t<T>, ObjT>::value(dt)(obj);
 }
-
-template <typename T, typename ObjT>
-constexpr static Tags value_tags = MemberMetadata<std::decay_t<T>, ObjT>::tags; // NOLINT
 
 template <typename T>
 constexpr static bool is_ref_by_local_v = //  NOLINT
@@ -598,6 +591,20 @@ private:
             return (std::tuple<>*)nullptr;
         }
     }
+    static constexpr auto _tags() {
+        if constexpr (detail::has_values_meta<T>) {
+            using values_type =
+                std::decay_t<decltype(detail::ReflectHelper<T>::getValues(std::declval<std::decay_t<T>&>()))>;
+            using ContextType = std::decay_t<T>;
+            if constexpr (detail::is_std_tuple_v<values_type>) {
+                return detail::tuple_tags_unwrap_v<values_type, ContextType>;
+            } else {
+                return std::make_tuple(unwrap_tags_v<values_type>);
+            }
+        } else {
+            return std::make_tuple();
+        }
+    }
 
 public:
     template <typename U, typename CallAbleT>
@@ -625,11 +632,11 @@ public:
             if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
                 [&values, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
                     ((func(detail::value_ref(std::get<Is>(values), obj),
-                           detail::value_tags<decltype(std::get<Is>(values)), decltype(obj)>)),
+                           unwrap_tags_v<std::tuple_element_t<Is, std::decay_t<decltype(values)>>>)),
                      ...);
                 }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
             } else {
-                func(detail::value_ref(values, obj), detail::value_tags<decltype(values), decltype(obj)>);
+                func(detail::value_ref(values, obj), unwrap_tags_v<std::decay_t<decltype(values)>>);
             }
         } else {
             static_assert(detail::has_values_meta<T>, "type has no values meta");
@@ -672,12 +679,12 @@ public:
                               "values and names size mismatch");
                 [&values, &names, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
                     ((func(detail::value_ref(std::get<Is>(values), obj), names[Is],
-                           detail::value_tags<decltype(std::get<Is>(values)), decltype(obj)>)),
+                           unwrap_tags_v<std::tuple_element_t<Is, std::decay_t<decltype(values)>>>)),
                      ...);
                 }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
             } else {
                 static_assert(1 == std::tuple_size_v<std::decay_t<decltype(names)>>, "values and names size mismatch");
-                func(detail::value_ref(values, obj), names[0], detail::value_tags<decltype(values), decltype(obj)>);
+                func(detail::value_ref(values, obj), names[0], unwrap_tags_v<std::decay_t<decltype(values)>>);
             }
         } else {
             static_assert(detail::has_values_meta<T> && detail::has_names_meta<T>, "type has no values or names meta");
@@ -685,39 +692,30 @@ public:
     }
 
     template <typename U, typename CallAbleT>
-        requires requires(U&& obj, CallAbleT&& func) {
-            forEachWithName(obj, func);
-            func(std::declval<int&>(), std::declval<std::string_view>());
-        }
     static constexpr void forEach(U&& obj, CallAbleT&& func) noexcept {
-        forEachWithName(obj, func);
-    }
-
-    template <typename U, typename CallAbleT>
-        requires requires(U&& obj, CallAbleT&& func) {
-            forEachWithoutName(obj, func);
-            func(std::declval<int&>());
-        }
-    static constexpr void forEach(U&& obj, CallAbleT&& func) noexcept {
-        forEachWithoutName(obj, func);
-    }
-
-    template <typename U, typename CallAbleT>
-        requires requires(U&& obj, CallAbleT&& func, const Tags& tags) {
+        // 尝试 1: func(val, name, tags) - 完整签名
+        if constexpr (std::is_invocable_v<CallAbleT, std::tuple_element_t<0, value_types>&, std::string_view,
+                                          std::tuple_element_t<0, decltype(value_tags)>>) {
             forEachWithNameTags(obj, func);
-            func(std::declval<int&>(), std::declval<std::string_view>(), std::declval<const Tags&>());
         }
-    static constexpr void forEach(U&& obj, CallAbleT&& func) noexcept {
-        forEachWithNameTags(obj, func);
-    }
-
-    template <typename U, typename CallAbleT>
-        requires requires(U&& obj, CallAbleT&& func, const Tags& tags) {
+        // 尝试 2: func(val, tags) - 省略名字
+        else if constexpr (std::is_invocable_v<CallAbleT, std::tuple_element_t<0, value_types>&,
+                                               std::tuple_element_t<0, decltype(value_tags)>>) {
             forEachWithoutNameTags(obj, func);
-            func(std::declval<int&>(), std::declval<const Tags&>());
         }
-    static constexpr void forEach(U&& obj, CallAbleT&& func) noexcept {
-        forEachWithoutNameTags(obj, func);
+        // 尝试 3: func(val, name) - 省略 tags
+        else if constexpr (std::is_invocable_v<CallAbleT, std::tuple_element_t<0, value_types>&, std::string_view>) {
+            forEachWithName(obj, func);
+        }
+        // 尝试 4: func(val) - 只有值
+        else if constexpr (std::is_invocable_v<CallAbleT, std::tuple_element_t<0, value_types>&>) {
+            forEachWithoutName(obj, func);
+        } else {
+            // 编译期报错提示：没有匹配的参数签名
+            static_assert(std::is_invocable_v<CallAbleT, std::tuple_element_t<0, value_types>&>,
+                          "Callback function signature not supported. Supported: (val, name, tags), (val, tags), (val, "
+                          "name), (val)");
+        }
     }
 
     static constexpr auto size() noexcept {
@@ -827,9 +825,9 @@ public:
         }
     }
 
-    using value_types = std::remove_pointer_t<decltype(_types())>;
+    using value_types                = std::remove_pointer_t<decltype(_types())>;
+    static constexpr auto value_tags = _tags();                             // NOLINT
     static constexpr int value_count = std::tuple_size<value_types>::value; // NOLINT
-    
 };
 
 template <typename T>
