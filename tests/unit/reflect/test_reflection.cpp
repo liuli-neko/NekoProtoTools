@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "nekoproto/global/config.h"
 #include "nekoproto/global/reflect.hpp"
 #include "nekoproto/serialization/private/tags.hpp"
 #include "nekoproto/serialization/private/traits.hpp"
@@ -8,8 +9,8 @@
 #include "nekoproto/serialization/types/struct_unwrap.hpp"
 #include "nekoproto/serialization/types/vector.hpp"
 
-#include <iostream>
-#include <typeinfo>
+#include <tuple>
+#include <utility>
 NEKO_USE_NAMESPACE
 
 struct Test1 {
@@ -33,17 +34,23 @@ TEST(Reflection, Test) {
     static_assert(!detail::is_local_ref_value<Test1>, "Test1 must not be local_ref_value");
     static_assert(std::is_same_v<Reflect<Test1>::value_types, std::tuple<int, int, int>>, "Test1 must have 3 members");
     Test1 test{.member1 = 23, .member2 = 12, .member3 = 45};
-
-    Reflect<Test1>::forEach(test, [](auto& field) {
-        std::cout << field << std::endl;
-        field += 10;
-    });
     Reflect<Test1>::forEach(
-        test, [](auto& field, std::string_view name) { std::cout << name << ": " << field << std::endl; });
+        test, [](auto& field, [[maybe_unused]] const JsonTags& tags) { // default tags can convert to any tags
+            NEKO_LOG_INFO("test", "field: {}", field);
+            field += 10;
+        });
+    Reflect<Test1>::forEach(test,
+                            [](auto& field, std::string_view name) { NEKO_LOG_INFO("test", "{}: {}", name, field); });
     EXPECT_EQ(test.member1, 33);
     EXPECT_EQ(test.member2, 22);
     EXPECT_EQ(test.member3, 55);
 }
+
+struct CustomTags {
+    bool tag1 = false;
+    bool tag2 = false;
+    bool tag3 = false;
+};
 
 struct Test2 {
     int member1 = 213;
@@ -53,9 +60,11 @@ struct Test2 {
 
     struct Neko {
         constexpr static auto value = // NOLINT
-            Object(
-                "member1", &Test2::member1, "member2", &Test2::member2, "member3",
-                [](auto&& self) -> auto& { return self.member3; }, "member4", &Test2::member4);
+            Object("member1", make_tags<CustomTags{.tag1 = false, .tag2 = true, .tag3 = false}>(&Test2::member1),
+                   "member2", make_tags<JsonTags{.flat = true, .skipable = false, .rawString = true}>(&Test2::member2),
+                   "member3",
+                   make_tags<BinaryTags{.fixedLength = true}>([](auto&& self) -> auto& { return self.member3; }),
+                   "member4", &Test2::member4);
     };
 };
 
@@ -66,17 +75,31 @@ TEST(Reflection, RefObjectValue) {
     static_assert(!detail::is_local_ref_array<Test2>, "Test2 must not be local_ref_array");
     static_assert(!detail::is_local_ref_value<Test2>, "Test2 must not be local_ref_value");
     static_assert(detail::has_value_function<Test2>, "Test2 must have value function");
-    using FuncType = std::decay_t<decltype(std::get<2>(Test2::Neko::value.values))>;
+    using FuncType = unwrap_tags_t<std::decay_t<decltype(std::get<2>(Test2::Neko::value.values))>>;
     static_assert(detail::is_member_ref_function<FuncType, Test2>, "");
     Test2 test{.member1 = 23, .member2 = 12, .member3 = 45, .member4 = 56};
     Reflect<Test2>::forEach(test, [](auto& field) {
-        std::cout << field << std::endl;
+        NEKO_LOG_INFO("test", "field: {}", field);
         field += 10;
     });
     static_assert(std::is_same_v<Reflect<Test2>::value_types, std::tuple<int, int, int, int>>,
                   "Test2 must have 4 members");
-    Reflect<Test2>::forEach(
-        test, [](auto& field, std::string_view name) { std::cout << name << ": " << field << std::endl; });
+    static_assert(is_tagged_value_v<std::tuple_element_t<
+                      0, std::decay_t<decltype(detail::ReflectHelper<Test2>::getValues(std::declval<Test2&>()))>>>,
+                  "has tag");
+    Reflect<Test2>::forEach(test, [](auto& field, std::string_view name, const auto& tags) {
+        NEKO_LOG_INFO("test", "{}: {}", name, field);
+        if constexpr (std::is_same_v<std::decay_t<decltype(tags)>, CustomTags>) {
+            NEKO_LOG_INFO("test", "custom tags: tag1={} tag2={} tag3={}", tags.tag1, tags.tag2, tags.tag3);
+        } else if constexpr (std::is_same_v<std::decay_t<decltype(tags)>, JsonTags>) {
+            NEKO_LOG_INFO("test", "json tags: flat={} skipable={} rawString={}", tags.flat, tags.skipable,
+                          tags.rawString);
+        } else if constexpr (std::is_same_v<std::decay_t<decltype(tags)>, BinaryTags>) {
+            NEKO_LOG_INFO("test", "binary tags: fixedLength={}", tags.fixedLength);
+        } else {
+            NEKO_LOG_INFO("test", "not tags");
+        }
+    });
     EXPECT_EQ(test.member1, 33);
     EXPECT_EQ(test.member2, 22);
     EXPECT_EQ(test.member3, 55);
@@ -98,8 +121,8 @@ struct Test3 {
 
     struct Neko {
         constexpr static auto value = // NOLINT
-            Array(make_tags<Tags{.fixedLength = true}>([](auto&& self) -> auto& { return self.prr.member1; }),
-                  make_tags<Tags{.rawString = true}>(&Test3::member2));
+            Array(make_tags<BinaryTags{.fixedLength = true}>([](auto&& self) -> auto& { return self.prr.member1; }),
+                  make_tags<JsonTags{.rawString = true}>(&Test3::member2));
     };
 };
 
@@ -112,9 +135,14 @@ TEST(Reflection, RefObjectArray) {
     static_assert(std::is_same_v<Reflect<Test3>::value_types, std::tuple<int, std::string>>,
                   "Test3 must have 2 members");
     Test3 test{.prr = {.member1 = 234}, .member2 = "3453"};
-    Reflect<Test3>::forEach(test, []<typename T>(T& field, const Tags& tags) {
-        std::cout << field << std::endl;
-        std::cout << tags.fixedLength << " " << tags.flat << " " << tags.rawString << " " << tags.skipable << std::endl;
+    Reflect<Test3>::forEach(test, []<typename T>(T& field, const auto& tags) {
+        NEKO_LOG_INFO("test", "field: {}", field);
+        if constexpr (std::is_same_v<std::decay_t<decltype(tags)>, BinaryTags>) {
+            NEKO_LOG_INFO("test", "binary tags: fixedLength={}", tags.fixedLength);
+        } else if constexpr (std::is_same_v<std::decay_t<decltype(tags)>, JsonTags>) {
+            NEKO_LOG_INFO("test", "json tags: flat={} skipable={} rawString={}", tags.flat, tags.skipable,
+                          tags.rawString);
+        }
         if constexpr (std::is_arithmetic_v<T>) {
             field += 10;
         } else {
@@ -130,7 +158,7 @@ struct Test4 {
     int member2 = 125;
 
     struct Neko {
-        constexpr static auto value = make_tags<Tags{.flat = true}>(&Test4::member1); // NOLINT
+        constexpr static auto value = make_tags<JsonTags{.flat = true}>(&Test4::member1); // NOLINT
     };
 };
 
@@ -160,14 +188,14 @@ TEST(Reflection, RefObjectSingle) {
 
     Test4 test{.member1 = 23, .member2 = 12};
     Reflect<Test4>::forEach(test, [](auto& field) {
-        std::cout << field << std::endl;
+        NEKO_LOG_INFO("test", "field: {}", field);
         field += 10;
     });
     EXPECT_EQ(test.member1, 33);
 
     Test5 test2{.member1 = 23, .member2 = 12};
     Reflect<Test5>::forEach(test2, [](auto& field, std::string_view name) {
-        std::cout << name << ": " << field << std::endl;
+        NEKO_LOG_INFO("test", "{}: {}", name, field);
         field += 10;
     });
     EXPECT_EQ(test2.member2, 22);
@@ -195,7 +223,7 @@ TEST(Reflection, Local) {
     Test6 test{.member1 = 23, .member2 = 12};
     static_assert(std::is_same_v<Reflect<Test6>::value_types, std::tuple<int, int>>, "Test6 must have 2 members");
     Reflect<Test6>::forEach(test, [](auto& field, std::string_view name) {
-        std::cout << name << ": " << field << std::endl;
+        NEKO_LOG_INFO("test", "{}: {}", name, field);
         field += 10;
     });
     EXPECT_EQ(test.member1, 33);
@@ -208,7 +236,7 @@ TEST(Reflection, ConstObject) {
         .member2 = 2,
         .member3 = 3,
     };
-    Reflect<Test1>::forEach(test, [](auto&& field) { std::cout << field << std::endl; });
+    Reflect<Test1>::forEach(test, [](auto&& field) { NEKO_LOG_INFO("test", "field: {}", field); });
 }
 
 struct Test7 {
@@ -223,30 +251,29 @@ TEST(Reflection, Optional) {
     Test7 test{.member1 = 1, .member2 = 2, .member3 = "3", .member4 = "5", .member5 = 6};
     // clang-format off
     static_assert(std::is_same_v<Reflect<Test7>::value_types, std::tuple<std::optional<int>, int, std::string, std::string, int>>, "Test7 must have 5 members");
-    NEKO_LOG_INFO("test", "types : {}", typeid(Reflect<Test7>::value_types).name());
     Reflect<Test7>::forEach(test, Overloads{
         [](std::optional<int>& field, std::string_view name) {
             if (field.has_value()) {
-                std::cout << name << ": " << field.value() << std::endl;
+                NEKO_LOG_INFO("test", "{}: {}", name, field.value());
                 *field += 10;
             } else {
-                std::cout << name << ": " << "null" << std::endl;
+                NEKO_LOG_INFO("test", "{}: null", name);
             }
         },
         [](int& field, std::string_view name) {
-            std::cout << name << ": " << field << std::endl;
+            NEKO_LOG_INFO("test", "{}: {}", name, field);
             field += 10;
         },
         [](std::string& field, std::string_view name) {
-            std::cout << name << ": " << field << std::endl;
+            NEKO_LOG_INFO("test", "{}: {}", name, field);
             field += "5";
         },
         [](std::optional<std::string>& field, std::string_view name) {
             if (field.has_value()) {
-                std::cout << name << ": " << field.value() << std::endl;
+                NEKO_LOG_INFO("test", "{}: {}", name, field.value());
                 *field += "5";
             } else {
-                std::cout << name << ": " << "null" << std::endl;
+                NEKO_LOG_INFO("test", "{}: null", name);
             }
         }});
     // clang-format on
@@ -255,8 +282,4 @@ TEST(Reflection, Optional) {
     EXPECT_EQ(test.member3, "35");
 }
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
-    return RUN_ALL_TESTS();
-}
+#include "../common/common_main.cpp.in" // IWYU pragma: export
