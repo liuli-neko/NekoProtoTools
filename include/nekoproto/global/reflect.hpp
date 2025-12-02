@@ -114,7 +114,7 @@ template <typename T>
 constexpr auto unwrap_struct(T& data) noexcept {
     static_assert(can_unwrap_v<T>, "The struct must be aggregate");
     static_assert(member_count_v<T> > 0, "The struct must have at least one member");
-    static_assert(member_count_v<T> <= 60, "The struct must have at most 60 members");
+    static_assert(member_count_v<T> <= MAX_UNWRAP_STRUCT_SIZE, "The struct is too large");
     return unwrap_struct_impl<member_count_v<T>>(data);
 }
 

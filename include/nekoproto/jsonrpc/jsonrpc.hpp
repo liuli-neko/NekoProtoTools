@@ -421,6 +421,7 @@ template <RpcMethodT T, ConstexprString MethodName, ConstexprString... ArgNames>
 class RpcMethod : public RpcMethodDynamic<T, ArgNames...> {
 public:
     RpcMethod() : RpcMethodDynamic<T, ArgNames...>(MethodName.view()) {}
+    RpcMethod(bool isNotification) : RpcMethodDynamic<T, ArgNames...>(MethodName.view(), isNotification) {}
     using RpcMethodDynamic<T, ArgNames...>::operator=;
     operator bool() const noexcept { return this->mCoFunction != nullptr; }
     bool operator==(std::nullptr_t) const noexcept { return this->mCoFunction == nullptr; }
