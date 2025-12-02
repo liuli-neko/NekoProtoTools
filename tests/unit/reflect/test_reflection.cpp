@@ -167,8 +167,8 @@ struct Test5 {
     int member2 = 125;
 
     struct Neko {
-        constexpr static std::array names = {"member2"};                                       // NOLINT
-        constexpr static auto value       = [](auto&& self) -> auto& { return self.member2; }; // NOLINT
+        constexpr static std::array names = {"member2"};                                                     // NOLINT
+        constexpr static auto value       = make_tags<35>([](auto&& self) -> auto& { return self.member2; }); // NOLINT
     };
 };
 
@@ -194,8 +194,8 @@ TEST(Reflection, RefObjectSingle) {
     EXPECT_EQ(test.member1, 33);
 
     Test5 test2{.member1 = 23, .member2 = 12};
-    Reflect<Test5>::forEach(test2, [](auto& field, std::string_view name) {
-        NEKO_LOG_INFO("test", "{}: {}", name, field);
+    Reflect<Test5>::forEach(test2, [](auto& field, std::string_view name, const auto& tags) {
+        NEKO_LOG_INFO("test", "{}: {} tags={}", name, field, tags);
         field += 10;
     });
     EXPECT_EQ(test2.member2, 22);
