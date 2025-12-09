@@ -234,8 +234,10 @@ struct MemberMetadata {
 
     constexpr static auto tags = unwrap_tags_v<T>; // NOLINT
     template <typename V>
-    constexpr static decltype(auto) value(V&& obj) {
-        if constexpr (is_tagged_value_v<T>) {
+    constexpr static std::conditional_t<is_tagged_value_v<V>,
+                                        std::conditional_t<!IsLambda && !IsMemberPointer, raw_type&, raw_type>, V>
+    value(V&& obj) {
+        if constexpr (is_tagged_value_v<V>) {
             return std::forward<V>(obj).value;
         } else {
             return std::forward<V>(obj);
@@ -339,6 +341,14 @@ template <typename T, typename ObjT>
     requires MemberMetadata<std::decay_t<T>, ObjT>::IsLambda
 constexpr decltype(auto) value_ref(T&& dt, ObjT& obj) noexcept {
     return MemberMetadata<std::decay_t<T>, ObjT>::value(dt)(obj);
+}
+
+template <typename T, typename ObjT>
+    requires(!MemberMetadata<std::decay_t<T>, ObjT>::IsRef) && (!MemberMetadata<std::decay_t<T>, ObjT>::IsLRef) &&
+            (!MemberMetadata<std::decay_t<T>, ObjT>::IsMemberPointer) &&
+            (!MemberMetadata<std::decay_t<T>, ObjT>::IsLambda) && is_tagged_value_v<T>
+constexpr decltype(auto) value_ref(T&& dt, ObjT& /*unused*/) noexcept {
+    return MemberMetadata<std::decay_t<T>, ObjT>::value(dt);
 }
 
 template <typename T>

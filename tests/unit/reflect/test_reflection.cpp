@@ -167,7 +167,7 @@ struct Test5 {
     int member2 = 125;
 
     struct Neko {
-        constexpr static std::array names = {"member2"};                                                     // NOLINT
+        constexpr static std::array names = {"member2"};                                                      // NOLINT
         constexpr static auto value       = make_tags<35>([](auto&& self) -> auto& { return self.member2; }); // NOLINT
     };
 };
@@ -210,7 +210,9 @@ NEKO_BEGIN_NAMESPACE
 template <>
 struct Meta<Test6, void> {
     constexpr static auto value = // NOLINT
-        Object("the_member1", [](auto&& self) -> auto& { return self.member1; }, "the_member2", &Test6::member2);
+        Object(
+            "the_member1", [](auto&& self) -> auto& { return self.member1; }, "the_member2",
+            make_tags<JsonTags{.flat = true}>(&Test6::member2));
 };
 NEKO_END_NAMESPACE
 
@@ -222,8 +224,8 @@ TEST(Reflection, Local) {
     static_assert(!detail::is_local_ref_value<Test6>, "Test6 must not be local_ref_value");
     Test6 test{.member1 = 23, .member2 = 12};
     static_assert(std::is_same_v<Reflect<Test6>::value_types, std::tuple<int, int>>, "Test6 must have 2 members");
-    Reflect<Test6>::forEach(test, [](auto& field, std::string_view name) {
-        NEKO_LOG_INFO("test", "{}: {}", name, field);
+    Reflect<Test6>::forEach(test, [](auto& field, std::string_view name, const JsonTags& tags) {
+        NEKO_LOG_INFO("test", "{}: {}, tags={}", name, field, tags.flat);
         field += 10;
     });
     EXPECT_EQ(test.member1, 33);
@@ -240,7 +242,7 @@ TEST(Reflection, ConstObject) {
 }
 
 struct Test7 {
-    std::optional<int> member1;
+    TaggedValue<23, std::optional<int>> member1;
     int member2;
     std::string member3;
     std::string member4;
@@ -277,7 +279,7 @@ TEST(Reflection, Optional) {
             }
         }});
     // clang-format on
-    EXPECT_EQ(*test.member1, 11);
+    EXPECT_EQ(**test.member1, 11);
     EXPECT_EQ(test.member2, 12);
     EXPECT_EQ(test.member3, "35");
 }
