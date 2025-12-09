@@ -81,6 +81,25 @@ struct TaggedValue {
     using tag_type             = decltype(Tags); // 获取 Tag 的实际类型
     constexpr static auto tags = Tags;           // NOLINT
     InnerValue value;
+
+    operator InnerValue() && noexcept { return std::move(value); }
+    operator InnerValue() const& noexcept { return value; }
+    operator InnerValue() & noexcept { return value; }
+    auto operator*() const noexcept { return value; }
+    auto operator->() const noexcept { return &value; }
+    auto operator*() noexcept { return value; }
+    auto operator->() noexcept { return &value; }
+    auto& operator=(InnerValue&& value) noexcept {
+        this->value = std::move(value);
+        return *this;
+    }
+    auto& operator=(const InnerValue& value) noexcept {
+        this->value = value;
+        return *this;
+    }
+    operator raw_type&&() noexcept { return std::move(value); }
+    operator const raw_type&() const noexcept { return value; }
+    operator raw_type&() noexcept { return value; }
 };
 
 template <auto Tags, typename InnerValue>

@@ -27,10 +27,13 @@ task("check")
     set_menu({
         usage = "xmake check",
         description = "Parallel syntax check with timing",
-        options = {}
+        options = {
+            {nil, "target",  "v", "Check only the specified target."}
+        }
     })
     
     on_run(function ()
+        import("core.base.option")
         import("core.project.config")
         import("core.project.project")
         import("core.tool.compiler")
@@ -40,42 +43,45 @@ task("check")
         config.load()
         project.lock()
         project.load_targets()
-        
+                
+        local target_filter = option.get("target")
         local jobs = {}
         local checked_files = {} 
         
         -- 2. 收集任务
         for _, target in pairs(project.targets()) do
-            if target:is_enabled() then
-                for _, sourcebatch in pairs(target:sourcebatches()) do
-                    local sourcekind = sourcebatch.sourcekind
-                    if sourcekind == "cxx" or sourcekind == "cc" then
-                        for _, sourcefile in ipairs(sourcebatch.sourcefiles) do
-                            if not checked_files[sourcefile] then
-                                checked_files[sourcefile] = true
-                                
-                                local extra_flags = {}
-                                if target:has_tool(sourcekind, "cl") then
-                                    table.insert(extra_flags, "/Zs")
-                                else
-                                    table.insert(extra_flags, "-fsyntax-only")
-                                end
+            if target_filter and target:name() == target_filter then
+                if target:is_enabled() then
+                    for _, sourcebatch in pairs(target:sourcebatches()) do
+                        local sourcekind = sourcebatch.sourcekind
+                        if sourcekind == "cxx" or sourcekind == "cc" then
+                            for _, sourcefile in ipairs(sourcebatch.sourcefiles) do
+                                if not checked_files[sourcefile] then
+                                    checked_files[sourcefile] = true
+                                    
+                                    local extra_flags = {}
+                                    if target:has_tool(sourcekind, "cl") then
+                                        table.insert(extra_flags, "/Zs")
+                                    else
+                                        table.insert(extra_flags, "-fsyntax-only")
+                                    end
 
-                                local compile_opts = { target = target }
-                                if sourcekind == "cxx" then
-                                    compile_opts.cxxflags = extra_flags
-                                else
-                                    compile_opts.cflags = extra_flags
-                                end
+                                    local compile_opts = { target = target }
+                                    if sourcekind == "cxx" then
+                                        compile_opts.cxxflags = extra_flags
+                                    else
+                                        compile_opts.cflags = extra_flags
+                                    end
 
-                                -- 使用 build 目录下的 obj 路径，防止污染源码
-                                local obj_file = target:objectfile(sourcefile)
-                                
-                                table.insert(jobs, {
-                                    source = sourcefile,
-                                    obj = obj_file,
-                                    opts = compile_opts
-                                })
+                                    -- 使用 build 目录下的 obj 路径，防止污染源码
+                                    local obj_file = target:objectfile(sourcefile)
+                                    
+                                    table.insert(jobs, {
+                                        source = sourcefile,
+                                        obj = obj_file,
+                                        opts = compile_opts
+                                    })
+                                end
                             end
                         end
                     end
