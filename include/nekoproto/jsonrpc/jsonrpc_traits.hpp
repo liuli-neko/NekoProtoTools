@@ -10,21 +10,26 @@
  */
 #pragma once
 
+#include <concepts>
 #include <ilias/task.hpp>
 #include <string_view>
+#include <type_traits>
 
 #include "nekoproto/global/reflect.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_error.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/types/types.hpp"
+#include "nekoproto/serialization/types/unordered_map.hpp"
 
 NEKO_BEGIN_NAMESPACE
 namespace traits {
 template <typename T>
-concept Serializable = requires(JsonSerializer::OutputSerializer serializer, T value) {
-    { serializer(value) };
-};
+concept Serializable =
+    (traits::has_method_save<T, JsonSerializer::OutputSerializer> ||
+     traits::has_function_save<T, JsonSerializer::OutputSerializer> || std::is_same_v<T, const char*>) &&
+    (traits::has_method_load<T, JsonSerializer::OutputSerializer> ||
+     traits::has_function_load<T, JsonSerializer::OutputSerializer> || std::is_same_v<T, const char*>);
 template <typename T, class enable = void>
 struct IsSerializable : std::false_type {};
 template <Serializable T>
