@@ -15,6 +15,7 @@
 
 #include <array>
 #include <optional>
+#include <type_traits>
 
 #ifdef __GNUC__
 #include <cxxabi.h>
@@ -159,6 +160,8 @@ constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<std:
 
 struct NekoReflector {
     int nekoField;
+    static void nekoStaticFunc() {}
+    void nekoFunc() {}
 };
 
 struct reflect_type {                                                       // NOLINT(readability-identifier-naming)
@@ -187,6 +190,29 @@ struct member_nameof_impl {                                                     
     static constexpr std::string_view stripped_literal = join_v<stripped>; // NOLINT
 };
 
+struct reflect_static_func {                                                                // NOLINT
+    static constexpr std::string_view name = mangled_name<NekoReflector::nekoStaticFunc>(); // NOLINT
+    static constexpr auto end              =                                                // NOLINT
+        name.substr(name.find("NekoReflector::nekoStaticFunc") + sizeof("NekoReflector::nekoStaticFunc") - 1);
+    static constexpr auto begin = name[name.find("NekoReflector::nekoStaticFunc") - 1]; // NOLINT
+};
+
+template <auto Ptr>
+    requires(std::is_member_function_pointer_v<decltype(Ptr)> || std::is_pointer_v<decltype(Ptr)>)
+struct func_nameof_impl {                                                                                  // NOLINT
+    static constexpr std::string_view name = mangled_name<Ptr>();                                          // NOLINT
+    static constexpr auto begin            = name.find(reflect_static_func::end);                          // NOLINT
+    static constexpr auto tmp              = name.substr(0, begin);                                        // NOLINT
+    static constexpr auto stripped         = tmp.substr(tmp.find_last_of(reflect_static_func::begin) + 1); // NOLINT
+    static constexpr auto seq              = stripped.find("::");                                          // NOLINT
+    static constexpr auto is_member_func   = seq != std::string_view::npos;                                // NOLINT
+    static constexpr auto func_name        = is_member_func ? stripped.substr(seq + 2) : stripped;         // NOLINT
+    static constexpr auto is_static_func   = stripped.starts_with('&');                                    // NOLINT
+    static constexpr auto class_name       = is_member_func                                                // NOLINT
+                                                 ? (is_static_func ? stripped.substr(1, seq - 1) : stripped.substr(0, seq))
+                                                 : std::string_view{}; // NOLINT
+};
+
 template <const std::string_view& str>
 constexpr std::string_view parser_class_name_with_type() {
     std::string_view string;
@@ -213,6 +239,13 @@ inline constexpr auto member_nameof = []() constexpr { return member_nameof_impl
 
 template <class T>
 inline constexpr auto class_nameof = []() constexpr { return class_nameof_impl<T>::stripped_literal; }(); // NOLINT
+
+template <auto Ptr>
+inline constexpr auto func_nameof = []() constexpr { return func_nameof_impl<Ptr>::func_name; }(); // NOLINT
+
+template <auto Ptr>
+inline constexpr auto member_func_class_nameof = // NOLINT
+    []() constexpr { return func_nameof_impl<Ptr>::class_name; }();
 
 template <class T, std::size_t... Is>
 [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<Is...> /*unused*/) {

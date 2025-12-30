@@ -21,15 +21,13 @@
 #include <utility> // std::index_sequence, std::make_index_sequence
 
 #include "ilias/task/task.hpp"
+#include "nekoproto/global/reflect.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_error.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_traits.hpp"
 #include "nekoproto/jsonrpc/message_stream_wrapper.hpp"
 
 NEKO_BEGIN_NAMESPACE
 namespace detail {
-template <typename T, class enable = void>
-class RpcMethodTraits;
-
 template <typename... Args>
 constexpr bool is_automatic_expansion_able() {
     if constexpr (sizeof...(Args) == 1) {
@@ -50,65 +48,89 @@ using FunctionT = std::move_only_function<ArgsT...>;
 template <typename... ArgsT>
 using FunctionT = std::function<ArgsT...>;
 #endif
+// MARK: function traits
+template <typename T, class Enable = void>
+struct function_traits; // 主模板
 
-template <typename RetT, typename Arg>
-    requires is_automatic_expansion_able_v<Arg> && traits::IsSerializable<std::remove_cvref_t<RetT>>::value
-class RpcMethodTraits<RetT(Arg), void> {
-public:
-    using ParamsTupleType = std::remove_cvref_t<Arg>;
-    using ReturnType =
-        std::optional<std::conditional_t<std::is_void_v<RetT>, std::nullptr_t, std::remove_cvref_t<RetT>>>;
-    using FunctionType                             = FunctionT<RetT(Arg)>;
-    using RawReturnType                            = RetT;
-    using RawParamsType                            = std::tuple<Arg>;
-    using CoroutinesFuncType                       = FunctionT<ILIAS_NAMESPACE::IoTask<RawReturnType>(Arg)>;
-    constexpr static int NumParams                 = 1;
-    constexpr static int ParamsSize                = Reflect<Arg>::size();
-    constexpr static bool IsAutomaticExpansionAble = true;
-    constexpr static bool IsTopTuple               = false;
-
-    auto operator()(Arg arg) const -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
-        if (mCoFunction) {
-            co_return co_await mCoFunction(std::forward<Arg>(arg));
-        }
-        co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MethodNotBind);
-    }
-
-    auto notification(Arg arg) const -> ILIAS_NAMESPACE::IoTask<void> {
-        std::unique_ptr<bool, FunctionT<void(bool*)>> raii((bool*)(mIsNotification = true),
-                                                           [this](bool*) { mIsNotification = false; });
-        if (mCoFunction) {
-            if (auto ret = co_await mCoFunction(std::forward<Arg>(arg)); !ret) {
-                co_return ILIAS_NAMESPACE::Unexpected(ret.error());
-            }
-        }
-        co_return {};
-    }
-
-    auto isNotification() const -> bool { return mIsNotification; }
-
-protected:
-    mutable CoroutinesFuncType mCoFunction;
-    mutable bool mIsNotification = false;
+// 特化：普通函数指针
+template <typename R, typename... Args>
+struct function_traits<R (*)(Args...), void> {
+    using return_type = R;
+    using arg_tuple   = std::tuple<Args...>;
+    template <typename Ret, template <typename...> class T>
+    using args_in = T<Ret, Args...>;
 };
 
+// 特化：普通函数类型
+template <typename R, typename... Args>
+struct function_traits<R(Args...), void> : function_traits<R (*)(Args...)> {};
+
+// 特化：std::function
+template <typename R, typename... Args>
+struct function_traits<std::function<R(Args...)>, void> : function_traits<R (*)(Args...)> {};
+
+#if __cpp_lib_move_only_function >= 202110L
+// 特化：std::move_only_function
+template <typename R, typename... Args>
+struct function_traits<std::move_only_function<R(Args...)>, void> : function_traits<R (*)(Args...)> {};
+#endif
+
+// 特化：成员函数指针
+template <typename C, typename R, typename... Args>
+struct function_traits<R (C::*)(Args...), void> {
+    using return_type = R;
+    using arg_tuple   = std::tuple<Args...>;
+    template <typename Ret, template <typename...> class T>
+    using args_in = T<Ret, Args...>;
+};
+
+template <typename Functor>
+struct function_traits<Functor, std::void_t<decltype(&std::remove_cvref_t<Functor>::operator())>>
+    : function_traits<decltype(&std::remove_cvref_t<Functor>::operator())>
+{};
+
+#define MEMBER_FUNCTION_TRAITS_QUALIFIER(QUAL)                                                                         \
+    template <typename C, typename R, typename... Args>                                                                \
+    struct function_traits<R (C::*)(Args...) QUAL> : function_traits<R (C::*)(Args...)> {};
+
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(&)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const&)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile&)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile&)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(&&)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const&&)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile&&)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile&&)
+#if __cpp_noexcept_function_type
+MEMBER_FUNCTION_TRAITS_QUALIFIER(noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(& noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const& noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile& noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile& noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(&& noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const&& noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile&& noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile&& noexcept)
+#endif
+#undef MEMBER_FUNCTION_TRAITS_QUALIFIER
+
+template <typename T>
+    requires requires(T tt) {
+        { tt.operator()() };
+    }
+struct function_traits<T> : function_traits<decltype(&std::remove_cvref_t<T>::operator())> {};
+
 template <typename RetT, typename... Args>
-    requires(!is_automatic_expansion_able_v<Args...>) &&
-            (!is_std_tuple_v<Args...>) && traits::IsSerializable<std::tuple<std::remove_cvref_t<Args>...>>::value
-            && traits::IsSerializable<std::remove_cvref_t<RetT>>::value
-class RpcMethodTraits<RetT(Args...), void> {
+class RpcMethodExecutor {
 public:
-    using ParamsTupleType = std::tuple<std::remove_cvref_t<Args>...>;
-    using ReturnType =
-        std::optional<std::conditional_t<std::is_void_v<RetT>, std::nullptr_t, std::remove_cvref_t<RetT>>>;
-    using FunctionType                             = FunctionT<RetT(Args...)>;
-    using RawReturnType                            = RetT;
-    using RawParamsType                            = std::tuple<Args...>;
-    using CoroutinesFuncType                       = FunctionT<ILIAS_NAMESPACE::IoTask<RawReturnType>(Args...)>;
-    constexpr static int NumParams                 = sizeof...(Args);
-    constexpr static int ParamsSize                = sizeof...(Args);
-    constexpr static bool IsAutomaticExpansionAble = false;
-    constexpr static bool IsTopTuple               = false;
+    using RawReturnType      = RetT;
+    using CoroutinesFuncType = FunctionT<ILIAS_NAMESPACE::IoTask<RawReturnType>(Args...)>;
 
     auto operator()(Args... args) const -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
         if (mCoFunction) {
@@ -118,8 +140,13 @@ public:
     }
 
     auto notification(Args... args) const -> ILIAS_NAMESPACE::IoTask<void> {
-        std::unique_ptr<bool, FunctionT<void(bool*)>> raii((bool*)(mIsNotification = true),
-                                                           [this](bool*) { mIsNotification = false; });
+        struct NotificationGuard {
+            bool& flag;
+            NotificationGuard(bool& fg) : flag(fg) { flag = true; }
+            ~NotificationGuard() { flag = false; }
+        };
+        NotificationGuard guard{mIsNotification};
+
         if (mCoFunction) {
             if (auto ret = co_await mCoFunction(std::forward<Args>(args)...); !ret) {
                 co_return ILIAS_NAMESPACE::Unexpected(ret.error());
@@ -134,52 +161,99 @@ protected:
     mutable CoroutinesFuncType mCoFunction;
     mutable bool mIsNotification = false;
 };
-template <typename RetT, typename Arg>
-    requires(!is_automatic_expansion_able_v<Arg>) && is_std_tuple_v<Arg> &&
-            traits::IsSerializable<std::remove_cvref_t<Arg>>::value &&
-            traits::IsSerializable<std::remove_cvref_t<RetT>>::value
-class RpcMethodTraits<RetT(Arg), void> {
+
+template <typename Traits, typename... T>
+struct RpcMethodAliasesHelper {
+    // 将原始代码中的三种逻辑用 if constexpr 统一
+    constexpr static bool is_auto_expand      = is_automatic_expansion_able<T...>();
+    constexpr static bool is_single_tuple_arg = [] {
+        if constexpr (sizeof...(T) == 1) {
+            using FirstArg = std::tuple_element_t<0, std::tuple<T...>>;
+            return is_std_tuple_v<std::remove_cvref_t<FirstArg>>;
+        } else {
+            return false;
+        }
+    }();
+
+    using ParamsTupleType = decltype([] {
+        if constexpr (is_auto_expand) { // is_auto_expand implies sizeof...(T) == 1
+            using FirstArg = std::tuple_element_t<0, std::tuple<T...>>;
+            return std::remove_cvref_t<FirstArg>{}; // Return an object of the desired type
+        } else if constexpr (is_single_tuple_arg) {
+            return std::tuple_element_t<0, std::tuple<T...>>{};
+        } else {
+            return std::tuple<std::remove_cvref_t<T>...>{};
+        }
+    }()); // Use decltype on the lambda's return type to get the actual type
+
+    using RawParamsType = std::tuple<T...>;
+    using RetT          = typename Traits::return_type;
+    using FunctionType  = FunctionT<RetT(T...)>;
+
+    constexpr static int NumParams  = sizeof...(T);
+    constexpr static int ParamsSize = [] {
+        if constexpr (is_auto_expand) {
+            return Reflect<std::tuple_element_t<0, std::tuple<T...>>>::size();
+        } else if constexpr (is_single_tuple_arg) {
+            return std::tuple_size_v<std::remove_cvref_t<std::tuple_element_t<0, std::tuple<T...>>>>;
+        } else {
+            return sizeof...(T);
+        }
+    }();
+    constexpr static bool IsAutomaticExpansionAble = is_auto_expand;
+    constexpr static bool IsTopTuple               = is_single_tuple_arg;
+};
+
+// **新增**: 用于将参数元组 std::tuple<T...> 解包并传递给 RpcMethodAliasesHelper 的辅助模板
+template <typename Traits, typename Tuple>
+struct RpcMethodAliases;
+
+template <typename Traits, typename... T>
+struct RpcMethodAliases<Traits, std::tuple<T...>> {
+    using type = RpcMethodAliasesHelper<Traits, T...>;
+};
+
+template <typename Callable>
+using RpcMethodTraitsUnpacker =
+    typename function_traits<Callable>::template args_in<typename function_traits<Callable>::return_type,
+                                                         RpcMethodExecutor>;
+
+template <typename T, class enable = void>
+class RpcMethodTraits; // 主模板前向声明
+
+// 统一的特化，处理所有可调用类型
+template <typename Callable>
+class RpcMethodTraits<Callable, std::void_t<typename function_traits<std::remove_cvref_t<Callable>>::return_type>>
+    : public RpcMethodTraitsUnpacker<std::remove_cvref_t<Callable>> {
+private:
+    using Traits   = function_traits<std::remove_cvref_t<Callable>>;
+    using ArgTuple = typename Traits::arg_tuple;
+    using Base     = RpcMethodTraitsUnpacker<std::remove_cvref_t<Callable>>;
+
+    // **已修正**: 直接使用新的模板辅助结构体，而不是调用一个包含局部类的函数
+    using Aliases = typename RpcMethodAliases<Traits, ArgTuple>::type;
+
 public:
-    using ParamsTupleType = std::remove_cvref_t<Arg>;
-    using ReturnType =
-        std::optional<std::conditional_t<std::is_void_v<RetT>, std::nullptr_t, std::remove_cvref_t<RetT>>>;
-    using FunctionType                             = FunctionT<RetT(Arg)>;
-    using RawReturnType                            = RetT;
-    using RawParamsType                            = std::tuple<Arg>;
-    using CoroutinesFuncType                       = FunctionT<ILIAS_NAMESPACE::IoTask<RawReturnType>(Arg)>;
-    constexpr static int NumParams                 = 1;
-    constexpr static int ParamsSize                = std::tuple_size_v<Arg>;
-    constexpr static bool IsAutomaticExpansionAble = false;
-    constexpr static bool IsTopTuple               = true;
+    // 从 Aliases 结构体中导出所有类型和常量
+    using ParamsTupleType = typename Aliases::ParamsTupleType;
+    using RawParamsType   = typename Aliases::RawParamsType;
+    using FunctionType    = typename Aliases::FunctionType;
+    using ReturnType = std::optional<std::conditional_t<std::is_void_v<typename Base::RawReturnType>, std::nullptr_t,
+                                                        std::remove_cvref_t<typename Base::RawReturnType>>>;
 
-    auto operator()(Arg arg) const -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
-        if (mCoFunction) {
-            co_return co_await mCoFunction(std::forward<Arg>(arg));
-        }
-        co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MethodNotBind);
-    }
-
-    auto notification(Arg arg) const -> ILIAS_NAMESPACE::IoTask<void> {
-        std::unique_ptr<bool, FunctionT<void(bool*)>> raii((bool*)(mIsNotification = true),
-                                                           [this](bool*) { mIsNotification = false; });
-        if (mCoFunction) {
-            if (auto ret = co_await mCoFunction(std::forward<Arg>(arg)); !ret) {
-                co_return ILIAS_NAMESPACE::Unexpected(ret.error());
-            }
-        }
-        co_return {};
-    }
-
-    auto isNotification() const -> bool { return mIsNotification; }
-
-protected:
-    mutable CoroutinesFuncType mCoFunction;
-    mutable bool mIsNotification = false;
+    constexpr static int NumParams                 = Aliases::NumParams;
+    constexpr static int ParamsSize                = Aliases::ParamsSize;
+    constexpr static bool IsAutomaticExpansionAble = Aliases::IsAutomaticExpansionAble;
+    constexpr static bool IsTopTuple               = Aliases::IsTopTuple;
 };
 
 template <typename T>
 concept RpcMethodT = requires() { std::is_constructible_v<typename RpcMethodTraits<T>::FunctionType, T>; };
 
+template <auto Ptr>
+concept RpcMethodFuncT = requires() { typename RpcMethodTraits<decltype(Ptr)>::FunctionType; };
+
+// MARK: JsonRpc Proto
 // The Client is defined as the origin of Request objects and the handler of Response objects.
 /**
  * @brief JsonRpc Request or Notification
@@ -313,7 +387,6 @@ struct JsonRpcResponse<void> {
     NEKO_SERIALIZER(jsonrpc, error, id)
 };
 
-// TODO: 与RpcMethod合并一下
 template <RpcMethodT T, ConstexprString... ArgNames>
 class RpcMethodDynamic : public RpcMethodTraits<T> {
     static_assert(sizeof...(ArgNames) == 0 || RpcMethodTraits<T>::NumParams == sizeof...(ArgNames),
@@ -425,6 +498,20 @@ public:
     using RpcMethodDynamic<T, ArgNames...>::operator=;
     operator bool() const noexcept { return this->mCoFunction != nullptr; }
     bool operator==(std::nullptr_t) const noexcept { return this->mCoFunction == nullptr; }
+};
+
+template <auto Ptr, ConstexprString... ArgNames>
+class RpcMethodF : public RpcMethodDynamic<decltype(*Ptr), ArgNames...> {
+public:
+    RpcMethodF()
+        : RpcMethodDynamic<decltype(*Ptr), ArgNames...>(
+              detail::func_nameof_impl<Ptr>::is_member_func
+                  ? detail::join<detail::member_func_class_nameof<Ptr>, ".", detail::func_nameof<Ptr>>()
+                  : detail::func_nameof<Ptr>,
+              *Ptr) {}
+    RpcMethodF(bool isNotification)
+        : RpcMethodDynamic<decltype(*Ptr), ArgNames...>(Ptr->name(), *Ptr, isNotification) {}
+    using RpcMethodDynamic<decltype(*Ptr), ArgNames...>::operator=;
 };
 
 struct RpcMethodErrorHelper {
@@ -750,6 +837,7 @@ auto RpcMethodWrapperImpl<T>::call(JsonSerializer::InputSerializer& in, JsonSeri
 } // namespace detail
 
 using detail::RpcMethod;
+using detail::RpcMethodT;
 template <typename ProtocolT>
 class JsonRpcServer {
 private:

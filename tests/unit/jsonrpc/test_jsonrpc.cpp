@@ -43,6 +43,8 @@ struct MXXParams {
     NEKO_SERIALIZER(param1, param2, param3)
 };
 
+int add(int a, int b) { return a + b; }
+
 struct Protocol {
     RpcMethod<int(int, int), "test1", "num1", "num2"> test1;
     RpcMethod<void(int, int), "test2", "num1", "num2"> test2;
@@ -55,6 +57,7 @@ struct Protocol {
     RpcMethod<std::vector<int>(std::vector<bool>), "test9"> test9;
     RpcMethod<Copytest(int tt), "test10"> test10;
     RpcMethod<std::string(MXXParams), "testxx"> test11;
+    // detail::RpcMethodF<add, "a", "b"> test12;
 };
 
 class JsonRpcTest : public ::testing::Test {

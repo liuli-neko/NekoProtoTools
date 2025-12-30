@@ -6,6 +6,7 @@
 #include <cstring>
 #include <type_traits>
 #include <vector>
+#include <stdint.h>
 
 NEKO_BEGIN_NAMESPACE
 
