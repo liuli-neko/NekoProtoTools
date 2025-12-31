@@ -401,7 +401,7 @@ struct JsonRpcResponse<void> {
 
     NEKO_SERIALIZER(jsonrpc, error, id)
 };
-
+// MARK: Rpc Method MetaObject
 template <RpcMethodT T, ConstexprString... ArgNames>
 class RpcMethodDynamic : public RpcMethodTraits<T> {
     static_assert(sizeof...(ArgNames) == 0 || RpcMethodTraits<T>::NumParams == sizeof...(ArgNames),
@@ -586,7 +586,7 @@ private:
     T mMethodData;
     JsonRpcServerImp* mSelf = nullptr;
 };
-
+// MARK: jsonrpc server
 class JsonRpcServerImp {
 public:
     struct MethodData {
@@ -1016,7 +1016,7 @@ private:
     std::map<std::string_view, std::unique_ptr<MethodData>> mMethodDatas;
     ILIAS_NAMESPACE::TaskGroup<void> mScop;
 };
-
+// MARK: jsonrpc client
 template <typename ProtocolT>
 class JsonRpcClient {
 public:

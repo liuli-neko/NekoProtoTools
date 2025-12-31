@@ -24,12 +24,13 @@
 
 NEKO_BEGIN_NAMESPACE
 namespace traits {
+// MARK: serialization traits
 template <typename T>
 concept Serializable =
-    (traits::has_method_save<T, JsonSerializer::OutputSerializer> ||
-     traits::has_function_save<T, JsonSerializer::OutputSerializer> || std::is_same_v<T, const char*>) &&
-    (traits::has_method_load<T, JsonSerializer::OutputSerializer> ||
-     traits::has_function_load<T, JsonSerializer::OutputSerializer> || std::is_same_v<T, const char*>);
+    (traits::has_method_save<std::decay_t<T>, JsonSerializer::OutputSerializer> ||
+     traits::has_function_save<std::decay_t<T>, JsonSerializer::OutputSerializer> || std::is_same_v<T, const char*>) &&
+    (traits::has_method_load<std::decay_t<T>, JsonSerializer::OutputSerializer> ||
+     traits::has_function_load<std::decay_t<T>, JsonSerializer::OutputSerializer> || std::is_same_v<T, const char*>);
 template <typename T, class enable = void>
 struct IsSerializable : std::false_type {};
 template <Serializable T>

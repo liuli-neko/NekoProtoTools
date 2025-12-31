@@ -66,7 +66,7 @@ ILIAS_NAMESPACE::Task<std::string> failed_testxx(MXXParams params) {
     }
     co_return ret;
 }
-
+extern int test1(int, int);
 struct Protocol {
     RpcMethod<int(int, int), "test1", "num1", "num2"> test1;
     RpcMethod<void(int, int), "test2", "num1", "num2"> test2;
@@ -256,7 +256,7 @@ TEST_F(JsonRpcTest, BindAndCallUdp) {
                                     [](int aa) -> ilias::IoTask<std::string> { co_return std::to_string(aa); }));
 
     {
-        auto res = (client->test1(1, 2).wait());
+        auto res = (client.callRemote<test1>(1, 2).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), 3);
     }

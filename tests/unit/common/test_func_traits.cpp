@@ -4,6 +4,7 @@
 
 #include "nekoproto/global/reflect.hpp"
 #include "nekoproto/jsonrpc/jsonrpc.hpp"
+#include "nekoproto/jsonrpc/jsonrpc_traits.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 
