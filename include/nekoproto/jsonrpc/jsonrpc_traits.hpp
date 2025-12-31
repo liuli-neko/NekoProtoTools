@@ -15,14 +15,28 @@
 #include <string_view>
 #include <type_traits>
 
+#include "ilias/defines.hpp"
+#include "nekoproto/global/config.h"
 #include "nekoproto/global/reflect.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_error.hpp"
+#include "nekoproto/serialization/json/schema.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/types/types.hpp"
 #include "nekoproto/serialization/types/unordered_map.hpp"
 
 NEKO_BEGIN_NAMESPACE
+namespace detail {
+// 特化：普通函数指针
+template <typename R, typename... Args>
+struct function_traits<ILIAS_NAMESPACE::IoTask<R> (*)(Args...), void> {
+    using return_type = R;
+    using arg_tuple   = std::tuple<Args...>;
+    template <typename Ret, template <typename...> class T>
+    using args_in = T<Ret, Args...>;
+};
+
+} // namespace detail
 namespace traits {
 // MARK: serialization traits
 template <typename T>
@@ -222,6 +236,133 @@ struct SerializerHelperObject {
         }(std::make_index_sequence<sizeof...(ArgNames)>{});
     };
 };
+
+#if __cpp_lib_move_only_function >= 202110L
+template <typename... ArgsT>
+using FunctionT = std::move_only_function<ArgsT...>;
+#else
+template <typename... ArgsT>
+using FunctionT = std::function<ArgsT...>;
+#endif
+
+using NEKO_NAMESPACE::detail::has_names_meta;
+using NEKO_NAMESPACE::detail::has_values_meta;
+using NEKO_NAMESPACE::detail::is_std_tuple_v;
+using NEKO_NAMESPACE::detail::function_traits;
+
+template <typename... Args>
+constexpr bool is_automatic_expansion_able() {
+    if constexpr (sizeof...(Args) == 1) {
+        return has_values_meta<std::remove_cvref_t<std::tuple_element_t<0, std::tuple<Args...>>>> &&
+               has_names_meta<std::remove_cvref_t<std::tuple_element_t<0, std::tuple<Args...>>>>;
+    } else {
+        return false;
+    }
+}
+
+template <typename... Args>
+constexpr bool is_automatic_expansion_able_v = is_automatic_expansion_able<Args...>(); // NOLINT
+
+template <typename RetT, typename... Args>
+class RpcMethodExecutor {
+public:
+    using RawReturnType      = RetT;
+    using CoroutinesFuncType = FunctionT<ILIAS_NAMESPACE::IoTask<RawReturnType>(Args...)>;
+
+    auto operator()(Args... args) const -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
+        if (mCoFunction) {
+            co_return co_await mCoFunction(std::forward<Args>(args)...);
+        }
+        co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MethodNotBind);
+    }
+
+    auto notification(Args... args) const -> ILIAS_NAMESPACE::IoTask<void> {
+        struct NotificationGuard {
+            bool& flag;
+            NotificationGuard(bool& fg) : flag(fg) { flag = true; }
+            ~NotificationGuard() { flag = false; }
+        };
+        NotificationGuard guard{mIsNotification};
+
+        if (mCoFunction) {
+            if (auto ret = co_await mCoFunction(std::forward<Args>(args)...); !ret) {
+                co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+            }
+        }
+        co_return {};
+    }
+
+    auto isNotification() const -> bool { return mIsNotification; }
+
+protected:
+    mutable CoroutinesFuncType mCoFunction;
+    mutable bool mIsNotification = false;
+};
+
+template <typename Traits, typename... T>
+struct RpcMethodAliasesHelper {
+    // 将原始代码中的三种逻辑用 if constexpr 统一
+    constexpr static bool is_auto_expand      = is_automatic_expansion_able<T...>(); // NOLINT
+    constexpr static bool is_single_tuple_arg = [] {                                 // NOLINT
+        if constexpr (sizeof...(T) == 1) {
+            using FirstArg = std::tuple_element_t<0, std::tuple<T...>>;
+            return is_std_tuple_v<std::remove_cvref_t<FirstArg>>;
+        } else {
+            return false;
+        }
+    }();
+
+    using ParamsTupleType = decltype([] {
+        if constexpr (is_auto_expand) { // is_auto_expand implies sizeof...(T) == 1
+            using FirstArg = std::tuple_element_t<0, std::tuple<T...>>;
+            static_assert(traits::IsSerializable<FirstArg>::value,
+                          "The params of bound functions must be serializable");
+            return std::remove_cvref_t<FirstArg>{}; // Return an object of the desired type
+        } else if constexpr (is_single_tuple_arg) {
+            using FirstArg = std::tuple_element_t<0, std::tuple<T...>>;
+            static_assert(traits::IsSerializable<FirstArg>::value,
+                          "The params of bound functions must be serializable");
+            return std::remove_cvref_t<FirstArg>{};
+        } else {
+            static_assert((traits::IsSerializable<T>::value && ...),
+                          "The params of bound functions must be serializable");
+            return std::tuple<std::remove_cvref_t<T>...>{};
+        }
+    }()); // Use decltype on the lambda's return type to get the actual type
+
+    using RawParamsType = std::tuple<T...>;
+    using RetT          = typename Traits::return_type;
+    static_assert(traits::IsSerializable<RetT>::value,
+                  "The return type T or IoTask<T> of bound functions must be serializable");
+    using FunctionType = FunctionT<RetT(T...)>;
+
+    constexpr static int NumParams  = sizeof...(T);
+    constexpr static int ParamsSize = [] {
+        if constexpr (is_auto_expand) {
+            return Reflect<std::tuple_element_t<0, std::tuple<T...>>>::size();
+        } else if constexpr (is_single_tuple_arg) {
+            return std::tuple_size_v<std::remove_cvref_t<std::tuple_element_t<0, std::tuple<T...>>>>;
+        } else {
+            return sizeof...(T);
+        }
+    }();
+    constexpr static bool IsAutomaticExpansionAble = is_auto_expand;
+    constexpr static bool IsTopTuple               = is_single_tuple_arg;
+};
+
+template <typename Traits, typename Tuple>
+struct RpcMethodAliases;
+
+template <typename Traits, typename... T>
+struct RpcMethodAliases<Traits, std::tuple<T...>> {
+    using type = RpcMethodAliasesHelper<Traits, T...>;
+};
+
+template <typename Callable>
+using RpcMethodTraitsUnpacker =
+    typename function_traits<Callable>::template args_in<typename function_traits<Callable>::return_type,
+                                                         RpcMethodExecutor>;
+
 } // namespace traits
 
 NEKO_END_NAMESPACE

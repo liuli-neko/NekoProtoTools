@@ -71,6 +71,8 @@ struct MyFunctor {
 };
 
 TEST(RefectNames, Test) { // NOLINT
+    std::cout << detail::mangled_name<detail::NekoReflector::nekoStaticFunc>() << std::endl;
+    std::cout << detail::mangled_name<test_func>() << std::endl;
     ASSERT_EQ(detail::class_nameof<TestStruct>, "TestStruct");
     auto names = Reflect<TestStruct>::names();
     ASSERT_EQ(names.size(), 4);
@@ -93,17 +95,26 @@ TEST(RefectNames, Test) { // NOLINT
     EXPECT_EQ(names1[0], "aMember");
     EXPECT_EQ(names1[1], "cMember");
     EXPECT_EQ(names1[2], "dMember");
-    EXPECT_EQ(detail::func_nameof<test_func>, "test_func");
+    std::string name = std::string(detail::func_nameof<test_func>);
+    EXPECT_STREQ(name.c_str(), "test_func");
     call<test_func>(1);
-    EXPECT_EQ(detail::func_nameof<test_func_with_struct>, "test_func_with_struct");
-    TestStructWithFunc a;
-    call<test_func_with_struct>(a);
-    EXPECT_EQ(detail::func_nameof<TestStructWithFunc::staticTestFunc>, "staticTestFunc");
+    name = std::string(detail::func_nameof<test_func_with_struct>);
+    EXPECT_STREQ(name.c_str(), "test_func_with_struct");
+    TestStructWithFunc aa;
+    call<test_func_with_struct>(aa);
+    name = std::string(detail::func_nameof<TestStructWithFunc::staticTestFunc>);
+    EXPECT_STREQ(name.c_str(), "staticTestFunc");
     call<TestStructWithFunc::staticTestFunc>(1);
-    EXPECT_EQ(detail::func_nameof<&TestStructWithFunc::testFunc>, "testFunc");
-    call<&TestStructWithFunc::testFunc>(a, 1);
-    EXPECT_EQ(detail::member_func_class_nameof<TestStructWithFunc::staticTestFunc>, "TestStructWithFunc");
-    EXPECT_EQ(detail::member_func_class_nameof<&TestStructWithFunc::testFunc>, "TestStructWithFunc");
+    name = std::string(detail::func_nameof<&TestStructWithFunc::testFunc>);
+    EXPECT_STREQ(name.c_str(), "testFunc");
+    call<&TestStructWithFunc::testFunc>(aa, 1);
+    std::cout << detail::function_traits<decltype(TestStructWithFunc::staticTestFunc)>::is_member_func << std::endl;
+    std::cout << detail::mangled_name<&TestStructWithFunc::testFunc>() << std::endl;
+
+    name = std::string(detail::member_func_class_nameof<TestStructWithFunc::staticTestFunc>);
+    EXPECT_STREQ(name.c_str(), "TestStructWithFunc");
+    name = std::string(detail::member_func_class_nameof<&TestStructWithFunc::testFunc>);
+    EXPECT_STREQ(name.c_str(), "TestStructWithFunc");
 }
 
 TEST(RpcMethodTraitsTest, FunctionType) {
