@@ -391,7 +391,7 @@ template <typename T>
 struct function_traits<T> : function_traits<decltype(&std::remove_cvref_t<T>::operator())> {};
 
 /**
- * @brief reflect member function helper
+ * @brief reflect function name
  * in linux
  * consteval auto NekoProto::detail::mangled_name() [with auto Ptr = NekoReflector::nekoStaticFunc]
  * consteval auto NekoProto::detail::mangled_name() [with auto Ptr = test_func_with_struct]
@@ -399,26 +399,36 @@ struct function_traits<T> : function_traits<decltype(&std::remove_cvref_t<T>::op
  * auto __cdecl NekoProto::detail::mangled_name<void __cdecl
  * NekoProto::detail::NekoReflector::nekoStaticFunc(void)>(void)
  * auto __cdecl NekoProto::detail::mangled_name<int __cdecl free_func_one_arg(int)>(void)
+ * in clang
+ * auto NekoProto::detail::mangled_name() [Ptr = &NekoProto::detail::NekoReflector::nekoStaticFunc]
+ * auto NekoProto::detail::mangled_name() [Ptr = &test_func]
  */
-struct reflect_static_func {                                                                                // NOLINT
-    static constexpr std::string_view name                 = mangled_name<NekoReflector::nekoStaticFunc>(); // NOLINT
-    static constexpr std::string_view characteristicString = "NekoReflector::nekoStaticFunc";
-    static constexpr auto end                              = // NOLINT
-        name.substr(name.find(characteristicString) + characteristicString.size());
-    static constexpr auto begin = name[name.find(characteristicString) - 1]; // NOLINT
-};
-
 template <auto Ptr>
-    requires(std::is_member_function_pointer_v<decltype(Ptr)> || std::is_pointer_v<decltype(Ptr)>)
+    requires(std::is_pointer_v<decltype(Ptr)>)
 struct func_nameof_impl {                                         // NOLINT
     static constexpr std::string_view name = mangled_name<Ptr>(); // NOLINT
-#if defined(__clang__) || defined(__GNUC__)
-    static constexpr auto begin          = name.find(reflect_static_func::end);                          // NOLINT
-    static constexpr auto tmp            = name.substr(0, begin);                                        // NOLINT
-    static constexpr auto stripped       = tmp.substr(tmp.find_last_of(reflect_static_func::begin) + 1); // NOLINT
-    static constexpr auto seq            = stripped.find_last_of("::");                                  // NOLINT
-    static constexpr auto is_member_func = seq != std::string_view::npos;                                // NOLINT
-    static constexpr auto func_name      = is_member_func ? stripped.substr(seq + 1) : stripped;         // NOLINT
+#if defined(__clang__)
+    // auto NekoProto::detail::mangled_name() [Ptr = &NekoProto::detail::NekoReflector::nekoStaticFunc]
+    // auto NekoProto::detail::mangled_name() [Ptr = &test_func]
+    static constexpr std::string_view characteristicString =                                         // NOLINT
+        "auto NekoProto::detail::mangled_name() [Ptr = &";                                           // NOLINT
+    static constexpr auto full_function_name =                                                       // NOLINT
+        name.substr(characteristicString.size(), name.size() - characteristicString.size() - 1);     // NOLINT
+    static constexpr auto begin     = full_function_name.find_last_of("::");                         // NOLINT
+    static constexpr auto func_name =                                                                // NOLINT
+        begin == std::string_view::npos ? full_function_name : full_function_name.substr(begin + 1); // NOLINT
+#elif defined(__GNUC__)
+    // consteval auto NekoProto::detail::mangled_name() [with auto Ptr = NekoReflector::nekoStaticFunc]
+    // consteval auto NekoProto::detail::mangled_name() [with auto Ptr = test_func_with_struct]
+    static constexpr std::string_view characteristicString =
+        "consteval auto NekoProto::detail::mangled_name() [with auto Ptr = ";                    // NOLINT
+    static constexpr auto full_function_name =                                                   // NOLINT
+        name.substr(characteristicString.size(), name.size() - characteristicString.size() - 1); // NOLINT
+    static_assert(full_function_name.size() > 0, "can not find a valid function name");
+    static constexpr auto seq            = full_function_name.find_last_of("::"); // NOLINT
+    static constexpr auto is_member_func = seq != std::string_view::npos;         // NOLINT
+    static constexpr auto func_name =
+        is_member_func ? full_function_name.substr(seq + 1) : full_function_name; // NOLINT
 #elif defined(_MSC_VER)
     static constexpr std::string_view characteristicString = "auto __cdecl NekoProto::detail::mangled_name<"; // NOLINT
     // void __cdecl NekoProto::detail::NekoReflector::nekoStaticFunc(void)>(void)
