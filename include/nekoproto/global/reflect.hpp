@@ -412,7 +412,14 @@ template <auto Ptr>
     requires(std::is_member_function_pointer_v<decltype(Ptr)> || std::is_pointer_v<decltype(Ptr)>)
 struct func_nameof_impl {                                         // NOLINT
     static constexpr std::string_view name = mangled_name<Ptr>(); // NOLINT
-#ifdef _MSC_VER
+#if defined(__clang__) || defined(__GNUC__)
+    static constexpr auto begin          = name.find(reflect_static_func::end);                          // NOLINT
+    static constexpr auto tmp            = name.substr(0, begin);                                        // NOLINT
+    static constexpr auto stripped       = tmp.substr(tmp.find_last_of(reflect_static_func::begin) + 1); // NOLINT
+    static constexpr auto seq            = stripped.find_last_of("::");                                  // NOLINT
+    static constexpr auto is_member_func = seq != std::string_view::npos;                                // NOLINT
+    static constexpr auto func_name      = is_member_func ? stripped.substr(seq + 1) : stripped;         // NOLINT
+#elif defined(_MSC_VER)
     static constexpr std::string_view characteristicString = "auto __cdecl NekoProto::detail::mangled_name<"; // NOLINT
     // void __cdecl NekoProto::detail::NekoReflector::nekoStaticFunc(void)>(void)
     // int __cdecl free_func_one_arg(int)>(void)
@@ -426,15 +433,8 @@ struct func_nameof_impl {                                         // NOLINT
     static_assert(end != std::string_view::npos, "function end not found");
     static constexpr auto tmp                   = full_function_name.substr(begin, end - begin); // NOLINT
     static constexpr std::string_view func_name = join_v<tmp>;                                   // NOLINT
-#elif defined(__clang__) || defined(__GNUC__)
-    static constexpr auto begin          = name.find(reflect_static_func::end);                          // NOLINT
-    static constexpr auto tmp            = name.substr(0, begin);                                        // NOLINT
-    static constexpr auto stripped       = tmp.substr(tmp.find_last_of(reflect_static_func::begin) + 1); // NOLINT
-    static constexpr auto seq            = stripped.find_last_of("::");                                  // NOLINT
-    static constexpr auto is_member_func = seq != std::string_view::npos;                                // NOLINT
-    static constexpr auto func_name      = is_member_func ? stripped.substr(seq + 2) : stripped;         // NOLINT
 #else
-    static constexpr auto func_name = name;
+    static_assert(false, "unsupported compiler");
 #endif
 };
 
