@@ -14,7 +14,10 @@
 #include "string_literal.hpp"
 
 #include <array>
+#include <functional>
 #include <optional>
+#include <string_view>
+#include <type_traits>
 
 #ifdef __GNUC__
 #include <cxxabi.h>
@@ -64,8 +67,7 @@ template <typename T>
 struct is_optional<const std::optional<T>&, void> : std::true_type {};
 
 struct any_type { // NOLINT(readability-identifier-naming)
-    template <typename T,
-              typename = std::enable_if_t<!is_optional<std::decay_t<T>>::value>> // 禁用到 optional 的直接转换
+    template <typename T, typename = std::enable_if_t<!is_optional<std::decay_t<T>>::value>>
     operator T() {}
 };
 template <typename T, typename _Cond = void, typename... Args>
@@ -83,10 +85,13 @@ struct can_aggregate : can_aggregate_impl<T, void, Args...> {}; // NOLINT(readab
  */
 template <typename T, typename... Args>
 constexpr auto member_count([[maybe_unused]] Args&&... args) noexcept {
-    if constexpr (!can_aggregate<T, any_type, Args...>::value) {
+    if constexpr ((!can_aggregate<T, Args..., any_type>::value) &&
+                  (!can_aggregate<T, Args..., std::nullopt_t>::value)) {
         return sizeof...(args);
-    } else {
+    } else if constexpr (can_aggregate<T, Args..., any_type>::value) {
         return member_count<T>(std::forward<Args>(args)..., any_type{});
+    } else {
+        return member_count<T>(std::forward<Args>(args)..., std::nullopt);
     }
 }
 
@@ -159,6 +164,8 @@ constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<std:
 
 struct NekoReflector {
     int nekoField;
+    static void nekoStaticFunc() {}
+    void nekoFunc() {}
 };
 
 struct reflect_type {                                                       // NOLINT(readability-identifier-naming)
@@ -305,6 +312,145 @@ constexpr auto neko_get_valid_enum_names(std::index_sequence<N...> seq) noexcept
     }
     return arr;
 }
+
+// MARK: function traits
+template <typename T, class Enable = void>
+struct function_traits; // 主模板
+
+// 特化：普通函数指针
+template <typename R, typename... Args>
+struct function_traits<R (*)(Args...), void> {
+    using return_type = R;
+    using arg_tuple   = std::tuple<Args...>;
+    template <typename Ret, template <typename...> class T>
+    using args_in                                = T<Ret, Args...>;
+    static constexpr auto is_member_func         = false; // 是否为成员函数指针
+    static constexpr std::string_view class_name = "";
+};
+
+// 特化：普通函数类型
+template <typename R, typename... Args>
+struct function_traits<R(Args...), void> : function_traits<R (*)(Args...)> {};
+
+// 特化：std::function
+template <typename R, typename... Args>
+struct function_traits<std::function<R(Args...)>, void> : function_traits<R (*)(Args...)> {};
+
+#if __cpp_lib_move_only_function >= 202110L
+// 特化：std::move_only_function
+template <typename R, typename... Args>
+struct function_traits<std::move_only_function<R(Args...)>, void> : function_traits<R (*)(Args...)> {};
+#endif
+
+// 特化：成员函数指针
+template <typename C, typename R, typename... Args>
+struct function_traits<R (C::*)(Args...), void> : function_traits<R (*)(Args...)> {
+    static constexpr auto is_member_func         = true; // 是否为成员函数指针
+    static constexpr std::string_view class_name = class_nameof<C>;
+};
+
+template <typename Functor>
+struct function_traits<Functor, std::void_t<decltype(&std::remove_cvref_t<Functor>::operator())>>
+    : function_traits<decltype(&std::remove_cvref_t<Functor>::operator())> {};
+
+#define MEMBER_FUNCTION_TRAITS_QUALIFIER(QUAL)                                                                         \
+    template <typename C, typename R, typename... Args>                                                                \
+    struct function_traits<R (C::*)(Args...) QUAL> : function_traits<R (C::*)(Args...)> {};
+
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(&)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const&)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile&)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile&)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(&&)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const&&)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile&&)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile&&)
+#if __cpp_noexcept_function_type
+MEMBER_FUNCTION_TRAITS_QUALIFIER(noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(& noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const& noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile& noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile& noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(&& noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const&& noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile&& noexcept)
+MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile&& noexcept)
+#endif
+#undef MEMBER_FUNCTION_TRAITS_QUALIFIER
+
+template <typename T>
+    requires requires(T tt) {
+        { tt.operator()() };
+    }
+struct function_traits<T> : function_traits<decltype(&std::remove_cvref_t<T>::operator())> {};
+
+/**
+ * @brief reflect function name
+ * in linux
+ * consteval auto NekoProto::detail::mangled_name() [with auto Ptr = NekoReflector::nekoStaticFunc]
+ * consteval auto NekoProto::detail::mangled_name() [with auto Ptr = test_func_with_struct]
+ * in windows
+ * auto __cdecl NekoProto::detail::mangled_name<void __cdecl
+ * NekoProto::detail::NekoReflector::nekoStaticFunc(void)>(void)
+ * auto __cdecl NekoProto::detail::mangled_name<int __cdecl free_func_one_arg(int)>(void)
+ * in clang
+ * auto NekoProto::detail::mangled_name() [Ptr = &NekoProto::detail::NekoReflector::nekoStaticFunc]
+ * auto NekoProto::detail::mangled_name() [Ptr = &test_func]
+ */
+template <auto Ptr>
+    requires(std::is_pointer_v<decltype(Ptr)>)
+struct func_nameof_impl {                                         // NOLINT
+    static constexpr std::string_view name = mangled_name<Ptr>(); // NOLINT
+#if defined(__clang__)
+    // auto NekoProto::detail::mangled_name() [Ptr = &NekoProto::detail::NekoReflector::nekoStaticFunc]
+    // auto NekoProto::detail::mangled_name() [Ptr = &test_func]
+    static constexpr std::string_view characteristicString =                                         // NOLINT
+        "auto NekoProto::detail::mangled_name() [Ptr = &";                                           // NOLINT
+    static constexpr auto full_function_name =                                                       // NOLINT
+        name.substr(characteristicString.size(), name.size() - characteristicString.size() - 1);     // NOLINT
+    static constexpr auto begin     = full_function_name.find_last_of("::");                         // NOLINT
+    static constexpr auto func_name =                                                                // NOLINT
+        begin == std::string_view::npos ? full_function_name : full_function_name.substr(begin + 1); // NOLINT
+#elif defined(__GNUC__)
+    // consteval auto NekoProto::detail::mangled_name() [with auto Ptr = NekoReflector::nekoStaticFunc]
+    // consteval auto NekoProto::detail::mangled_name() [with auto Ptr = test_func_with_struct]
+    static constexpr std::string_view characteristicString =
+        "consteval auto NekoProto::detail::mangled_name() [with auto Ptr = ";                    // NOLINT
+    static constexpr auto full_function_name =                                                   // NOLINT
+        name.substr(characteristicString.size(), name.size() - characteristicString.size() - 1); // NOLINT
+    static_assert(full_function_name.size() > 0, "can not find a valid function name");
+    static constexpr auto seq            = full_function_name.find_last_of("::"); // NOLINT
+    static constexpr auto is_member_func = seq != std::string_view::npos;         // NOLINT
+    static constexpr auto func_name =
+        is_member_func ? full_function_name.substr(seq + 1) : full_function_name; // NOLINT
+#elif defined(_MSC_VER)
+    static constexpr std::string_view characteristicString = "auto __cdecl NekoProto::detail::mangled_name<"; // NOLINT
+    // void __cdecl NekoProto::detail::NekoReflector::nekoStaticFunc(void)>(void)
+    // int __cdecl free_func_one_arg(int)>(void)
+    static constexpr auto full_function_name =                                                   // NOLINT
+        name.substr(characteristicString.size(), name.size() - characteristicString.size() - 6); // NOLINT
+    static constexpr auto end    = full_function_name.find_first_of('(');                        // NOLINT
+    static constexpr auto begin1 = full_function_name.substr(0, end).find_last_of(' ');          // NOLINT
+    static constexpr auto begin2 = full_function_name.substr(0, end).find_last_of("::");         // NOLINT
+    static constexpr auto begin  = begin2 != std::string_view::npos ? begin2 + 1 : begin1 + 1;   // NOLINT
+    static_assert(begin2 != std::string_view::npos || begin1 != std::string_view::npos, "function begin not found");
+    static_assert(end != std::string_view::npos, "function end not found");
+    static constexpr auto tmp                   = full_function_name.substr(begin, end - begin); // NOLINT
+    static constexpr std::string_view func_name = join_v<tmp>;                                   // NOLINT
+#else
+    static_assert(false, "unsupported compiler");
+#endif
+};
+
+template <auto Ptr>
+inline constexpr auto func_nameof = []() constexpr { return func_nameof_impl<Ptr>::func_name; }(); // NOLINT
+
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif

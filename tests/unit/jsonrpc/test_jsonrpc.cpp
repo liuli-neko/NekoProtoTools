@@ -3,12 +3,14 @@
 #include <iostream>
 
 #include <gtest/gtest.h>
+#include <string>
 
 #include "ilias/defines.hpp"
 #include "ilias/io/error.hpp"
 #include "ilias/result.hpp" // IWYU pragma: export
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/jsonrpc/jsonrpc.hpp"
+#include "nekoproto/jsonrpc/jsonrpc_traits.hpp"
 #include "nekoproto/jsonrpc/message_stream_wrapper.hpp"
 
 NEKO_USE_NAMESPACE
@@ -43,6 +45,28 @@ struct MXXParams {
     NEKO_SERIALIZER(param1, param2, param3)
 };
 
+int add(int aa, int bb) { return aa + bb; }
+
+struct MyFunc {
+    static int execute(int aa, int bb) { return aa + bb; }
+};
+
+ILIAS_NAMESPACE::IoTask<std::string> testxx(MXXParams params) {
+    std::string ret = std::to_string(params.param1) + params.param2;
+    for (auto& ii : params.param3) {
+        ret += "," + std::to_string(ii);
+    }
+    co_return ret;
+}
+
+ILIAS_NAMESPACE::Task<std::string> failed_testxx(MXXParams params) {
+    std::string ret = std::to_string(params.param1) + params.param2;
+    for (auto& ii : params.param3) {
+        ret += "," + std::to_string(ii);
+    }
+    co_return ret;
+}
+extern int test1(int, int);
 struct Protocol {
     RpcMethod<int(int, int), "test1", "num1", "num2"> test1;
     RpcMethod<void(int, int), "test2", "num1", "num2"> test2;
@@ -55,6 +79,8 @@ struct Protocol {
     RpcMethod<std::vector<int>(std::vector<bool>), "test9"> test9;
     RpcMethod<Copytest(int tt), "test10"> test10;
     RpcMethod<std::string(MXXParams), "testxx"> test11;
+    RpcMethodF<add, "a", "b"> funcAdd;
+    RpcMethodF<MyFunc::execute, "a", "b"> funcAdd2;
 };
 
 class JsonRpcTest : public ::testing::Test {
@@ -102,8 +128,13 @@ TEST_F(JsonRpcTest, BindAndCall) {
         co_return res;
     };
     server->test10 = [](int tt) -> ilias::IoTask<Copytest> { co_return Copytest{tt + 114514}; };
-    server.bindMethod("test11", NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<std::string>(int)>(
+    server.bindMethod("test11", traits::FunctionT<ilias::IoTask<std::string>(int)>(
                                     [](int aa) -> ilias::IoTask<std::string> { co_return std::to_string(aa); }));
+    server.bindMethod<add>();
+    server.bindMethod<MyFunc::execute>();
+    server.bindMethod<testxx>();
+    // IoTask<T> can return with error, but Task<T> can not, so we can not bind it, if you want to bind coroutine
+    // method, please use IoTask<T>. server.bindMethod<failed_testxx>(); // this can not compile
     {
         auto res = (client->test1(1, 2).wait());
         EXPECT_TRUE(res.has_value());
@@ -154,6 +185,25 @@ TEST_F(JsonRpcTest, BindAndCall) {
         auto res = (client.callRemote<std::string>("test12", 114514, 114514).wait());
         EXPECT_EQ(res.error().value(), (int)JsonRpcError::MethodNotFound);
     }
+    {
+        auto res = (client.callRemote<add>(114514, 114514).wait());
+        EXPECT_TRUE(res.has_value());
+        EXPECT_EQ(res.value(), 229028);
+    }
+    {
+        auto res = (client.callRemote<MyFunc::execute>(114514, 114514).wait());
+        EXPECT_TRUE(res.has_value());
+        EXPECT_EQ(res.value(), 229028);
+    }
+    {
+        MXXParams params;
+        params.param1 = 114514;
+        params.param2 = "hello";
+        params.param3 = std::vector<int>{1, 2, 3, 4, 5};
+        auto res      = (client.callRemote<testxx>(params).wait());
+        EXPECT_TRUE(res.has_value());
+        EXPECT_EQ(res.value(), "114514hello,1,2,3,4,5");
+    }
     client.close();
     server.close();
 }
@@ -202,11 +252,11 @@ TEST_F(JsonRpcTest, BindAndCallUdp) {
     server->test11 = [](MXXParams params) -> ilias::IoTask<std::string> {
         co_return std::to_string(params.param1) + params.param2 + std::to_string(params.param3.size());
     };
-    server.bindMethod("test11", NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<std::string>(int)>(
+    server.bindMethod("test11", traits::FunctionT<ilias::IoTask<std::string>(int)>(
                                     [](int aa) -> ilias::IoTask<std::string> { co_return std::to_string(aa); }));
 
     {
-        auto res = (client->test1(1, 2).wait());
+        auto res = (client.callRemote<test1>(1, 2).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), 3);
     }
@@ -338,8 +388,7 @@ TEST_F(JsonRpcTest, Notification) {
         std::cout << "this is test4!" << std::endl;
         co_return 0;
     };
-    server.bindMethod("test11",
-                      NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<void>(int)>([](int aa) -> ilias::IoTask<void> {
+    server.bindMethod("test11", traits::FunctionT<ilias::IoTask<void>(int)>([](int aa) -> ilias::IoTask<void> {
                           std::cout << "test11 called with " << aa << std::endl;
                           co_return {};
                       }));
@@ -374,13 +423,15 @@ TEST_F(JsonRpcTest, Basic) {
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server.bindMethod<"aa", "bb">("test11",
-                                  NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<int>(int, int)>(
+                                  traits::FunctionT<ilias::IoTask<int>(int, int)>(
                                       [](int aa, int bb) -> ilias::IoTask<int> { co_return (aa * 10) + bb; }));
 
     auto methods = client.callRemote<std::vector<std::string>>("rpc.get_method_list").wait();
     ASSERT_TRUE(methods.has_value());
-    EXPECT_EQ(methods.value().size(), 16);
+    EXPECT_EQ(methods.value().size(), 18);
     int idx = 0;
+    EXPECT_EQ(methods.value()[idx++], "add");
+    EXPECT_EQ(methods.value()[idx++], "execute");
     EXPECT_EQ(methods.value()[idx++], "rpc.get_bind_method_list");
     EXPECT_EQ(methods.value()[idx++], "rpc.get_method_info");
     EXPECT_EQ(methods.value()[idx++], "rpc.get_method_info_list");
@@ -400,7 +451,9 @@ TEST_F(JsonRpcTest, Basic) {
     idx     = 0;
     methods = client.callRemote<std::vector<std::string>>("rpc.get_bind_method_list").wait();
     ASSERT_TRUE(methods.has_value());
-    EXPECT_EQ(methods.value().size(), 6);
+    EXPECT_EQ(methods.value().size(), 8);
+    EXPECT_EQ(methods.value()[idx++], "add");
+    EXPECT_EQ(methods.value()[idx++], "execute");
     EXPECT_EQ(methods.value()[idx++], "rpc.get_bind_method_list");
     EXPECT_EQ(methods.value()[idx++], "rpc.get_method_info");
     EXPECT_EQ(methods.value()[idx++], "rpc.get_method_info_list");
@@ -463,12 +516,19 @@ TEST_F(JsonRpcTest, Basic) {
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result.value(), 12);
 
+    result = client.callRemote<add, "b", "a">(1, 2).wait();
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result.value(), 3);
+
+    result = client.callRemote<MyFunc::execute, "a", "b">(1, 2).wait();
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result.value(), 3);
+
     auto methodInfoList = client.callRemote<std::vector<std::string>>("rpc.get_method_info_list").wait();
     ASSERT_TRUE(methodInfoList.has_value());
-    EXPECT_EQ(methodInfoList.value().size(), 16);
+    EXPECT_EQ(methodInfoList.value().size(), 18);
 
-    server.bindMethod<>("test112",
-                        NEKO_NAMESPACE::detail::FunctionT<ilias::IoTask<void>()>([]() -> ILIAS_NAMESPACE::IoTask<void> {
+    server.bindMethod<>("test112", traits::FunctionT<ilias::IoTask<void>()>([]() -> ILIAS_NAMESPACE::IoTask<void> {
                             std::cout << "test112: sleep 5s start" << std::endl;
                             co_await ilias::sleep(std::chrono::milliseconds(5000));
                             std::cout << "test112: sleep 5s end" << std::endl;
