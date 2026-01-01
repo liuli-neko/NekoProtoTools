@@ -39,7 +39,8 @@ class RpcMethodTraits; // 主模板前向声明
 
 // 统一的特化，处理所有可调用类型
 template <typename Callable>
-class RpcMethodTraits<Callable, std::void_t<typename traits::function_traits<std::remove_cvref_t<Callable>>::return_type>>
+class RpcMethodTraits<Callable,
+                      std::void_t<typename traits::function_traits<std::remove_cvref_t<Callable>>::return_type>>
     : public traits::RpcMethodTraitsUnpacker<std::remove_cvref_t<Callable>> {
 private:
     using Traits   = traits::function_traits<std::remove_cvref_t<Callable>>;
@@ -317,15 +318,23 @@ public:
 
 template <auto Ptr, ConstexprString... ArgNames>
 class RpcMethodF : public RpcMethodDynamic<decltype(Ptr), ArgNames...> {
-    constexpr static std::string_view Separator = ".";
-
 public:
-    constexpr static std::string_view MethodName =
-        detail::func_nameof_impl<Ptr>::is_member_func
-            ? detail::join<detail::member_func_class_nameof<Ptr>, Separator, detail::func_nameof<Ptr>>()
-            : detail::func_nameof<Ptr>;
+    constexpr static std::string_view MethodName = detail::func_nameof<Ptr>;
     RpcMethodF() : RpcMethodDynamic<decltype(Ptr), ArgNames...>(MethodName) { this->operator=(Ptr); }
     RpcMethodF(bool isNotification)
+        : RpcMethodDynamic<decltype(Ptr), ArgNames...>(Ptr->name(), nullptr, isNotification) {
+        this->operator=(Ptr);
+    }
+    using RpcMethodDynamic<decltype(Ptr), ArgNames...>::operator=;
+};
+
+template <auto Ptr, typename T, ConstexprString... ArgNames>
+class RpcMethodFN : public RpcMethodDynamic<decltype(Ptr), ArgNames...> {
+    constexpr static std::string_view seq = ".";
+public:
+    constexpr static std::string_view MethodName = detail::join<detail::class_nameof<T>, seq, detail::func_nameof<Ptr>>;
+    RpcMethodFN() : RpcMethodDynamic<decltype(Ptr), ArgNames...>(MethodName) { this->operator=(Ptr); }
+    RpcMethodFN(bool isNotification)
         : RpcMethodDynamic<decltype(Ptr), ArgNames...>(Ptr->name(), nullptr, isNotification) {
         this->operator=(Ptr);
     }

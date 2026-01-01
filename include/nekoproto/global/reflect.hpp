@@ -412,29 +412,34 @@ template <auto Ptr>
     requires(std::is_member_function_pointer_v<decltype(Ptr)> || std::is_pointer_v<decltype(Ptr)>)
 struct func_nameof_impl {                                         // NOLINT
     static constexpr std::string_view name = mangled_name<Ptr>(); // NOLINT
-
+#ifdef _MSC_VER
     static constexpr std::string_view characteristicString = "auto __cdecl NekoProto::detail::mangled_name<"; // NOLINT
     // void __cdecl NekoProto::detail::NekoReflector::nekoStaticFunc(void)>(void)
     // int __cdecl free_func_one_arg(int)>(void)
-    static constexpr auto full_function_name = name.substr(characteristicString.size(), name.size() - characteristicString.size() - 6); // NOLINT
-    static constexpr auto end                = full_function_name.find_first_of('(');       // NOLINT
-    static constexpr auto begin1             = full_function_name.substr(0, end).find_last_of(' ');    // NOLINT
-    static constexpr auto begin2             = full_function_name.substr(0, end).find_last_of("::");       // NOLINT
-    static constexpr auto begin                 = begin2 != std::string_view::npos ? begin2 + 1 : begin1 + 1; // NOLINT
+    static constexpr auto full_function_name =                                                   // NOLINT
+        name.substr(characteristicString.size(), name.size() - characteristicString.size() - 6); // NOLINT
+    static constexpr auto end    = full_function_name.find_first_of('(');                        // NOLINT
+    static constexpr auto begin1 = full_function_name.substr(0, end).find_last_of(' ');          // NOLINT
+    static constexpr auto begin2 = full_function_name.substr(0, end).find_last_of("::");         // NOLINT
+    static constexpr auto begin  = begin2 != std::string_view::npos ? begin2 + 1 : begin1 + 1;   // NOLINT
     static_assert(begin2 != std::string_view::npos || begin1 != std::string_view::npos, "function begin not found");
     static_assert(end != std::string_view::npos, "function end not found");
-    static constexpr auto tmp                   = full_function_name.substr(begin, end - begin);              // NOLINT
-    static constexpr auto is_member_func        = function_traits<decltype(Ptr)>::is_member_func;             // NOLINT
-    static constexpr std::string_view func_name = join_v<tmp>;                                                // NOLINT
-    static constexpr auto class_name            = function_traits<decltype(Ptr)>::class_name;                 // NOLINT
+    static constexpr auto tmp                   = full_function_name.substr(begin, end - begin); // NOLINT
+    static constexpr std::string_view func_name = join_v<tmp>;                                   // NOLINT
+#elif defined(__clang__) || defined(__GNUC__)
+    static constexpr auto begin          = name.find(reflect_static_func::end);                          // NOLINT
+    static constexpr auto tmp            = name.substr(0, begin);                                        // NOLINT
+    static constexpr auto stripped       = tmp.substr(tmp.find_last_of(reflect_static_func::begin) + 1); // NOLINT
+    static constexpr auto seq            = stripped.find_last_of("::");                                  // NOLINT
+    static constexpr auto is_member_func = seq != std::string_view::npos;                                // NOLINT
+    static constexpr auto func_name      = is_member_func ? stripped.substr(seq + 2) : stripped;         // NOLINT
+#else
+    static constexpr auto func_name = name;
+#endif
 };
 
 template <auto Ptr>
 inline constexpr auto func_nameof = []() constexpr { return func_nameof_impl<Ptr>::func_name; }(); // NOLINT
-
-template <auto Ptr>
-inline constexpr auto member_func_class_nameof = // NOLINT
-    []() constexpr { return func_nameof_impl<Ptr>::class_name; }();
 
 #ifdef __clang__
 #pragma clang diagnostic pop
