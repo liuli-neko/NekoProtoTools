@@ -323,9 +323,7 @@ struct function_traits<R (*)(Args...), void> {
     using return_type = R;
     using arg_tuple   = std::tuple<Args...>;
     template <typename Ret, template <typename...> class T>
-    using args_in                                = T<Ret, Args...>;
-    static constexpr auto is_member_func         = false; // 是否为成员函数指针
-    static constexpr std::string_view class_name = "";
+    using args_in = T<Ret, Args...>;
 };
 
 // 特化：普通函数类型
@@ -344,10 +342,7 @@ struct function_traits<std::move_only_function<R(Args...)>, void> : function_tra
 
 // 特化：成员函数指针
 template <typename C, typename R, typename... Args>
-struct function_traits<R (C::*)(Args...), void> : function_traits<R (*)(Args...)> {
-    static constexpr auto is_member_func         = true; // 是否为成员函数指针
-    static constexpr std::string_view class_name = class_nameof<C>;
-};
+struct function_traits<R (C::*)(Args...), void> : function_traits<R (*)(Args...)> {};
 
 template <typename Functor>
 struct function_traits<Functor, std::void_t<decltype(&std::remove_cvref_t<Functor>::operator())>>

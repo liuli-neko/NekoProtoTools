@@ -9,6 +9,7 @@
 #include "nekoproto/serialization/types/struct_unwrap.hpp"
 #include "nekoproto/serialization/types/vector.hpp"
 
+#include <optional>
 #include <tuple>
 #include <utility>
 NEKO_USE_NAMESPACE
@@ -61,7 +62,7 @@ struct Test2 {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("member1", make_tags<CustomTags{.tag1 = false, .tag2 = true, .tag3 = false}>(&Test2::member1),
-                   "member2", make_tags<JsonTags{.flat = true, .skipable = false, .rawString = true}>(&Test2::member2),
+                   "member2", make_tags<JsonTags{.flat = true, .skipable = false, .rawString = false}>(&Test2::member2),
                    "member3",
                    make_tags<BinaryTags{.fixedLength = true}>([](auto&& self) -> auto& { return self.member3; }),
                    "member4", &Test2::member4);
@@ -122,7 +123,7 @@ struct Test3 {
     struct Neko {
         constexpr static auto value = // NOLINT
             Array(make_tags<BinaryTags{.fixedLength = true}>([](auto&& self) -> auto& { return self.prr.member1; }),
-                  make_tags<JsonTags{.rawString = true}>(&Test3::member2));
+                  make_tags<JsonTags{.skipable = false, .rawString = true}>(&Test3::member2));
     };
 };
 
