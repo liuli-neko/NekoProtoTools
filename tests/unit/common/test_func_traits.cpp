@@ -105,7 +105,6 @@ TEST(RefectNames, Test) { // NOLINT
     name = std::string(detail::func_nameof<TestStructWithFunc::staticTestFunc>);
     EXPECT_STREQ(name.c_str(), "staticTestFunc");
     call<TestStructWithFunc::staticTestFunc>(1);
-    std::cout << detail::function_traits<decltype(TestStructWithFunc::staticTestFunc)>::is_member_func << std::endl;
     std::cout << detail::mangled_name<&TestStructWithFunc::testFunc>() << std::endl;
 }
 
