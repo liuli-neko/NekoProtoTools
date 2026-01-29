@@ -39,45 +39,16 @@ enum class JsonRpcError {
 
 class JsonRpcErrorCategory : public std::error_category {
 public:
+    // Declaration - implementation moved to src/jsonrpc.cpp
     static JsonRpcErrorCategory& instance();
+    // Declaration - implementation moved to src/jsonrpc.cpp
     auto message(int value) const noexcept -> std::string override;
     auto name() const noexcept -> const char* override { return "jsonrpc"; }
 };
 
-inline JsonRpcErrorCategory& JsonRpcErrorCategory::instance() {
-    static JsonRpcErrorCategory kInstance;
-    return kInstance;
-}
-
-inline auto JsonRpcErrorCategory::message(int value) const noexcept -> std::string {
-    switch ((JsonRpcError)value) {
-    case JsonRpcError::Ok:
-        return "Ok";
-    case JsonRpcError::MethodNotBind:
-        return "Method not Bind";
-    case JsonRpcError::ParseError:
-        return "Parse Eror";
-    case JsonRpcError::InvalidRequest:
-        return "InvalidRequest";
-    case JsonRpcError::MethodNotFound:
-        return "Method ot Found";
-    case JsonRpcError::InvalidParams:
-        return "InvalidParams";
-    case JsonRpcError::InternalError:
-        return "Internal Error";
-    case JsonRpcError::ClientNotInit:
-        return "Client Not Init";
-    case JsonRpcError::ResponseIdNotMatch:
-        return "Response Id Not Match";
-    default:
-        return "Unknow Error";
-    }
-}
-
 ILIAS_DECLARE_ERROR(JsonRpcError, JsonRpcErrorCategory); // NOLINT
-inline auto make_error_code(JsonRpcError value) noexcept -> std::error_code {
-    return std::error_code(static_cast<int>(value), JsonRpcErrorCategory::instance());
-}
+// Declaration - implementation moved to src/jsonrpc.cpp
+auto make_error_code(JsonRpcError value) noexcept -> std::error_code;
 NEKO_END_NAMESPACE
 
 template <>

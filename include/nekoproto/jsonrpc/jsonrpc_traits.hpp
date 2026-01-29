@@ -65,16 +65,25 @@ constexpr auto parameter_to_string(std::index_sequence<Is...> /*unused*/, ArgNam
     -> std::string {
     if constexpr (sizeof...(Is) == 0) {
         return "";
-    } else if constexpr (sizeof...(ArgNames) != sizeof...(Is)) {
-        constexpr std::size_t Nt = sizeof...(Is) - 1;
-        return ((traits::TypeName<std::tuple_element_t<Is, RawParamsType>>::name() + (Is == Nt ? "" : ", ")) + ...);
-    } else {
-        constexpr std::size_t Nt                                  = sizeof...(Is) - 1;
-        std::array<std::string_view, sizeof...(Is)> argNamesArray = {ArgNames.view()...};
-        return ((traits::TypeName<std::tuple_element_t<Is, RawParamsType>>::name() + " " +
-                 std::string(argNamesArray[Is]) + (Is == Nt ? "" : ", ")) +
-                ...);
     }
+    std::string result;
+    auto appendParam = [&](auto idx) {
+        constexpr size_t Idx = idx;
+        using ParamType      = std::tuple_element_t<Idx, RawParamsType>;
+
+        if constexpr (sizeof...(ArgNames) == sizeof...(Is)) {
+            constexpr std::array<std::string_view, sizeof...(Is)> CArgNames = {ArgNames.view()...};
+            result += TypeName<ParamType>::name() + " " + std::string(CArgNames[Idx]);
+        } else {
+            result += TypeName<ParamType>::name();
+        }
+
+        if constexpr (Idx < sizeof...(Is) - 1) {
+            result += ", ";
+        }
+    };
+    (appendParam(std::integral_constant<size_t, Is>{}), ...);
+    return result;
 };
 template <>
 struct TypeName<void, void> {
@@ -82,34 +91,33 @@ struct TypeName<void, void> {
 };
 template <typename T>
 struct TypeName<std::optional<T>, void> {
-    static std::string name() { return "std::optional<" + TypeName<T>::name() + ">"; }
+    static std::string name() { return std::format("std::optional<{}>", TypeName<T>::name()); }
 };
 template <typename... Args>
 struct TypeName<std::variant<Args...>, void> {
     static std::string name() {
-        return "std::variant<" + parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}) +
-               ">";
+        return std::format("std::variant<{}>",
+                           parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}));
     }
 };
 template <typename T, std::size_t N>
 struct TypeName<std::array<T, N>, void> {
-    static std::string name() { return "std::array<" + TypeName<T>::name() + ", " + std::to_string(N) + ">"; }
+    static std::string name() { return std::format("std::array<{}, {}>", TypeName<T>::name(), N); }
 };
 template <typename... Args>
 struct TypeName<std::tuple<Args...>, void> {
-    ;
     static std::string name() {
-        return "std::tuple<" + parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}) +
-               ">";
+        return std::format("std::tuple<{}>",
+                           parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}));
     }
 };
 template <typename T, typename T2>
 struct TypeName<std::pair<T, T2>, void> {
-    static std::string name() { return "std::pair<" + TypeName<T>::name() + ", " + TypeName<T2>::name() + ">"; }
+    static std::string name() { return std::format("std::pair<{}, {}>", TypeName<T>::name(), TypeName<T2>::name()); }
 };
 template <typename T>
 struct TypeName<std::vector<T>, void> {
-    static std::string name() { return "std::vector<" + TypeName<T>::name() + ">"; }
+    static std::string name() { return std::format("std::vector<{}>", TypeName<T>::name()); }
 };
 template <>
 struct TypeName<std::string, void> {
@@ -181,11 +189,11 @@ struct TypeName<T&, void> {
 };
 template <typename T>
 struct TypeName<const T&, void> {
-    static std::string name() { return "const " + TypeName<T>::name() + "&"; }
+    static std::string name() { return std::format("const {}&", TypeName<T>::name()); }
 };
 template <typename T>
 struct TypeName<T&&, void> {
-    static std::string name() { return TypeName<T>::name() + "&&"; }
+    static std::string name() { return std::format("{}&&", TypeName<T>::name()); }
 };
 template <typename T>
 struct TypeName<const T, void> {
@@ -245,10 +253,10 @@ template <typename... ArgsT>
 using FunctionT = std::function<ArgsT...>;
 #endif
 
+using NEKO_NAMESPACE::detail::function_traits;
 using NEKO_NAMESPACE::detail::has_names_meta;
 using NEKO_NAMESPACE::detail::has_values_meta;
 using NEKO_NAMESPACE::detail::is_std_tuple_v;
-using NEKO_NAMESPACE::detail::function_traits;
 
 template <typename... Args>
 constexpr bool is_automatic_expansion_able() {
@@ -302,10 +310,11 @@ protected:
 template <typename Traits, typename... T>
 struct RpcMethodAliasesHelper {
     // 将原始代码中的三种逻辑用 if constexpr 统一
+    using DecayTuple                          = std::tuple<std::remove_cvref_t<T>...>;
     constexpr static bool is_auto_expand      = is_automatic_expansion_able<T...>(); // NOLINT
     constexpr static bool is_single_tuple_arg = [] {                                 // NOLINT
         if constexpr (sizeof...(T) == 1) {
-            using FirstArg = std::tuple_element_t<0, std::tuple<T...>>;
+            using FirstArg = std::tuple_element_t<0, DecayTuple>;
             return is_std_tuple_v<std::remove_cvref_t<FirstArg>>;
         } else {
             return false;
@@ -314,12 +323,12 @@ struct RpcMethodAliasesHelper {
 
     using ParamsTupleType = decltype([] {
         if constexpr (is_auto_expand) { // is_auto_expand implies sizeof...(T) == 1
-            using FirstArg = std::tuple_element_t<0, std::tuple<T...>>;
+            using FirstArg = std::tuple_element_t<0, DecayTuple>;
             static_assert(traits::IsSerializable<FirstArg>::value,
                           "The params of bound functions must be serializable");
             return std::remove_cvref_t<FirstArg>{}; // Return an object of the desired type
         } else if constexpr (is_single_tuple_arg) {
-            using FirstArg = std::tuple_element_t<0, std::tuple<T...>>;
+            using FirstArg = std::tuple_element_t<0, DecayTuple>;
             static_assert(traits::IsSerializable<FirstArg>::value,
                           "The params of bound functions must be serializable");
             return std::remove_cvref_t<FirstArg>{};
@@ -339,9 +348,9 @@ struct RpcMethodAliasesHelper {
     constexpr static int NumParams  = sizeof...(T);
     constexpr static int ParamsSize = [] {
         if constexpr (is_auto_expand) {
-            return Reflect<std::tuple_element_t<0, std::tuple<T...>>>::size();
+            return Reflect<std::tuple_element_t<0, DecayTuple>>::size();
         } else if constexpr (is_single_tuple_arg) {
-            return std::tuple_size_v<std::remove_cvref_t<std::tuple_element_t<0, std::tuple<T...>>>>;
+            return std::tuple_size_v<std::remove_cvref_t<std::tuple_element_t<0, DecayTuple>>>;
         } else {
             return sizeof...(T);
         }

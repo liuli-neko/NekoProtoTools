@@ -102,18 +102,8 @@ concept RpcMethodFuncT = requires() { typename RpcMethodTraits<decltype(Ptr)>::F
  */
 using JsonRpcIdType = std::variant<std::monostate, uint64_t, std::string>;
 
-std::string to_string(JsonRpcIdType id) {
-    switch (id.index()) {
-    case 0:
-        return "null";
-    case 1:
-        return std::to_string(std::get<1>(id));
-    case 2:
-        return std::get<2>(id);
-    default:
-        return "unknown";
-    }
-}
+// Declaration - implementation moved to src/jsonrpc.cpp
+NEKO_PROTO_API std::string to_string(JsonRpcIdType id);
 
 template <typename T, ConstexprString... ArgNames>
 struct JsonRpcRequest2;
@@ -127,7 +117,6 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
     std::string method;
     ParamsTupleType params;
     JsonRpcIdType id;
-    bool hasParams = false;
 
     template <typename SerializerT>
     bool save(SerializerT& serializer) const NEKO_NOEXCEPT {
@@ -151,15 +140,13 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
     bool load(SerializerT& serializer) NEKO_NOEXCEPT {
         serializer.startNode();
         if constexpr (sizeof...(ArgNames) == 0) {
-            bool ret  = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                                   NEKO_PROTO_NAME_VALUE_PAIR(id));
-            hasParams = serializer(NEKO_PROTO_NAME_VALUE_PAIR(params));
+            bool ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
+                                  NEKO_PROTO_NAME_VALUE_PAIR(params), NEKO_PROTO_NAME_VALUE_PAIR(id));
             return serializer.finishNode() && ret;
         } else {
             traits::SerializerHelperObject<ParamsTupleType, ArgNames...> mParamsHelper(params);
-            bool ret  = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                                   make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id));
-            hasParams = serializer(make_name_value_pair("params", mParamsHelper));
+            bool ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
+                                  make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id));
 
             return serializer.finishNode() && ret;
         }
@@ -331,6 +318,7 @@ public:
 template <auto Ptr, typename T, ConstexprString... ArgNames>
 class RpcMethodFN : public RpcMethodDynamic<decltype(Ptr), ArgNames...> {
     constexpr static std::string_view seq = ".";
+
 public:
     constexpr static std::string_view MethodName = detail::join<detail::class_nameof<T>, seq, detail::func_nameof<Ptr>>;
     RpcMethodFN() : RpcMethodDynamic<decltype(Ptr), ArgNames...>(MethodName) { this->operator=(Ptr); }
@@ -396,7 +384,7 @@ private:
     JsonRpcServerImp* mSelf = nullptr;
 };
 // MARK: jsonrpc server
-class JsonRpcServerImp {
+class NEKO_PROTO_API JsonRpcServerImp {
 public:
     struct MethodData {
         std::string_view name;
@@ -406,30 +394,7 @@ public:
 
 private:
     auto _makeBatch(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out, int batchSize) noexcept
-        -> void {
-        for (int ix = 0; ix < batchSize; ++ix) {
-            JsonRpcRequestMethod method;
-            if (!in(method)) {
-                break;
-            }
-            if (method.jsonrpc.has_value() && method.jsonrpc.value() != "2.0") {
-                NEKO_LOG_ERROR("jsonrpc", "unsupport jsonrpc version! {}", method.jsonrpc.value());
-                break;
-            }
-            auto id = method.id;
-            mCurrentIds.emplace_back(id);
-            in.rollbackItem();
-            if (auto it = mHandlers.find(method.method); it != mHandlers.end()) {
-                NEKO_LOG_INFO("jsonrpc", "spawn taskhandle for method {} with id {}", method.method, to_string(id));
-                mTaskScope.spawn((*it->second)(in, out, std::move(method)));
-            } else {
-                NEKO_LOG_WARN("jsonrpc", "method {} not found!", method.method);
-                _handleError<RpcMethodErrorHelper>(
-                    out, std::move(method), (int)JsonRpcError::MethodNotFound,
-                    JsonRpcErrorCategory::instance().message((int)JsonRpcError::MethodNotFound));
-            }
-        }
-    }
+        -> void;
 
 public:
     JsonRpcServerImp([[maybe_unused]] ILIAS_NAMESPACE::IoContext& ctx) : mTaskScope() {}
@@ -445,31 +410,13 @@ public:
         }
         mHandlers[metadata.name()] = std::make_unique<RpcMethodWrapperImpl<T*>>(&metadata, this);
     }
-
-    auto methodDatas() noexcept -> std::vector<MethodData> {
-        std::vector<MethodData> metas;
-        for (auto& [name, handler] : mHandlers) {
-            metas.push_back(
-                {.name = handler->name(), .description = handler->description(), .isBind = handler->isBind()});
-        }
-        return metas;
-    }
-
-    auto methodDatas(std::string_view name) noexcept -> MethodData {
-        if (auto item = mHandlers.find(name); item != mHandlers.end()) {
-            return {.name        = item->second->name(),
-                    .description = item->second->description(),
-                    .isBind      = item->second->isBind()};
-        }
-        return {};
-    }
-
+    auto methodDatas() noexcept -> std::vector<MethodData>;
+    auto methodDatas(std::string_view name) noexcept -> MethodData;
     template <typename RetT, typename... Args, ConstexprString... ArgNames>
     auto bindRpcMethod(std::string_view name, traits::FunctionT<RetT(Args...)> func,
                        traits::ArgNamesHelper<ArgNames...> /*unused*/ = {}) noexcept -> void {
         return _registerRpcMethod<RpcMethodDynamic<RetT(Args...), ArgNames...>>(name, std::move(func));
     }
-
     template <typename RetT, typename... Args, ConstexprString... ArgNames>
     auto bindRpcMethod(std::string_view name, traits::FunctionT<ILIAS_NAMESPACE::IoTask<RetT>(Args...)> func,
                        traits::ArgNamesHelper<ArgNames...> /*unused*/ = {}) noexcept -> void {
@@ -477,76 +424,11 @@ public:
     }
 
     auto processRequest(const char* data, std::size_t size, detail::IMessageStream* client) noexcept
-        -> ILIAS_NAMESPACE::Task<std::vector<char>> {
-        std::vector<char> buffer;
-        JsonSerializer::OutputSerializer out(buffer);
-        JsonSerializer::InputSerializer in(data, size);
-        while ((*data == '\n' || *data == ' ') && size > 0) {
-            data++;
-            size--;
-        }
-        bool batchRequest     = false;
-        std::size_t batchSize = 1;
-        if (data[0] == '[') { // batch request
-            batchRequest = true;
-            in.startNode();
-            in(make_size_tag(batchSize));
-            out.startArray(batchSize);
-        }
-        _makeBatch(in, out, (int)batchSize);
-        co_await mTaskScope.waitAll();
-        NEKO_LOG_INFO("jsonrpc", "Finished processing batch request, batch size {}", batchSize);
-        mCurrentIds.clear();
-        mCancelHandles.clear();
-        if (batchRequest) {
-            in.finishNode();
-            out.endArray();
-        }
-        if (batchSize > 0) {
-            out.end();
-        }
-        if (client != nullptr && buffer.size() > 3) {
-            NEKO_LOG_INFO("jsonrpc", "sending {} bytes : {}", buffer.size(),
-                          std::string_view{buffer.data(), buffer.size()});
-            auto ret = co_await client->send({reinterpret_cast<std::byte*>(buffer.data()), buffer.size()});
-            if (ret.error_or(ILIAS_NAMESPACE::IoError::Unknown) == JsonRpcError::MessageToolLarge) {
-                NEKO_LOG_ERROR("jsonrpc", "message too large!");
-            }
-        }
-        co_return buffer;
-    }
-
-    void cancel(JsonRpcIdType id) noexcept {
-        NEKO_LOG_INFO("jsonrpc", "cancelling id {}", to_string(id));
-        if (auto it = mCancelHandles.find(id); it != mCancelHandles.end()) {
-            it->second.stop();
-        } else {
-            NEKO_LOG_WARN("jsonrpc", "id not found");
-        }
-    }
-
-    void cancelAll() {
-        NEKO_LOG_INFO("jsonrpc", "cancelling all {}", mCancelHandles.size());
-        for (auto& [id, handle] : mCancelHandles) {
-            NEKO_LOG_INFO("jsonrpc", "cancelling id {}", to_string(id));
-            handle.stop();
-        }
-        mCancelHandles.clear();
-    }
-
-    auto receiveLoop(detail::IMessageStream* client) noexcept -> ILIAS_NAMESPACE::Task<void> {
-        while (client != nullptr) {
-            std::vector<std::byte> buffer;
-            if (auto ret = co_await client->recv(buffer); ret && buffer.size() > 0) {
-                co_await (processRequest(reinterpret_cast<const char*>(buffer.data()), buffer.size(), client) |
-                          ILIAS_NAMESPACE::unstoppable());
-            } else {
-                break;
-            }
-        }
-    }
-
-    auto getCurrentIds() const noexcept -> const std::vector<JsonRpcIdType>& { return mCurrentIds; }
+        -> ILIAS_NAMESPACE::Task<std::vector<char>>;
+    void cancel(JsonRpcIdType id) noexcept;
+    void cancelAll();
+    auto receiveLoop(detail::IMessageStream* client) noexcept -> ILIAS_NAMESPACE::Task<void>;
+    auto getCurrentIds() const noexcept -> const std::vector<JsonRpcIdType>&;
 
 private:
     template <typename T>
@@ -830,8 +712,8 @@ template <typename ProtocolT>
 class JsonRpcClient {
 public:
     JsonRpcClient(ILIAS_NAMESPACE::IoContext& /*unused*/) {
-        Reflect<ProtocolT>::forEach(
-            mProtocol, [this](auto& rpcMethodData) { this->_registerRpcMethod(rpcMethodData); });
+        Reflect<ProtocolT>::forEach(mProtocol,
+                                    [this](auto& rpcMethodData) { this->_registerRpcMethod(rpcMethodData); });
     }
     ~JsonRpcClient() { close(); }
     auto operator->() const noexcept { return &mProtocol; }
