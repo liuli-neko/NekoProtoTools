@@ -9,7 +9,7 @@ if has_config("enable_jsonrpc") then
             add_tests(string.gsub(cpp_versions[i], '+', 'p', 2), {group = "jsonrpc", kind = "binary", files = {"test_jsonrpc.cpp"}, languages = cpp_versions[i], run_timeout = 30000})
         end
         set_group("jsonrpc")
-        add_files("test_jsonrpc.cpp")
+        add_files("test_jsonrpc.cpp", "$(projectdir)/src/jsonrpc.cpp")
         on_load(function (target) 
             import("lua.auto", {rootdir = os.projectdir()})
             auto().auto_add_packages(target)

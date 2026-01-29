@@ -196,9 +196,19 @@ target_end()
 
 if has_config("enable_jsonrpc") then
     target("NekoJsonRpc")
-        set_kind("headeronly")
+        -- TODO: 考虑改为 shared 或 static 以进一步减少编译时间
+        -- 当前保持 headeronly + 部分实现分离到 cpp 的方式
+        if is_kind("shared") then
+            set_kind("shared")
+            add_defines("NEKO_PROTO_LIBRARY")
+        else
+            set_kind("static")
+            set_configvar("NEKO_PROTO_STATIC", true)
+        end
         add_headerfiles("include/(nekoproto/jsonrpc/**.hpp)")
         add_includedirs("include")
+        -- 添加非模板函数的实现文件
+        add_files("src/jsonrpc.cpp")
 
         on_load(function (target) 
             import("lua.auto", {rootdir = os.projectdir()})

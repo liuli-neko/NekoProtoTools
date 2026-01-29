@@ -120,13 +120,6 @@ struct RawDataMessage {
 private:
     friend class detail::proto_method_access;
 };
-static_assert(std::is_class_v<decltype(RawDataMessage::Neko::values)>, "value");
-static_assert(detail::is_std_tuple_v<std::decay_t<decltype(RawDataMessage::Neko::values)>>, "tuple");
-static_assert(
-    detail::is_all_meta_ref_value<RawDataMessage, std::decay_t<decltype(RawDataMessage::Neko::values)>>::value, "0");
-static_assert(detail::is_local_ref_values<RawDataMessage>, "static ");
-static_assert(detail::has_names_meta<RawDataMessage>, "names? why");
-static_assert(detail::has_values_meta<RawDataMessage>, "why ");
 
 // enum | code | message | system code mapping
 #define NEKO_CHANNEL_ERROR_CODE_TABLE                                                                                  \

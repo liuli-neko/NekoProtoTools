@@ -224,14 +224,16 @@ struct MemberMetadata {
     constexpr static bool IsOk            = IsRef || IsLambda || IsMemberPointer;
 
     constexpr static auto tags = unwrap_tags_v<T>; // NOLINT
-    template <typename V>
-    constexpr static std::conditional_t<is_tagged_value_v<V>,
-                                        std::conditional_t<!IsLambda && !IsMemberPointer, raw_type&, raw_type>, V>
-    value(V&& obj) {
-        if constexpr (is_tagged_value_v<V>) {
-            return std::forward<V>(obj).value;
+    static constexpr decltype(auto) get(auto&& accessor, U& obj) noexcept {
+        using AccessorType = std::decay_t<decltype(accessor)>;
+        if constexpr (std::is_member_object_pointer_v<AccessorType>) {
+            return obj.*accessor;
+        } else if constexpr (is_member_ref_function<AccessorType, U>) {
+            return accessor(obj); // lambda 或函数
+        } else if constexpr (is_tagged_value_v<AccessorType>) {
+            return get(accessor.value, obj);
         } else {
-            return std::forward<V>(obj);
+            return accessor; // 直接引用
         }
     }
 };
@@ -315,31 +317,9 @@ concept is_meta_enumerate = std::is_enum_v<T> && requires {
     requires is_ref_enumerate<std::decay_t<decltype(Meta<T>::value)>>::value;
 };
 
-template <typename T, typename U>
-    requires MemberMetadata<std::decay_t<T>, U>::IsMemberPointer
-constexpr decltype(auto) value_ref(T&& dt, U& obj) noexcept {
-    return obj.*MemberMetadata<std::decay_t<T>, U>::value(dt);
-}
-
 template <typename T, typename ObjT>
-    requires MemberMetadata<T, ObjT>::IsLRef && (!MemberMetadata<std::decay_t<T>, ObjT>::IsMemberPointer) &&
-             (!MemberMetadata<std::decay_t<T>, ObjT>::IsLambda)
-constexpr decltype(auto) value_ref(T&& dt, ObjT& /*unused*/) noexcept {
-    return MemberMetadata<std::decay_t<T>, ObjT>::value(dt);
-}
-
-template <typename T, typename ObjT>
-    requires MemberMetadata<std::decay_t<T>, ObjT>::IsLambda
-constexpr decltype(auto) value_ref(T&& dt, ObjT& obj) noexcept {
-    return MemberMetadata<std::decay_t<T>, ObjT>::value(dt)(obj);
-}
-
-template <typename T, typename ObjT>
-    requires(!MemberMetadata<std::decay_t<T>, ObjT>::IsRef) && (!MemberMetadata<std::decay_t<T>, ObjT>::IsLRef) &&
-            (!MemberMetadata<std::decay_t<T>, ObjT>::IsMemberPointer) &&
-            (!MemberMetadata<std::decay_t<T>, ObjT>::IsLambda) && is_tagged_value_v<T>
-constexpr decltype(auto) value_ref(T&& dt, ObjT& /*unused*/) noexcept {
-    return MemberMetadata<std::decay_t<T>, ObjT>::value(dt);
+constexpr decltype(auto) value_ref(T&& accessor, ObjT& obj) noexcept {
+    return MemberMetadata<std::decay_t<T>, ObjT>::get(std::forward<T>(accessor), obj);
 }
 
 template <typename T>
@@ -616,7 +596,7 @@ public:
             static_assert(detail::has_values_meta<T>, "type has no values meta");
         }
         decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
-        using value_types     = std::decay_t<decltype(values)>;
+        using values_types     = std::decay_t<decltype(values)>;
         auto names            = []() {
             if constexpr (detail::has_names_meta<T>) {
                 return detail::ReflectHelper<T>::getNames();
@@ -625,8 +605,8 @@ public:
             }
         }();
 
-        if constexpr (detail::is_std_tuple_v<value_types>) {
-            constexpr auto Size = std::tuple_size_v<value_types>;
+        if constexpr (detail::is_std_tuple_v<values_types>) {
+            constexpr auto Size = std::tuple_size_v<values_types>;
             [&]<std::size_t... Is>(std::index_sequence<Is...>) {
                 auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
                     auto&& val  = detail::value_ref(std::get<I>(values), obj);
