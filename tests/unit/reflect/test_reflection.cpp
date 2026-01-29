@@ -35,6 +35,7 @@ TEST(Reflection, Test) {
     static_assert(!detail::is_local_ref_value<Test1>, "Test1 must not be local_ref_value");
     static_assert(std::is_same_v<Reflect<Test1>::value_types, std::tuple<int, int, int>>, "Test1 must have 3 members");
     Test1 test{.member1 = 23, .member2 = 12, .member3 = 45};
+    static_assert(std::is_invocable_v<void(const JsonTags&), NoTags>, "NoTags can convert to JsonTags");
     Reflect<Test1>::forEach(
         test, [](auto& field, [[maybe_unused]] const JsonTags& tags) { // default tags can convert to any tags
             NEKO_LOG_INFO("test", "field: {}", field);

@@ -784,8 +784,8 @@ private:
 
     auto _init() noexcept {
         auto registerRpcMethod = [this]<typename T>(T& rpcMethodData) { mImp.registerRpcMethod(rpcMethodData); };
-        Reflect<ProtocolT>::forEachWithoutName(mProtocol, registerRpcMethod);
-        Reflect<decltype(mRpc)>::forEachWithoutName(mRpc, registerRpcMethod);
+        Reflect<ProtocolT>::forEach(mProtocol, registerRpcMethod);
+        Reflect<decltype(mRpc)>::forEach(mRpc, registerRpcMethod);
         mRpc.getMethodInfo = [this](std::string methodName) -> ilias::IoTask<std::string> {
             if (auto ret = mImp.methodDatas(methodName); !ret.name.empty()) {
                 co_return std::string(ret.description);
@@ -830,7 +830,7 @@ template <typename ProtocolT>
 class JsonRpcClient {
 public:
     JsonRpcClient(ILIAS_NAMESPACE::IoContext& /*unused*/) {
-        Reflect<ProtocolT>::forEachWithoutName(
+        Reflect<ProtocolT>::forEach(
             mProtocol, [this](auto& rpcMethodData) { this->_registerRpcMethod(rpcMethodData); });
     }
     ~JsonRpcClient() { close(); }

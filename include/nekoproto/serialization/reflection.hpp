@@ -612,113 +612,69 @@ private:
 
 public:
     template <typename U, typename CallAbleT>
-        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
-    static constexpr void forEachWithoutName(U&& obj, CallAbleT&& func) noexcept {
-        if constexpr (detail::has_values_meta<T>) {
-            decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
-            if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
-                [&values, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
-                    ((func(detail::value_ref(std::get<Is>(values), obj))), ...);
-                }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
-            } else {
-                func(detail::value_ref(values, obj));
-            }
-        } else {
-            static_assert(detail::has_values_meta<T>, "type has no values meta");
-        }
-    }
-
-    template <typename U, typename CallAbleT>
-        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
-    static constexpr void forEachWithoutNameTags(U&& obj, CallAbleT&& func) noexcept {
-        if constexpr (detail::has_values_meta<T>) {
-            decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
-            if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
-                [&values, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
-                    ((func(detail::value_ref(std::get<Is>(values), obj),
-                           unwrap_tags_v<std::tuple_element_t<Is, std::decay_t<decltype(values)>>>)),
-                     ...);
-                }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
-            } else {
-                func(detail::value_ref(values, obj), unwrap_tags_v<std::decay_t<decltype(values)>>);
-            }
-        } else {
-            static_assert(detail::has_values_meta<T>, "type has no values meta");
-        }
-    }
-
-    template <typename U, typename CallAbleT>
-        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
-    static constexpr void forEachWithName(U&& obj, CallAbleT&& func) noexcept {
-        if constexpr (detail::has_values_meta<T> && detail::has_names_meta<T>) {
-            auto names            = detail::ReflectHelper<T>::getNames();
-            decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
-            if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
-                static_assert(std::tuple_size_v<std::decay_t<decltype(values)>> ==
-                                  std::tuple_size_v<std::decay_t<decltype(names)>>,
-                              "values and names size mismatch");
-                []<std::size_t... Is>(auto&& values, auto&& names, auto&& func, auto&& obj,
-                                      std::index_sequence<Is...>) mutable {
-                    ((func(detail::value_ref(std::get<Is>(values), obj), names[Is])), ...);
-                }(values, names, func, obj,
-                  std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
-            } else {
-                static_assert(1 == std::tuple_size_v<std::decay_t<decltype(names)>>, "values and names size mismatch");
-                func(detail::value_ref(values, obj), names[0]);
-            }
-        } else {
-            static_assert(detail::has_values_meta<T> && detail::has_names_meta<T>, "type has no values or names meta");
-        }
-    }
-
-    template <typename U, typename CallAbleT>
-        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
-    static constexpr void forEachWithNameTags(U&& obj, CallAbleT&& func) noexcept {
-        if constexpr (detail::has_values_meta<T> && detail::has_names_meta<T>) {
-            auto names            = detail::ReflectHelper<T>::getNames();
-            decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
-            if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
-                static_assert(std::tuple_size_v<std::decay_t<decltype(values)>> ==
-                                  std::tuple_size_v<std::decay_t<decltype(names)>>,
-                              "values and names size mismatch");
-                [&values, &names, &func, &obj]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
-                    ((func(detail::value_ref(std::get<Is>(values), obj), names[Is],
-                           unwrap_tags_v<std::tuple_element_t<Is, std::decay_t<decltype(values)>>>)),
-                     ...);
-                }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
-            } else {
-                static_assert(1 == std::tuple_size_v<std::decay_t<decltype(names)>>, "values and names size mismatch");
-                func(detail::value_ref(values, obj), names[0], unwrap_tags_v<std::decay_t<decltype(values)>>);
-            }
-        } else {
-            static_assert(detail::has_values_meta<T> && detail::has_names_meta<T>, "type has no values or names meta");
-        }
-    }
-
-    template <typename U, typename CallAbleT>
     static constexpr void forEach(U&& obj, CallAbleT&& func) noexcept {
-        // 尝试 1: func(val, name, tags) - 完整签名
-        if constexpr (std::is_invocable_v<CallAbleT, std::tuple_element_t<0, value_types>&, std::string_view,
-                                          std::tuple_element_t<0, decltype(value_tags)>>) {
-            forEachWithNameTags(obj, func);
+        if constexpr (!detail::has_values_meta<T>) {
+            static_assert(detail::has_values_meta<T>, "type has no values meta");
         }
-        // 尝试 2: func(val, tags) - 省略名字
-        else if constexpr (std::is_invocable_v<CallAbleT, std::tuple_element_t<0, value_types>&,
-                                               std::tuple_element_t<0, decltype(value_tags)>>) {
-            forEachWithoutNameTags(obj, func);
-        }
-        // 尝试 3: func(val, name) - 省略 tags
-        else if constexpr (std::is_invocable_v<CallAbleT, std::tuple_element_t<0, value_types>&, std::string_view>) {
-            forEachWithName(obj, func);
-        }
-        // 尝试 4: func(val) - 只有值
-        else if constexpr (std::is_invocable_v<CallAbleT, std::tuple_element_t<0, value_types>&>) {
-            forEachWithoutName(obj, func);
+        decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
+        using value_types     = std::decay_t<decltype(values)>;
+        auto names            = []() {
+            if constexpr (detail::has_names_meta<T>) {
+                return detail::ReflectHelper<T>::getNames();
+            } else {
+                return std::array<std::string_view, 0>{};
+            }
+        }();
+
+        if constexpr (detail::is_std_tuple_v<value_types>) {
+            constexpr auto Size = std::tuple_size_v<value_types>;
+            [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+                auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
+                    auto&& val  = detail::value_ref(std::get<I>(values), obj);
+                    auto&& tags = std::get<I>(value_tags);
+                    // 编译期根据回调函数的签名选择调用方式
+                    if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view, decltype(tags)>) {
+                        static_assert(names.size() == Size, "type has no names meta or names size mismatch");
+                        func(val, names[I], tags);
+                    } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), decltype(tags)>) {
+                        // func(val, tags)
+                        func(val, tags);
+                    } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view>) {
+                        // func(val, name)
+                        static_assert(names.size() == Size, "type has no names meta or names size mismatch");
+                        func(val, names[I]);
+                    } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val)>) {
+                        // func(val)
+                        func(val);
+                    } else {
+                        static_assert(!detail::has_values_meta<T>, "Callback function signature not supported. "
+                                                                   "Supported: (val, name, tags), (val, tags), (val, "
+                                                                   "name), (val)");
+                    }
+                };
+
+                ((invoke(std::integral_constant<std::size_t, Is>{})), ...);
+            }(std::make_index_sequence<Size>{});
         } else {
-            // 编译期报错提示：没有匹配的参数签名
-            static_assert(std::is_invocable_v<CallAbleT, std::tuple_element_t<0, value_types>&>,
-                          "Callback function signature not supported. Supported: (val, name, tags), (val, tags), (val, "
-                          "name), (val)");
+            auto&& val = detail::value_ref(values, obj);
+                    auto&& tags = std::get<0>(value_tags);
+            if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view,
+                                              decltype(tags)>) {
+                static_assert(names.size() == 1, "type has no names meta or names size mismatch");
+                func(val, names[0], tags);
+            } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), decltype(tags)>) {
+                func(val, tags);
+            } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view>) {
+                static_assert(names.size() == 1, "type has no names meta or names size mismatch");
+                func(val, names[0]);
+            } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val)>) {
+                func(val);
+            } else {
+                static_assert(
+                    !detail::has_values_meta<T>,
+                    "Callback function signature not supported. Supported: (val, name, tags), (val, tags), (val, "
+                    "name), (val)");
+            }
         }
     }
 

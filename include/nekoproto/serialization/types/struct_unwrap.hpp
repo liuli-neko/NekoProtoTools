@@ -25,13 +25,13 @@ inline bool save(SerializerT& sa, const T& value) {
     bool ret        = true;
     if constexpr (detail::has_values_meta<ValueType> && detail::has_names_meta<ValueType>) {
         sa.startObject(Reflect<ValueType>::size());
-        Reflect<ValueType>::forEachWithName(value, [&sa, &ret](auto&& value, std::string_view name) {
+        Reflect<ValueType>::forEach(value, [&sa, &ret](auto&& value, std::string_view name) {
             ret = sa(make_name_value_pair(name, value)) && ret;
         });
         sa.endObject();
     } else if constexpr (detail::has_values_meta<ValueType>) {
         sa.startArray(Reflect<ValueType>::size());
-        Reflect<ValueType>::forEachWithoutName(value, [&sa, &ret](auto&& value) { ret = sa(value) && ret; });
+        Reflect<ValueType>::forEach(value, [&sa, &ret](auto&& value) { ret = sa(value) && ret; });
         sa.endArray();
     }
     return ret;
@@ -50,7 +50,7 @@ inline bool load(SerializerT& sa, T& value) {
         return ret;
     }
     if constexpr (detail::has_values_meta<ValueType> && detail::has_names_meta<ValueType>) {
-        Reflect<ValueType>::forEachWithName(value, [&sa, &ret](auto&& value, std::string_view name) {
+        Reflect<ValueType>::forEach(value, [&sa, &ret](auto&& value, std::string_view name) {
             ret = sa(make_name_value_pair(name, value)) && ret;
         });
     } else if constexpr (detail::has_values_meta<ValueType>) {
@@ -62,7 +62,7 @@ inline bool load(SerializerT& sa, T& value) {
             sa.finishNode();
             return false;
         }
-        Reflect<ValueType>::forEachWithoutName(value, [&sa, &ret](auto&& value) { ret = sa(value) && ret; });
+        Reflect<ValueType>::forEach(value, [&sa, &ret](auto&& value) { ret = sa(value) && ret; });
     }
     return sa.finishNode() && ret;
 }

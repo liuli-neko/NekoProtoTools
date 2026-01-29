@@ -484,7 +484,7 @@ struct SchemaGenerator<T, void> {
             if (item == nullptr) {
                 item = std::make_unique<JsonSchema>();
             }
-            Reflect<T>::forEachWithoutName(obj, [&](auto& member) mutable {
+            Reflect<T>::forEach(obj, [&](auto& member) mutable {
                 using value_type = decltype(member);
                 ret              = SchemaGenerator<std::decay_t<value_type>>::get(member, *item) && ret;
             });
@@ -495,7 +495,7 @@ struct SchemaGenerator<T, void> {
             auto& item = std::get<std::vector<JsonSchema>>(def.items);
             item.resize(Reflect<T>::size());
             int idx = 0;
-            Reflect<T>::forEachWithoutName(obj, [&](auto& member) mutable {
+            Reflect<T>::forEach(obj, [&](auto& member) mutable {
                 using value_type = decltype(member);
                 ret              = SchemaGenerator<std::decay_t<value_type>>::get(member, item[idx++]) && ret;
             });
@@ -529,7 +529,7 @@ struct SchemaGenerator<T, void> {
         auto required = def.required.has_value() ? *std::move(def.required) : std::vector<std::string>();
         bool ret      = true;
         // Use the reflection helper
-        Reflect<T>::forEachWithName(obj, [&](auto& member, std::string_view name) {
+        Reflect<T>::forEach(obj, [&](auto& member, std::string_view name) {
             using ValueType = decltype(member);
             auto mname      = std::string(name);
             // Recursively generate def for the member
