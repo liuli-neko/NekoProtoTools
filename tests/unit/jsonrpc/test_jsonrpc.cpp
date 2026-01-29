@@ -12,6 +12,7 @@
 #include "nekoproto/jsonrpc/jsonrpc.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_traits.hpp"
 #include "nekoproto/jsonrpc/message_stream_wrapper.hpp"
+#include "nekoproto/serialization/reflection.hpp"
 
 NEKO_USE_NAMESPACE
 
