@@ -352,14 +352,63 @@ constexpr static bool is_ref_by_meta_v = //  NOLINT
     (is_meta_ref_values<T> && is_meta_names<T>) || is_meta_ref_object<T> || is_meta_ref_array<T> ||
     is_meta_ref_value<T>;
 
-template <typename T, class enable = void>
-struct MetaPrivate;
+enum class MetaKind {
+    ErrorKind,        // error
+    AutoUnwrap,       // can_unwrap_v<T> && !is_ref_by_local_v<T> && !is_ref_by_meta_v<T>
+    LocalValuesNames, // is_local_ref_values<T> && is_local_names<T>
+    LocalObject,      // is_local_ref_object<T>
+    LocalArray,       // is_local_ref_array<T>
+    LocalValue,       // is_local_ref_value<T> && !is_local_names<T>
+    LocalValueNames,  // is_local_names<T> && is_local_ref_value<T>
+    MetaValuesNames,  // !is_ref_by_local_v<T> && is_meta_ref_values<T> && is_meta_names<T>
+    MetaObject,       // !is_ref_by_local_v<T> && is_meta_ref_object<T>
+    MetaArray,        // !is_ref_by_local_v<T> && is_meta_ref_array<T>
+    MetaValue,        // !is_ref_by_local_v<T> && is_meta_ref_value<T> && !is_meta_names<T>
+    MetaValueNames    // !is_ref_by_local_v<T> && is_meta_names<T> && is_meta_ref_value<T>
+};
+
+// 辅助函数，确定类型使用哪种 tag
+template <typename T>
+constexpr MetaKind get_meta_kind() noexcept {
+    if constexpr (is_local_ref_values<T> && is_local_names<T>) {
+        return MetaKind::LocalValuesNames;
+    } else if constexpr (is_local_ref_object<T>) {
+        return MetaKind::LocalObject;
+    } else if constexpr (is_local_ref_array<T>) {
+        return MetaKind::LocalArray;
+    } else if constexpr (is_local_ref_value<T> && is_local_names<T>) {
+        return MetaKind::LocalValueNames;
+    } else if constexpr (is_local_ref_value<T>) {
+        return MetaKind::LocalValue;
+    } else if constexpr (!is_ref_by_local_v<T> && is_meta_ref_values<T> && is_meta_names<T>) {
+        return MetaKind::MetaValuesNames;
+    } else if constexpr (!is_ref_by_local_v<T> && is_meta_ref_object<T>) {
+        return MetaKind::MetaObject;
+    } else if constexpr (!is_ref_by_local_v<T> && is_meta_ref_array<T>) {
+        return MetaKind::MetaArray;
+    } else if constexpr (!is_ref_by_local_v<T> && is_meta_ref_value<T> && is_meta_names<T>) {
+        return MetaKind::MetaValueNames;
+    } else if constexpr (!is_ref_by_local_v<T> && is_meta_ref_value<T>) {
+        return MetaKind::MetaValue;
+    } else if constexpr (can_unwrap_v<T>) {
+        return MetaKind::AutoUnwrap;
+    } else {
+        return MetaKind::ErrorKind;
+    }
+}
 
 template <typename T>
-    requires can_unwrap_v<T> && (!is_ref_by_local_v<T>) && (!is_ref_by_meta_v<T>)
-struct MetaPrivate<T, void> {
-    static constexpr auto names = // NOLINT
-        member_names_impl<T>(std::make_index_sequence<member_count_v<T>>{});
+constexpr static auto meta_kind_v = get_meta_kind<T>(); // NOLINT
+
+template <typename T, MetaKind Kind>
+struct MetaPrivateBase;
+
+// 基础实现 - AutoUnwrap
+template <typename T>
+struct MetaPrivateBase<T, MetaKind::AutoUnwrap> {
+    static constexpr auto names() noexcept {
+        return member_names_impl<T>(std::make_index_sequence<member_count_v<T>>{});
+    }
     template <typename U>
         requires std::same_as<std::remove_cvref_t<T>, std::remove_cvref_t<U>>
     static constexpr decltype(auto) value(U&& obj) {
@@ -367,115 +416,78 @@ struct MetaPrivate<T, void> {
     }
 };
 
+// 基础实现 - LocalValuesNames
 template <typename T>
-    requires is_local_ref_values<T> && is_local_names<T>
-struct MetaPrivate<T, void> {
-    static constexpr auto names = // NOLINT
-        T::Neko::names;
-    static constexpr auto value = // NOLINT
-        T::Neko::values;
+struct MetaPrivateBase<T, MetaKind::LocalValuesNames> {
+    static constexpr auto names() noexcept { return T::Neko::names; }
+    static constexpr auto value() noexcept { return T::Neko::values; }
 };
 
-template <is_local_ref_object T>
-struct MetaPrivate<T, void> {
-    static constexpr auto& names() // NOLINT
-    {
-        return T::Neko::value.names;
-    }
-    static constexpr auto& value() // NOLINT
-    {
-        return T::Neko::value.values;
-    }
-};
-
-template <is_local_ref_array T>
-struct MetaPrivate<T, void> {
-    static constexpr auto& value() // NOLINT
-    {
-        return T::Neko::value.values;
-    }
-};
-
+// 基础实现 - LocalObject
 template <typename T>
-    requires is_local_ref_value<T> && (!is_local_names<T>)
-struct MetaPrivate<T, void> {
-    static constexpr auto value = // NOLINT
-        T::Neko::value;
+struct MetaPrivateBase<T, MetaKind::LocalObject> {
+    static constexpr auto& names() noexcept { return T::Neko::value.names; }
+    static constexpr auto& value() noexcept { return T::Neko::value.values; }
 };
 
+// 基础实现 - LocalArray
 template <typename T>
-    requires is_local_names<T> && is_local_ref_value<T>
-struct MetaPrivate<T, void> {
-    static constexpr auto names = // NOLINT
-        T::Neko::names;
-    static constexpr auto value = // NOLINT
-        T::Neko::value;
+struct MetaPrivateBase<T, MetaKind::LocalArray> {
+    static constexpr auto& value() noexcept { return T::Neko::value.values; }
+};
+
+// 基础实现 - LocalValue
+template <typename T>
+struct MetaPrivateBase<T, MetaKind::LocalValue> {
+    static constexpr auto value() noexcept { return T::Neko::value; }
+};
+
+// 基础实现 - LocalValueNames
+template <typename T>
+struct MetaPrivateBase<T, MetaKind::LocalValueNames> {
+    static constexpr auto names() noexcept { return T::Neko::names; }
+    static constexpr auto value() noexcept { return T::Neko::value; }
+};
+
+// Meta 变体 - 类似上面的实现
+template <typename T>
+struct MetaPrivateBase<T, MetaKind::MetaValuesNames> {
+    static constexpr auto names() noexcept { return Meta<T>::names; }
+    static constexpr auto value() noexcept { return Meta<T>::values; }
 };
 
 template <typename T>
-    requires(!is_ref_by_local_v<T>) && is_meta_ref_values<T> && is_meta_names<T>
-struct MetaPrivate<T, void> {
-    static constexpr auto names = // NOLINT
-        Meta<T>::names;
-    static constexpr auto value = // NOLINT
-        Meta<T>::values;
+struct MetaPrivateBase<T, MetaKind::MetaObject> {
+    static constexpr auto& names() noexcept { return Meta<T>::value.names; }
+    static constexpr auto& value() noexcept { return Meta<T>::value.values; }
 };
 
 template <typename T>
-    requires(!is_ref_by_local_v<T>) && is_meta_ref_object<T>
-struct MetaPrivate<T, void> {
-    static constexpr auto& names() // NOLINT
-    {
-        return Meta<T>::value.names;
-    }
-    static constexpr auto& value() // NOLINT
-    {
-        return Meta<T>::value.values;
-    }
+struct MetaPrivateBase<T, MetaKind::MetaArray> {
+    static constexpr auto& value() noexcept { return Meta<T>::value.values; }
 };
 
 template <typename T>
-    requires(!is_ref_by_local_v<T>) && is_meta_ref_array<T>
-struct MetaPrivate<T, void> {
-    static constexpr auto& value() // NOLINT
-    {
-        return Meta<T>::value.values;
-    }
+struct MetaPrivateBase<T, MetaKind::MetaValue> {
+    static constexpr auto value() noexcept { return Meta<T>::value; }
 };
 
 template <typename T>
-    requires(!is_ref_by_local_v<T>) && is_meta_ref_value<T> && (!is_meta_names<T>)
-struct MetaPrivate<T, void> {
-    static constexpr auto value = // NOLINT
-        Meta<T>::value;
+struct MetaPrivateBase<T, MetaKind::MetaValueNames> {
+    static constexpr auto names() noexcept { return Meta<T>::names; }
+    static constexpr auto value() noexcept { return Meta<T>::value; }
 };
 
-template <typename T>
-    requires(!is_ref_by_local_v<T>) && is_meta_names<T> && is_meta_ref_value<T>
-struct MetaPrivate<T, void> {
-    static constexpr auto names = // NOLINT
-        Meta<T>::names;
-    static constexpr auto value = // NOLINT
-        Meta<T>::value;
-};
+template <typename T, class enable = void>
+struct MetaPrivate : MetaPrivateBase<T, meta_kind_v<T>> {};
 
 template <typename T>
-concept has_names_meta = requires {
-    { MetaPrivate<T>::names };
-} || requires {
-    { MetaPrivate<T>::names(std::declval<T&>()) };
-} || requires {
-    { MetaPrivate<T>::names() };
-};
+concept has_names_meta = meta_kind_v<T> != MetaKind::ErrorKind && meta_kind_v<T> != MetaKind::MetaValue &&
+                         meta_kind_v<T> != MetaKind::LocalValue && meta_kind_v<T> != MetaKind::MetaArray &&
+                         meta_kind_v<T> != MetaKind::LocalArray;
 
 template <typename T>
-concept has_values_meta = requires {
-    { MetaPrivate<T>::value };
-} || requires {
-    { MetaPrivate<T>::value(std::declval<T&>()) };
-} || requires {
-    { MetaPrivate<T>::value() };
-};
+concept has_values_meta = meta_kind_v<T> != MetaKind::ErrorKind;
 
 template <typename T>
 concept has_value_function_one = requires(T& obj) {
@@ -486,17 +498,8 @@ concept has_value_function = requires {
     { MetaPrivate<T>::value() };
 };
 template <typename T>
-concept has_value_member = requires {
-    { MetaPrivate<T>::value };
-};
-template <typename T>
 concept has_name_function = requires {
     { MetaPrivate<T>::names() };
-};
-
-template <typename T>
-concept has_name_member = requires {
-    { MetaPrivate<T>::names };
 };
 
 template <typename T>
@@ -504,8 +507,6 @@ struct ReflectHelper {
     static constexpr auto getNames() {
         if constexpr (detail::has_name_function<T>) {
             return detail::MetaPrivate<T>::names();
-        } else if constexpr (detail::has_name_member<T>) {
-            return detail::MetaPrivate<T>::names;
         } else {
             return std::array<std::string_view, 0>{};
         }
@@ -521,8 +522,6 @@ struct ReflectHelper {
     static constexpr decltype(auto) getValues() {
         if constexpr (detail::has_value_function<T>) {
             return detail::MetaPrivate<T>::value();
-        } else if constexpr (detail::has_value_member<T>) {
-            return detail::MetaPrivate<T>::value;
         } else {
             return std::forward_as_tuple();
         }
@@ -656,10 +655,9 @@ public:
                 ((invoke(std::integral_constant<std::size_t, Is>{})), ...);
             }(std::make_index_sequence<Size>{});
         } else {
-            auto&& val = detail::value_ref(values, obj);
-                    auto&& tags = std::get<0>(value_tags);
-            if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view,
-                                              decltype(tags)>) {
+            auto&& val  = detail::value_ref(values, obj);
+            auto&& tags = std::get<0>(value_tags);
+            if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view, decltype(tags)>) {
                 static_assert(names.size() == 1, "type has no names meta or names size mismatch");
                 func(val, names[0], tags);
             } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), decltype(tags)>) {
