@@ -324,6 +324,8 @@ struct function_traits<R (*)(Args...), void> {
     using arg_tuple   = std::tuple<Args...>;
     template <typename Ret, template <typename...> class T>
     using args_in = T<Ret, Args...>;
+    using function_type = R(Args...);
+    using function_pointer_type = R (*)(Args...);
 };
 
 // 特化：普通函数类型

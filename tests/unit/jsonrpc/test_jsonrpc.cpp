@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include <gtest/gtest.h>
+#include <optional>
 #include <string>
 
 #include "ilias/defines.hpp"
@@ -67,6 +68,18 @@ ILIAS_NAMESPACE::Task<std::string> failed_testxx(MXXParams params) {
     }
     co_return ret;
 }
+
+ILIAS_NAMESPACE::IoTask<std::string> test_optional_params(std::optional<MXXParams> params) {
+    if (params) {
+        std::string ret = std::to_string(params->param1) + params->param2;
+        for (auto& ii : params->param3) {
+            ret += "," + std::to_string(ii);
+        }
+        co_return ret;
+    }
+    co_return "no params";
+};
+
 extern int test1(int, int);
 struct Protocol {
     RpcMethod<int(int, int), "test1", "num1", "num2"> test1;
@@ -134,6 +147,7 @@ TEST_F(JsonRpcTest, BindAndCall) {
     server.bindMethod<add>();
     server.bindMethod<MyFunc::execute>();
     server.bindMethod<testxx>();
+    server.bindMethod<test_optional_params>();
     // IoTask<T> can return with error, but Task<T> can not, so we can not bind it, if you want to bind coroutine
     // method, please use IoTask<T>. server.bindMethod<failed_testxx>(); // this can not compile
     {
@@ -204,6 +218,11 @@ TEST_F(JsonRpcTest, BindAndCall) {
         auto res      = (client.callRemote<testxx>(params).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), "114514hello,1,2,3,4,5");
+    }
+    {
+        auto res = (client.callRemote<test_optional_params>(std::optional<MXXParams>{}).wait());
+        EXPECT_TRUE(res.has_value());
+        EXPECT_EQ(res.value(), "no params");
     }
     client.close();
     server.close();
