@@ -400,6 +400,11 @@ public:
                 return mWriter.Key(value.name, (int)value.nameLen) &&
                        (*this)(traits::optional_like_type<T>::get_value(value.value));
             }
+#ifdef NEKO_WRITE_NULL_FOR_EMPTY_OPTIONAL
+            else {
+                return mWriter.Key(value.name, (int)value.nameLen) && (*this)(std::nullptr_t{});
+            }
+#endif
             return true;
         } else {
             return mWriter.Key(value.name, (int)value.nameLen) && (*this)(value.value);
