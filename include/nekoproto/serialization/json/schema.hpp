@@ -17,6 +17,7 @@
 #include <map>
 #include <optional>
 #include <list>
+#include <set>
 #include <memory>
 #include <variant>
 #include <vector>
