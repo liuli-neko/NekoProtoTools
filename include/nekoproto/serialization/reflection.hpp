@@ -595,9 +595,9 @@ public:
         if constexpr (!detail::has_values_meta<T>) {
             static_assert(detail::has_values_meta<T>, "type has no values meta");
         }
-        decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
-        using values_types     = std::decay_t<decltype(values)>;
-        auto names            = []() {
+        decltype(auto) values       = detail::ReflectHelper<T>::getValues(obj);
+        using values_types          = std::decay_t<decltype(values)>;
+        constexpr static auto names = []() {
             if constexpr (detail::has_names_meta<T>) {
                 return detail::ReflectHelper<T>::getNames();
             } else {
@@ -631,7 +631,6 @@ public:
                                                                    "name), (val)");
                     }
                 };
-
                 ((invoke(std::integral_constant<std::size_t, Is>{})), ...);
             }(std::make_index_sequence<Size>{});
         } else {

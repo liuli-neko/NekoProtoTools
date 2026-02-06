@@ -107,11 +107,14 @@ concept optional_like = requires(T t, typename T::value_type v) {
 };
 
 template <typename T, class enable = void>
-struct optional_like_type : public std::false_type {};
+struct optional_like_type {
+    constexpr static bool value = false;
+};
 
 template <typename T>
     requires optional_like<std::remove_cvref_t<T>>
-struct optional_like_type<T, void> : public std::true_type {
+struct optional_like_type<T, void> {
+    constexpr static bool value = true;
     using type = std::remove_cvref_t<T>::value_type;
 
     static bool has_value(const T& val) { return val.has_value(); }
@@ -127,7 +130,8 @@ struct optional_like_type<T, void> : public std::true_type {
 };
 
 template <typename T>
-struct optional_like_type<T, std::enable_if_t<has_monostate<std::remove_cvref_t<T>>::value>> : public std::true_type {
+struct optional_like_type<T, std::enable_if_t<has_monostate<std::remove_cvref_t<T>>::value>> {
+    constexpr static bool value = true;
     using type = std::remove_cvref_t<T>;
 
     static bool has_value(const T& val) { return !std::holds_alternative<std::monostate>(val); }

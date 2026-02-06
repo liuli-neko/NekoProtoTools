@@ -285,7 +285,7 @@ constexpr bool perform_all_checks_impl(std::index_sequence<Is...> /*unused*/) {
 
 template <typename ValuesTuple, typename ContextType>
 constexpr bool perform_all_checks() {
-    if constexpr (std::tuple_size_v<ValuesTuple> > 0) {
+    if constexpr (std::tuple_size<ValuesTuple>::value > 0) {
         return perform_all_checks_impl<ValuesTuple, ContextType>(
             std::make_index_sequence<std::tuple_size_v<ValuesTuple>>{});
     }
