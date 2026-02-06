@@ -13,6 +13,7 @@
 #include <concepts>
 #include <ilias/task.hpp>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 
 #include "ilias/defines.hpp"
@@ -21,6 +22,7 @@
 #include "nekoproto/jsonrpc/jsonrpc_error.hpp"
 #include "nekoproto/serialization/json/schema.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
+#include "nekoproto/serialization/private/traits.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/types/types.hpp"
 #include "nekoproto/serialization/types/unordered_map.hpp"
@@ -307,12 +309,50 @@ protected:
     mutable bool mIsNotification = false;
 };
 
+template <typename T, class enable = void>
+struct is_null_able_object_helper;
+
+template <typename T>
+consteval bool is_null_able_object() {
+    if constexpr (NEKO_NAMESPACE::detail::is_optional<T>::value) {
+        return true;
+    } else if constexpr (is_automatic_expansion_able<T>()) {
+        using types     = Reflect<T>::value_types;
+        return is_null_able_object_helper<types>::value;
+    } else if constexpr (is_std_tuple_v<T>) {
+        return is_null_able_object_helper<T>::value;
+    } else {
+        return false;
+    }
+}
+
+template <typename T, class enable>
+struct is_null_able_object_helper {
+    static constexpr bool value = is_null_able_object<T>();
+};
+
+template <typename ...Ts>
+struct is_null_able_object_helper<std::tuple<Ts...>> {
+    static constexpr bool value = (is_null_able_object<Ts>() && ...);
+};
+
 template <typename Traits, typename... T>
 struct RpcMethodAliasesHelper {
-    // 将原始代码中的三种逻辑用 if constexpr 统一
-    using DecayTuple                          = std::tuple<std::remove_cvref_t<T>...>;
-    constexpr static bool is_auto_expand      = is_automatic_expansion_able<T...>(); // NOLINT
-    constexpr static bool is_single_tuple_arg = [] {                                 // NOLINT
+    using DecayTuple                                         = std::tuple<std::remove_cvref_t<T>...>;
+    constexpr static bool is_auto_expand                     = is_automatic_expansion_able<T...>(); // NOLINT
+    constexpr static bool is_single_optional_auto_expand_arg = [] {                                 // NOLINT
+        if constexpr (sizeof...(T) == 1) {
+            using FirstArg = std::tuple_element_t<0, DecayTuple>;
+            if constexpr (optional_like<FirstArg>) {
+                return is_automatic_expansion_able<typename optional_like_type<FirstArg>::type>();
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }();
+    constexpr static bool is_single_tuple_arg = [] { // NOLINT
         if constexpr (sizeof...(T) == 1) {
             using FirstArg = std::tuple_element_t<0, DecayTuple>;
             return is_std_tuple_v<std::remove_cvref_t<FirstArg>>;
@@ -321,8 +361,17 @@ struct RpcMethodAliasesHelper {
         }
     }();
 
+    /**
+     * @brief Type of the parameters to be passed to the RPC method.
+     * I want to auto expand types like struct XxParams {int a, std::string b} to "params": {"a": 1, "b": "hello"} in
+     * request. I will expand like this:
+     * 1. a type has name, value in reflect meta. like struct XxParams {int a, std::string b}.
+     * 2. a type in optional and has name, value in reflect meta. like std::optional<XxParams>.
+     * for other args, I will make to std::tuple<...>. of course, can use std::tuple<...> directly.
+     */
     using ParamsTupleType = decltype([] {
-        if constexpr (is_auto_expand) { // is_auto_expand implies sizeof...(T) == 1
+        if constexpr (is_auto_expand ||
+                      is_single_optional_auto_expand_arg) { // is_auto_expand implies sizeof...(T) == 1
             using FirstArg = std::tuple_element_t<0, DecayTuple>;
             static_assert(traits::IsSerializable<FirstArg>::value,
                           "The params of bound functions must be serializable");
@@ -349,13 +398,17 @@ struct RpcMethodAliasesHelper {
     constexpr static int ParamsSize = [] {
         if constexpr (is_auto_expand) {
             return Reflect<std::tuple_element_t<0, DecayTuple>>::size();
+        } else if constexpr (is_single_optional_auto_expand_arg) {
+            using FirstArg = std::tuple_element_t<0, DecayTuple>;
+            return Reflect<typename optional_like_type<FirstArg>::type>::size();
         } else if constexpr (is_single_tuple_arg) {
             return std::tuple_size_v<std::remove_cvref_t<std::tuple_element_t<0, DecayTuple>>>;
         } else {
             return sizeof...(T);
         }
     }();
-    constexpr static bool IsAutomaticExpansionAble = is_auto_expand;
+    constexpr static bool IsNullAble = is_null_able_object<ParamsTupleType>();
+    constexpr static bool IsAutomaticExpansionAble = is_auto_expand || is_single_optional_auto_expand_arg;
     constexpr static bool IsTopTuple               = is_single_tuple_arg;
 };
 

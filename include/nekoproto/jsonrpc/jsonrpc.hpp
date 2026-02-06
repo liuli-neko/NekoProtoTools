@@ -27,6 +27,7 @@
 #include "nekoproto/jsonrpc/jsonrpc_error.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_traits.hpp"
 #include "nekoproto/jsonrpc/message_stream_wrapper.hpp"
+#include "nekoproto/serialization/reflection.hpp"
 
 NEKO_BEGIN_NAMESPACE
 namespace detail {
@@ -61,6 +62,7 @@ public:
     constexpr static int ParamsSize                = Aliases::ParamsSize;
     constexpr static bool IsAutomaticExpansionAble = Aliases::IsAutomaticExpansionAble;
     constexpr static bool IsTopTuple               = Aliases::IsTopTuple;
+    constexpr static bool IsNullAble               = Aliases::IsNullAble;
 };
 
 template <typename T>
@@ -110,8 +112,12 @@ struct JsonRpcRequest2;
 template <typename... Args, ConstexprString... ArgNames>
 struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
     using ParamsTupleType = typename RpcMethodTraits<Args...>::ParamsTupleType;
+    // if ParamsTupleType is tuple, argnames > 0 and argnames == number of params
+    // if ParamsTupleType is not tuple, argnames must == 0
     static_assert(sizeof...(ArgNames) == 0 || RpcMethodTraits<Args...>::NumParams == sizeof...(ArgNames),
                   "JsonRpcRequest2: The number of parameters and names do not match.");
+    static_assert((is_std_tuple_v<ParamsTupleType> ? true : (sizeof...(ArgNames) == 0)),
+                  "JsonRpcRequest2: ParamsTupleType must be tuple if argnames > 0 and not tuple if argnames == 0.");
 
     std::optional<std::string> jsonrpc = "2.0";
     std::string method;
@@ -141,13 +147,16 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
         serializer.startNode();
         if constexpr (sizeof...(ArgNames) == 0) {
             bool ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                                  NEKO_PROTO_NAME_VALUE_PAIR(params), NEKO_PROTO_NAME_VALUE_PAIR(id));
+                                  NEKO_PROTO_NAME_VALUE_PAIR(id));
+            // params maybe is all is std::optional, then server will not send params
+            ret = (serializer(NEKO_PROTO_NAME_VALUE_PAIR(params)) || RpcMethodTraits<Args...>::IsNullAble)&& ret;
             return serializer.finishNode() && ret;
         } else {
             traits::SerializerHelperObject<ParamsTupleType, ArgNames...> mParamsHelper(params);
             bool ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                                  make_name_value_pair("params", mParamsHelper), NEKO_PROTO_NAME_VALUE_PAIR(id));
-
+                                  NEKO_PROTO_NAME_VALUE_PAIR(id));
+            // params maybe is all is std::optional, then server will not send params
+            ret = (serializer(make_name_value_pair("params", mParamsHelper)) || RpcMethodTraits<Args...>::IsNullAble) && ret;
             return serializer.finishNode() && ret;
         }
     }
