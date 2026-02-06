@@ -102,7 +102,10 @@ template <typename T>
 struct is_std_array : std::false_type {}; // NOLINT(readability-identifier-naming)
 
 template <typename T, size_t N>
-struct is_std_array<std::array<T, N>> : std::true_type {};
+struct is_std_array<std::array<T, N>> : std::true_type {
+    using value_type = T;
+    constexpr static size_t size = N;
+};
 
 template <typename T>
 static constexpr bool can_unwrap_v = // NOLINT(readability-identifier-naming)

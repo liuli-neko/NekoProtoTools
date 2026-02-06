@@ -595,16 +595,10 @@ public:
         if constexpr (!detail::has_values_meta<T>) {
             static_assert(detail::has_values_meta<T>, "type has no values meta");
         }
-        decltype(auto) values       = detail::ReflectHelper<T>::getValues(obj);
-        using values_types          = std::decay_t<decltype(values)>;
-        constexpr static auto names = []() {
-            if constexpr (detail::has_names_meta<T>) {
-                return detail::ReflectHelper<T>::getNames();
-            } else {
-                return std::array<std::string_view, 0>{};
-            }
-        }();
-
+        decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
+        using values_types    = std::decay_t<decltype(values)>;
+        std::array names      = detail::ReflectHelper<T>::getNames();
+        using names_type      = std::decay_t<decltype(names)>;
         if constexpr (detail::is_std_tuple_v<values_types>) {
             constexpr auto Size = std::tuple_size_v<values_types>;
             [&]<std::size_t... Is>(std::index_sequence<Is...>) {
@@ -613,14 +607,16 @@ public:
                     auto&& tags = std::get<I>(value_tags);
                     // 编译期根据回调函数的签名选择调用方式
                     if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view, decltype(tags)>) {
-                        static_assert(names.size() == Size, "type has no names meta or names size mismatch");
+                        static_assert(detail::is_std_array<names_type>::size == Size,
+                                      "type has no names meta or names size mismatch");
                         func(val, names[I], tags);
                     } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), decltype(tags)>) {
                         // func(val, tags)
                         func(val, tags);
                     } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view>) {
                         // func(val, name)
-                        static_assert(names.size() == Size, "type has no names meta or names size mismatch");
+                        static_assert(detail::is_std_array<names_type>::size == Size,
+                                      "type has no names meta or names size mismatch");
                         func(val, names[I]);
                     } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val)>) {
                         // func(val)
@@ -637,12 +633,14 @@ public:
             auto&& val  = detail::value_ref(values, obj);
             auto&& tags = std::get<0>(value_tags);
             if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view, decltype(tags)>) {
-                static_assert(names.size() == 1, "type has no names meta or names size mismatch");
+                static_assert(detail::is_std_array<names_type>::size == 1,
+                              "type has no names meta or names size mismatch");
                 func(val, names[0], tags);
             } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), decltype(tags)>) {
                 func(val, tags);
             } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view>) {
-                static_assert(names.size() == 1, "type has no names meta or names size mismatch");
+                static_assert(detail::is_std_array<names_type>::size == 1,
+                              "type has no names meta or names size mismatch");
                 func(val, names[0]);
             } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val)>) {
                 func(val);
