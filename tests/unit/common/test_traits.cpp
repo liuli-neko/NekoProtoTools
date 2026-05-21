@@ -19,7 +19,6 @@ struct TestStruct {
 };
 
 TEST(TraitsTest, test) {
-    EXPECT_EQ(NEKO_CPP_PLUS, 20);
     EXPECT_FALSE(traits::optional_like_type<int>::value);
     EXPECT_TRUE(traits::optional_like_type<std::optional<int>&>::value);
     EXPECT_TRUE(traits::optional_like_type<const std::optional<int>&>::value);

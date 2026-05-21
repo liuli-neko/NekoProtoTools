@@ -149,14 +149,15 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
             bool ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
                                   NEKO_PROTO_NAME_VALUE_PAIR(id));
             // params maybe is all is std::optional, then server will not send params
-            ret = (serializer(NEKO_PROTO_NAME_VALUE_PAIR(params)) || RpcMethodTraits<Args...>::IsNullAble)&& ret;
+            ret = (serializer(NEKO_PROTO_NAME_VALUE_PAIR(params)) || RpcMethodTraits<Args...>::IsNullAble) && ret;
             return serializer.finishNode() && ret;
         } else {
             traits::SerializerHelperObject<ParamsTupleType, ArgNames...> mParamsHelper(params);
             bool ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
                                   NEKO_PROTO_NAME_VALUE_PAIR(id));
             // params maybe is all is std::optional, then server will not send params
-            ret = (serializer(make_name_value_pair("params", mParamsHelper)) || RpcMethodTraits<Args...>::IsNullAble) && ret;
+            ret = (serializer(make_name_value_pair("params", mParamsHelper)) || RpcMethodTraits<Args...>::IsNullAble) &&
+                  ret;
             return serializer.finishNode() && ret;
         }
     }
@@ -560,6 +561,13 @@ template <typename ProtocolT>
 class JsonRpcServer {
 private:
     using MethodData = detail::JsonRpcServerImp::MethodData;
+#if __cpp_lib_move_only_function >= 202110L
+    template <typename T>
+    using Function = std::move_only_function<T>;
+#else
+    template <typename T>
+    using Function = std::function<T>;
+#endif
     struct {
         RpcMethod<std::vector<std::string>(), "rpc.get_method_list"> getMethodList;
         RpcMethod<std::vector<std::string>(), "rpc.get_method_info_list"> getMethodInfoList;
@@ -638,8 +646,8 @@ public:
     template <auto Ptr, ConstexprString... ArgNames>
         requires detail::RpcMethodFuncT<Ptr>
     auto bindMethod() noexcept -> void {
-        mImp.bindRpcMethod(detail::RpcMethodF<Ptr, ArgNames...>::MethodName, std::function(Ptr),
-                           traits::ArgNamesHelper<ArgNames...>{});
+        mImp.bindRpcMethod(detail::RpcMethodF<Ptr, ArgNames...>::MethodName,
+                           Function<std::remove_pointer_t<decltype(Ptr)>>(Ptr), traits::ArgNamesHelper<ArgNames...>{});
     }
 
     template <ConstexprString... ArgNames, typename RetT, typename... Args>
