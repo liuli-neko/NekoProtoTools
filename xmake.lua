@@ -4,7 +4,13 @@ set_version("0.2.6", {build = "%Y%m%d%H%M"})
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 set_warnings("allextra")
 set_policy("package.cmake_generator.ninja", true)
-set_languages("c++20")
+
+option("stdc",   {showmenu = true, default = 23, values = {23}})
+option("stdcxx", {showmenu = true, default = 23, values = {26, 23, 20}})
+function stdc()   return "c"   .. tostring(get_config("stdc"))   end
+function stdcxx() return "c++" .. tostring(get_config("stdcxx")) end
+
+set_languages(stdc(), stdcxx())
 
 add_configfiles("include/nekoproto/global/config.h.in")
 set_configdir("include/nekoproto/global")
@@ -82,6 +88,8 @@ option("enable_stdformat")
     end)
 option_end()
 
+option("3rd_custom",   {showmenu = true, type = "boolean", default = false})
+
 option("enable_protocol")
     set_default(true)
     set_showmenu(true)
@@ -145,8 +153,11 @@ if has_config("enable_fmt") then
 end
 
 if has_config("enable_communication") or has_config("enable_jsonrpc") then
-    add_requires("ilias", {version = "0.3.4", configs = { shared = is_kind("shared"), cpp20 = true}})
-    add_requireconfs("**.ilias", {version = "0.3.4", configs = { shared = is_kind("shared"), cpp20 = true}})
+    add_requires("ilias")
+    if not has_config("3rd_custom") then
+        -- configurations of required libraries
+        add_requireconfs("**ilias", {version = "0.4.1", configs = { shared = is_kind("shared"), stdcxx = get_config("stdcxx")}})
+    end
 end
 
 if has_config("enable_tests") then
