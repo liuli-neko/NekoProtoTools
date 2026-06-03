@@ -61,7 +61,7 @@ auto JsonRpcServerImp::methodDatas(std::string_view name) noexcept -> MethodData
 }
 
 auto JsonRpcServerImp::processRequest(const char* data, std::size_t size, detail::IMessageStream* client) noexcept
-    -> ILIAS_NAMESPACE::Task<std::vector<char>> {
+    -> ilias::Task<std::vector<char>> {
     std::vector<char> buffer;
     JsonSerializer::OutputSerializer out(buffer);
     JsonSerializer::InputSerializer in(data, size);
@@ -93,7 +93,7 @@ auto JsonRpcServerImp::processRequest(const char* data, std::size_t size, detail
         NEKO_LOG_INFO("jsonrpc", "sending {} bytes : {}", buffer.size(),
                       std::string_view{buffer.data(), buffer.size()});
         auto ret = co_await client->send({reinterpret_cast<std::byte*>(buffer.data()), buffer.size()});
-        if (ret.error_or(ILIAS_NAMESPACE::IoError::Unknown) == JsonRpcError::MessageToolLarge) {
+        if (ret.error_or(ilias::IoError::Unknown) == JsonRpcError::MessageToolLarge) {
             NEKO_LOG_ERROR("jsonrpc", "message too large!");
         }
     }
@@ -118,12 +118,12 @@ void JsonRpcServerImp::cancelAll() {
     mCancelHandles.clear();
 }
 
-auto JsonRpcServerImp::receiveLoop(detail::IMessageStream* client) noexcept -> ILIAS_NAMESPACE::Task<void> {
+auto JsonRpcServerImp::receiveLoop(detail::IMessageStream* client) noexcept -> ilias::Task<void> {
     while (client != nullptr) {
         std::vector<std::byte> buffer;
         if (auto ret = co_await client->recv(buffer); ret && buffer.size() > 0) {
             co_await (processRequest(reinterpret_cast<const char*>(buffer.data()), buffer.size(), client) |
-                      ILIAS_NAMESPACE::unstoppable());
+                      ilias::unstoppable());
         } else {
             break;
         }
@@ -201,7 +201,7 @@ auto MessageStream<TcpStream, void>::recv(std::vector<std::byte>& buffer) -> IoT
         size = networkToHost(size);
     } else {
         mClient.close();
-        co_return Unexpected(ILIAS_NAMESPACE::IoError::Unknown);
+        co_return Unexpected(ilias::IoError::Unknown);
     }
     if (buffer.size() < size) {
         buffer.resize(size);
@@ -211,7 +211,7 @@ auto MessageStream<TcpStream, void>::recv(std::vector<std::byte>& buffer) -> IoT
         co_return {};
     } else {
         mClient.close();
-        co_return Unexpected(ret.error_or(ILIAS_NAMESPACE::IoError::Unknown));
+        co_return Unexpected(ret.error_or(ilias::IoError::Unknown));
     }
 }
 
@@ -226,12 +226,12 @@ auto MessageStream<TcpStream, void>::send(std::span<const std::byte> data) -> Io
         co_return Unexpected(ret.error());
     } else if (ret.value() != sizeof(size)) {
         mClient.close();
-        co_return Unexpected(ILIAS_NAMESPACE::IoError::Unknown);
+        co_return Unexpected(ilias::IoError::Unknown);
     }
     auto ret = co_await (mClient.writeAll(data) | unstoppable());
     if (!ret || ret.value() != data.size()) {
         mClient.close();
-        co_return Unexpected(ret.error_or(ILIAS_NAMESPACE::IoError::Unknown));
+        co_return Unexpected(ret.error_or(ilias::IoError::Unknown));
     }
     co_return {};
 }
@@ -290,7 +290,7 @@ auto make_tcp_stream_client(std::string_view url) -> IoTask<MessageStream<TcpStr
     }
     auto ipendpoint = IPEndpoint::fromString(ipstr);
     if (!ipendpoint) {
-        co_return Unexpected(ILIAS_NAMESPACE::IoError::InvalidArgument);
+        co_return Unexpected(ilias::IoError::InvalidArgument);
     }
     co_return co_await make_tcp_stream_client(ipendpoint.value());
 }
@@ -305,9 +305,9 @@ auto make_tcp_stream_client(const std::string& url) -> IoTask<MessageStream<TcpS
 NEKO_PROTO_API
 auto make_udp_stream_client(IPEndpoint bindIpendpoint, IPEndpoint remoteIpendpoint)
     -> IoTask<MessageStream<UdpStream>> {
-    if (auto ret = ILIAS_NAMESPACE::Socket::make(bindIpendpoint.family(), SOCK_DGRAM, 0); ret) {
+    if (auto ret = ilias::Socket::make(bindIpendpoint.family(), SOCK_DGRAM, 0); ret) {
         auto socket = std::move(ret.value());
-        socket.setOption(ILIAS_NAMESPACE::sockopt::ReuseAddress(1));
+        socket.setOption(ilias::sockopt::ReuseAddress(1));
         if (auto ret1 = socket.bind(bindIpendpoint); !ret1) {
             socket.close();
             co_return Unexpected(ret1.error());
@@ -331,12 +331,12 @@ auto make_udp_stream_client(std::string_view url) -> IoTask<MessageStream<UdpStr
     }
     auto pos = bindRemoteIp.find('-');
     if (pos == std::string_view::npos) {
-        co_return Unexpected(ILIAS_NAMESPACE::IoError::InvalidArgument);
+        co_return Unexpected(ilias::IoError::InvalidArgument);
     }
     auto bindIpendpoint   = IPEndpoint::fromString(bindRemoteIp.substr(0, pos));
     auto remoteIpendpoint = IPEndpoint::fromString(bindRemoteIp.substr(pos + 1));
     if (!bindIpendpoint || !remoteIpendpoint) {
-        co_return Unexpected(ILIAS_NAMESPACE::IoError::InvalidArgument);
+        co_return Unexpected(ilias::IoError::InvalidArgument);
     }
     co_return co_await make_udp_stream_client(bindIpendpoint.value(), remoteIpendpoint.value());
 }
@@ -350,8 +350,8 @@ auto make_udp_stream_client(const std::string& url) -> IoTask<MessageStream<UdpS
 }
 NEKO_PROTO_API
 auto make_tcp_stream_server(IPEndpoint ipendpoint) -> IoTask<MessageStream<TcpListener>> {
-    if (auto ret = ILIAS_NAMESPACE::Socket::make(ipendpoint.family(), SOCK_STREAM, IPPROTO_TCP); ret) {
-        ret.value().setOption(ILIAS_NAMESPACE::sockopt::ReuseAddress(1));
+    if (auto ret = ilias::Socket::make(ipendpoint.family(), SOCK_STREAM, IPPROTO_TCP); ret) {
+        ret.value().setOption(ilias::sockopt::ReuseAddress(1));
         if (auto ret1 = ret.value().bind(ipendpoint); ret1) {
             auto ret2 = ret.value().listen();
             if (!ret2) {
@@ -375,7 +375,7 @@ auto make_tcp_stream_server(std::string_view url) -> IoTask<MessageStream<TcpLis
     }
     auto ipendpoint = IPEndpoint::fromString(ipstr);
     if (!ipendpoint) {
-        co_return Unexpected(ILIAS_NAMESPACE::IoError::InvalidArgument);
+        co_return Unexpected(ilias::IoError::InvalidArgument);
     }
     co_return co_await make_tcp_stream_server(ipendpoint.value());
 }
