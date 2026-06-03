@@ -33,7 +33,7 @@ NEKO_BEGIN_NAMESPACE
 namespace detail {
 
 template <typename T>
-using IoTask = ILIAS_NAMESPACE::IoTask<T>;
+using IoTask = ilias::IoTask<T>;
 
 template <typename T, class enable = void>
 class RpcMethodTraits; // 主模板前向声明
@@ -229,7 +229,7 @@ public:
 
     RpcMethodDynamic(std::string_view name, FunctionType func, bool isNotification = false) noexcept
         : RpcMethodDynamic(name, isNotification) {
-        this->mCoFunction = [func = std::move(func)](auto... args) mutable -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
+        this->mCoFunction = [func = std::move(func)](auto... args) mutable -> ilias::IoTask<RawReturnType> {
             if constexpr (std::is_void_v<RawReturnType>) {
                 func(args...);
                 co_return {};
@@ -275,7 +275,7 @@ public:
     }
 
     RpcMethodDynamic& set(FunctionType&& func) noexcept {
-        this->mCoFunction = [func = std::move(func)](auto... args) mutable -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
+        this->mCoFunction = [func = std::move(func)](auto... args) mutable -> ilias::IoTask<RawReturnType> {
             if constexpr (std::is_void_v<RawReturnType>) {
                 func(args...);
                 co_return {};
@@ -353,7 +353,7 @@ public:
     RpcMethodWrapper(RpcMethodWrapper&&)                                                     = default;
     virtual ~RpcMethodWrapper()                                                              = default;
     virtual auto call(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
-                      JsonRpcRequestMethod&& method) noexcept -> ILIAS_NAMESPACE::Task<void> = 0;
+                      JsonRpcRequestMethod&& method) noexcept -> ilias::Task<void> = 0;
     auto operator()(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
                     JsonRpcRequestMethod&& method) noexcept {
         return call(in, out, std::move(method));
@@ -384,7 +384,7 @@ public:
     using MethodType = typename RpcMethodTypeHelper<T>::MethodType;
     RpcMethodWrapperImpl(T methodData, JsonRpcServerImp* self) : mMethodData(std::move(methodData)), mSelf(self) {}
     auto call(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
-              JsonRpcRequestMethod&& method) noexcept -> ILIAS_NAMESPACE::Task<void> override;
+              JsonRpcRequestMethod&& method) noexcept -> ilias::Task<void> override;
     auto name() noexcept -> std::string_view override { return mMethodData->name(); }
     auto description() noexcept -> std::string_view override { return mMethodData->description; }
     auto isBind() noexcept -> bool override { return (bool)(*mMethodData); }
@@ -407,7 +407,7 @@ private:
         -> void;
 
 public:
-    JsonRpcServerImp([[maybe_unused]] ILIAS_NAMESPACE::IoContext& ctx) : mTaskScope() {}
+    JsonRpcServerImp([[maybe_unused]] ilias::IoContext& ctx) : mTaskScope() {}
     ~JsonRpcServerImp() {
         cancelAll();
         mTaskScope.waitAll().wait();
@@ -428,35 +428,35 @@ public:
         return _registerRpcMethod<RpcMethodDynamic<RetT(Args...), ArgNames...>>(name, std::move(func));
     }
     template <typename RetT, typename... Args, ConstexprString... ArgNames>
-    auto bindRpcMethod(std::string_view name, traits::FunctionT<ILIAS_NAMESPACE::IoTask<RetT>(Args...)> func,
+    auto bindRpcMethod(std::string_view name, traits::FunctionT<ilias::IoTask<RetT>(Args...)> func,
                        traits::ArgNamesHelper<ArgNames...> /*unused*/ = {}) noexcept -> void {
         _registerRpcMethod<RpcMethodDynamic<RetT(Args...), ArgNames...>>(name, std::move(func));
     }
 
     auto processRequest(const char* data, std::size_t size, detail::IMessageStream* client) noexcept
-        -> ILIAS_NAMESPACE::Task<std::vector<char>>;
+        -> ilias::Task<std::vector<char>>;
     void cancel(JsonRpcIdType id) noexcept;
     void cancelAll();
-    auto receiveLoop(detail::IMessageStream* client) noexcept -> ILIAS_NAMESPACE::Task<void>;
+    auto receiveLoop(detail::IMessageStream* client) noexcept -> ilias::Task<void>;
     auto getCurrentIds() const noexcept -> const std::vector<JsonRpcIdType>&;
 
 private:
     template <typename T>
     auto _handle(bool success, auto request, auto& out, auto method, T& metadata) noexcept
-        -> ILIAS_NAMESPACE::Task<void> {
+        -> ilias::Task<void> {
         if (!success) {
             NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc request");
             co_return _handleError<T>(out, std::move(method), (int64_t)JsonRpcError::InvalidRequest,
                                       JsonRpcErrorCategory::instance().message((int64_t)JsonRpcError::InvalidRequest));
         }
         auto handle =
-            mTaskScope.spawn([&, this, request = std::move(request), method = method]() -> ILIAS_NAMESPACE::Task<void> {
-                ILIAS_NAMESPACE::Result<typename T::RawReturnType, std::error_code> result =
-                    ILIAS_NAMESPACE::Unexpected(ILIAS_NAMESPACE::SystemError::Canceled);
-                auto onfinally = [&]() -> ILIAS_NAMESPACE::Task<void> {
+            mTaskScope.spawn([&, this, request = std::move(request), method = method]() -> ilias::Task<void> {
+                ilias::Result<typename T::RawReturnType, std::error_code> result =
+                    ilias::Unexpected(ilias::SystemError::Canceled);
+                auto onfinally = [&]() -> ilias::Task<void> {
                     co_return _processMethodReturn<T>(metadata, std::move(result), out, std::move(method));
                 };
-                co_await ([&result, request = std::move(request)](T& metadata) -> ILIAS_NAMESPACE::Task<void> {
+                co_await ([&result, request = std::move(request)](T& metadata) -> ilias::Task<void> {
                     if constexpr (T::NumParams == 0) {
                         result = co_await metadata();
                     } else if constexpr (T::IsAutomaticExpansionAble || T::IsTopTuple) {
@@ -465,7 +465,7 @@ private:
                         result = co_await std::apply(metadata, std::move(request.params));
                     }
                     co_return;
-                }(metadata) | ILIAS_NAMESPACE::finally(onfinally));
+                }(metadata) | ilias::finally(onfinally));
                 co_return;
             });
         if (!std::holds_alternative<std::monostate>(method.id)) {
@@ -517,7 +517,7 @@ private:
     }
 
     template <typename T>
-    auto _processMethodReturn(T& methodData, ILIAS_NAMESPACE::Result<typename T::RawReturnType, std::error_code> result,
+    auto _processMethodReturn(T& methodData, ilias::Result<typename T::RawReturnType, std::error_code> result,
                               JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method) noexcept -> void {
         if constexpr (std::is_void_v<typename T::RawReturnType>) {
             if (result) {
@@ -537,8 +537,8 @@ private:
 
 private:
     std::vector<detail::JsonRpcIdType> mCurrentIds;
-    std::map<JsonRpcIdType, ILIAS_NAMESPACE::StopHandle> mCancelHandles;
-    ILIAS_NAMESPACE::TaskGroup<void> mTaskScope;
+    std::map<JsonRpcIdType, ilias::StopHandle> mCancelHandles;
+    ilias::TaskGroup<void> mTaskScope;
     std::map<std::string_view, std::unique_ptr<RpcMethodWrapper>> mHandlers;
 
     template <typename T>
@@ -547,7 +547,7 @@ private:
 
 template <typename T>
 auto RpcMethodWrapperImpl<T>::call(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
-                                   JsonRpcRequestMethod&& method) noexcept -> ILIAS_NAMESPACE::Task<void> {
+                                   JsonRpcRequestMethod&& method) noexcept -> ilias::Task<void> {
     typename MethodType::RequestType request;
     auto success = in(request);
     return mSelf->_handle(success, request, out, std::move(method), *mMethodData);
@@ -576,7 +576,7 @@ private:
     } mRpc;
 
 public:
-    JsonRpcServer(ILIAS_NAMESPACE::IoContext& ctx) : mImp(ctx), mScop() { _init(); }
+    JsonRpcServer(ilias::IoContext& ctx) : mImp(ctx), mScop() { _init(); }
     ~JsonRpcServer() {
         close();
         wait().wait();
@@ -600,7 +600,7 @@ public:
         }
     }
 
-    auto wait() -> ILIAS_NAMESPACE::Task<void> { co_await mScop.waitAll(); }
+    auto wait() -> ilias::Task<void> { co_await mScop.waitAll(); }
     auto cancel(uint64_t id) noexcept -> void { mImp.cancel(id); }
     auto cancel(const std::string& id) noexcept -> void { mImp.cancel(id); }
     auto cancelAll() noexcept -> void { mImp.cancelAll(); }
@@ -616,7 +616,7 @@ public:
             item = mTransports.emplace(mTransports.end(),
                                        std::make_unique<detail::MessageStreamWrapper<ClientT>>(std::move(client)));
         }
-        mScop.spawn([this, item]() -> ILIAS_NAMESPACE::Task<void> {
+        mScop.spawn([this, item]() -> ilias::Task<void> {
             NEKO_LOG_INFO("jsonrpc", "Starting receive loop({}) for transport", ((void*)item->get()));
             co_await mImp.receiveLoop((*item).get());
             NEKO_LOG_INFO("jsonrpc", "Stoped receive loop({}) for transport", ((void*)item->get()));
@@ -651,12 +651,12 @@ public:
     }
 
     template <ConstexprString... ArgNames, typename RetT, typename... Args>
-    auto bindMethod(std::string_view name, traits::FunctionT<ILIAS_NAMESPACE::IoTask<RetT>(Args...)> func) noexcept
+    auto bindMethod(std::string_view name, traits::FunctionT<ilias::IoTask<RetT>(Args...)> func) noexcept
         -> void {
         mImp.bindRpcMethod(name, std::move(func), traits::ArgNamesHelper<ArgNames...>{});
     }
 
-    auto callMethod(std::string_view json) noexcept -> ILIAS_NAMESPACE::Task<std::vector<char>> {
+    auto callMethod(std::string_view json) noexcept -> ilias::Task<std::vector<char>> {
         co_return co_await mImp.processRequest(json.data(), json.size(), nullptr);
     }
 
@@ -665,7 +665,7 @@ public:
     auto methodDatas(std::string_view name) noexcept -> MethodData { return mImp.methodDatas(name); }
 
 private:
-    auto _acceptLoop() noexcept -> ILIAS_NAMESPACE::Task<void> {
+    auto _acceptLoop() noexcept -> ilias::Task<void> {
         while (mServer != nullptr) {
             if (auto ret = co_await mServer->accept(); ret) {
                 if (mTransports.size() > 0 && mTransports.back() == ret.value()) {
@@ -673,7 +673,7 @@ private:
                 }
                 addTransport(std::move(ret.value()));
             } else {
-                if (ret.error() != ILIAS_NAMESPACE::IoError::Canceled) {
+                if (ret.error() != ilias::IoError::Canceled) {
                     NEKO_LOG_WARN("jsonrpc", "accepting exit with: {}", ret.error().message());
                 }
                 break;
@@ -722,13 +722,13 @@ private:
     std::unique_ptr<detail::IMessageListener> mServer;
     std::list<std::unique_ptr<detail::IMessageStream>> mTransports;
     std::map<std::string_view, std::unique_ptr<MethodData>> mMethodDatas;
-    ILIAS_NAMESPACE::TaskGroup<void> mScop;
+    ilias::TaskGroup<void> mScop;
 };
 // MARK: jsonrpc client
 template <typename ProtocolT>
 class JsonRpcClient {
 public:
-    JsonRpcClient(ILIAS_NAMESPACE::IoContext& /*unused*/) {
+    JsonRpcClient(ilias::IoContext& /*unused*/) {
         Reflect<ProtocolT>::forEach(mProtocol,
                                     [this](auto& rpcMethodData) { this->_registerRpcMethod(rpcMethodData); });
     }
@@ -756,7 +756,7 @@ public:
     }
 
     template <typename RetT, ConstexprString... ArgNames, typename... Args>
-    auto callRemote(std::string_view name, Args... args) noexcept -> ILIAS_NAMESPACE::IoTask<RetT> {
+    auto callRemote(std::string_view name, Args... args) noexcept -> ilias::IoTask<RetT> {
         using CoroutinesFuncType = typename detail::RpcMethodDynamic<RetT(Args...), ArgNames...>::CoroutinesFuncType;
         detail::RpcMethodDynamic<RetT(Args...), ArgNames...> metadata(name, (CoroutinesFuncType)(nullptr), false);
         co_return co_await _callRemote(metadata, std::forward<Args>(args)...);
@@ -765,7 +765,7 @@ public:
     template <auto Ptr, ConstexprString... ArgNames, typename... Args>
         requires detail::RpcMethodFuncT<Ptr>
     auto callRemote(Args... args) noexcept
-        -> ILIAS_NAMESPACE::IoTask<typename traits::function_traits<decltype(Ptr)>::return_type> {
+        -> ilias::IoTask<typename traits::function_traits<decltype(Ptr)>::return_type> {
         using CoroutinesFuncType = typename detail::RpcMethodDynamic<decltype(Ptr), ArgNames...>::CoroutinesFuncType;
         detail::RpcMethodDynamic<decltype(Ptr), ArgNames...> metadata(RpcMethodF<Ptr>::MethodName,
                                                                       (CoroutinesFuncType)(nullptr), false);
@@ -773,7 +773,7 @@ public:
     }
 
     template <typename RetT, ConstexprString... ArgNames, typename... Args>
-    auto notifyRemote(std::string_view name, Args... args) noexcept -> ILIAS_NAMESPACE::IoTask<RetT> {
+    auto notifyRemote(std::string_view name, Args... args) noexcept -> ilias::IoTask<RetT> {
         using CoroutinesFuncType = typename detail::RpcMethodDynamic<RetT(Args...), ArgNames...>::CoroutinesFuncType;
         detail::RpcMethodDynamic<RetT(Args...), ArgNames...> metadata(name, (CoroutinesFuncType)(nullptr), true);
         co_return co_await _callRemote(metadata, std::forward<Args>(args)...);
@@ -782,7 +782,7 @@ public:
     template <auto Ptr, ConstexprString... ArgNames, typename... Args>
         requires detail::RpcMethodFuncT<Ptr>
     auto notifyRemote(Args... args) noexcept
-        -> ILIAS_NAMESPACE::IoTask<typename traits::function_traits<decltype(Ptr)>::return_type> {
+        -> ilias::IoTask<typename traits::function_traits<decltype(Ptr)>::return_type> {
         using CoroutinesFuncType = typename detail::RpcMethodDynamic<decltype(Ptr), ArgNames...>::CoroutinesFuncType;
         detail::RpcMethodDynamic<decltype(Ptr), ArgNames...> metadata(RpcMethodF<Ptr>::MethodName,
                                                                       (CoroutinesFuncType)(nullptr), true);
@@ -793,16 +793,16 @@ private:
     template <typename T>
     void _registerRpcMethod(T&& metadata) noexcept {
         metadata = (typename std::decay_t<T>::CoroutinesFuncType)[this, &metadata](auto... args) noexcept
-            -> ILIAS_NAMESPACE::IoTask<typename std::decay_t<T>::RawReturnType> {
+            -> ilias::IoTask<typename std::decay_t<T>::RawReturnType> {
             return _callRemote<T, decltype(args)...>(metadata, args...);
         };
     }
 
     template <typename T, typename... Args>
     auto _callRemote(T& metadata, Args... args) noexcept
-        -> ILIAS_NAMESPACE::IoTask<typename std::decay_t<T>::RawReturnType> {
+        -> ilias::IoTask<typename std::decay_t<T>::RawReturnType> {
         if (mTransport == nullptr) {
-            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ClientNotInit);
+            co_return ilias::Unexpected(JsonRpcError::ClientNotInit);
         }
         auto grid = co_await mMutex.lock();
         typename std::decay_t<T>::RequestType request;
@@ -812,17 +812,17 @@ private:
             if (auto ret1 = co_await mTransport->send({reinterpret_cast<std::byte*>(mBuffer.data()), mBuffer.size()});
                 !ret1) {
                 NEKO_LOG_ERROR("jsonrpc", "send {} request failed", request.method);
-                co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
+                co_return ilias::Unexpected(ret1.error());
             }
         } else {
-            co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+            co_return ilias::Unexpected(ret.error());
         }
         if (!metadata.isNotification()) {
             typename std::decay_t<T>::ResponseType respone;
             std::vector<std::byte> buffer;
             if (auto ret = co_await mTransport->recv(buffer); ret) {
                 if (auto ret1 = _recvResponse<T>(buffer, respone, request.id); !ret1) {
-                    co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
+                    co_return ilias::Unexpected(ret1.error());
                 } else {
                     if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
                         co_return {};
@@ -832,17 +832,17 @@ private:
                 }
             } else {
                 NEKO_LOG_ERROR("jsonrpc", "Error: {}", ret.error().message());
-                co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+                co_return ilias::Unexpected(ret.error());
             }
         } else {
-            co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::Ok);
+            co_return ilias::Unexpected(JsonRpcError::Ok);
         }
         co_return {};
     }
 
     template <typename T, typename... Args>
     auto _sendRequest(T& methodData, bool notification, typename std::decay_t<T>::RequestType& request,
-                      Args... args) noexcept -> ILIAS_NAMESPACE::Result<void, std::error_code> {
+                      Args... args) noexcept -> ilias::Result<void, std::error_code> {
         if constexpr (traits::optional_like_type<typename std::decay_t<T>::ParamsTupleType>::value) {
             if (notification) {
                 request    = methodData.request(std::monostate{});
@@ -874,13 +874,13 @@ private:
             return {};
         }
         NEKO_LOG_ERROR("jsonrpc", "make {} request failed", request.method);
-        return ILIAS_NAMESPACE::Unexpected(JsonRpcError::InvalidRequest);
+        return ilias::Unexpected(JsonRpcError::InvalidRequest);
     }
 
     template <typename T>
     auto _recvResponse(std::span<std::byte> buffer, typename std::decay_t<T>::ResponseType& response,
                        detail::JsonRpcIdType& id) noexcept
-        -> ILIAS_NAMESPACE::Result<typename std::decay_t<T>::RawReturnType, std::error_code> {
+        -> ilias::Result<typename std::decay_t<T>::RawReturnType, std::error_code> {
         NEKO_LOG_INFO("jsonrpc", "recv response: {}",
                       std::string_view{reinterpret_cast<const char*>(buffer.data()), buffer.size()});
         if (auto in = JsonSerializer::InputSerializer(reinterpret_cast<const char*>(buffer.data()), buffer.size());
@@ -888,13 +888,13 @@ private:
             if (response.id != id) {
                 NEKO_LOG_ERROR("jsonrpc", "id mismatch: {} != {}", detail::to_string(response.id),
                                detail::to_string(id));
-                return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ResponseIdNotMatch);
+                return ilias::Unexpected(JsonRpcError::ResponseIdNotMatch);
             }
             if (response.error.has_value()) {
                 detail::JsonRpcErrorResponse err = response.error.value();
                 NEKO_LOG_WARN("jsonrpc", "Error({}): {}", err.code, err.message);
-                return ILIAS_NAMESPACE::Unexpected(err.code > 0
-                                                       ? std::error_code(ILIAS_NAMESPACE::IoError::Code(err.code))
+                return ilias::Unexpected(err.code > 0
+                                                       ? std::error_code(ilias::IoError::Code(err.code))
                                                        : std::error_code(JsonRpcError(err.code)));
             }
             if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
@@ -904,7 +904,7 @@ private:
             }
         } else {
             NEKO_LOG_ERROR("jsonrpc", "Error: response parser error");
-            return ILIAS_NAMESPACE::Unexpected(JsonRpcError::ParseError);
+            return ilias::Unexpected(JsonRpcError::ParseError);
         }
     }
 
@@ -913,6 +913,6 @@ private:
     std::unique_ptr<detail::IMessageStream> mTransport = nullptr;
     uint64_t mId                                       = 0;
     std::vector<char> mBuffer;
-    ILIAS_NAMESPACE::Mutex mMutex;
+    ilias::Mutex mMutex;
 };
 NEKO_END_NAMESPACE

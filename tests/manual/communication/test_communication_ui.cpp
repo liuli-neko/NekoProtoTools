@@ -7,7 +7,7 @@
 #pragma comment(linker, "/subsystem:console") // 设置连接器选项
 
 NEKO_USE_NAMESPACE
-using namespace ILIAS_NAMESPACE;
+using namespace ilias;
 
 MainWidget::MainWidget(QIoContext* ctxt, NEKO_NAMESPACE::ProtoFactory& protoFactory, QWidget* parent)
     : QMainWindow(parent), ui(new Ui::MainWindow), mCtxt(ctxt), mProtoFactor(protoFactory) {
@@ -38,7 +38,7 @@ MainWidget::~MainWidget() {
 }
 
 Task<void>
-MainWidget::clientLoop(std::map<int, NEKO_NAMESPACE::ProtoStreamClient<ILIAS_NAMESPACE::TcpClient>>::iterator client,
+MainWidget::clientLoop(std::map<int, NEKO_NAMESPACE::ProtoStreamClient<ilias::TcpClient>>::iterator client,
                        QListWidgetItem* item) {
     mExit = false;
     while (!mExit) {
@@ -58,12 +58,12 @@ MainWidget::clientLoop(std::map<int, NEKO_NAMESPACE::ProtoStreamClient<ILIAS_NAM
     co_return Result<>();
 }
 
-ILIAS_NAMESPACE::Task<void> MainWidget::serverLoop() {
+ilias::Task<void> MainWidget::serverLoop() {
     NEKO_LOG_INFO("ui test", "serverLoop");
     if (!mExit) {
         co_return Unexpected<Error>(Error::InProgress);
     }
-    mListener = ILIAS_NAMESPACE::TcpListener(*mCtxt, AF_INET);
+    mListener = ilias::TcpListener(*mCtxt, AF_INET);
     ui->makeMainChannel->setDisabled(true);
     ui->listening->setDisabled(true);
     auto ret = mListener.bind(IPEndpoint(ui->serviceUrlEdit->text().toLocal8Bit().constData()));
@@ -94,7 +94,7 @@ ILIAS_NAMESPACE::Task<void> MainWidget::serverLoop() {
     co_return Result<>();
 }
 
-ILIAS_NAMESPACE::Task<void> MainWidget::makeMainChannel() {
+ilias::Task<void> MainWidget::makeMainChannel() {
     TcpClient client(*mCtxt, AF_INET);
     auto ret = co_await client.connect(IPEndpoint(ui->serviceUrlEdit->text().toLocal8Bit().constData()));
     if (!ret) {

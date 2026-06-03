@@ -287,7 +287,7 @@ This library provides a coroutine-based communication abstraction layer built up
 #include <chrono> // For timestamp
 
 NEKO_USE_NAMESPACE // Use nekoproto namespace
-using namespace ILIAS_NAMESPACE; // Use ilias namespace
+using namespace ilias; // Use ilias namespace
 
 // Define the message protocol to be transmitted
 class ChatMessage {
@@ -450,7 +450,7 @@ This library provides a lightweight JSON-RPC 2.0 implementation based on Ilias, 
 #include <string>
 
 NEKO_USE_NAMESPACE
-using namespace ILIAS_NAMESPACE;
+using namespace ilias;
 
 // 1. Define RPC service module and methods
 struct CalculatorModule {

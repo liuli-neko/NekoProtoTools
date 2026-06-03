@@ -145,7 +145,6 @@ public:
     auto name() const noexcept -> const char* override;
     auto equivalent(int value, const std::error_condition& other) const noexcept -> bool override;
 };
-ILIAS_DECLARE_ERROR(ErrorCode, ErrorCategory);
 
 inline auto ErrorCategory::message(int value) const -> std::string {
     switch (value) {

@@ -31,7 +31,7 @@ NEKO_BEGIN_NAMESPACE
 namespace detail {
 // 特化：普通函数指针
 template <typename R, typename... Args>
-struct function_traits<ILIAS_NAMESPACE::IoTask<R> (*)(Args...), void> {
+struct function_traits<ilias::IoTask<R> (*)(Args...), void> {
     using return_type = R;
     using arg_tuple   = std::tuple<Args...>;
     template <typename Ret, template <typename...> class T>
@@ -277,16 +277,16 @@ template <typename RetT, typename... Args>
 class RpcMethodExecutor {
 public:
     using RawReturnType      = RetT;
-    using CoroutinesFuncType = FunctionT<ILIAS_NAMESPACE::IoTask<RawReturnType>(Args...)>;
+    using CoroutinesFuncType = FunctionT<ilias::IoTask<RawReturnType>(Args...)>;
 
-    auto operator()(Args... args) const -> ILIAS_NAMESPACE::IoTask<RawReturnType> {
+    auto operator()(Args... args) const -> ilias::IoTask<RawReturnType> {
         if (mCoFunction) {
             co_return co_await mCoFunction(std::forward<Args>(args)...);
         }
-        co_return ILIAS_NAMESPACE::Unexpected(JsonRpcError::MethodNotBind);
+        co_return ilias::Unexpected(JsonRpcError::MethodNotBind);
     }
 
-    auto notification(Args... args) const -> ILIAS_NAMESPACE::IoTask<void> {
+    auto notification(Args... args) const -> ilias::IoTask<void> {
         struct NotificationGuard {
             bool& flag;
             NotificationGuard(bool& fg) : flag(fg) { flag = true; }
@@ -296,7 +296,7 @@ public:
 
         if (mCoFunction) {
             if (auto ret = co_await mCoFunction(std::forward<Args>(args)...); !ret) {
-                co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+                co_return ilias::Unexpected(ret.error());
             }
         }
         co_return {};

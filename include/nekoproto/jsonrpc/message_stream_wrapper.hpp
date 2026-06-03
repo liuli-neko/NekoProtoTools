@@ -31,10 +31,10 @@ template <typename T>
 concept MessageStreamClient = requires(T client, std::vector<std::byte>& buffer) {
     {
         client.recv(buffer) // must return a valid and complete jsonrpc request or response
-    } -> std::same_as<ILIAS_NAMESPACE::IoTask<void>>;
+    } -> std::same_as<ilias::IoTask<void>>;
     {
         client.send(buffer) // while provide a valid and complete jsonrpc response
-    } -> std::same_as<ILIAS_NAMESPACE::IoTask<void>>;
+    } -> std::same_as<ilias::IoTask<void>>;
     {
         client.close() // close the connection
     } -> std::same_as<void>;
@@ -58,16 +58,16 @@ concept MessageStreamListener = requires(T server) {
 
 namespace detail {
 using Error = std::error_code;
-using ILIAS_NAMESPACE::IoTask;
-using ILIAS_NAMESPACE::IPEndpoint;
-using ILIAS_NAMESPACE::Task;
-using IliasTcpClient   = ILIAS_NAMESPACE::TcpClient;
-using IliasTcpListener = ILIAS_NAMESPACE::TcpListener;
-using IliasUdpClient   = ILIAS_NAMESPACE::UdpClient;
-using ILIAS_NAMESPACE::hostToNetwork;
-using ILIAS_NAMESPACE::networkToHost;
-using ILIAS_NAMESPACE::Unexpected;
-using ILIAS_NAMESPACE::unstoppable;
+using ilias::IoTask;
+using ilias::IPEndpoint;
+using ilias::Task;
+using IliasTcpClient   = ilias::TcpClient;
+using IliasTcpListener = ilias::TcpListener;
+using IliasUdpClient   = ilias::UdpClient;
+using ilias::hostToNetwork;
+using ilias::networkToHost;
+using ilias::Unexpected;
+using ilias::unstoppable;
 
 template <typename T, class enable = void>
 class MessageStream;

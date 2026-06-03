@@ -3,6 +3,7 @@ add_rules("mode.debug", "mode.release", "mode.releasedbg", "mode.coverage", "mod
 set_version("0.2.6", {build = "%Y%m%d%H%M"})
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 set_warnings("allextra")
+set_encodings("utf-8")
 set_policy("package.cmake_generator.ninja", true)
 
 option("stdc",   {showmenu = true, default = 23, values = {23}})
@@ -156,7 +157,7 @@ if has_config("enable_communication") or has_config("enable_jsonrpc") then
     add_requires("ilias")
     if not has_config("3rd_custom") then
         -- configurations of required libraries
-        add_requireconfs("**ilias", {version = "0.4.1", configs = { shared = is_kind("shared"), stdcxx = get_config("stdcxx")}})
+        add_requireconfs("**ilias", {version = "0.4.2", configs = { shared = is_kind("shared"), stdcxx = get_config("stdcxx")}})
     end
 end
 

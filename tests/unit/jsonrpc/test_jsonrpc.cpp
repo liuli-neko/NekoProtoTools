@@ -53,7 +53,7 @@ struct MyFunc {
     static int execute(int aa, int bb) { return aa + bb; }
 };
 
-ILIAS_NAMESPACE::IoTask<std::string> testxx(MXXParams params) {
+ilias::IoTask<std::string> testxx(MXXParams params) {
     std::string ret = std::to_string(params.param1) + params.param2;
     for (auto& ii : params.param3) {
         ret += "," + std::to_string(ii);
@@ -61,7 +61,7 @@ ILIAS_NAMESPACE::IoTask<std::string> testxx(MXXParams params) {
     co_return ret;
 }
 
-ILIAS_NAMESPACE::Task<std::string> failed_testxx(MXXParams params) {
+ilias::Task<std::string> failed_testxx(MXXParams params) {
     std::string ret = std::to_string(params.param1) + params.param2;
     for (auto& ii : params.param3) {
         ret += "," + std::to_string(ii);
@@ -69,7 +69,7 @@ ILIAS_NAMESPACE::Task<std::string> failed_testxx(MXXParams params) {
     co_return ret;
 }
 
-ILIAS_NAMESPACE::IoTask<std::string> test_optional_params(std::optional<MXXParams> params) {
+ilias::IoTask<std::string> test_optional_params(std::optional<MXXParams> params) {
     if (params) {
         std::string ret = std::to_string(params->param1) + params->param2;
         for (auto& ii : params->param3) {
@@ -102,7 +102,7 @@ public:
     void SetUp() override {}
     void TearDown() override {}
 
-    static ILIAS_NAMESPACE::PlatformContext* gContext;
+    static ilias::PlatformContext* gContext;
 };
 
 TEST_F(JsonRpcTest, BindAndCall) {
@@ -357,7 +357,7 @@ TEST_F(JsonRpcTest, Batch) {
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> {
         // some bug in ilias::sleep
-        // co_await ILIAS_NAMESPACE::sleep(std::chrono::milliseconds(10));
+        // co_await ilias::sleep(std::chrono::milliseconds(10));
         co_return a1 + b1;
     };
     server->test2 = [](int a1, int b1) -> ilias::IoTask<void> {
@@ -548,15 +548,15 @@ TEST_F(JsonRpcTest, Basic) {
     ASSERT_TRUE(methodInfoList.has_value());
     EXPECT_EQ(methodInfoList.value().size(), 18);
 
-    server.bindMethod<>("test112", traits::FunctionT<ilias::IoTask<void>()>([]() -> ILIAS_NAMESPACE::IoTask<void> {
+    server.bindMethod<>("test112", traits::FunctionT<ilias::IoTask<void>()>([]() -> ilias::IoTask<void> {
                             std::cout << "test112: sleep 5s start" << std::endl;
                             co_await ilias::sleep(std::chrono::milliseconds(5000));
                             std::cout << "test112: sleep 5s end" << std::endl;
                             co_return {};
                         }));
     [&]() -> ilias::Task<void> {
-        co_await ILIAS_NAMESPACE::whenAll(
-            [&server]() -> ILIAS_NAMESPACE::Task<void> {
+        co_await ilias::whenAll(
+            [&server]() -> ilias::Task<void> {
                 std::cout << "cancel test112: sleep 1s start" << std::endl;
                 co_await ilias::sleep(std::chrono::milliseconds(1000));
                 server.cancelAll();
@@ -570,10 +570,10 @@ TEST_F(JsonRpcTest, Basic) {
     server.close();
 }
 
-ILIAS_NAMESPACE::PlatformContext* JsonRpcTest::gContext = nullptr;
+ilias::PlatformContext* JsonRpcTest::gContext = nullptr;
 
 #define CUSTOM_MAIN                                                                                                    \
-    ILIAS_NAMESPACE::PlatformContext context;                                                                          \
+    ilias::PlatformContext context;                                                                          \
     context.install();                                                                                                 \
     JsonRpcTest::gContext = &context;
 

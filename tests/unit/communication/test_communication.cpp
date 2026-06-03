@@ -19,13 +19,13 @@
 
 NEKO_USE_NAMESPACE
 
-using ILIAS_NAMESPACE::IoContext;
-using ILIAS_NAMESPACE::IPEndpoint;
-using ILIAS_NAMESPACE::TcpClient;
-using ILIAS_NAMESPACE::TcpListener;
-using ILIAS_NAMESPACE::UdpClient;
-using ILIAS_NAMESPACE::Unexpected;
-using ILIAS_NAMESPACE::sockopt::TcpNoDelay;
+using ilias::IoContext;
+using ilias::IPEndpoint;
+using ilias::TcpClient;
+using ilias::TcpListener;
+using ilias::UdpClient;
+using ilias::Unexpected;
+using ilias::sockopt::TcpNoDelay;
 
 class Message {
 public:
@@ -63,8 +63,8 @@ std::string to_string(const T& values) {
     return ss.str();
 }
 
-ILIAS_NAMESPACE::IoTask<void>
-client_loop([[maybe_unused]] ILIAS_NAMESPACE::IoContext& ioContext,
+ilias::IoTask<void>
+client_loop([[maybe_unused]] ilias::IoContext& ioContext,
             ProtoFactory& protoFactory, // NOLINT(readability-function-cognitive-complexity)
             StreamFlag sendFlag, StreamFlag recvFlag) {
     NEKO_LOG_DEBUG("unit test", "Client connect to service");
@@ -113,7 +113,7 @@ client_loop([[maybe_unused]] ILIAS_NAMESPACE::IoContext& ioContext,
     co_return co_await client.close();
 }
 
-ILIAS_NAMESPACE::IoTask<void> handle_loop(ProtoStreamClient<TcpClient>&& pClient,
+ilias::IoTask<void> handle_loop(ProtoStreamClient<TcpClient>&& pClient,
                                           StreamFlag sendFlag, // NOLINT(readability-function-cognitive-complexity)
                                           StreamFlag recvFlag) {
     ProtoStreamClient<TcpClient> client(std::move(pClient));
@@ -154,7 +154,7 @@ ILIAS_NAMESPACE::IoTask<void> handle_loop(ProtoStreamClient<TcpClient>&& pClient
     co_return co_await client.close();
 }
 
-ILIAS_NAMESPACE::IoTask<void> server_loop([[maybe_unused]] IoContext& ioContext, ProtoFactory& protoFactor,
+ilias::IoTask<void> server_loop([[maybe_unused]] IoContext& ioContext, ProtoFactory& protoFactor,
                                           StreamFlag sendFlag, StreamFlag recvFlag) {
     NEKO_LOG_DEBUG("unit test", "serverLoop");
     auto retl = co_await TcpListener::bind(IPEndpoint("127.0.0.1", 10345));
@@ -171,25 +171,25 @@ ILIAS_NAMESPACE::IoTask<void> server_loop([[maybe_unused]] IoContext& ioContext,
     ret.value().first.setOption(TcpNoDelay(1));
     auto ret1 = co_await handle_loop(ProtoStreamClient<ilias::TcpClient>(protoFactor, std::move(ret.value().first)),
                                      sendFlag, recvFlag);
-    if (!ret1 && ret1.error() != ILIAS_NAMESPACE::IoError::ConnectionReset) {
+    if (!ret1 && ret1.error() != ilias::IoError::ConnectionReset) {
         co_return Unexpected(ret1.error());
     }
     co_return {};
 }
 
-ILIAS_NAMESPACE::IoTask<void> test(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlag,
+ilias::IoTask<void> test(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlag,
                                    StreamFlag recvFlag) {
     auto [ret1, ret2] = co_await whenAll(server_loop(ioContext, protoFactory, sendFlag, recvFlag),
                                          client_loop(ioContext, protoFactory, sendFlag, recvFlag));
-    EXPECT_FALSE((!ret1 && ret1.error() != ILIAS_NAMESPACE::IoError::ConnectionReset) || (!ret2));
+    EXPECT_FALSE((!ret1 && ret1.error() != ilias::IoError::ConnectionReset) || (!ret2));
     co_return {};
 }
 
-ILIAS_NAMESPACE::IoTask<void> udp_client([[maybe_unused]] IoContext& ioContext, ProtoFactory& protoFactory,
+ilias::IoTask<void> udp_client([[maybe_unused]] IoContext& ioContext, ProtoFactory& protoFactory,
                                          StreamFlag sendFlags, StreamFlag recvFlags, const IPEndpoint& bindPoint,
                                          const IPEndpoint& endpoint) {
     NEKO_LOG_DEBUG("unit test", "testing udp client ...");
-    auto udpclient = ILIAS_NAMESPACE::Socket::make(AF_INET, SOCK_DGRAM, 0).value();
+    auto udpclient = ilias::Socket::make(AF_INET, SOCK_DGRAM, 0).value();
 #ifdef _WIN32
     auto fd = udpclient.get();
     // 关闭SIO_UDP_CONNRESET
@@ -202,7 +202,7 @@ ILIAS_NAMESPACE::IoTask<void> udp_client([[maybe_unused]] IoContext& ioContext, 
                            &lpcbBytesReturned, nullptr, nullptr);
     if (wsaRet == SOCKET_ERROR) {
         NEKO_LOG_DEBUG("unit test", "WSAIoctl fd {} failed: {}", fd,
-                       ILIAS_NAMESPACE::SystemError::fromErrno().toString());
+                       ilias::SystemError::fromErrno().toString());
     }
 #endif
     auto ret = udpclient.bind(bindPoint);
@@ -246,11 +246,11 @@ ILIAS_NAMESPACE::IoTask<void> udp_client([[maybe_unused]] IoContext& ioContext, 
     co_return {};
 }
 
-ILIAS_NAMESPACE::IoTask<void> udp_client_peer([[maybe_unused]] IoContext& ioContext, ProtoFactory& protoFactory,
+ilias::IoTask<void> udp_client_peer([[maybe_unused]] IoContext& ioContext, ProtoFactory& protoFactory,
                                               StreamFlag sendFlags, StreamFlag recvFlags, const IPEndpoint& bindPoint,
                                               const IPEndpoint& endpoint) {
     NEKO_LOG_DEBUG("unit test", "testing udp client ...");
-    auto udpclient = ILIAS_NAMESPACE::Socket::make(AF_INET, SOCK_DGRAM, 0).value();
+    auto udpclient = ilias::Socket::make(AF_INET, SOCK_DGRAM, 0).value();
 #ifdef _WIN32
     auto fd = udpclient.get();
     // 关闭SIO_UDP_CONNRESET
@@ -263,7 +263,7 @@ ILIAS_NAMESPACE::IoTask<void> udp_client_peer([[maybe_unused]] IoContext& ioCont
                            &lpcbBytesReturned, nullptr, nullptr);
     if (wsaRet == SOCKET_ERROR) {
         NEKO_LOG_DEBUG("unit test", "WSAIoctl fd {} failed: {}", fd,
-                       ILIAS_NAMESPACE::SystemError::fromErrno().toString());
+                       ilias::SystemError::fromErrno().toString());
     }
 #endif
     auto ret = udpclient.bind(bindPoint);
@@ -306,7 +306,7 @@ ILIAS_NAMESPACE::IoTask<void> udp_client_peer([[maybe_unused]] IoContext& ioCont
     co_return {};
 }
 
-ILIAS_NAMESPACE::IoTask<void> udp_test(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlags,
+ilias::IoTask<void> udp_test(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlags,
                                        StreamFlag recvFlags) {
     uint16_t port1 = (rand() % 1000) + 10000;
     uint16_t port2 = (rand() % 1000) + 10000;
@@ -328,7 +328,7 @@ class Communication : public ::testing::Test {
 public:
     void SetUp() override { ioContext.install(); }
     void TearDown() override {}
-    ILIAS_NAMESPACE::PlatformContext ioContext;
+    ilias::PlatformContext ioContext;
     ProtoFactory protoFactory;
 };
 
