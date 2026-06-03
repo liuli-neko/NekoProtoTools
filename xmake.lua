@@ -206,6 +206,27 @@ target("NekoSerializer")
     end)
 target_end()
 
+target("NekoArgParser")
+    set_kind("headeronly")
+    add_headerfiles("include/(nekoproto/global/**.hpp)")
+    add_headerfiles("include/(nekoproto/global/**.h)")
+    add_headerfiles("include/(nekoproto/serialization/reflection.hpp)")
+    add_headerfiles("include/(nekoproto/serialization/private/**.hpp)")
+    add_headerfiles("include/(nekoproto/argparser/**.hpp)")
+    add_includedirs("include")
+
+    add_options("enable_spdlog",
+                "enable_fmt",
+                "enable_stdformat",
+                "custom_namespace")
+
+    set_configvar("NEKO_NAMESPACE", "$(custom_namespace)")
+    on_load(function (target)
+        import("lua.auto", {rootdir = os.projectdir()})
+        auto().auto_add_packages(target)
+    end)
+target_end()
+
 if has_config("enable_jsonrpc") then
     target("NekoJsonRpc")
         -- TODO: 考虑改为 shared 或 static 以进一步减少编译时间
