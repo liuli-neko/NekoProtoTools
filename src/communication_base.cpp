@@ -13,7 +13,7 @@
 #include <ilias/task.hpp>
 #include <system_error>
 
-using namespace ILIAS_NAMESPACE;
+using namespace ilias;
 
 NEKO_BEGIN_NAMESPACE
 

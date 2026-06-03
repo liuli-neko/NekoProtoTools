@@ -290,7 +290,7 @@ int main() {
 #include <chrono> // 用于时间戳
 
 NEKO_USE_NAMESPACE // 使用 nekoproto 命名空间
-using namespace ILIAS_NAMESPACE; // 使用 ilias 命名空间
+using namespace ilias; // 使用 ilias 命名空间
 
 // 定义要传输的消息协议
 class ChatMessage {
@@ -432,7 +432,7 @@ int main() {
 #include <string>
 
 NEKO_USE_NAMESPACE
-using namespace ILIAS_NAMESPACE;
+using namespace ilias;
 
 // 1. 定义 RPC 服务模块及方法
 struct CalculatorModule {

@@ -46,7 +46,6 @@ public:
     auto name() const noexcept -> const char* override { return "jsonrpc"; }
 };
 
-ILIAS_DECLARE_ERROR(JsonRpcError, JsonRpcErrorCategory); // NOLINT
 // Declaration - implementation moved to src/jsonrpc.cpp
 auto make_error_code(JsonRpcError value) noexcept -> std::error_code;
 NEKO_END_NAMESPACE

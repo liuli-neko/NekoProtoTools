@@ -33,19 +33,19 @@ struct Message {
 class MainWidget : public QMainWindow {
     Q_OBJECT
 public:
-    MainWidget(ILIAS_NAMESPACE::QIoContext* ctxt, NEKO_NAMESPACE::ProtoFactory& protoFactory,
+    MainWidget(ilias::QIoContext* ctxt, NEKO_NAMESPACE::ProtoFactory& protoFactory,
                QWidget* parent = nullptr);
     ~MainWidget();
 
-    ILIAS_NAMESPACE::Task<void>
-    clientLoop(std::map<int, NEKO_NAMESPACE::ProtoStreamClient<ILIAS_NAMESPACE::TcpClient>>::iterator client,
+    ilias::Task<void>
+    clientLoop(std::map<int, NEKO_NAMESPACE::ProtoStreamClient<ilias::TcpClient>>::iterator client,
                QListWidgetItem* item);
-    ILIAS_NAMESPACE::Task<void> serverLoop();
-    ILIAS_NAMESPACE::Task<void> makeMainChannel();
+    ilias::Task<void> serverLoop();
+    ilias::Task<void> makeMainChannel();
     template <typename T>
-    ILIAS_NAMESPACE::Task<void> sendMessage(NEKO_NAMESPACE::ProtoStreamClient<T>& client);
+    ilias::Task<void> sendMessage(NEKO_NAMESPACE::ProtoStreamClient<T>& client);
     template <typename T>
-    ILIAS_NAMESPACE::Task<void> recvMessage(NEKO_NAMESPACE::ProtoStreamClient<T>& client);
+    ilias::Task<void> recvMessage(NEKO_NAMESPACE::ProtoStreamClient<T>& client);
 
 protected Q_SLOTS:
     void startService();
@@ -56,18 +56,18 @@ protected Q_SLOTS:
 
 private:
     Ui::MainWindow* ui;
-    ILIAS_NAMESPACE::QIoContext* mCtxt;
+    ilias::QIoContext* mCtxt;
     NEKO_NAMESPACE::ProtoFactory& mProtoFactor;
     bool mExit = true;
-    ILIAS_NAMESPACE::TcpListener mListener;
-    std::vector<ILIAS_NAMESPACE::CancelHandle> mHandles;
-    std::map<int, NEKO_NAMESPACE::ProtoStreamClient<ILIAS_NAMESPACE::TcpClient>> mClients;
+    ilias::TcpListener mListener;
+    std::vector<ilias::CancelHandle> mHandles;
+    std::map<int, NEKO_NAMESPACE::ProtoStreamClient<ilias::TcpClient>> mClients;
     int mChannelCount = 0;
     int mCurrentIndex = 0;
 };
 
 template <typename T>
-ILIAS_NAMESPACE::Task<void> MainWidget::sendMessage(NEKO_NAMESPACE::ProtoStreamClient<T>& client) {
+ilias::Task<void> MainWidget::sendMessage(NEKO_NAMESPACE::ProtoStreamClient<T>& client) {
     Message msg;
     msg.id        = mCurrentIndex;
     msg.msg       = std::string(ui->sendEdit->toPlainText().toUtf8());
@@ -77,17 +77,17 @@ ILIAS_NAMESPACE::Task<void> MainWidget::sendMessage(NEKO_NAMESPACE::ProtoStreamC
     if (!ret1) {
         NEKO_LOG_ERROR("ui test", "send failed: {}",
                        QString::fromUtf8(ret1.error().message()).toLocal8Bit().constData());
-        co_return ILIAS_NAMESPACE::Unexpected(ret1.error());
+        co_return ilias::Unexpected(ret1.error());
     }
-    co_return ILIAS_NAMESPACE::Result<>();
+    co_return ilias::Result<>();
 }
 
 template <typename T>
-ILIAS_NAMESPACE::Task<void> MainWidget::recvMessage(NEKO_NAMESPACE::ProtoStreamClient<T>& client) {
+ilias::Task<void> MainWidget::recvMessage(NEKO_NAMESPACE::ProtoStreamClient<T>& client) {
     auto ret = co_await client.recv(NEKO_NAMESPACE::ProtoStreamClient<T>::SerializerInThread);
     if (!ret) {
         NEKO_LOG_ERROR("ui test", "recv failed: {}", ret.error().message());
-        co_return ILIAS_NAMESPACE::Unexpected(ret.error());
+        co_return ilias::Unexpected(ret.error());
     }
     auto retMsg = std::move(ret.value());
 
@@ -98,5 +98,5 @@ ILIAS_NAMESPACE::Task<void> MainWidget::recvMessage(NEKO_NAMESPACE::ProtoStreamC
     } else {
         NEKO_LOG_WARN("ui test", "recv: {}", to_hex(retMsg->toData()));
     }
-    co_return ILIAS_NAMESPACE::Result<>();
+    co_return ilias::Result<>();
 }
