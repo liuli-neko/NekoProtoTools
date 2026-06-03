@@ -1,0 +1,7 @@
+target("test_argparser_manual")
+    set_kind("binary")
+    set_default(false)
+    add_includedirs("$(projectdir)/include")
+    add_files("test_argparser_manual.cpp")
+    add_defines("NEKO_PROTO_STATIC")
+target_end()
