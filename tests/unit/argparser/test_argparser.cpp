@@ -96,7 +96,7 @@ TEST(ArgParser, ErrorCode) {
     auto result = parser<CliOptions>(static_cast<int>(std::size(argv)), argv);
 
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), make_error_code(argparser_error::missing_required));
+    EXPECT_EQ(result.error(), make_error_code(ArgParserError::MissingRequired));
 }
 
 TEST(ArgParser, RangeConstraint) {
@@ -105,7 +105,7 @@ TEST(ArgParser, RangeConstraint) {
     auto result = parser<CliOptions>(static_cast<int>(std::size(argv)), argv);
 
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), make_error_code(argparser_error::invalid_value));
+    EXPECT_EQ(result.error(), make_error_code(ArgParserError::InvalidValue));
 }
 
 TEST(ArgParser, HelpRequestedAndFormatHelp) {
@@ -114,7 +114,7 @@ TEST(ArgParser, HelpRequestedAndFormatHelp) {
     auto result = parser<CliOptions>(static_cast<int>(std::size(argv)), argv);
 
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), make_error_code(argparser_error::help_requested));
+    EXPECT_EQ(result.error(), make_error_code(ArgParserError::HelpRequested));
 
     ArgParserConfig config;
     config.programName = "demo";
@@ -187,7 +187,7 @@ TEST(ArgParser, ChoicesConstraint) {
     auto result = parser<ToolCommands>(static_cast<int>(std::size(argv)), argv);
 
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), make_error_code(argparser_error::invalid_value));
+    EXPECT_EQ(result.error(), make_error_code(ArgParserError::InvalidValue));
 }
 
 TEST(ArgParser, PlaceholderCommand) {
@@ -208,7 +208,7 @@ TEST(ArgParser, CommandContextHelpAndVersion) {
     auto helpResult = parser<ToolCommands>(static_cast<int>(std::size(helpArgv)), helpArgv, config);
 
     ASSERT_FALSE(helpResult.has_value());
-    EXPECT_EQ(helpResult.error(), make_error_code(argparser_error::help_requested));
+    EXPECT_EQ(helpResult.error(), make_error_code(ArgParserError::HelpRequested));
 
     auto help = format_help<ToolCommands>(static_cast<int>(std::size(helpArgv)), helpArgv, config);
     EXPECT_NE(help.find("Usage: tool build [options]"), std::string::npos);
@@ -219,7 +219,7 @@ TEST(ArgParser, CommandContextHelpAndVersion) {
     const char* versionArgv[] = {"tool", "--version"};
     auto versionResult = parser<ToolCommands>(static_cast<int>(std::size(versionArgv)), versionArgv, config);
     ASSERT_FALSE(versionResult.has_value());
-    EXPECT_EQ(versionResult.error(), make_error_code(argparser_error::version_requested));
+    EXPECT_EQ(versionResult.error(), make_error_code(ArgParserError::VersionRequested));
     EXPECT_EQ(format_version(config), "tool 1.2.3\n");
 }
 
@@ -231,7 +231,7 @@ TEST(ArgParser, PlaceholderCommandContextHelp) {
     auto result = parser<ToolCommands>(static_cast<int>(std::size(argv)), argv, config);
 
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), make_error_code(argparser_error::help_requested));
+    EXPECT_EQ(result.error(), make_error_code(ArgParserError::HelpRequested));
 
     auto help = format_help<ToolCommands>(static_cast<int>(std::size(argv)), argv, config);
     EXPECT_NE(help.find("Usage: tool clean"), std::string::npos);
@@ -244,5 +244,5 @@ TEST(ArgParser, UnknownCommand) {
     auto result = parser<ToolCommands>(static_cast<int>(std::size(argv)), argv);
 
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), make_error_code(argparser_error::unknown_command));
+    EXPECT_EQ(result.error(), make_error_code(ArgParserError::UnknownCommand));
 }

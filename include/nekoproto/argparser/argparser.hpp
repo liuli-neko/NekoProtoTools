@@ -14,16 +14,16 @@
 #include "nekoproto/global/string_literal.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
+#include <algorithm>
 #include <array>
-#include <charconv>
-#include <concepts>
 #include <cctype>
+#include <charconv>
 #include <expected>
 #include <functional>
 #include <iomanip>
 #include <optional>
-#include <sstream>
 #include <span>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -33,17 +33,19 @@
 
 NEKO_BEGIN_NAMESPACE
 
-enum class argparser_error {
-    success = 0,
-    unknown_option,
-    missing_value,
-    invalid_value,
-    missing_required,
-    unexpected_positional,
-    invalid_definition,
-    help_requested,
-    unknown_command,
-    version_requested,
+// Public API -----------------------------------------------------------------
+
+enum class ArgParserError {
+    Success = 0,
+    UnknownOption,
+    MissingValue,
+    InvalidValue,
+    MissingRequired,
+    UnexpectedPositional,
+    InvalidDefinition,
+    HelpRequested,
+    UnknownCommand,
+    VersionRequested,
 };
 
 namespace detail {
@@ -51,26 +53,26 @@ class ArgParserErrorCategory final : public std::error_category {
 public:
     [[nodiscard]] const char* name() const noexcept override { return "nekoproto.argparser"; }
     [[nodiscard]] std::string message(int condition) const override {
-        switch (static_cast<argparser_error>(condition)) {
-        case argparser_error::success:
+        switch (static_cast<ArgParserError>(condition)) {
+        case ArgParserError::Success:
             return "success";
-        case argparser_error::unknown_option:
+        case ArgParserError::UnknownOption:
             return "unknown option";
-        case argparser_error::missing_value:
+        case ArgParserError::MissingValue:
             return "missing option value";
-        case argparser_error::invalid_value:
+        case ArgParserError::InvalidValue:
             return "invalid option value";
-        case argparser_error::missing_required:
+        case ArgParserError::MissingRequired:
             return "missing required option";
-        case argparser_error::unexpected_positional:
+        case ArgParserError::UnexpectedPositional:
             return "unexpected positional argument";
-        case argparser_error::invalid_definition:
+        case ArgParserError::InvalidDefinition:
             return "invalid argument definition";
-        case argparser_error::help_requested:
+        case ArgParserError::HelpRequested:
             return "help requested";
-        case argparser_error::unknown_command:
+        case ArgParserError::UnknownCommand:
             return "unknown command";
-        case argparser_error::version_requested:
+        case ArgParserError::VersionRequested:
             return "version requested";
         }
         return "unknown argparser error";
@@ -78,20 +80,20 @@ public:
 };
 
 inline const std::error_category& argparser_error_category() {
-    static ArgParserErrorCategory category;
-    return category;
+    static ArgParserErrorCategory kCategory;
+    return kCategory;
 }
 } // namespace detail
 
-inline std::error_code make_error_code(argparser_error error) {
+inline std::error_code make_error_code(ArgParserError error) {
     return {static_cast<int>(error), detail::argparser_error_category()};
 }
 
 template <ConstexprString Long = "", ConstexprString Short = "", ConstexprString Help = "", ConstexprString... Choices>
 struct ArgTags {
-    static constexpr std::string_view longName  = Long.view();  // NOLINT
-    static constexpr std::string_view shortName = Short.view(); // NOLINT
-    static constexpr std::string_view help      = Help.view();  // NOLINT
+    static constexpr std::string_view longName                                = Long.view();         // NOLINT
+    static constexpr std::string_view shortName                               = Short.view();        // NOLINT
+    static constexpr std::string_view help                                    = Help.view();         // NOLINT
     static constexpr std::array<std::string_view, sizeof...(Choices)> choices = {Choices.view()...}; // NOLINT
 
     bool required   = false;
@@ -122,6 +124,9 @@ struct ArgParserConfig {
 };
 
 namespace detail {
+
+// Type traits ----------------------------------------------------------------
+
 template <typename T>
 struct is_arg_optional : std::false_type {}; // NOLINT(readability-identifier-naming)
 
@@ -164,6 +169,8 @@ template <typename T>
 inline constexpr bool is_nested_option_v = // NOLINT
     std::is_class_v<std::remove_cvref_t<T>> && !is_string_like_v<T> && !is_arg_optional_v<T> && !is_vector_v<T> &&
     detail::has_values_meta<std::remove_cvref_t<T>>;
+
+// Tag access -----------------------------------------------------------------
 
 template <typename Tags>
 constexpr std::string_view tag_long_name(const Tags& /*unused*/) {
@@ -278,29 +285,21 @@ constexpr auto tag_choices(const Tags& /*unused*/) {
     }
 }
 
-inline bool is_option_token(std::string_view arg) {
-    return arg.size() > 1 && arg[0] == '-';
-}
+// Token and scalar parsing ---------------------------------------------------
 
-inline bool is_help_token(std::string_view arg) {
-    return arg == "--help" || arg == "-h";
-}
+inline bool is_option_token(std::string_view arg) { return arg.size() > 1 && arg[0] == '-'; }
 
-inline bool is_version_token(std::string_view arg) {
-    return arg == "--version" || arg == "-V";
-}
+inline bool is_help_token(std::string_view arg) { return arg == "--help" || arg == "-h"; }
+
+inline bool is_version_token(std::string_view arg) { return arg == "--version" || arg == "-V"; }
 
 inline bool equals_ignore_case(std::string_view lhs, std::string_view rhs) {
     if (lhs.size() != rhs.size()) {
         return false;
     }
-    for (std::size_t idx = 0; idx < lhs.size(); ++idx) {
-        if (std::tolower(static_cast<unsigned char>(lhs[idx])) !=
-            std::tolower(static_cast<unsigned char>(rhs[idx]))) {
-            return false;
-        }
-    }
-    return true;
+    return std::equal(lhs.begin(), lhs.end(), rhs.begin(), [](char lhs, char rhs) {
+        return std::tolower(static_cast<unsigned char>(lhs)) == std::tolower(static_cast<unsigned char>(rhs));
+    });
 }
 
 inline std::error_code parse_bool(std::string_view text, bool& value) {
@@ -318,7 +317,7 @@ inline std::error_code parse_bool(std::string_view text, bool& value) {
         value = false;
         return {};
     }
-    return make_error_code(argparser_error::invalid_value);
+    return make_error_code(ArgParserError::InvalidValue);
 }
 
 template <typename T>
@@ -333,33 +332,25 @@ std::error_code parse_scalar(std::string_view text, T& value) {
         value = text;
         return {};
     } else if constexpr (std::is_enum_v<RawT>) {
-        constexpr auto enumNames  = Reflect<RawT>::names();
-        constexpr auto enumValues = Reflect<RawT>::values();
-        for (std::size_t idx = 0; idx < enumNames.size(); ++idx) {
-            if (enumNames[idx] == text) {
-                value = enumValues[idx];
+        constexpr auto EnumNames  = Reflect<RawT>::names();
+        constexpr auto EnumValues = Reflect<RawT>::values();
+        for (std::size_t idx = 0; idx < EnumNames.size(); ++idx) {
+            if (EnumNames[idx] == text) {
+                value = EnumValues[idx];
                 return {};
             }
         }
         std::underlying_type_t<RawT> raw{};
         const auto [ptr, ec] = std::from_chars(text.data(), text.data() + text.size(), raw);
         if (ec != std::errc{} || ptr != text.data() + text.size()) {
-            return make_error_code(argparser_error::invalid_value);
+            return make_error_code(ArgParserError::InvalidValue);
         }
         value = static_cast<RawT>(raw);
         return {};
-    } else if constexpr (std::is_integral_v<RawT>) {
+    } else if constexpr (std::is_integral_v<RawT> || std::is_floating_point_v<RawT>) {
         const auto [ptr, ec] = std::from_chars(text.data(), text.data() + text.size(), value);
         if (ec != std::errc{} || ptr != text.data() + text.size()) {
-            return make_error_code(argparser_error::invalid_value);
-        }
-        return {};
-    } else if constexpr (std::is_floating_point_v<RawT>) {
-        std::string buffer{text};
-        std::istringstream stream(buffer);
-        stream >> value;
-        if (!stream || !stream.eof()) {
-            return make_error_code(argparser_error::invalid_value);
+            return make_error_code(ArgParserError::InvalidValue);
         }
         return {};
     } else {
@@ -388,6 +379,8 @@ std::error_code assign_value(std::string_view text, T& value) {
         return parse_scalar(text, value);
     }
 }
+
+// Validation -----------------------------------------------------------------
 
 template <typename T>
 inline constexpr bool is_range_value_v = // NOLINT
@@ -420,23 +413,23 @@ std::error_code validate_range(const T& value, bool hasRange, double min, double
         return {};
     }
     if constexpr (!is_range_supported_v<RawT>) {
-        return make_error_code(argparser_error::invalid_definition);
+        return make_error_code(ArgParserError::InvalidDefinition);
     } else if constexpr (is_range_value_v<RawT>) {
         if (!scalar_in_range(value, min, max)) {
-            return make_error_code(argparser_error::invalid_value);
+            return make_error_code(ArgParserError::InvalidValue);
         }
     } else if constexpr (is_arg_optional_v<RawT>) {
         if (value.has_value() && !scalar_in_range(*value, min, max)) {
-            return make_error_code(argparser_error::invalid_value);
+            return make_error_code(ArgParserError::InvalidValue);
         }
     } else if constexpr (is_vector_v<RawT>) {
         for (const auto& item : value) {
             if (!scalar_in_range(item, min, max)) {
-                return make_error_code(argparser_error::invalid_value);
+                return make_error_code(ArgParserError::InvalidValue);
             }
         }
     } else {
-        return make_error_code(argparser_error::invalid_definition);
+        return make_error_code(ArgParserError::InvalidDefinition);
     }
     return {};
 }
@@ -460,12 +453,7 @@ inline constexpr bool is_choices_supported_v = []() consteval { // NOLINT
 }();
 
 inline bool choice_contains(std::span<const std::string_view> choices, std::string_view value) {
-    for (const auto choice : choices) {
-        if (choice == value) {
-            return true;
-        }
-    }
-    return false;
+    return std::any_of(choices.begin(), choices.end(), [&](const auto& choice) { return choice == value; });
 }
 
 template <typename T>
@@ -474,11 +462,11 @@ bool choice_value_allowed(const T& value, std::span<const std::string_view> choi
     if constexpr (is_string_like_v<RawT>) {
         return choice_contains(choices, value);
     } else if constexpr (std::is_enum_v<RawT>) {
-        constexpr auto enumNames  = Reflect<RawT>::names();
-        constexpr auto enumValues = Reflect<RawT>::values();
-        for (std::size_t idx = 0; idx < enumNames.size(); ++idx) {
-            if (enumValues[idx] == value) {
-                return choice_contains(choices, enumNames[idx]);
+        constexpr auto EnumNames  = Reflect<RawT>::names();
+        constexpr auto EnumValues = Reflect<RawT>::values();
+        for (std::size_t idx = 0; idx < EnumNames.size(); ++idx) {
+            if (EnumValues[idx] == value) {
+                return choice_contains(choices, EnumNames[idx]);
             }
         }
         return false;
@@ -494,19 +482,19 @@ std::error_code validate_choices(const T& value, std::span<const std::string_vie
         return {};
     }
     if constexpr (!is_choices_supported_v<RawT>) {
-        return make_error_code(argparser_error::invalid_definition);
+        return make_error_code(ArgParserError::InvalidDefinition);
     } else if constexpr (is_choice_value_v<RawT>) {
         if (!choice_value_allowed(value, choices)) {
-            return make_error_code(argparser_error::invalid_value);
+            return make_error_code(ArgParserError::InvalidValue);
         }
     } else if constexpr (is_arg_optional_v<RawT>) {
         if (value.has_value() && !choice_value_allowed(*value, choices)) {
-            return make_error_code(argparser_error::invalid_value);
+            return make_error_code(ArgParserError::InvalidValue);
         }
     } else if constexpr (is_vector_v<RawT>) {
         for (const auto& item : value) {
             if (!choice_value_allowed(item, choices)) {
-                return make_error_code(argparser_error::invalid_value);
+                return make_error_code(ArgParserError::InvalidValue);
             }
         }
     }
@@ -529,6 +517,8 @@ struct ArgSpec {
     std::vector<std::string_view> choices;
     std::function<std::error_code(std::string_view)> assign;
 };
+
+// Command metadata -----------------------------------------------------------
 
 template <typename T>
 constexpr bool field_is_flag(const T& /*unused*/, bool taggedFlag) {
@@ -628,18 +618,20 @@ consteval void static_check_parser_definition() {
 }
 
 template <typename T>
-struct parser_result {
+struct ParserResult {
     using type = T;
 };
 
 template <typename T>
     requires(is_command_set_v<T>)
-struct parser_result<T> {
+struct ParserResult<T> {
     using type = tuple_to_variant_t<typename Reflect<std::remove_cvref_t<T>>::value_types>;
 };
 
 template <typename T>
-using parser_result_t = typename parser_result<std::remove_cvref_t<T>>::type;
+using parser_result_t = typename ParserResult<std::remove_cvref_t<T>>::type;
+
+// Spec collection ------------------------------------------------------------
 
 inline std::string join_arg_name(std::string_view prefix, std::string_view name, char separator) {
     if (prefix.empty()) {
@@ -655,8 +647,9 @@ template <typename T>
 void collect_specs(T& object, std::string_view prefix, const ArgParserConfig& config, std::vector<ArgSpec>& specs,
                    std::vector<std::size_t>& positionalSpecs) {
     static_assert(detail::has_values_meta<std::remove_cvref_t<T>>, "argparser requires a reflected options type");
-    Reflect<std::remove_cvref_t<T>>::forEach(object, [&](auto& field, std::string_view reflectedName, const auto& tags) {
-        using FieldT = std::remove_cvref_t<decltype(field)>;
+    Reflect<std::remove_cvref_t<T>>::forEach(object, [&](auto& field, std::string_view reflectedName,
+                                                         const auto& tags) {
+        using FieldT                = std::remove_cvref_t<decltype(field)>;
         const auto explicitLongName = tag_long_name(tags);
         const auto name             = explicitLongName.empty() ? reflectedName : explicitLongName;
 
@@ -665,28 +658,27 @@ void collect_specs(T& object, std::string_view prefix, const ArgParserConfig& co
             collect_specs(field, nextPrefix, config, specs, positionalSpecs);
         } else {
             ArgSpec spec;
-            spec.longName   = join_arg_name(prefix, name, config.nestedSeparator);
-            spec.shortName  = std::string(tag_short_name(tags));
-            spec.help       = std::string(tag_help(tags));
-            spec.required   = tag_required(tags);
-            spec.positional = tag_positional(tags);
-            spec.flag       = field_is_flag(field, tag_flag(tags));
-            spec.repeatable = tag_repeatable(tags) || is_vector_v<FieldT>;
-            spec.hidden     = tag_hidden(tags);
-            spec.hasRange   = tag_has_range(tags);
-            spec.rangeMin   = tag_range_min(tags);
-            spec.rangeMax   = tag_range_max(tags);
-            constexpr auto choices = tag_choices(tags);
-            spec.choices.assign(choices.begin(), choices.end());
-            spec.assign     = [&field, tags](std::string_view text) {
-                constexpr auto choices = tag_choices(tags);
-                if (tag_has_range(tags) &&
-                    (!is_range_supported_v<std::remove_cvref_t<decltype(field)>> ||
-                     tag_range_min(tags) > tag_range_max(tags))) {
-                    return make_error_code(argparser_error::invalid_definition);
+            spec.longName          = join_arg_name(prefix, name, config.nestedSeparator);
+            spec.shortName         = std::string(tag_short_name(tags));
+            spec.help              = std::string(tag_help(tags));
+            spec.required          = tag_required(tags);
+            spec.positional        = tag_positional(tags);
+            spec.flag              = field_is_flag(field, tag_flag(tags));
+            spec.repeatable        = tag_repeatable(tags) || is_vector_v<FieldT>;
+            spec.hidden            = tag_hidden(tags);
+            spec.hasRange          = tag_has_range(tags);
+            spec.rangeMin          = tag_range_min(tags);
+            spec.rangeMax          = tag_range_max(tags);
+            constexpr auto Choices = tag_choices(tags);
+            spec.choices.assign(Choices.begin(), Choices.end());
+            spec.assign = [&field, tags](std::string_view text) {
+                constexpr auto Choices = tag_choices(tags);
+                if (tag_has_range(tags) && (!is_range_supported_v<std::remove_cvref_t<decltype(field)>> ||
+                                            tag_range_min(tags) > tag_range_max(tags))) {
+                    return make_error_code(ArgParserError::InvalidDefinition);
                 }
-                if (!choices.empty() && !is_choices_supported_v<std::remove_cvref_t<decltype(field)>>) {
-                    return make_error_code(argparser_error::invalid_definition);
+                if (!Choices.empty() && !is_choices_supported_v<std::remove_cvref_t<decltype(field)>>) {
+                    return make_error_code(ArgParserError::InvalidDefinition);
                 }
                 if (auto error = assign_value(text, field)) {
                     return error;
@@ -694,7 +686,7 @@ void collect_specs(T& object, std::string_view prefix, const ArgParserConfig& co
                 if (auto error = validate_range(field, tag_has_range(tags), tag_range_min(tags), tag_range_max(tags))) {
                     return error;
                 }
-                return validate_choices(field, std::span<const std::string_view>{choices.data(), choices.size()});
+                return validate_choices(field, std::span<const std::string_view>{Choices.data(), Choices.size()});
             };
 
             specs.push_back(std::move(spec));
@@ -725,7 +717,7 @@ inline ArgSpec* find_short_spec(std::vector<ArgSpec>& specs, std::string_view na
 
 inline std::error_code apply_spec(ArgSpec& spec, std::string_view value) {
     if (!spec.repeatable && spec.seen && spec.positional) {
-        return make_error_code(argparser_error::unexpected_positional);
+        return make_error_code(ArgParserError::UnexpectedPositional);
     }
     if (auto error = spec.assign(value)) {
         return error;
@@ -737,7 +729,7 @@ inline std::error_code apply_spec(ArgSpec& spec, std::string_view value) {
 inline std::error_code apply_positional(std::vector<ArgSpec>& specs, const std::vector<std::size_t>& positionalSpecs,
                                         std::size_t& positionalIndex, std::string_view value) {
     if (positionalIndex >= positionalSpecs.size()) {
-        return make_error_code(argparser_error::unexpected_positional);
+        return make_error_code(ArgParserError::UnexpectedPositional);
     }
     auto& spec = specs[positionalSpecs[positionalIndex]];
     if (auto error = apply_spec(spec, value)) {
@@ -748,6 +740,8 @@ inline std::error_code apply_positional(std::vector<ArgSpec>& specs, const std::
     }
     return {};
 }
+
+// Help and version formatting ------------------------------------------------
 
 inline std::string default_usage(std::string_view programName) {
     std::string usage = "Usage:";
@@ -856,13 +850,13 @@ inline std::string format_help_from_specs(const std::vector<ArgSpec>& specs, con
 
 template <typename T, std::size_t I>
 std::string command_name_at() {
-    constexpr auto names = Reflect<std::remove_cvref_t<T>>::names();
-    constexpr auto tags  = std::get<I>(Reflect<std::remove_cvref_t<T>>::value_tags);
-    constexpr auto name  = tag_long_name(tags);
-    if constexpr (!name.empty()) {
-        return std::string(name);
+    constexpr auto Names = Reflect<std::remove_cvref_t<T>>::names();
+    constexpr auto Tags  = std::get<I>(Reflect<std::remove_cvref_t<T>>::value_tags);
+    constexpr auto Name  = tag_long_name(Tags);
+    if constexpr (!Name.empty()) {
+        return std::string(Name);
     } else {
-        return std::string(names[I]);
+        return std::string(Names[I]);
     }
 }
 
@@ -889,14 +883,14 @@ std::string format_command_help(const ArgParserConfig& config) {
     }
     []<std::size_t... Is>(std::index_sequence<Is...>, std::string& out) {
         (([&] {
-             constexpr auto tags = std::get<Is>(Reflect<std::remove_cvref_t<T>>::value_tags);
-             if constexpr (!tag_hidden(tags)) {
+             constexpr auto Tags = std::get<Is>(Reflect<std::remove_cvref_t<T>>::value_tags);
+             if constexpr (!tag_hidden(Tags)) {
                  out.append("  ");
                  out.append(command_name_at<T, Is>());
-                 constexpr auto help = tag_help(tags);
-                 if constexpr (!help.empty()) {
+                 constexpr auto Help = tag_help(Tags);
+                 if constexpr (!Help.empty()) {
                      out.append("\n      ");
-                     out.append(help);
+                     out.append(Help);
                  }
                  out.push_back('\n');
              }
@@ -929,6 +923,8 @@ std::vector<ArgSpec> collect_specs_for(T& object, const ArgParserConfig& config,
     return specs;
 }
 
+// Option parsing -------------------------------------------------------------
+
 template <typename T>
 std::error_code parse_options_into(T& object, int argc, const char* const* argv, int startIndex,
                                    const ArgParserConfig& config) {
@@ -952,10 +948,10 @@ std::error_code parse_options_into(T& object, int argc, const char* const* argv,
         }
 
         if (config.addHelp && (arg == "--help" || arg == "-h")) {
-            return make_error_code(argparser_error::help_requested);
+            return make_error_code(ArgParserError::HelpRequested);
         }
         if (config.addVersion && !config.version.empty() && is_version_token(arg)) {
-            return make_error_code(argparser_error::version_requested);
+            return make_error_code(ArgParserError::VersionRequested);
         }
 
         if (arg.starts_with("--")) {
@@ -973,11 +969,11 @@ std::error_code parse_options_into(T& object, int argc, const char* const* argv,
                 if (config.allowUnknown) {
                     continue;
                 }
-                return make_error_code(argparser_error::unknown_option);
+                return make_error_code(ArgParserError::UnknownOption);
             }
             if (!spec->flag && !valueInline) {
                 if (idx + 1 >= argc || argv[idx + 1] == nullptr) {
-                    return make_error_code(argparser_error::missing_value);
+                    return make_error_code(ArgParserError::MissingValue);
                 }
                 value = argv[++idx];
             }
@@ -1014,10 +1010,10 @@ std::error_code parse_options_into(T& object, int argc, const char* const* argv,
                         if (config.allowUnknown) {
                             continue;
                         }
-                        return make_error_code(argparser_error::unknown_option);
+                        return make_error_code(ArgParserError::UnknownOption);
                     }
                     if (!spec->flag) {
-                        return make_error_code(argparser_error::missing_value);
+                        return make_error_code(ArgParserError::MissingValue);
                     }
                     if (auto error = apply_spec(*spec, {})) {
                         return error;
@@ -1039,11 +1035,11 @@ std::error_code parse_options_into(T& object, int argc, const char* const* argv,
                 if (config.allowUnknown) {
                     continue;
                 }
-                return make_error_code(argparser_error::unknown_option);
+                return make_error_code(ArgParserError::UnknownOption);
             }
             if (!spec->flag && !valueInline) {
                 if (idx + 1 >= argc || argv[idx + 1] == nullptr) {
-                    return make_error_code(argparser_error::missing_value);
+                    return make_error_code(ArgParserError::MissingValue);
                 }
                 value = argv[++idx];
             }
@@ -1060,11 +1056,13 @@ std::error_code parse_options_into(T& object, int argc, const char* const* argv,
 
     for (const auto& spec : specs) {
         if (spec.required && !spec.seen) {
-            return make_error_code(argparser_error::missing_required);
+            return make_error_code(ArgParserError::MissingRequired);
         }
     }
     return {};
 }
+
+// Command parsing ------------------------------------------------------------
 
 template <typename RootT, std::size_t I>
 bool try_parse_command(std::string_view command, int argc, const char* const* argv, int startIndex,
@@ -1077,14 +1075,14 @@ bool try_parse_command(std::string_view command, int argc, const char* const* ar
         if (startIndex < argc) {
             const auto arg = argv[startIndex] == nullptr ? std::string_view{} : std::string_view(argv[startIndex]);
             if (config.addHelp && is_help_token(arg)) {
-                error = make_error_code(argparser_error::help_requested);
+                error = make_error_code(ArgParserError::HelpRequested);
                 return true;
             }
             if (config.addVersion && !config.version.empty() && is_version_token(arg)) {
-                error = make_error_code(argparser_error::version_requested);
+                error = make_error_code(ArgParserError::VersionRequested);
                 return true;
             }
-            error = make_error_code(argparser_error::unexpected_positional);
+            error = make_error_code(ArgParserError::UnexpectedPositional);
             return true;
         }
         result.template emplace<I>();
@@ -1103,27 +1101,28 @@ template <typename T>
 std::expected<parser_result_t<T>, std::error_code> parse_command_set(int argc, const char* const* argv,
                                                                      const ArgParserConfig& config) {
     if (argc <= 1 || argv == nullptr || argv[1] == nullptr) {
-        return std::unexpected(make_error_code(argparser_error::missing_required));
+        return std::unexpected(make_error_code(ArgParserError::MissingRequired));
     }
     std::string_view command = argv[1];
     if (config.addHelp && is_help_token(command)) {
-        return std::unexpected(make_error_code(argparser_error::help_requested));
+        return std::unexpected(make_error_code(ArgParserError::HelpRequested));
     }
     if (config.addVersion && !config.version.empty() && is_version_token(command)) {
-        return std::unexpected(make_error_code(argparser_error::version_requested));
+        return std::unexpected(make_error_code(ArgParserError::VersionRequested));
     }
 
     parser_result_t<T> result;
     std::error_code error;
-    bool matched = []<std::size_t... Is>(std::index_sequence<Is...>, std::string_view commandName, int argcValue,
-                                         const char* const* argvValue, const ArgParserConfig& parserConfig,
-                                         parser_result_t<T>& out, std::error_code& outError) {
-        return (try_parse_command<T, Is>(commandName, argcValue, argvValue, 2, parserConfig, out, outError) || ...);
-    }(std::make_index_sequence<Reflect<std::remove_cvref_t<T>>::value_count>{}, command, argc, argv, config, result,
-      error);
+    bool matched =
+        []<std::size_t... Is>(std::index_sequence<Is...>, std::string_view commandName, int argcValue,
+                              const char* const* argvValue, const ArgParserConfig& parserConfig,
+                              parser_result_t<T>& out, std::error_code& outError) {
+            return (try_parse_command<T, Is>(commandName, argcValue, argvValue, 2, parserConfig, out, outError) || ...);
+        }(std::make_index_sequence<Reflect<std::remove_cvref_t<T>>::value_count>{}, command, argc, argv, config, result,
+          error);
 
     if (!matched) {
-        return std::unexpected(make_error_code(argparser_error::unknown_command));
+        return std::unexpected(make_error_code(ArgParserError::UnknownCommand));
     }
     if (error) {
         return std::unexpected(error);
@@ -1137,7 +1136,7 @@ bool try_format_command_help(std::string_view command, const ArgParserConfig& co
         return false;
     }
 
-    constexpr auto tags = std::get<I>(Reflect<std::remove_cvref_t<RootT>>::value_tags);
+    constexpr auto Tags    = std::get<I>(Reflect<std::remove_cvref_t<RootT>>::value_tags);
     const auto commandName = command_name_at<RootT, I>();
     std::string programName;
     if (!config.programName.empty()) {
@@ -1149,9 +1148,9 @@ bool try_format_command_help(std::string_view command, const ArgParserConfig& co
     ArgParserConfig commandConfig = config;
     commandConfig.programName     = programName;
     commandConfig.usage           = {};
-    constexpr auto commandHelp    = tag_help(tags);
-    if constexpr (!commandHelp.empty()) {
-        commandConfig.description = commandHelp;
+    constexpr auto CommandHelp    = tag_help(Tags);
+    if constexpr (!CommandHelp.empty()) {
+        commandConfig.description = CommandHelp;
     }
 
     using CommandT = std::tuple_element_t<I, typename Reflect<std::remove_cvref_t<RootT>>::value_types>;
@@ -1173,11 +1172,12 @@ std::string format_context_help(int argc, const char* const* argv, ArgParserConf
     }
 
     if constexpr (is_command_set_v<T>) {
-        if (argc > 1 && argv != nullptr && argv[1] != nullptr && !is_help_token(argv[1]) && !is_version_token(argv[1])) {
+        if (argc > 1 && argv != nullptr && argv[1] != nullptr && !is_help_token(argv[1]) &&
+            !is_version_token(argv[1])) {
             std::string result;
             const auto matched =
                 []<std::size_t... Is>(std::index_sequence<Is...>, std::string_view command, const ArgParserConfig& cfg,
-                                       std::string& out) {
+                                      std::string& out) {
                     return (try_format_command_help<T, Is>(command, cfg, out) || ...);
                 }(std::make_index_sequence<Reflect<std::remove_cvref_t<T>>::value_count>{}, std::string_view(argv[1]),
                   config, result);
@@ -1222,9 +1222,7 @@ std::string format_help(ArgParserConfig config = {}) {
     }
 }
 
-inline std::string format_version(ArgParserConfig config = {}) {
-    return detail::format_version_text(config);
-}
+inline std::string format_version(ArgParserConfig config = {}) { return detail::format_version_text(config); }
 
 template <typename T>
 std::expected<detail::parser_result_t<T>, std::error_code> parser(int argc, const char* const* argv,
@@ -1256,5 +1254,5 @@ NEKO_END_NAMESPACE
 
 namespace std {
 template <>
-struct is_error_code_enum<NEKO_NAMESPACE::argparser_error> : true_type {};
+struct is_error_code_enum<NEKO_NAMESPACE::ArgParserError> : true_type {};
 } // namespace std

@@ -234,11 +234,11 @@ int main(int argc, char** argv) {
 
     auto result = parser<ToolCommands>(argc, argv, config);
     if (!result) {
-        if (result.error() == make_error_code(argparser_error::help_requested)) {
+        if (result.error() == make_error_code(ArgParserError::HelpRequested)) {
             std::cout << format_help<ToolCommands>(argc, argv, config);
             return 0;
         }
-        if (result.error() == make_error_code(argparser_error::version_requested)) {
+        if (result.error() == make_error_code(ArgParserError::VersionRequested)) {
             std::cout << format_version(config);
             return 0;
         }
