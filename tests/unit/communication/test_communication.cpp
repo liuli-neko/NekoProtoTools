@@ -23,7 +23,7 @@ using ilias::IoContext;
 using ilias::IPEndpoint;
 using ilias::TcpClient;
 using ilias::TcpListener;
-using ilias::UdpClient;
+using ilias::UdpSocket;
 using ilias::Unexpected;
 using ilias::sockopt::TcpNoDelay;
 
@@ -210,7 +210,7 @@ ilias::IoTask<void> udp_client([[maybe_unused]] IoContext& ioContext, ProtoFacto
         NEKO_LOG_DEBUG("unit test", "udp bind failed: {}", ret.error().message());
         co_return Unexpected(ret.error());
     }
-    ProtoDatagramClient<UdpClient> client(protoFactory, UdpClient::from(std::move(udpclient)).value());
+    ProtoDatagramClient<UdpSocket> client(protoFactory, UdpSocket::from(std::move(udpclient)).value());
     int count = 10;
     while ((count--) != 0) {
         NEKO_LOG_DEBUG("unit test", "{}th testing...", count);
@@ -271,7 +271,7 @@ ilias::IoTask<void> udp_client_peer([[maybe_unused]] IoContext& ioContext, Proto
         NEKO_LOG_DEBUG("unit test", "udp bind failed: {}", ret.error().message());
         co_return Unexpected(ret.error());
     }
-    ProtoDatagramClient<UdpClient> client(protoFactory, UdpClient::from(std::move(udpclient)).value());
+    ProtoDatagramClient<UdpSocket> client(protoFactory, UdpSocket::from(std::move(udpclient)).value());
     int count = 10;
     while ((count--) != 0) {
         NEKO_LOG_DEBUG("unit test", "{}th testing...", count);
