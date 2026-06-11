@@ -283,7 +283,7 @@ public:
         if (mCoFunction) {
             co_return co_await mCoFunction(std::forward<Args>(args)...);
         }
-        co_return ilias::Unexpected(JsonRpcError::MethodNotBind);
+        co_return ilias::Err(JsonRpcError::MethodNotBind);
     }
 
     auto notification(Args... args) const -> ilias::IoTask<void> {
@@ -296,7 +296,7 @@ public:
 
         if (mCoFunction) {
             if (auto ret = co_await mCoFunction(std::forward<Args>(args)...); !ret) {
-                co_return ilias::Unexpected(ret.error());
+                co_return ilias::Err(ret.error());
             }
         }
         co_return {};

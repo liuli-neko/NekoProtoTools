@@ -11,6 +11,8 @@
 #pragma once
 
 #include <ilias/io/error.hpp>
+#include <ilias/io/dyn_traits.hpp>
+#include <ilias/io/traits.hpp>
 #include <ilias/net/sockopt.hpp>
 #include <ilias/net/system.hpp>
 #include <ilias/net/tcp.hpp>
@@ -61,12 +63,12 @@ using Error = std::error_code;
 using ilias::IoTask;
 using ilias::IPEndpoint;
 using ilias::Task;
-using IliasTcpClient   = ilias::TcpClient;
+using IliasDynStream   = ilias::DynStream;
 using IliasTcpListener = ilias::TcpListener;
-using IliasUdpClient   = ilias::UdpClient;
+using IliasUdpSocket   = ilias::UdpSocket;
 using ilias::hostToNetwork;
 using ilias::networkToHost;
-using ilias::Unexpected;
+using ilias::Err;
 using ilias::unstoppable;
 
 template <typename T, class enable = void>
@@ -84,7 +86,7 @@ struct TcpListener {};
 template <>
 class NEKO_PROTO_API MessageStream<UdpStream, void> {
 public:
-    MessageStream(IliasUdpClient&& client, IPEndpoint endpoint) : mClient(std::move(client)), mEndpoint(endpoint) {}
+    MessageStream(IliasUdpSocket&& client, IPEndpoint endpoint) : mClient(std::move(client)), mEndpoint(endpoint) {}
 
     auto recv(std::vector<std::byte>& buffer) -> IoTask<void>;
     auto send(std::span<const std::byte> data) -> IoTask<void>;
@@ -92,7 +94,7 @@ public:
     auto cancel() -> void;
 
 private:
-    IliasUdpClient mClient;
+    IliasUdpSocket mClient;
     IPEndpoint mEndpoint;
 };
 
@@ -103,10 +105,10 @@ private:
  * @tparam N
  */
 template <>
-class NEKO_PROTO_API MessageStream<TcpStream, void> {
+class NEKO_PROTO_API MessageStream<IliasDynStream, void> {
 public:
     MessageStream() = default;
-    MessageStream(IliasTcpClient&& client) : mClient(std::move(client)) {}
+    MessageStream(IliasDynStream&& client) : mClient(std::move(client)) {}
 
     auto recv(std::vector<std::byte>& buffer) -> IoTask<void>;
     auto send(std::span<const std::byte> data) -> IoTask<void>;
@@ -114,7 +116,7 @@ public:
     auto cancel() -> void;
 
 private:
-    IliasTcpClient mClient;
+    IliasDynStream mClient;
 };
 
 template <>
@@ -124,7 +126,7 @@ public:
 
     auto close() -> void;
     auto cancel() -> void;
-    auto accept() -> IoTask<MessageStream<TcpStream>>;
+    auto accept() -> IoTask<MessageStream<IliasDynStream>>;
 
 private:
     IliasTcpListener mListener;
@@ -177,7 +179,7 @@ public:
                 co_return std::make_unique<MessageStreamWrapper<ClientT>>(std::move(*ret));
             }
         } else {
-            co_return Unexpected(ret.error());
+            co_return Err(ret.error());
         }
     }
     auto close() -> void override { return mListener.close(); }
@@ -187,15 +189,15 @@ private:
     T mListener;
 };
 NEKO_PROTO_API
-auto make_tcp_stream_client(IPEndpoint ipendpoint) -> IoTask<MessageStream<TcpStream>>;
+auto make_tcp_stream_client(IPEndpoint ipendpoint) -> IoTask<MessageStream<IliasDynStream>>;
 // tcp://127.0.0.1:8080
 // 127.0.0.1:8080
 NEKO_PROTO_API
-auto make_tcp_stream_client(std::string_view url) -> IoTask<MessageStream<TcpStream>>;
+auto make_tcp_stream_client(std::string_view url) -> IoTask<MessageStream<IliasDynStream>>;
 NEKO_PROTO_API
-auto make_tcp_stream_client(const char* url) -> IoTask<MessageStream<TcpStream>>;
+auto make_tcp_stream_client(const char* url) -> IoTask<MessageStream<IliasDynStream>>;
 NEKO_PROTO_API
-auto make_tcp_stream_client(const std::string& url) -> IoTask<MessageStream<TcpStream>>;
+auto make_tcp_stream_client(const std::string& url) -> IoTask<MessageStream<IliasDynStream>>;
 NEKO_PROTO_API
 auto make_udp_stream_client(IPEndpoint bindIpendpoint, IPEndpoint remoteIpendpoint) -> IoTask<MessageStream<UdpStream>>;
 // like udp://127.0.0.1:12345-127.0.0.1:12346

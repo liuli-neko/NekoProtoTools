@@ -244,7 +244,7 @@ TEST(Reflection, ConstObject) {
 }
 
 struct Test7 {
-    TaggedValue<23, std::optional<int>> member1;
+    std::optional<int> member1;
     int member2;
     std::string member3;
     std::string member4;
@@ -281,7 +281,7 @@ TEST(Reflection, Optional) {
             }
         }});
     // clang-format on
-    EXPECT_EQ(**test.member1, 11);
+    EXPECT_EQ(*test.member1, 11);
     EXPECT_EQ(test.member2, 12);
     EXPECT_EQ(test.member3, "35");
 }

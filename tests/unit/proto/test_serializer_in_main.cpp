@@ -10,7 +10,7 @@
 
 NEKO_USE_NAMESPACE
 
-enum TEnum { TEnum_A = 1, TEnum_B = 2, TEnum_C = 3 };
+enum class TEnum : uint { TEnum_A = 1, TEnum_B = 2, TEnum_C = 3 };
 
 struct StructA {
     int a;
@@ -31,8 +31,8 @@ struct TestP {
     std::list<int> e             = {1, 2, 3, 4, 5};
     std::map<std::string, int> f = {{"a", 1}, {"b", 2}, {"c", 3}};
     std::array<int, 5> g         = {1, 2, 3, 4, 5};
-    TEnum h                      = TEnum_A;
-    StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum_A};
+    TEnum h                      = TEnum::TEnum_A;
+    StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum::TEnum_A};
     std::tuple<int, std::string> j = {1, "hello"};
     std::vector<double> m          = {1.1, 2.2, 3.3, 2.0, 1.0, 0.0, 1.11451555213339};
 #if NEKO_CPP_PLUS >= 17
@@ -116,7 +116,7 @@ int main(int argc, char** argv) {
     EXPECT_EQ(testp.g[0], 1);
     EXPECT_EQ(testp.g[1], 2);
     EXPECT_EQ(testp.g[2], 3);
-    EXPECT_EQ(testp.h, TEnum_A);
+    EXPECT_EQ(testp.h, TEnum::TEnum_A);
     EXPECT_EQ(testp.i.a, 1);
     EXPECT_STREQ(testp.i.b.c_str(), "hello");
     EXPECT_TRUE(testp.i.c);
@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
     EXPECT_EQ(testp.i.g[2], 3);
     EXPECT_EQ(testp.i.g[3], 0);
     EXPECT_EQ(testp.i.g[4], 0);
-    EXPECT_EQ(testp.i.h, TEnum_A);
+    EXPECT_EQ(testp.i.h, TEnum::TEnum_A);
     EXPECT_EQ(std::get<0>(testp.j), 1);
     EXPECT_STREQ(std::get<1>(testp.j).c_str(), "hello");
     EXPECT_EQ(testp.k.value_or(-1), 1);

@@ -61,7 +61,7 @@ MainWidget::clientLoop(std::map<int, NEKO_NAMESPACE::ProtoStreamClient<ilias::Tc
 ilias::Task<void> MainWidget::serverLoop() {
     NEKO_LOG_INFO("ui test", "serverLoop");
     if (!mExit) {
-        co_return Unexpected<Error>(Error::InProgress);
+        co_return Err<Error>(Error::InProgress);
     }
     mListener = ilias::TcpListener(*mCtxt, AF_INET);
     ui->makeMainChannel->setDisabled(true);
@@ -70,7 +70,7 @@ ilias::Task<void> MainWidget::serverLoop() {
     if (!ret) {
         NEKO_LOG_ERROR("ui test", "bind failed: {}",
                        QString::fromUtf8(ret.error().message()).toLocal8Bit().constData());
-        co_return Unexpected(ret.error());
+        co_return Err(ret.error());
     }
     mExit = false;
     while (!mExit) {
@@ -100,7 +100,7 @@ ilias::Task<void> MainWidget::makeMainChannel() {
     if (!ret) {
         NEKO_LOG_ERROR("ui test", "connect failed: {}",
                        QString::fromUtf8(ret.error().message().c_str()).toLocal8Bit().constData());
-        co_return Unexpected(ret.error());
+        co_return Err(ret.error());
     }
     ui->channelList->addItem(
         QString("%1 %2").arg(ui->serviceUrlEdit->text().toLocal8Bit().constData()).arg(++mChannelCount));

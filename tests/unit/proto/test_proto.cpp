@@ -25,7 +25,7 @@ std::string make_enum_string(const std::string& fmt) {
     return ret;
 }
 
-enum TEnum { TEnum_A = 1, TEnum_B = 2, TEnum_C = 3 };
+enum class TEnum : int { TEnum_A = 1, TEnum_B = 2, TEnum_C = 3 };
 
 struct StructA {
     int a;
@@ -46,8 +46,8 @@ struct TestP {
     std::list<int> e             = {1, 2, 3, 4, 5};
     std::map<std::string, int> f = {{"a", 1}, {"b", 2}, {"c", 3}};
     std::array<int, 5> g         = {1, 2, 3, 4, 5};
-    TEnum h                      = TEnum_A;
-    StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum_A};
+    TEnum h                      = TEnum::TEnum_A;
+    StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum::TEnum_A};
     std::tuple<int, std::string> j = {1, "hello"};
     std::optional<int> k;
     std::variant<int, std::string, double> l;
@@ -101,21 +101,21 @@ TEST_F(ProtoTest, Reflection) {
     EXPECT_TRUE(Reflect<TestP>::value<2>(testp));
     EXPECT_EQ(Reflect<TestP>::value<3>(testp), 3.14);
     EXPECT_EQ(Reflect<TestP>::value<4>(testp), (std::list<int>{1, 2, 3, 4, 5}));
-    EXPECT_EQ(Reflect<TestP>::value<7>(testp), TEnum_A);
+    EXPECT_EQ(Reflect<TestP>::value<7>(testp), TEnum::TEnum_A);
 
     Reflect<TestP>::value(testp, 0).as<int>()           = 2;
     Reflect<TestP>::value(testp, "b").as<std::string>() = "world";
     Reflect<TestP>::value<2>(testp)                     = false;
     Reflect<TestP>::value<3>(testp)                     = 6.28;
     Reflect<TestP>::value<4>(testp)                     = std::list<int>{6, 7, 8, 9, 10};
-    Reflect<TestP>::value<7>(testp)                     = TEnum_B;
+    Reflect<TestP>::value<7>(testp)                     = TEnum::TEnum_B;
 
     EXPECT_EQ(Reflect<TestP>::value(testp, 0).as<int>(), 2);
     EXPECT_EQ(Reflect<TestP>::value(testp, 1).as<std::string>(), "world");
     EXPECT_FALSE(Reflect<TestP>::value(testp, "c").as<bool>());
     EXPECT_EQ(Reflect<TestP>::value(testp, "d").as<double>(), 6.28);
     EXPECT_EQ(Reflect<TestP>::value<4>(testp), (std::list<int>{6, 7, 8, 9, 10}));
-    EXPECT_EQ(Reflect<TestP>::value<7>(testp), TEnum_B);
+    EXPECT_EQ(Reflect<TestP>::value<7>(testp), TEnum::TEnum_B);
 
     const TestP testp2 = testp;
     EXPECT_EQ(Reflect<TestP>::value(testp2, 0).as<const int>(), 2);
@@ -135,8 +135,8 @@ TEST_F(ProtoTest, StructSerialize) {
     testp.e = std::list<int>{1, 2, 3};
     testp.f = std::map<std::string, int>{{"a", 1}, {"b", 2}};
     testp.g = std::array<int, 5>{1, 2, 3, 0, 0};
-    testp.h = TEnum_A;
-    testp.i = StructA{1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
+    testp.h = TEnum::TEnum_A;
+    testp.i = StructA{1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum::TEnum_A};
     testp.j = std::make_tuple(1, "hello");
     testp.l = "this a test for variant";
     std::vector<char> data;
@@ -172,7 +172,7 @@ TEST_F(ProtoTest, StructDeserialize) {
     EXPECT_EQ(testp.g[0], 1);
     EXPECT_EQ(testp.g[1], 2);
     EXPECT_EQ(testp.g[2], 3);
-    EXPECT_EQ(testp.h, TEnum_A);
+    EXPECT_EQ(testp.h, TEnum::TEnum_A);
     EXPECT_EQ(testp.i.a, 1);
     EXPECT_STREQ(testp.i.b.c_str(), "hello");
     EXPECT_TRUE(testp.i.c);
@@ -187,7 +187,7 @@ TEST_F(ProtoTest, StructDeserialize) {
     EXPECT_EQ(testp.i.g[2], 3);
     EXPECT_EQ(testp.i.g[3], 0);
     EXPECT_EQ(testp.i.g[4], 0);
-    EXPECT_EQ(testp.i.h, TEnum_A);
+    EXPECT_EQ(testp.i.h, TEnum::TEnum_A);
     EXPECT_EQ(std::get<0>(testp.j), 1);
     EXPECT_STREQ(std::get<1>(testp.j).c_str(), "hello");
 #if NEKO_CPP_PLUS >= 17
@@ -292,7 +292,7 @@ TEST_F(ProtoTest, JsonProtoRef) {
     EXPECT_EQ(rawp->g[0], 1);
     EXPECT_EQ(rawp->g[1], 2);
     EXPECT_EQ(rawp->g[2], 3);
-    EXPECT_EQ(rawp->h, TEnum_A);
+    EXPECT_EQ(rawp->h, TEnum::TEnum_A);
     EXPECT_EQ(rawp->i.a, 1);
     EXPECT_STREQ(rawp->i.b.c_str(), "hello");
     EXPECT_TRUE(rawp->i.c);
@@ -307,7 +307,7 @@ TEST_F(ProtoTest, JsonProtoRef) {
     EXPECT_EQ(rawp->i.g[2], 3);
     EXPECT_EQ(rawp->i.g[3], 0);
     EXPECT_EQ(rawp->i.g[4], 0);
-    EXPECT_EQ(rawp->i.h, TEnum_A);
+    EXPECT_EQ(rawp->i.h, TEnum::TEnum_A);
     EXPECT_EQ(std::get<0>(rawp->j), 1);
     EXPECT_STREQ(std::get<1>(rawp->j).c_str(), "hello");
     NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(*rawp));
@@ -363,7 +363,7 @@ struct ZTypeTest {
     std::deque<float> i     = {1.1F, 2.2F, 3.3F, 4.4F, 5.5F, 6.6F, 7.7F};
     std::array<int, 7> j    = {1, 2, 3, 4, 5, 6, 7};
     std::tuple<int, std::string, bool, double, std::vector<int>, std::map<int, int>, TEnum> k = {
-        1, "hello", true, 3.141592654, {1, 2, 3}, {{1, 1}, {2, 2}}, TEnum_A};
+        1, "hello", true, 3.141592654, {1, 2, 3}, {{1, 1}, {2, 2}}, TEnum::TEnum_A};
     std::shared_ptr<std::string> l        = std::make_shared<std::string>("hello shared ptr");
     std::multimap<int, std::string> p     = {{1, "hello"}, {2, "world"}, {1, "world"}};
     std::multiset<std::string> q          = {"a", "b", "c", "a", "b"};
@@ -414,7 +414,7 @@ TEST_F(ProtoTest, AllType) {
     tproto.h         = {"a", "b", "c"};
     tproto.i         = {1.1F, 2.2F, 3.3F, 4.4F, 5.5F, 6.6F, 7.7F};
     tproto.j         = {1, 2, 3, 4, 5, 6, 7};
-    tproto.k         = {1, "hello", true, 3.141592654, {1, 2, 3}, {{1, 1}, {2, 2}}, TEnum_A};
+    tproto.k         = {1, "hello", true, 3.141592654, {1, 2, 3}, {{1, 1}, {2, 2}}, TEnum::TEnum_A};
     tproto.l         = std::make_shared<std::string>("hello shared ptr");
     tproto.p         = {{1, "hello"}, {2, "world"}, {1, "world"}};
     tproto.q         = {"a", "b", "c", "a", "b"};

@@ -268,7 +268,7 @@ private:
 template <typename BufferT>
 class SimdJsonOutputSerializer : public detail::OutputSerializer<SimdJsonOutputSerializer<BufferT>> {
 private:
-    enum State { Null, ObjectStart, InObject, ArrayStart, InArray, AfterKey };
+    enum class State : uint { Null, ObjectStart, InObject, ArrayStart, InArray, AfterKey };
     using OutputStreamBuf = typename detail::simd::json_output_buffer_type<BufferT>::output_stream_buffer_type;
     using OutputStream    = typename detail::simd::json_output_buffer_type<BufferT>::output_buffer_stream;
 
