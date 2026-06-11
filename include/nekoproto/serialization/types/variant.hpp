@@ -54,7 +54,7 @@ inline bool save(Serializer& sa, const std::monostate& /*unused*/) {
 
 template <typename Serializer>
 inline bool load(Serializer& sa, std::monostate& /*unused*/) {
-    nullptr_t dummy;
+    std::nullptr_t dummy;
     return sa(dummy);
 }
 

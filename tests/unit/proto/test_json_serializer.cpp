@@ -11,14 +11,14 @@
 
 NEKO_USE_NAMESPACE
 
-enum TEnum { TEnum_A = 1, TEnum_B = 2, TEnum_C = 3 };
+enum class TEnum : uint { TEnum_A = 1, TEnum_B = 2, TEnum_C = 3 };
 
 NEKO_BEGIN_NAMESPACE
 template <>
 struct Meta<TEnum> {
     using T                     = TEnum;
     static constexpr auto value = Enumerate{// NOLINT
-                                            "TEnum_A", TEnum_A, "TEnum_B", TEnum_B, "TEnum_C", TEnum_C};
+                                            "TEnum_A", TEnum::TEnum_A, "TEnum_B", TEnum::TEnum_B, "TEnum_C", TEnum::TEnum_C};
 };
 NEKO_END_NAMESPACE
 
@@ -75,8 +75,8 @@ struct TestP {
     std::list<int> e             = {1, 2, 3, 4, 5};
     std::map<std::string, int> f = {{"a", 1}, {"b", 2}, {"c", 3}};
     std::array<int, 5> g         = {1, 2, 3, 4, 5};
-    TEnum h                      = TEnum_A;
-    StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum_A};
+    TEnum h                      = TEnum::TEnum_A;
+    StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}}, {1, 2, 3, 4, 5}, TEnum::TEnum_A};
     std::tuple<int, std::string> j = {1, "hello"};
     std::vector<int> k             = {1, 2, 3, 4, 5};
     TestD l;
@@ -865,8 +865,8 @@ TEST_F(JsonSerializerTest, Struct) {
     testp.e = {1, 2, 3};
     testp.f = {{"a", 1}, {"b", 2}};
     testp.g = {1, 2, 3};
-    testp.h = TEnum_A;
-    testp.i = {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
+    testp.h = TEnum::TEnum_A;
+    testp.i = {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum::TEnum_A};
     testp.j = {1, "hello"};
     testp.k = std::vector<int>({1, 2, 3, 4, 5});
 #if NEKO_CPP_PLUS >= 17
@@ -939,8 +939,8 @@ TEST_F(JsonSerializerTest, IOStreamTest) {
     testp.e = {1, 2, 3};
     testp.f = {{"a", 1}, {"b", 2}};
     testp.g = {1, 2, 3};
-    testp.h = TEnum_A;
-    testp.i = {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum_A};
+    testp.h = TEnum::TEnum_A;
+    testp.i = {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}}, {1, 2, 3}, TEnum::TEnum_A};
     testp.j = {1, "hello"};
     testp.k = std::vector<int>({1, 2, 3, 4, 5});
 #if NEKO_CPP_PLUS >= 17

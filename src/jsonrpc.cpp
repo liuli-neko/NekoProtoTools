@@ -134,7 +134,7 @@ auto JsonRpcServerImp::getCurrentIds() const noexcept -> const std::vector<JsonR
 
 auto MessageStream<UdpStream, void>::recv(std::vector<std::byte>& buffer) -> IoTask<void> {
     if (!mClient) {
-        co_return Unexpected(JsonRpcError::ClientNotInit);
+        co_return Err(JsonRpcError::ClientNotInit);
     }
     int current = buffer.size();
     buffer.resize(current + 1500);
@@ -149,17 +149,17 @@ auto MessageStream<UdpStream, void>::recv(std::vector<std::byte>& buffer) -> IoT
             buffer.resize(ret.value().first + current);
             co_return {};
         } else {
-            co_return Unexpected<Error>(ret.error());
+            co_return Err<Error>(ret.error());
         }
     }
 }
 
 auto MessageStream<UdpStream, void>::send(std::span<const std::byte> data) -> IoTask<void> {
     if (!mClient) {
-        co_return Unexpected(JsonRpcError::ClientNotInit);
+        co_return Err(JsonRpcError::ClientNotInit);
     }
     if (data.size() >= 1500) {
-        co_return Unexpected(JsonRpcError::MessageToolLarge);
+        co_return Err(JsonRpcError::MessageToolLarge);
     }
     auto ret  = co_await (mClient.sendto(data, mEndpoint) | unstoppable());
     auto send = ret.value_or(0);
@@ -172,7 +172,7 @@ auto MessageStream<UdpStream, void>::send(std::span<const std::byte> data) -> Io
         }
     }
     if (!ret) {
-        co_return Unexpected<Error>(ret.error());
+        co_return Err<Error>(ret.error());
     }
     co_return {};
 }
@@ -189,19 +189,19 @@ auto MessageStream<UdpStream, void>::cancel() -> void {
     }
 }
 
-auto MessageStream<TcpStream, void>::recv(std::vector<std::byte>& buffer) -> IoTask<void> {
+auto MessageStream<IliasDynStream, void>::recv(std::vector<std::byte>& buffer) -> IoTask<void> {
     if (!mClient) {
-        co_return Unexpected(JsonRpcError::ClientNotInit);
+        co_return Err(JsonRpcError::ClientNotInit);
     }
     uint32_t size = 0;
     if (auto ret = co_await (mClient.readAll({reinterpret_cast<std::byte*>(&size), sizeof(size)}) | unstoppable());
         !ret) {
-        co_return Unexpected(ret.error());
+        co_return Err(ret.error());
     } else if (ret.value() == sizeof(size)) {
         size = networkToHost(size);
     } else {
         mClient.close();
-        co_return Unexpected(ilias::IoError::Unknown);
+        co_return Err(ilias::IoError::Unknown);
     }
     if (buffer.size() < size) {
         buffer.resize(size);
@@ -211,40 +211,38 @@ auto MessageStream<TcpStream, void>::recv(std::vector<std::byte>& buffer) -> IoT
         co_return {};
     } else {
         mClient.close();
-        co_return Unexpected(ret.error_or(ilias::IoError::Unknown));
+        co_return Err(ret.error_or(ilias::IoError::Unknown));
     }
 }
 
-auto MessageStream<TcpStream, void>::send(std::span<const std::byte> data) -> IoTask<void> {
+auto MessageStream<IliasDynStream, void>::send(std::span<const std::byte> data) -> IoTask<void> {
     if (!mClient) {
-        co_return Unexpected(JsonRpcError::ClientNotInit);
+        co_return Err(JsonRpcError::ClientNotInit);
     }
     auto size = hostToNetwork((uint32_t)data.size());
     if (auto ret = co_await (mClient.writeAll({reinterpret_cast<std::byte*>(&size), sizeof(size)}) | unstoppable());
         !ret) {
         mClient.close();
-        co_return Unexpected(ret.error());
+        co_return Err(ret.error());
     } else if (ret.value() != sizeof(size)) {
         mClient.close();
-        co_return Unexpected(ilias::IoError::Unknown);
+        co_return Err(ilias::IoError::Unknown);
     }
     auto ret = co_await (mClient.writeAll(data) | unstoppable());
     if (!ret || ret.value() != data.size()) {
         mClient.close();
-        co_return Unexpected(ret.error_or(ilias::IoError::Unknown));
+        co_return Err(ret.error_or(ilias::IoError::Unknown));
     }
     co_return {};
 }
-auto MessageStream<TcpStream, void>::close() -> void {
+auto MessageStream<IliasDynStream, void>::close() -> void {
     if (mClient) {
         mClient.close();
     }
 }
 
-auto MessageStream<TcpStream, void>::cancel() -> void {
-    if (mClient) {
-        mClient.cancel();
-    }
+auto MessageStream<IliasDynStream, void>::cancel() -> void {
+    // TODO: Ilias::DynStream has no cancel support
 }
 
 auto MessageStream<TcpListener, void>::close() -> void {
@@ -259,29 +257,29 @@ auto MessageStream<TcpListener, void>::cancel() -> void {
     }
 }
 
-auto MessageStream<TcpListener, void>::accept() -> IoTask<MessageStream<TcpStream>> {
+auto MessageStream<TcpListener, void>::accept() -> IoTask<MessageStream<IliasDynStream>> {
     if (!mListener) {
-        co_return Unexpected(JsonRpcError::ClientNotInit);
+        co_return Err(JsonRpcError::ClientNotInit);
     }
     if (auto ret = co_await mListener.accept(); ret) {
-        co_return MessageStream<TcpStream>(std::move(ret.value().first));
+        co_return MessageStream<IliasDynStream>(std::move(ret.value().first));
     } else {
-        co_return Unexpected(ret.error());
+        co_return Err(ret.error());
     }
 }
 NEKO_PROTO_API
-auto make_tcp_stream_client(IPEndpoint ipendpoint) -> IoTask<MessageStream<TcpStream>> {
-    if (auto ret1 = co_await IliasTcpClient::connect(ipendpoint); ret1) {
-        co_return MessageStream<TcpStream>(std::move(ret1.value()));
+auto make_tcp_stream_client(IPEndpoint ipendpoint) -> IoTask<MessageStream<IliasDynStream>> {
+    if (auto ret1 = co_await ilias::TcpStream::connect(ipendpoint); ret1) {
+        co_return MessageStream<IliasDynStream>(std::move(ret1.value()));
     } else {
-        co_return Unexpected(ret1.error());
+        co_return Err(ret1.error());
     }
 }
 
 // tcp://127.0.0.1:8080
 // 127.0.0.1:8080
 NEKO_PROTO_API
-auto make_tcp_stream_client(std::string_view url) -> IoTask<MessageStream<TcpStream>> {
+auto make_tcp_stream_client(std::string_view url) -> IoTask<MessageStream<IliasDynStream>> {
     std::string_view ipstr;
     if (url.substr(0, 6) == "tcp://") {
         ipstr = url.substr(6);
@@ -290,16 +288,16 @@ auto make_tcp_stream_client(std::string_view url) -> IoTask<MessageStream<TcpStr
     }
     auto ipendpoint = IPEndpoint::fromString(ipstr);
     if (!ipendpoint) {
-        co_return Unexpected(ilias::IoError::InvalidArgument);
+        co_return Err(ilias::IoError::InvalidArgument);
     }
     co_return co_await make_tcp_stream_client(ipendpoint.value());
 }
 NEKO_PROTO_API
-auto make_tcp_stream_client(const char* url) -> IoTask<MessageStream<TcpStream>> {
+auto make_tcp_stream_client(const char* url) -> IoTask<MessageStream<IliasDynStream>> {
     return make_tcp_stream_client(std::string_view(url));
 }
 NEKO_PROTO_API
-auto make_tcp_stream_client(const std::string& url) -> IoTask<MessageStream<TcpStream>> {
+auto make_tcp_stream_client(const std::string& url) -> IoTask<MessageStream<IliasDynStream>> {
     return make_tcp_stream_client(std::string_view(url));
 }
 NEKO_PROTO_API
@@ -310,12 +308,12 @@ auto make_udp_stream_client(IPEndpoint bindIpendpoint, IPEndpoint remoteIpendpoi
         socket.setOption(ilias::sockopt::ReuseAddress(1));
         if (auto ret1 = socket.bind(bindIpendpoint); !ret1) {
             socket.close();
-            co_return Unexpected(ret1.error());
+            co_return Err(ret1.error());
         }
-        auto udpclient = IliasUdpClient::from(std::move(socket));
+        auto udpclient = IliasUdpSocket::from(std::move(socket));
         co_return MessageStream<UdpStream>(std::move(udpclient.value()), remoteIpendpoint);
     } else {
-        co_return Unexpected(ret.error());
+        co_return Err(ret.error());
     }
 }
 
@@ -331,12 +329,12 @@ auto make_udp_stream_client(std::string_view url) -> IoTask<MessageStream<UdpStr
     }
     auto pos = bindRemoteIp.find('-');
     if (pos == std::string_view::npos) {
-        co_return Unexpected(ilias::IoError::InvalidArgument);
+        co_return Err(ilias::IoError::InvalidArgument);
     }
     auto bindIpendpoint   = IPEndpoint::fromString(bindRemoteIp.substr(0, pos));
     auto remoteIpendpoint = IPEndpoint::fromString(bindRemoteIp.substr(pos + 1));
     if (!bindIpendpoint || !remoteIpendpoint) {
-        co_return Unexpected(ilias::IoError::InvalidArgument);
+        co_return Err(ilias::IoError::InvalidArgument);
     }
     co_return co_await make_udp_stream_client(bindIpendpoint.value(), remoteIpendpoint.value());
 }
@@ -355,14 +353,14 @@ auto make_tcp_stream_server(IPEndpoint ipendpoint) -> IoTask<MessageStream<TcpLi
         if (auto ret1 = ret.value().bind(ipendpoint); ret1) {
             auto ret2 = ret.value().listen();
             if (!ret2) {
-                co_return Unexpected(ret2.error());
+                co_return Err(ret2.error());
             }
             co_return MessageStream<TcpListener>(IliasTcpListener::from(std::move(ret.value())).value());
         } else {
-            co_return Unexpected(ret1.error());
+            co_return Err(ret1.error());
         }
     } else {
-        co_return Unexpected(ret.error());
+        co_return Err(ret.error());
     }
 }
 NEKO_PROTO_API
@@ -375,7 +373,7 @@ auto make_tcp_stream_server(std::string_view url) -> IoTask<MessageStream<TcpLis
     }
     auto ipendpoint = IPEndpoint::fromString(ipstr);
     if (!ipendpoint) {
-        co_return Unexpected(ilias::IoError::InvalidArgument);
+        co_return Err(ilias::IoError::InvalidArgument);
     }
     co_return co_await make_tcp_stream_server(ipendpoint.value());
 }

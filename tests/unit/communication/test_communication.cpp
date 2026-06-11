@@ -24,7 +24,7 @@ using ilias::IPEndpoint;
 using ilias::TcpClient;
 using ilias::TcpListener;
 using ilias::UdpSocket;
-using ilias::Unexpected;
+using ilias::Err;
 using ilias::sockopt::TcpNoDelay;
 
 class Message {
@@ -70,7 +70,7 @@ client_loop([[maybe_unused]] ilias::IoContext& ioContext,
     NEKO_LOG_DEBUG("unit test", "Client connect to service");
     auto ret = co_await TcpClient::connect(IPEndpoint("127.0.0.1", 10345));
     if (!ret) {
-        co_return Unexpected(ret.error());
+        co_return Err(ret.error());
     }
     ret.value().setOption(TcpNoDelay(1));
     ProtoStreamClient<TcpClient> client(protoFactory, std::move(ret.value()));
@@ -86,14 +86,14 @@ client_loop([[maybe_unused]] ilias::IoContext& ioContext,
         auto ret1     = co_await client.send(msg.makeProto(), sendFlag);
         if (!ret1) {
             NEKO_LOG_DEBUG("unit test", "send failed: {}", ret1.error().message());
-            co_return Unexpected(ret1.error());
+            co_return Err(ret1.error());
         }
         NEKO_LOG_DEBUG("unit test", "send message: timestamp: {}, msg: {} numbers: {}", msg.timestamp,
                        msg.msg.substr(0, 20) + "...", to_string(msg.numbers));
         auto ret2 = co_await client.recv(recvFlag);
         if (!ret2) {
             NEKO_LOG_DEBUG("unit test", "recv failed: {}", ret2.error().message());
-            co_return Unexpected(ret2.error());
+            co_return Err(ret2.error());
         }
         IProto retMsg(std::move(ret2.value()));
         auto* msg1 = retMsg.cast<Message>();
@@ -124,7 +124,7 @@ ilias::IoTask<void> handle_loop(ProtoStreamClient<TcpClient>&& pClient,
         if (!ret) {
             NEKO_LOG_DEBUG("unit test", "recv failed: {}", ret.error().message());
             co_await client.close();
-            co_return Unexpected(ret.error());
+            co_return Err(ret.error());
         }
         auto* msg = ret->cast<Message>();
         if (msg != nullptr) {
@@ -140,7 +140,7 @@ ilias::IoTask<void> handle_loop(ProtoStreamClient<TcpClient>&& pClient,
         auto ret1      = co_await client.send(msg->makeProto(), sendFlag);
         if (!ret1) {
             co_await client.close();
-            co_return Unexpected(ret1.error());
+            co_return Err(ret1.error());
         }
         NEKO_LOG_DEBUG("unit test", "send message: timestamp: {}, msg: {} numbers: {}", msg1.timestamp,
                        msg1.msg.substr(0, 20) + "...", to_string(msg1.numbers));
@@ -160,19 +160,19 @@ ilias::IoTask<void> server_loop([[maybe_unused]] IoContext& ioContext, ProtoFact
     auto retl = co_await TcpListener::bind(IPEndpoint("127.0.0.1", 10345));
     if (!retl) {
         NEKO_LOG_DEBUG("unit test", "bind failed: {}", retl.error().message());
-        co_return Unexpected(retl.error());
+        co_return Err(retl.error());
     }
     auto ret = co_await retl.value().accept();
     if (!ret) {
         NEKO_LOG_DEBUG("unit test", "accept failed: {}", ret.error().message());
-        co_return Unexpected(ret.error());
+        co_return Err(ret.error());
     }
     NEKO_LOG_DEBUG("unit test", "accept successed");
     ret.value().first.setOption(TcpNoDelay(1));
     auto ret1 = co_await handle_loop(ProtoStreamClient<ilias::TcpClient>(protoFactor, std::move(ret.value().first)),
                                      sendFlag, recvFlag);
     if (!ret1 && ret1.error() != ilias::IoError::ConnectionReset) {
-        co_return Unexpected(ret1.error());
+        co_return Err(ret1.error());
     }
     co_return {};
 }
@@ -208,7 +208,7 @@ ilias::IoTask<void> udp_client([[maybe_unused]] IoContext& ioContext, ProtoFacto
     auto ret = udpclient.bind(bindPoint);
     if (!ret) {
         NEKO_LOG_DEBUG("unit test", "udp bind failed: {}", ret.error().message());
-        co_return Unexpected(ret.error());
+        co_return Err(ret.error());
     }
     ProtoDatagramClient<UdpSocket> client(protoFactory, UdpSocket::from(std::move(udpclient)).value());
     int count = 10;
@@ -222,13 +222,13 @@ ilias::IoTask<void> udp_client([[maybe_unused]] IoContext& ioContext, ProtoFacto
 
         if (!ret2) {
             NEKO_LOG_DEBUG("unit test", "send failed: {}", ret2.error().message());
-            co_return Unexpected(ret2.error());
+            co_return Err(ret2.error());
         }
 
         auto ret1 = co_await client.recv(recvFlags);
         if (!ret1) {
             NEKO_LOG_DEBUG("unit test", "recv failed: {}", ret1.error().message());
-            co_return Unexpected(ret1.error());
+            co_return Err(ret1.error());
         }
         IProto msg(std::move(ret1.value().first));
         auto* proto = msg.cast<Message>();
@@ -269,7 +269,7 @@ ilias::IoTask<void> udp_client_peer([[maybe_unused]] IoContext& ioContext, Proto
     auto ret = udpclient.bind(bindPoint);
     if (!ret) {
         NEKO_LOG_DEBUG("unit test", "udp bind failed: {}", ret.error().message());
-        co_return Unexpected(ret.error());
+        co_return Err(ret.error());
     }
     ProtoDatagramClient<UdpSocket> client(protoFactory, UdpSocket::from(std::move(udpclient)).value());
     int count = 10;
@@ -278,7 +278,7 @@ ilias::IoTask<void> udp_client_peer([[maybe_unused]] IoContext& ioContext, Proto
         auto ret1 = co_await client.recv(recvFlags);
         if (!ret1) {
             NEKO_LOG_DEBUG("unit test", "recv failed: {}", ret1.error().message());
-            co_return Unexpected(ret1.error());
+            co_return Err(ret1.error());
         }
         IProto msg(std::move(ret1.value().first));
         auto* proto = msg.cast<Message>();
@@ -292,7 +292,7 @@ ilias::IoTask<void> udp_client_peer([[maybe_unused]] IoContext& ioContext, Proto
 
         if (!ret2) {
             NEKO_LOG_DEBUG("unit test", "send failed: {}", ret2.error().message());
-            co_return Unexpected(ret2.error());
+            co_return Err(ret2.error());
         }
     }
     if (static_cast<int>(sendFlags & StreamFlag::VersionVerification) != 0) {

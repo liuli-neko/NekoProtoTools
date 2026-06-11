@@ -236,7 +236,7 @@ template <class T, std::size_t... Is>
 /// ====================== enum string =========================
 #ifdef __clang__
 #pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wenum-constexpr-conversion"
+// #pragma clang diagnostic ignored "-Wenum-constexpr-conversion"
 #endif
 #ifndef NEKO_ENUM_SEARCH_DEPTH
 #define NEKO_ENUM_SEARCH_DEPTH 60
@@ -304,7 +304,12 @@ constexpr auto neko_get_valid_enum_names(std::index_sequence<N...> seq) noexcept
         if (!idx.empty()) {
             // Valid name
             iter->first  = T(ns);
-            iter->second = idx;
+            auto pos = idx.find_last_of(':');
+            if (pos != std::string_view::npos) {
+                iter->second = idx.substr(pos + 1);
+            } else {
+                iter->second = idx;
+            }
             ++iter;
         }
         if (left == 0) {

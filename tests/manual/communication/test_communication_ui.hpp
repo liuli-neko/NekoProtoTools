@@ -77,7 +77,7 @@ ilias::Task<void> MainWidget::sendMessage(NEKO_NAMESPACE::ProtoStreamClient<T>& 
     if (!ret1) {
         NEKO_LOG_ERROR("ui test", "send failed: {}",
                        QString::fromUtf8(ret1.error().message()).toLocal8Bit().constData());
-        co_return ilias::Unexpected(ret1.error());
+        co_return ilias::Err(ret1.error());
     }
     co_return ilias::Result<>();
 }
@@ -87,7 +87,7 @@ ilias::Task<void> MainWidget::recvMessage(NEKO_NAMESPACE::ProtoStreamClient<T>& 
     auto ret = co_await client.recv(NEKO_NAMESPACE::ProtoStreamClient<T>::SerializerInThread);
     if (!ret) {
         NEKO_LOG_ERROR("ui test", "recv failed: {}", ret.error().message());
-        co_return ilias::Unexpected(ret.error());
+        co_return ilias::Err(ret.error());
     }
     auto retMsg = std::move(ret.value());
 

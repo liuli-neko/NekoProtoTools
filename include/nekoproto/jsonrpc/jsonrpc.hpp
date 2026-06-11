@@ -452,7 +452,7 @@ private:
         auto handle =
             mTaskScope.spawn([&, this, request = std::move(request), method = method]() -> ilias::Task<void> {
                 ilias::Result<typename T::RawReturnType, std::error_code> result =
-                    ilias::Unexpected(ilias::SystemError::Canceled);
+                    ilias::Err(ilias::SystemError::Canceled);
                 auto onfinally = [&]() -> ilias::Task<void> {
                     co_return _processMethodReturn<T>(metadata, std::move(result), out, std::move(method));
                 };
@@ -802,7 +802,7 @@ private:
     auto _callRemote(T& metadata, Args... args) noexcept
         -> ilias::IoTask<typename std::decay_t<T>::RawReturnType> {
         if (mTransport == nullptr) {
-            co_return ilias::Unexpected(JsonRpcError::ClientNotInit);
+            co_return ilias::Err(JsonRpcError::ClientNotInit);
         }
         auto grid = co_await mMutex.lock();
         typename std::decay_t<T>::RequestType request;
@@ -812,17 +812,17 @@ private:
             if (auto ret1 = co_await mTransport->send({reinterpret_cast<std::byte*>(mBuffer.data()), mBuffer.size()});
                 !ret1) {
                 NEKO_LOG_ERROR("jsonrpc", "send {} request failed", request.method);
-                co_return ilias::Unexpected(ret1.error());
+                co_return ilias::Err(ret1.error());
             }
         } else {
-            co_return ilias::Unexpected(ret.error());
+            co_return ilias::Err(ret.error());
         }
         if (!metadata.isNotification()) {
             typename std::decay_t<T>::ResponseType respone;
             std::vector<std::byte> buffer;
             if (auto ret = co_await mTransport->recv(buffer); ret) {
                 if (auto ret1 = _recvResponse<T>(buffer, respone, request.id); !ret1) {
-                    co_return ilias::Unexpected(ret1.error());
+                    co_return ilias::Err(ret1.error());
                 } else {
                     if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
                         co_return {};
@@ -832,10 +832,10 @@ private:
                 }
             } else {
                 NEKO_LOG_ERROR("jsonrpc", "Error: {}", ret.error().message());
-                co_return ilias::Unexpected(ret.error());
+                co_return ilias::Err(ret.error());
             }
         } else {
-            co_return ilias::Unexpected(JsonRpcError::Ok);
+            co_return ilias::Err(JsonRpcError::Ok);
         }
         co_return {};
     }
@@ -874,7 +874,7 @@ private:
             return {};
         }
         NEKO_LOG_ERROR("jsonrpc", "make {} request failed", request.method);
-        return ilias::Unexpected(JsonRpcError::InvalidRequest);
+        return ilias::Err(JsonRpcError::InvalidRequest);
     }
 
     template <typename T>
@@ -888,12 +888,12 @@ private:
             if (response.id != id) {
                 NEKO_LOG_ERROR("jsonrpc", "id mismatch: {} != {}", detail::to_string(response.id),
                                detail::to_string(id));
-                return ilias::Unexpected(JsonRpcError::ResponseIdNotMatch);
+                return ilias::Err(JsonRpcError::ResponseIdNotMatch);
             }
             if (response.error.has_value()) {
                 detail::JsonRpcErrorResponse err = response.error.value();
                 NEKO_LOG_WARN("jsonrpc", "Error({}): {}", err.code, err.message);
-                return ilias::Unexpected(err.code > 0
+                return ilias::Err(err.code > 0
                                                        ? std::error_code(ilias::IoError::Code(err.code))
                                                        : std::error_code(JsonRpcError(err.code)));
             }
@@ -904,7 +904,7 @@ private:
             }
         } else {
             NEKO_LOG_ERROR("jsonrpc", "Error: response parser error");
-            return ilias::Unexpected(JsonRpcError::ParseError);
+            return ilias::Err(JsonRpcError::ParseError);
         }
     }
 

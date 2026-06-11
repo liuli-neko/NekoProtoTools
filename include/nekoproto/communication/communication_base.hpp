@@ -48,7 +48,7 @@ using ilias::IPEndpoint;
 using ilias::networkToHost;
 using ilias::Stream;
 using ilias::Task;
-using ilias::Unexpected;
+using ilias::Err;
 using ilias::unstoppable;
 
 enum MessageType {
