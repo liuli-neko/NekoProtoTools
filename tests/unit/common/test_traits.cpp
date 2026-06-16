@@ -2,11 +2,9 @@
 
 #include <string>
 
+#include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/json/simd_json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
-#include "nekoproto/serialization/types/optional.hpp"      // IWYU pragma: export
-#include "nekoproto/serialization/types/struct_unwrap.hpp" // IWYU pragma: export
-#include "nekoproto/serialization/types/vector.hpp"        // IWYU pragma: export
 // MARK: region traits
 NEKO_USE_NAMESPACE
 struct TestStruct {

@@ -1,17 +1,30 @@
 #pragma once
 
 #include "nekoproto/global/global.hpp"
-#include "traits.hpp"
 
+#include <cstddef>
 #include <cstring>
+#include <string>
+#include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
-#include <stdint.h>
 
 NEKO_BEGIN_NAMESPACE
 
 template <class T>
-struct NameValuePair : traits::detail::NameValuePairCore {
+struct NameValuePair;
+
+namespace detail {
+template <typename T>
+struct is_name_value_pair : std::false_type {};
+
+template <typename T>
+struct is_name_value_pair<NameValuePair<T>> : std::true_type {};
+} // namespace detail
+
+template <class T>
+struct NameValuePair {
 private:
     // If we get passed an array, keep the type as is, otherwise store
     // a reference if we were passed an left value reference, else copy the value
@@ -19,7 +32,7 @@ private:
         std::is_array<typename std::remove_reference<T>::type>::value, typename std::remove_cv<T>::type,
         typename std::conditional<std::is_lvalue_reference<T>::value, T, typename std::decay<T>::type>::type>::type;
     // prevent nested name value pair
-    static_assert(!std::is_base_of<traits::detail::NameValuePairCore, T>::value,
+    static_assert(!detail::is_name_value_pair<std::remove_cvref_t<T>>::value,
                   "Cannot pair a name to a NameValuePair");
     NameValuePair& operator=(NameValuePair const&) = delete;
 
@@ -27,7 +40,7 @@ public:
     //! Constructs a new NameValuePair
     /*! @param name The name of the pair
         @param value The value to pair.  Ideally this should be an left-value reference so that
-                the value can be both loaded and saved to.  If you pass an right-value reference,
+                the value can be both read and written.  If you pass an right-value reference,
                 the NameValuePair will store a copy of it instead of a reference.  Thus you should
                 only pass right-values in cases where this makes sense, such as the result of some
                 size() call.
@@ -43,8 +56,6 @@ public:
     std::size_t nameLen;
     Type value;
 };
-template <typename T>
-struct is_minimal_serializable<NameValuePair<T>, void> : std::true_type {};
 
 template <class T>
 inline NameValuePair<T> make_name_value_pair(const char* name, T&& value) NEKO_NOEXCEPT {
@@ -68,167 +79,6 @@ inline NameValuePair<T> make_name_value_pair(const std::string_view& name, T&& v
 
 #define NEKO_PROTO_NAME_VALUE_PAIR(value) make_name_value_pair(#value, value)
 
-template <class T>
-class SizeTag : public traits::detail::SizeTagCore {
-private:
-    // Store a reference if passed an lvalue reference, otherwise
-    // make a copy of the data
-    using Type = typename std::conditional<std::is_lvalue_reference<T>::value, T, typename std::decay<T>::type>::type;
-    SizeTag& operator=(SizeTag const&) = delete;
-
-public:
-    SizeTag(T&& sz) NEKO_NOEXCEPT : size(std::forward<T>(sz)) {}
-    Type size;
-};
-
-template <typename T>
-struct is_minimal_serializable<SizeTag<T>, void> : std::true_type {};
-
-template <class T>
-inline SizeTag<T> make_size_tag(T&& sz) NEKO_NOEXCEPT {
-    return {std::forward<T>(sz)};
-}
-
-template <class Archive, class T>
-inline bool prologue(Archive& /* archive */, T const& /* data */) NEKO_NOEXCEPT {
-    return true;
-}
-
-//! Called after a type is serialized to tear down any special archive state
-//! for processing some type
-/*! @ingroup Internal */
-template <class Archive, class T>
-inline bool epilogue(Archive& /* archive */, T const& /* data */) NEKO_NOEXCEPT {
-    return true;
-}
-namespace detail {
-template <typename SelfT>
-class OutputSerializer {
-public:
-    using SerializerType = SelfT;
-
-public:
-    OutputSerializer(SelfT* self) NEKO_NOEXCEPT : mSelf(self) {}
-    template <class... Types>
-    bool operator()(Types&&... args) NEKO_NOEXCEPT {
-        return _process(std::forward<Types>(args)...);
-    }
-
-private:
-    // process a single value
-    template <class T>
-    bool _process(T&& head) NEKO_NOEXCEPT {
-        auto ret = prologue(*mSelf, head);
-        ret      = ret && mSelf->_processImpl(head);
-        epilogue(*mSelf, head);
-        return ret;
-    }
-
-    //! Unwinds to process all data
-    template <class T, class... Other>
-    bool _process(T&& head, Other&&... tail) NEKO_NOEXCEPT {
-        auto ret = _process(std::forward<T>(head));
-        ret      = ret && _process(std::forward<Other>(tail)...);
-        return ret;
-    }
-
-    template <typename T>
-        requires traits::has_method_save<T, SerializerType>
-    bool _processImpl(const T& value) NEKO_NOEXCEPT {
-        return traits::method_access::method_save(*mSelf, value);
-    }
-
-    template <typename T>
-        requires traits::has_function_save<T, SerializerType> && (!traits::has_method_save<T, SerializerType>)
-    bool _processImpl(const T& value) NEKO_NOEXCEPT {
-        return save(*mSelf, value);
-    }
-
-    template <typename T>
-        requires(!traits::has_function_save<T, SerializerType>) && (!traits::has_method_save<T, SerializerType>)
-    bool _processImpl(const T& /*unused*/) NEKO_NOEXCEPT {
-        static_assert(traits::has_function_save<T, SerializerType>,
-                      "can not find any function to serialize this Type, must have a save method"
-                      " or save function.");
-        return false;
-    }
-
-protected:
-    SelfT* mSelf;
-};
-
-template <typename SelfT>
-class InputSerializer {
-public:
-    using SerializerType = SelfT;
-
-public:
-    InputSerializer(SelfT* self) NEKO_NOEXCEPT : mSelf(self) {}
-    template <class... Types>
-    bool operator()(Types&&... args) NEKO_NOEXCEPT {
-        return _process(args...);
-    }
-
-private:
-    // process a single value
-    template <class T>
-    bool _process(T&& head) NEKO_NOEXCEPT {
-        auto ret = prologue(*mSelf, head);
-        ret      = ret && mSelf->_processImpl(head);
-        ret      = ret && epilogue(*mSelf, head);
-        return ret;
-    }
-
-    //! Unwinds to process all data
-    template <class T, class... Other>
-    bool _process(T&& head, Other&&... tail) NEKO_NOEXCEPT {
-        auto ret = _process(head);
-        ret      = _process(tail...) && ret;
-        return ret;
-    }
-
-    template <typename T>
-        requires traits::has_method_load<T, SerializerType>
-    bool _processImpl(T& value) NEKO_NOEXCEPT {
-        return traits::method_access::method_load(*mSelf, value);
-    }
-
-    template <typename T>
-        requires traits::has_function_load<T, SerializerType> && (!traits::has_method_load<T, SerializerType>)
-    bool _processImpl(T& value) NEKO_NOEXCEPT {
-        return load(*mSelf, value);
-    }
-
-    template <typename T>
-        requires(!traits::has_function_load<T, SerializerType>) && (!traits::has_method_load<T, SerializerType>)
-    bool _processImpl(T& /*unused*/) NEKO_NOEXCEPT {
-        static_assert(traits::has_function_load<T, SerializerType>,
-                      "can not find any function to serialize this Type, must load method"
-                      "or load function.");
-        return false;
-    }
-
-protected:
-    SelfT* mSelf;
-};
-} // namespace detail
-namespace traits {
-template <typename T, class enable = void>
-struct is_input_serializer : std::false_type {}; // NOLINT(readability-identifier-naming)
-
-template <typename T>
-struct is_input_serializer<
-    T, typename std::enable_if<std::is_base_of<NEKO_NAMESPACE::detail::InputSerializer<T>, T>::value>::type>
-    : std::true_type {};
-
-template <typename T, class enable = void>
-struct is_output_serializer : std::false_type {}; // NOLINT(readability-identifier-naming)
-
-template <typename T>
-struct is_output_serializer<
-    T, typename std::enable_if<std::is_base_of<NEKO_NAMESPACE::detail::OutputSerializer<T>, T>::value>::type>
-    : std::true_type {};
-} // namespace traits
 namespace detail {
 class OutBufferWrapper {
 public:
@@ -264,165 +114,5 @@ inline const OutBufferWrapper::Ch* OutBufferWrapper::GetString() const NEKO_NOEX
 inline std::size_t OutBufferWrapper::GetSize() const NEKO_NOEXCEPT { return mVec->size(); }
 inline void OutBufferWrapper::Clear() NEKO_NOEXCEPT { mVec->clear(); }
 } // namespace detail
-
-template <typename SerializerT, typename T>
-inline bool save(SerializerT& serializer, const SizeTag<T>& value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT, typename T>
-inline bool save(SerializerT& serializer, const NameValuePair<T>& value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT>
-inline bool save(SerializerT& serializer, const int8_t value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT>
-inline bool save(SerializerT& serializer, const uint8_t value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT>
-inline bool save(SerializerT& serializer, const int16_t value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT>
-inline bool save(SerializerT& serializer, const uint16_t value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT>
-inline bool save(SerializerT& serializer, const int32_t value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT>
-inline bool save(SerializerT& serializer, const uint32_t value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT>
-inline bool save(SerializerT& serializer, const int64_t value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT>
-inline bool save(SerializerT& serializer, const uint64_t value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT>
-inline bool save(SerializerT& serializer, const float value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT>
-inline bool save(SerializerT& serializer, const double value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT>
-inline bool save(SerializerT& serializer, const bool value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT, typename CharT, typename Traits, typename Alloc>
-inline bool save(SerializerT& serializer, const std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT>
-inline bool save(SerializerT& serializer, const char* value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT>
-inline bool save(SerializerT& serializer, std::nullptr_t) NEKO_NOEXCEPT {
-    return serializer.saveValue(nullptr);
-}
-
-template <typename SerializerT, typename CharT, typename Traits>
-inline bool save(SerializerT& serializer, const std::basic_string_view<CharT, Traits>& value) NEKO_NOEXCEPT {
-    return serializer.saveValue(value);
-}
-
-template <typename SerializerT, typename CharT, typename Traits, typename Alloc>
-inline bool load(SerializerT& serializer, std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
-    return serializer.loadValue(value);
-}
-
-template <typename SerializerT>
-inline bool load(SerializerT& serializer, int8_t& value) NEKO_NOEXCEPT {
-    return serializer.loadValue(value);
-}
-
-template <typename SerializerT>
-inline bool load(SerializerT& serializer, int16_t& value) NEKO_NOEXCEPT {
-    return serializer.loadValue(value);
-}
-
-template <typename SerializerT>
-inline bool load(SerializerT& serializer, int32_t& value) NEKO_NOEXCEPT {
-    return serializer.loadValue(value);
-}
-
-template <typename SerializerT>
-inline bool load(SerializerT& serializer, int64_t& value) NEKO_NOEXCEPT {
-    return serializer.loadValue(value);
-}
-
-template <typename SerializerT>
-inline bool load(SerializerT& serializer, uint8_t& value) NEKO_NOEXCEPT {
-    return serializer.loadValue(value);
-}
-
-template <typename SerializerT>
-inline bool load(SerializerT& serializer, uint16_t& value) NEKO_NOEXCEPT {
-    return serializer.loadValue(value);
-}
-
-template <typename SerializerT>
-inline bool load(SerializerT& serializer, uint32_t& value) NEKO_NOEXCEPT {
-    return serializer.loadValue(value);
-}
-
-template <typename SerializerT>
-inline bool load(SerializerT& serializer, uint64_t& value) NEKO_NOEXCEPT {
-    return serializer.loadValue(value);
-}
-
-template <typename SerializerT>
-inline bool load(SerializerT& serializer, float& value) NEKO_NOEXCEPT {
-    return serializer.loadValue(value);
-}
-
-template <typename SerializerT>
-inline bool load(SerializerT& serializer, double& value) NEKO_NOEXCEPT {
-    return serializer.loadValue(value);
-}
-
-template <typename SerializerT>
-inline bool load(SerializerT& serializer, bool& value) NEKO_NOEXCEPT {
-    return serializer.loadValue(value);
-}
-
-template <typename SerializerT>
-inline bool load(SerializerT& serializer, std::nullptr_t) NEKO_NOEXCEPT {
-    return serializer.loadValue(nullptr);
-}
-
-template <typename SerializerT, typename T>
-inline bool load(SerializerT& serializer, const SizeTag<T>& value) NEKO_NOEXCEPT {
-    return serializer.loadValue(value);
-}
-
-template <typename SerializerT, typename T>
-inline bool load(SerializerT& serializer, const NameValuePair<T>& value) NEKO_NOEXCEPT {
-    return serializer.loadValue(value);
-}
 
 NEKO_END_NAMESPACE

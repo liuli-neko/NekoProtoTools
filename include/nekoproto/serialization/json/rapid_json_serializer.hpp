@@ -20,8 +20,12 @@
 #include <rapidjson/ostreamwrapper.h>
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/rapidjson.h>
+#include <rapidjson/error/en.h>
+#include <cstring>
+#include <memory>
+#include <ostream>
 #include <type_traits>
-#include <unordered_map>
+#include <utility>
 #include <vector>
 #if NEKO_CPP_PLUS >= 17
 #include <optional>
@@ -36,6 +40,10 @@
 #endif
 
 #include "nekoproto/serialization/private/helpers.hpp"
+#include "nekoproto/serialization/json/rapid_json_writer.hpp"
+#include "nekoproto/serialization/json/rapid_json_reader.hpp"
+#include "nekoproto/serialization/parsing/parsers.hpp"
+#include "nekoproto/serialization/serializer_adapter.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
@@ -54,40 +62,53 @@ using JsonWriter = rapidjson::Writer<BufferT>;
 template <typename BufferT = std::vector<char>>
 struct PrettyJsonWriter {};
 
-template <typename T, class enable = void>
-struct json_output_buffer_type { // NOLINT(readability-identifier-naming)
+template <typename T>
+struct json_output_argument { // NOLINT(readability-identifier-naming)
+    using sink_type               = T;
+    static constexpr bool pretty  = false;
+};
+
+template <typename T>
+struct json_output_argument<PrettyJsonWriter<T>> { // NOLINT(readability-identifier-naming)
+    using sink_type              = T;
+    static constexpr bool pretty = true;
+};
+
+template <typename SinkT, class enable = void>
+struct json_output_sink_traits { // NOLINT(readability-identifier-naming)
     using output_buffer_type = void;
-};
-
-template <>
-struct json_output_buffer_type<std::vector<char>, void> {
-    using output_buffer_type = std::vector<char>;
-    using wrapper_type       = OutBufferWrapper;
-    using writer_type        = JsonWriter<OutBufferWrapper>;
-    using char_type          = char;
+    using wrapper_type       = void;
 };
 
 template <typename T>
-struct json_output_buffer_type<T, typename std::enable_if<std::is_base_of<std::ostream, T>::value>::type> {
-    using output_buffer_type = typename std::remove_reference<T>::type;
-    using wrapper_type       = rapidjson::BasicOStreamWrapper<T>;
-    using writer_type        = JsonWriter<rapidjson::BasicOStreamWrapper<T>>;
-    using char_type          = typename rapidjson::BasicOStreamWrapper<T>::Ch;
+struct json_output_sink_traits<T, std::enable_if_t<std::is_base_of_v<std::ostream, std::remove_reference_t<T>>>> {
+    using output_buffer_type = std::remove_reference_t<T>;
+    using wrapper_type       = rapidjson::BasicOStreamWrapper<output_buffer_type>;
 };
 
 template <>
-struct json_output_buffer_type<OutBufferWrapper, void> {
+struct json_output_sink_traits<std::vector<char>, void> {
     using output_buffer_type = std::vector<char>;
     using wrapper_type       = OutBufferWrapper;
-    using char_type          = OutBufferWrapper::Ch;
 };
 
-template <typename T>
-struct json_output_buffer_type<PrettyJsonWriter<T>, void> {
-    using output_buffer_type = typename json_output_buffer_type<T>::output_buffer_type;
-    using wrapper_type       = typename json_output_buffer_type<T>::wrapper_type;
-    using writer_type        = rapidjson::PrettyWriter<wrapper_type>;
-    using char_type          = typename json_output_buffer_type<T>::char_type;
+template <>
+struct json_output_sink_traits<OutBufferWrapper, void> {
+    using output_buffer_type = std::vector<char>;
+    using wrapper_type       = OutBufferWrapper;
+};
+
+template <typename BufferT>
+struct json_output_traits { // NOLINT(readability-identifier-naming)
+    using argument           = json_output_argument<std::remove_cvref_t<BufferT>>;
+    using sink_type          = typename argument::sink_type;
+    using sink_traits        = json_output_sink_traits<sink_type>;
+    using output_buffer_type = typename sink_traits::output_buffer_type;
+    using wrapper_type       = typename sink_traits::wrapper_type;
+    static constexpr bool pretty = argument::pretty;
+    static_assert(!std::is_void_v<output_buffer_type>, "Unsupported JSON output buffer");
+    using writer_type =
+        std::conditional_t<pretty, rapidjson::PrettyWriter<wrapper_type>, JsonWriter<wrapper_type>>;
 };
 
 template <typename T, class enable = void>
@@ -108,102 +129,6 @@ struct is_pretty_json_writer // NOLINT(readability-identifier-naming)
 
 template <typename T>
 struct is_pretty_json_writer<rapidjson::PrettyWriter<T>> : std::true_type {};
-
-class ConstJsonIterator {
-public:
-    using MemberIterator = JsonValue::ConstMemberIterator;
-    using ValueIterator  = JsonValue::ConstValueIterator;
-
-public:
-    inline ConstJsonIterator() NEKO_NOEXCEPT : mIndex(0), mType(Null) {};
-    inline ConstJsonIterator(MemberIterator begin, MemberIterator end) NEKO_NOEXCEPT : mMemberItBegin(begin),
-                                                                                       mMemberItEnd(end),
-                                                                                       mMemberIt(begin),
-                                                                                       mIndex(0),
-                                                                                       mSize(0),
-                                                                                       mType(Member) {
-        for (auto member = mMemberItBegin; member != mMemberItEnd; ++member) {
-            mMemberMap.emplace(NEKO_STRING_VIEW{member->name.GetString(), member->name.GetStringLength()}, member);
-            ++mSize;
-        }
-        if (mSize == 0) {
-            mType = Null;
-            return;
-        }
-    }
-
-    inline ConstJsonIterator(ValueIterator begin, ValueIterator end) NEKO_NOEXCEPT : mMemberIt(),
-                                                                                     mValueItBegin(begin),
-                                                                                     mIndex(0),
-                                                                                     mSize(std::distance(begin, end)),
-                                                                                     mType(Value) {
-        if (mSize == 0) {
-            mType = Null;
-        }
-    }
-
-    inline ~ConstJsonIterator() = default;
-
-    inline ConstJsonIterator& operator++() NEKO_NOEXCEPT {
-        if (mType == Member) {
-            ++mMemberIt;
-        } else {
-            ++mIndex;
-        }
-        return *this;
-    }
-    inline ConstJsonIterator& operator--() NEKO_NOEXCEPT {
-        if (mType == Member) {
-            --mMemberIt;
-        } else {
-            --mIndex;
-        }
-        return *this;
-    }
-    inline bool eof() const NEKO_NOEXCEPT {
-        return mType == Null || (mType == Value && mIndex >= mSize) || (mType == Member && mMemberIt == mMemberItEnd);
-    }
-    inline std::size_t size() const NEKO_NOEXCEPT { return mSize; }
-    inline const JsonValue& value() NEKO_NOEXCEPT {
-        static JsonValue kNull;
-        if (eof()) {
-            return kNull;
-        }
-        switch (mType) {
-        case Value:
-            return mValueItBegin[mIndex];
-        case Member:
-            return mMemberIt->value;
-        default:
-            return kNull; // should never reach here, but needed to avoid compiler warning
-        }
-    }
-    inline NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
-        if (mType == Member && mMemberIt != mMemberItEnd) {
-            return {mMemberIt->name.GetString(), mMemberIt->name.GetStringLength()};
-        }
-        return {};
-    };
-    inline const JsonValue* moveToMember(const NEKO_STRING_VIEW& name) NEKO_NOEXCEPT {
-        if (mMemberIt != mMemberItEnd &&
-            name == NEKO_STRING_VIEW{mMemberIt->name.GetString(), mMemberIt->name.GetStringLength()}) {
-            return &(mMemberIt)->value;
-        }
-        auto it = mMemberMap.find(name);
-        if (it != mMemberMap.end()) {
-            mMemberIt = it->second;
-            return &(mMemberIt)->value;
-        }
-        return nullptr;
-    };
-
-private:
-    MemberIterator mMemberItBegin, mMemberItEnd, mMemberIt;
-    ValueIterator mValueItBegin;
-    std::size_t mIndex, mSize;
-    std::unordered_map<NEKO_STRING_VIEW, MemberIterator> mMemberMap;
-    enum Type { Value, Member, Null } mType;
-};
 } // namespace detail
 
 struct JsonOutputFormatOptions {
@@ -319,513 +244,180 @@ private:
 
 } // namespace detail
 
-template <typename BufferT>
-class RapidJsonOutputSerializer : public detail::OutputSerializer<RapidJsonOutputSerializer<BufferT>> {
-public:
-    using WriterType = typename detail::json_output_buffer_type<BufferT>::writer_type;
-
-public:
-    explicit RapidJsonOutputSerializer(typename detail::json_output_buffer_type<BufferT>::output_buffer_type& buffer)
-        NEKO_NOEXCEPT : detail::OutputSerializer<RapidJsonOutputSerializer>(this),
-                        mStream(buffer),
-                        mWriter(mStream) {}
-
-    explicit RapidJsonOutputSerializer(typename detail::json_output_buffer_type<BufferT>::output_buffer_type& buffer,
-                                       WriterType&& writer) NEKO_NOEXCEPT
-        : detail::OutputSerializer<RapidJsonOutputSerializer>(this),
-          mStream(buffer),
-          mWriter(std::move(writer)) {
-        mWriter.Reset(mStream);
-    }
-
-    explicit RapidJsonOutputSerializer(typename detail::json_output_buffer_type<BufferT>::output_buffer_type& buffer,
-                                       const JsonOutputFormatOptions& formatOptions) NEKO_NOEXCEPT
-        : detail::OutputSerializer<RapidJsonOutputSerializer>(this),
-          mStream(buffer),
-          mWriter(mStream) {
-        detail::set_json_format_option<WriterType>::setting(mWriter, formatOptions);
-    }
-
-    RapidJsonOutputSerializer(const RapidJsonOutputSerializer& other) NEKO_NOEXCEPT
-        : detail::OutputSerializer<RapidJsonOutputSerializer>(this),
-          mStream(other.mStream),
-          mWriter(other.mWriter) {}
-    RapidJsonOutputSerializer(RapidJsonOutputSerializer&& other) NEKO_NOEXCEPT
-        : detail::OutputSerializer<RapidJsonOutputSerializer>(this),
-          mStream(std::move(other.mStream)),
-          mWriter(std::move(other.mWriter)) {}
-    ~RapidJsonOutputSerializer() { end(); }
-    template <typename T>
-    bool saveValue(SizeTag<T> const& /*unused*/) {
-        return true;
-    }
-
-    template <typename T>
-        requires std::is_signed_v<T> && (sizeof(T) < sizeof(int64_t)) && (!std::is_enum_v<T>)
-    bool saveValue(const T value) NEKO_NOEXCEPT {
-        return mWriter.Int(static_cast<int32_t>(value));
-    }
-
-    template <typename T>
-        requires std::is_unsigned_v<T> && (sizeof(T) < sizeof(uint64_t)) && (!std::is_enum_v<T>)
-    bool saveValue(const T value) NEKO_NOEXCEPT {
-        return mWriter.Uint(static_cast<uint32_t>(value));
-    }
-    bool saveValue(const int64_t value) NEKO_NOEXCEPT { return mWriter.Int64(value); }
-    bool saveValue(const uint64_t value) NEKO_NOEXCEPT { return mWriter.Uint64(value); }
-    bool saveValue(const float value) NEKO_NOEXCEPT { return mWriter.Double(value); }
-    bool saveValue(const double value) NEKO_NOEXCEPT { return mWriter.Double(value); }
-    bool saveValue(const bool value) NEKO_NOEXCEPT { return mWriter.Bool(value); }
-    template <typename CharT, typename Traits, typename Alloc>
-    bool saveValue(const std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
-        return mWriter.String(value.c_str(), (int)value.size());
-    }
-    bool saveValue(const char* value) NEKO_NOEXCEPT { return mWriter.String(value); }
-    bool saveValue(const std::nullptr_t) NEKO_NOEXCEPT { return mWriter.Null(); }
-    bool saveValue(const detail::RapidJsonValue& value) NEKO_NOEXCEPT {
-        if (value.hasValue()) {
-            return value.nativeValue().Accept(mWriter);
-        }
-        return saveValue(std::nullptr_t{});
-    }
-    template <typename CharT, typename Traits>
-    bool saveValue(const std::basic_string_view<CharT, Traits> value) NEKO_NOEXCEPT {
-        return mWriter.String(value.data(), (int)value.size());
-    }
-    template <typename T>
-    bool saveValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
-        NEKO_LOG_INFO("JsonSerializer", "saveValue: {}", std::string_view{value.name, value.nameLen});
-        if constexpr (traits::optional_like_type<T>::value) {
-            if (traits::optional_like_type<T>::has_value(value.value)) {
-                return mWriter.Key(value.name, (int)value.nameLen) &&
-                       (*this)(traits::optional_like_type<T>::get_value(value.value));
-            }
-#ifdef NEKO_WRITE_NULL_FOR_EMPTY_OPTIONAL
-            else {
-                return mWriter.Key(value.name, (int)value.nameLen) && (*this)(std::nullptr_t{});
-            }
-#endif
-            return true;
-        } else {
-            return mWriter.Key(value.name, (int)value.nameLen) && (*this)(value.value);
-        }
-    }
-    bool startArray(const std::size_t /*unused*/) NEKO_NOEXCEPT {
-        ++mCurrentLevel;
-        return mWriter.StartArray();
-    }
-    bool endArray() NEKO_NOEXCEPT {
-        --mCurrentLevel;
-        return mWriter.EndArray();
-    }
-    bool startObject(const std::size_t /*unused*/ = -1) NEKO_NOEXCEPT {
-        ++mCurrentLevel;
-        return mWriter.StartObject();
-    }
-    bool endObject() NEKO_NOEXCEPT {
-        --mCurrentLevel;
-        return mWriter.EndObject();
-    }
-    bool end() NEKO_NOEXCEPT {
-        if (!mWriter.IsComplete() && mCurrentLevel > 0) {
-            --mCurrentLevel;
-            auto ret = mWriter.EndObject();
-            mWriter.Flush();
-            return ret && mCurrentLevel == 0;
-        }
-        return true;
-    }
-
-private:
-    RapidJsonOutputSerializer& operator=(const RapidJsonOutputSerializer&) = delete;
-    RapidJsonOutputSerializer& operator=(RapidJsonOutputSerializer&&)      = delete;
-
-private:
-    typename detail::json_output_buffer_type<BufferT>::wrapper_type mStream;
-    WriterType mWriter;
-    int mCurrentLevel = 0;
-};
-
-/**
- * @brief json input serializer
- * This class provides a convenient template interface to help you parse JSON to CPP objects, you only need to give the
- * variables that need to be assigned to this class through parentheses, and the class will automatically expand the
- * object and array to make it easier for you to iterate through all the values.
- *
- * @note
- * A layer is automatically unfolded when constructing.
- * Like a vector<int> vec, and you have a array json data {1, 2, 3, 4} "json_data"
- * you construct RapidJsonInputSerializer is(json_data)
- * you should not is(vec), because it will try unfold the first node as array.
- * you should call a load function like load(sa, vec). or do it like this:
- * size_t size;
- * is(make_size_tag(size));
- * vec.resize(size);
- * for (auto &v : vec) {
- *     is(v);
- * }
- *
- */
-template <typename BufferT>
-class RapidJsonInputSerializer : public detail::InputSerializer<RapidJsonInputSerializer<BufferT>> {
-
-public:
-    explicit RapidJsonInputSerializer(const char* buf, std::size_t size) NEKO_NOEXCEPT
-        : detail::InputSerializer<RapidJsonInputSerializer>(this),
-          mDocument(),
-          mItemStack() {
-        mDocument.Parse(buf, size);
-        mLastResult = mDocument.GetParseError() == rapidjson::kParseErrorNone;
-    }
-
-    explicit RapidJsonInputSerializer(const detail::RapidJsonValue& value) NEKO_NOEXCEPT
-        : detail::InputSerializer<RapidJsonInputSerializer>(this),
-          mDocument(),
-          mItemStack() {
-        mLastResult = value.hasValue();
-        if (mLastResult) {
-            mDocument.CopyFrom(value.nativeValue(), mDocument.GetAllocator());
-        }
-    }
-
-    explicit RapidJsonInputSerializer(BufferT& stream) NEKO_NOEXCEPT
-        : detail::InputSerializer<RapidJsonInputSerializer>(this),
-          mDocument(),
-          mItemStack(),
-          mStream(new rapidjson::BasicIStreamWrapper<BufferT>(stream)) {
-        mDocument.ParseStream(*mStream);
-        mLastResult = mDocument.GetParseError() == rapidjson::kParseErrorNone;
-    }
-
-    ~RapidJsonInputSerializer() NEKO_NOEXCEPT {
-        if (mStream) {
-            delete mStream;
-            mStream = nullptr;
-        }
-    }
-
-    operator bool() const NEKO_NOEXCEPT { return mLastResult; }
-
-    NEKO_STRING_VIEW name() const NEKO_NOEXCEPT {
-        if (mCurrentItem == nullptr) {
-            return {};
-        }
-        if ((*mCurrentItem).eof()) {
-            return {};
-        }
-        return (*mCurrentItem).name();
-    }
-
-    template <typename T>
-        requires std::is_signed_v<T> && (sizeof(T) < sizeof(int64_t)) && (!std::is_enum_v<T>)
-    bool loadValue(T& value) NEKO_NOEXCEPT {
-        if (mCurrentItem == nullptr) {
-            return false;
-        }
-        mLastResult = (*mCurrentItem).value().IsInt();
-        if (!mLastResult) {
-            return false;
-        }
-        value = static_cast<T>((*mCurrentItem).value().GetInt());
-        ++(*mCurrentItem);
-        return true;
-    }
-
-    bool loadValue(detail::RapidJsonValue& value) NEKO_NOEXCEPT {
-        if (mCurrentItem == nullptr) {
-            value = detail::RapidJsonValue(mDocument);
-        } else {
-            value = detail::RapidJsonValue((*mCurrentItem).value());
-            ++(*mCurrentItem);
-        }
-        mLastResult = true;
-        return true;
-    }
-
-    template <typename T>
-        requires std::is_unsigned_v<T> && (sizeof(T) < sizeof(uint64_t)) && (!std::is_enum_v<T>)
-    bool loadValue(T& value) NEKO_NOEXCEPT {
-        if (mCurrentItem == nullptr) {
-            return false;
-        }
-        mLastResult = (*mCurrentItem).value().IsUint();
-        if (!mLastResult) {
-            return false;
-        }
-        value = static_cast<T>((*mCurrentItem).value().GetUint());
-        ++(*mCurrentItem);
-        return true;
-    }
-
-    template <typename CharT, typename Traits, typename Alloc>
-    bool loadValue(std::basic_string<CharT, Traits, Alloc>& value) NEKO_NOEXCEPT {
-        if (mCurrentItem == nullptr) {
-            return false;
-        }
-        mLastResult = (*mCurrentItem).value().IsString();
-        if (!mLastResult) {
-            return false;
-        }
-        const auto& cvalue = (*mCurrentItem).value();
-        value              = std::basic_string<CharT, Traits, Alloc>{cvalue.GetString(), cvalue.GetStringLength()};
-        ++(*mCurrentItem);
-        return true;
-    }
-
-    bool loadValue(int64_t& value) NEKO_NOEXCEPT {
-        if (mCurrentItem == nullptr) {
-            return false;
-        }
-        mLastResult = (*mCurrentItem).value().IsInt64();
-        if (!mLastResult) {
-            return false;
-        }
-        value = (*mCurrentItem).value().GetInt64();
-        ++(*mCurrentItem);
-        return true;
-    }
-
-    bool loadValue(uint64_t& value) NEKO_NOEXCEPT {
-        if (mCurrentItem == nullptr) {
-            return false;
-        }
-        mLastResult = (*mCurrentItem).value().IsUint64();
-        if (!mLastResult) {
-            return false;
-        }
-        value = (*mCurrentItem).value().GetUint64();
-        ++(*mCurrentItem);
-        return true;
-    }
-
-    bool loadValue(float& value) NEKO_NOEXCEPT {
-        if (mCurrentItem == nullptr) {
-            return false;
-        }
-        mLastResult = (*mCurrentItem).value().IsNumber();
-        if (!mLastResult) {
-            return false;
-        }
-        value = static_cast<float>((*mCurrentItem).value().GetDouble());
-        ++(*mCurrentItem);
-        return true;
-    }
-
-    bool loadValue(double& value) NEKO_NOEXCEPT {
-        if (mCurrentItem == nullptr) {
-            return false;
-        }
-        mLastResult = (*mCurrentItem).value().IsNumber();
-        if (!mLastResult) {
-            return false;
-        }
-        value = (*mCurrentItem).value().GetDouble();
-        ++(*mCurrentItem);
-        return true;
-    }
-
-    bool loadValue(bool& value) NEKO_NOEXCEPT {
-        if (mCurrentItem == nullptr) {
-            return false;
-        }
-        mLastResult = (*mCurrentItem).value().IsBool();
-        if (!mLastResult) {
-            return false;
-        }
-        value = (*mCurrentItem).value().GetBool();
-        ++(*mCurrentItem);
-        return true;
-    }
-
-    bool loadValue(std::nullptr_t) NEKO_NOEXCEPT {
-        if (mCurrentItem == nullptr) {
-            return false;
-        }
-        mLastResult = (*mCurrentItem).value().IsNull();
-        if (!mLastResult) {
-            return false;
-        }
-        ++(*mCurrentItem);
-        return true;
-    }
-
-    template <typename T>
-    bool loadValue(const SizeTag<T>& value) NEKO_NOEXCEPT {
-        if (mCurrentItem == nullptr) {
-            return false;
-        }
-        value.size = static_cast<uint32_t>((*mCurrentItem).size());
-        return true;
-    }
-
-    template <typename T>
-    bool loadValue(const NameValuePair<T>& value) NEKO_NOEXCEPT {
-        if (mCurrentItem == nullptr) {
-            return false;
-        }
-        const auto& cvalue = (*mCurrentItem).moveToMember({value.name, value.nameLen});
-        mLastResult        = true;
-        if constexpr (traits::optional_like_type<T>::value) {
-            if (nullptr == cvalue || cvalue->IsNull()) {
-                traits::optional_like_type<T>::set_null(value.value);
-#if defined(NEKO_VERBOSE_LOGS)
-                NEKO_LOG_INFO("JsonSerializer", "optional field {} is not find.",
-                              std::string(value.name, value.nameLen));
-#endif
-            } else {
-#if defined(NEKO_JSON_MAKE_STR_NONE_TO_NULL)
-                // Why would anyone write "None" in json?
-                // I've seen it, and it's a disaster.
-                if (cvalue->IsString() && std::strcmp(cvalue->GetString(), "None") == 0) {
-                    traits::optional_like_type<T>::set_null(value.value);
-#if defined(NEKO_VERBOSE_LOGS)
-                    NEKO_LOG_WARN("JsonSerializer", "optional field {} is \"None\".",
-                                  std::string(value.name, value.nameLen));
-#endif
-                    return true;
-                }
-#endif
-                if constexpr (std::is_default_constructible_v<typename traits::optional_like_type<T>::type>) {
-                    typename traits::optional_like_type<T>::type temp;
-                    mLastResult = (*this)(temp);
-                    traits::optional_like_type<T>::set_value(value.value, std::move(temp));
-                } else {
-                    mLastResult = (*this)(traits::optional_like_type<T>::get_value(value.value));
-                }
-#if defined(NEKO_VERBOSE_LOGS)
-                if (mLastResult) {
-                    NEKO_LOG_INFO("JsonSerializer", "optional field {} get value success.",
-                                  std::string(value.name, value.nameLen));
-                } else {
-                    NEKO_LOG_ERROR("JsonSerializer", "optional field {} get value fail.",
-                                   std::string(value.name, value.nameLen));
-                }
-#endif
-            }
-        } else {
-            if (nullptr == cvalue) {
-                if constexpr (is_skipable<T>::value) {
-                    mLastResult = true;
-                    return true;
-                } else {
-#if defined(NEKO_VERBOSE_LOGS)
-                    NEKO_LOG_ERROR("JsonSerializer", "field {} is not find.", std::string(value.name, value.nameLen));
-#endif
-                    mLastResult = false;
-                    return false;
-                }
-            }
-            mLastResult = (*this)(value.value);
-#if defined(NEKO_VERBOSE_LOGS)
-            if (mLastResult) {
-                NEKO_LOG_INFO("JsonSerializer", "field {} get value success.", std::string(value.name, value.nameLen));
-            } else {
-                NEKO_LOG_ERROR("JsonSerializer", "field {} get value fail.", std::string(value.name, value.nameLen));
-            }
-#endif
-        }
-        return mLastResult;
-    }
-    bool startNode() NEKO_NOEXCEPT {
-        if (!mItemStack.empty()) {
-            if (mCurrentItem == nullptr) {
-                return false;
-            }
-            if ((*mCurrentItem).value().IsArray()) {
-                mItemStack.emplace_back((*mCurrentItem).value().Begin(), (*mCurrentItem).value().End());
-            } else if ((*mCurrentItem).value().IsObject()) {
-                mItemStack.emplace_back((*mCurrentItem).value().MemberBegin(), (*mCurrentItem).value().MemberEnd());
-            } else {
-                return false;
-            }
-        } else {
-            if (mDocument.IsArray()) {
-                mItemStack.emplace_back(mDocument.Begin(), mDocument.End());
-            } else if (mDocument.IsObject()) {
-                mItemStack.emplace_back(mDocument.MemberBegin(), mDocument.MemberEnd());
-            } else {
-                return false;
-            }
-        }
-        mCurrentItem = &mItemStack.back();
-        return true;
-    }
-
-    bool finishNode() NEKO_NOEXCEPT {
-        if (mItemStack.size() >= 2) {
-            mItemStack.pop_back();
-            mCurrentItem = &mItemStack.back();
-            if (mLastResult) {
-                ++(*mCurrentItem);
-            } else {
-                mLastResult = true;
-            }
-        } else if (mItemStack.size() == 1) {
-            mItemStack.pop_back();
-            mCurrentItem = nullptr;
-        } else {
-            return false;
-        }
-        return true;
-    }
-
-    void rollbackItem() {
-        if (mCurrentItem != nullptr) {
-            --(*mCurrentItem);
-        }
-    }
-
-    bool isArray() {
-        if (mItemStack.empty()) {
-            return mDocument.IsArray();
-        }
-        if (mCurrentItem == nullptr) {
-            return false;
-        }
-        return (*mCurrentItem).value().IsArray();
-    }
-
-    bool isObject() {
-        if (mItemStack.empty()) {
-            return mDocument.IsObject();
-        }
-        if (mCurrentItem == nullptr) {
-            return false;
-        }
-        return (*mCurrentItem).value().IsObject();
-    }
-
-private:
-    RapidJsonInputSerializer& operator=(const RapidJsonInputSerializer&) = delete;
-    RapidJsonInputSerializer& operator=(RapidJsonInputSerializer&&)      = delete;
-
-private:
-    detail::JsonDocument mDocument;
-    std::vector<detail::ConstJsonIterator> mItemStack;
-    detail::ConstJsonIterator* mCurrentItem          = nullptr;
-    rapidjson::BasicIStreamWrapper<BufferT>* mStream = nullptr;
-    bool mLastResult                                 = true;
-};
-
+namespace detail {
 template <>
-struct is_minimal_serializable<detail::RapidJsonValue> : std::true_type {};
+struct Parser<rapid::Reader, rapid::Writer, RapidJsonValue, void> {
+    template <typename ParentType, typename Tags>
+    static ParserResult write(rapid::Writer& writer, const RapidJsonValue& value, const ParentType& parent,
+                              const Tags& /*tags*/) {
+        if (value.hasValue()) {
+            parsing::Parent<rapid::Writer>::addValue(writer, value.nativeValue(), parent);
+            return sa::success();
+        }
+        parsing::Parent<rapid::Writer>::addNull(writer, parent);
+        return sa::success();
+    }
+    template <typename Tags>
+    static ParserResult read(rapid::Reader::InputValueType in, RapidJsonValue& value, const Tags& /*tags*/) {
+        if (in == nullptr) {
+            return parser_error(sa::ErrorCode::InvalidType, "Cannot read RapidJsonValue from a null input handle");
+        }
+        value = RapidJsonValue(*in);
+        return sa::success();
+    }
+};
+} // namespace detail
 
-template <typename WriterT>
-inline bool save(RapidJsonOutputSerializer<WriterT>& sa, const detail::RapidJsonValue& value) NEKO_NOEXCEPT {
-    return sa.saveValue(value);
-}
+struct RapidJsonBackend {
+    using Reader              = rapid::Reader;
+    using Writer              = rapid::Writer;
+    using JsonValue           = detail::RapidJsonValue;
+    using DefaultOutputBuffer = std::vector<char>;
+    using DefaultInputSource  = std::istream;
+
+    template <typename BufferT>
+    class OutputState {
+    public:
+        using OutputTraits = detail::json_output_traits<BufferT>;
+        using WriterType   = typename OutputTraits::writer_type;
+
+        explicit OutputState(typename OutputTraits::output_buffer_type& buffer) noexcept : stream(buffer) {}
+
+        OutputState(typename OutputTraits::output_buffer_type& buffer, WriterType&& writer) noexcept
+            : stream(buffer) {
+            static_cast<void>(writer);
+        }
+
+        OutputState(typename OutputTraits::output_buffer_type& buffer,
+                    const JsonOutputFormatOptions& formatOptions) noexcept
+            : stream(buffer),
+              options(formatOptions),
+              hasFormatOptions(true) {}
+
+        typename OutputTraits::wrapper_type stream;
+        rapid::Writer writer;
+        JsonOutputFormatOptions options = JsonOutputFormatOptions::Default();
+        bool hasFormatOptions = false;
+        bool hasRoot          = false;
+        bool flushed          = false;
+    };
+
+    template <typename BufferT>
+    class InputState {
+    public:
+        explicit InputState(const char* buffer, std::size_t size) noexcept {
+            document.Parse(buffer, size);
+            if (document.HasParseError()) {
+                result =
+                    sa::error(sa::ErrorCode::ParseError,
+                              "RapidJSON parse error at offset " + std::to_string(document.GetErrorOffset()) + ": " +
+                                  rapidjson::GetParseError_En(document.GetParseError()));
+            }
+        }
+
+        explicit InputState(const detail::RapidJsonValue& value) noexcept {
+            if (value.hasValue()) {
+                document.CopyFrom(value.nativeValue(), document.GetAllocator());
+            } else {
+                result = sa::error(sa::ErrorCode::InvalidType, "RapidJsonValue does not contain a value");
+            }
+        }
+
+        explicit InputState(BufferT& inputStream) noexcept
+            : stream(std::make_unique<rapidjson::BasicIStreamWrapper<BufferT>>(inputStream)) {
+            document.ParseStream(*stream);
+            if (document.HasParseError()) {
+                result =
+                    sa::error(sa::ErrorCode::ParseError,
+                              "RapidJSON parse error at offset " + std::to_string(document.GetErrorOffset()) + ": " +
+                                  rapidjson::GetParseError_En(document.GetParseError()));
+            }
+        }
+
+        detail::JsonDocument document;
+        std::unique_ptr<rapidjson::BasicIStreamWrapper<BufferT>> stream;
+        sa::Result<void> result;
+    };
+
+    template <typename BufferT, typename T>
+    static sa::Result<void> write(OutputState<BufferT>& state, const T& value) {
+        state.writer.doc()->SetNull();
+        auto result = detail::parser_write<rapid::Reader, rapid::Writer>(
+            state.writer, value, parsing::Parent<rapid::Writer>::Root{});
+        state.hasRoot = static_cast<bool>(result);
+        state.flushed = false;
+        return result;
+    }
+
+    template <typename BufferT>
+    static sa::Result<void> finish(OutputState<BufferT>& state, sa::Result<void> result) {
+        if (!state.hasRoot || !result) {
+            return result;
+        }
+        if (state.flushed) {
+            return result;
+        }
+
+        typename OutputState<BufferT>::WriterType writer(state.stream);
+        if (state.hasFormatOptions) {
+            detail::set_json_format_option<typename OutputState<BufferT>::WriterType>::setting(writer, state.options);
+        }
+        const auto flushed = state.writer.doc()->Accept(writer);
+        writer.Flush();
+        state.flushed = flushed;
+        if (!flushed) {
+            return sa::error(sa::ErrorCode::ParseError, "RapidJSON failed to flush the output document");
+        }
+        return result;
+    }
+
+    template <typename BufferT>
+    static bool outputReady(const OutputState<BufferT>& state, const sa::Result<void>& result) noexcept {
+        return state.hasRoot && static_cast<bool>(result);
+    }
+
+    template <typename BufferT>
+    static sa::Result<void> inputResult(const InputState<BufferT>& state) {
+        return state.result;
+    }
+
+    template <typename BufferT, typename T>
+    static sa::Result<void> read(InputState<BufferT>& state, T& value) {
+        return detail::parser_read<rapid::Reader, rapid::Writer>(&state.document, value);
+    }
+};
+
+template <typename BufferT = RapidJsonBackend::DefaultOutputBuffer>
+class RapidJsonOutputSerializer : public detail::OutputSerializerAdapter<RapidJsonBackend, BufferT> {
+public:
+    using Base = detail::OutputSerializerAdapter<RapidJsonBackend, BufferT>;
+    using Base::Base;
+};
 
 template <typename BufferT>
-inline bool load(RapidJsonInputSerializer<BufferT>& sa, detail::RapidJsonValue& value) NEKO_NOEXCEPT {
-    return sa.loadValue(value);
-}
+RapidJsonOutputSerializer(BufferT&) -> RapidJsonOutputSerializer<BufferT>;
+
+template <typename BufferT = RapidJsonBackend::DefaultInputSource>
+class RapidJsonInputSerializer : public detail::InputSerializerAdapter<RapidJsonBackend, BufferT> {
+public:
+    using Base = detail::InputSerializerAdapter<RapidJsonBackend, BufferT>;
+    using Base::Base;
+};
+
+RapidJsonInputSerializer(const char*, std::size_t) -> RapidJsonInputSerializer<>;
+RapidJsonInputSerializer(const detail::RapidJsonValue&) -> RapidJsonInputSerializer<>;
+
+template <typename BufferT>
+RapidJsonInputSerializer(BufferT&) -> RapidJsonInputSerializer<BufferT>;
 
 // #####################################################
 // default JsonSerializer type definition
 struct RapidJsonSerializer {
-    using OutputSerializer = RapidJsonOutputSerializer<std::vector<char>>;
-    using InputSerializer  = RapidJsonInputSerializer<std::istream>;
+    using OutputSerializer = RapidJsonOutputSerializer<>;
+    using InputSerializer  = RapidJsonInputSerializer<>;
     using JsonValue        = detail::RapidJsonValue;
+    using Reader           = rapid::Reader;
+    using Writer           = rapid::Writer;
 };
 
 NEKO_END_NAMESPACE

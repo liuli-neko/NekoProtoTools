@@ -19,25 +19,11 @@
 
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/global/log.hpp"
-
-#include "nekoproto/serialization/types/struct_unwrap.hpp"
+#include "nekoproto/serialization/reflection.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
-template <typename T>
-struct NameValuePair;
-
 namespace detail {
-template <typename T>
-struct is_name_value_pair { // NOLINT(readability-identifier-naming)
-    static constexpr bool Value = false;
-};
-
-template <typename T>
-struct is_name_value_pair<NameValuePair<T>> {
-    static constexpr bool Value = true;
-};
-
 class ReflectionFieldBase {
 public:
     ReflectionFieldBase() NEKO_NOEXCEPT                          = default;
@@ -171,7 +157,7 @@ private:
 
 class ReflectionSerializer {
 public:
-    ReflectionSerializer() { mObject.clear(); }
+    ReflectionSerializer()                                       = default;
     ReflectionSerializer(const ReflectionSerializer&)            = delete;
     ReflectionSerializer& operator=(const ReflectionSerializer&) = delete;
     ReflectionSerializer(ReflectionSerializer&& other) : mObject(std::move(other.mObject)) {}
@@ -180,48 +166,19 @@ public:
         return *this;
     }
     ~ReflectionSerializer() = default;
-    operator bool() const { return true; }
-    bool startNode() { return true; }  // NOLINT
-    bool finishNode() { return true; } // NOLINT
+
     template <typename T>
-        requires traits::can_be_serializable<T>
+        requires detail::has_values_meta<std::remove_cvref_t<T>> && detail::has_names_meta<std::remove_cvref_t<T>>
     static ReflectionSerializer reflection(T& obj) {
         ReflectionSerializer rs;
-        auto ret = true;
-        if constexpr (traits::has_function_load<T, ReflectionSerializer>) {
-            ret = load(rs, obj);
-        } else if constexpr (traits::has_method_load<T, ReflectionSerializer>) {
-            ret = obj.load(rs);
-        } else {
-            static_assert(traits::has_function_load<T, ReflectionSerializer>,
-                          "Reflection operations cannot be performed on this type");
-        }
-        NEKO_ASSERT(ret, "ReflectionSerializer", "{} get reflection object error", detail::class_nameof<T>);
-        NEKO_ASSERT(rs.getObject() != nullptr, "ReflectionSerializer", "reflection object is nullptr");
+        Reflect<std::remove_cvref_t<T>>::forEach(obj, [&rs](auto& field, std::string_view name, const auto& /*tags*/) {
+            const auto* bound = rs.mObject.bindField(name, &field);
+            NEKO_ASSERT(bound != nullptr, "ReflectionSerializer", "failed to bind field {}", name);
+        });
         return rs;
     }
 
-    template <typename... Ts>
-    bool operator()(const Ts&... fields) {
-        return _process(fields...);
-    }
-
     inline detail::ReflectionObject* getObject() { return &mObject; }
-
-private:
-    template <typename T, typename... Ts>
-    bool _process(const T& field, const Ts&... fields) {
-        return _process(field) && _process(fields...);
-    }
-    template <typename T>
-    bool _process(const NameValuePair<T>& field) {
-        return nullptr != mObject.bindField(NEKO_STRING_VIEW(field.name, field.nameLen), &field.value);
-    }
-    template <typename T, typename std::enable_if<!detail::is_name_value_pair<T>::Value, char>::type = 0>
-    bool _process(const T& /*unused*/) {
-        NEKO_LOG_WARN("ReflectionSerializer", "Types other than NameValuePair are not supported reflection");
-        return true;
-    }
 
 private:
     detail::ReflectionObject mObject;

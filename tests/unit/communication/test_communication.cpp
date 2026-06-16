@@ -5,10 +5,10 @@
 #include "ilias/defines.hpp"
 #include "ilias/net/sockfd.hpp"
 #include "ilias/net/udp.hpp"
-#include "nekoproto/communication/communication_base.hpp"
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
-#include "nekoproto/serialization/types/vector.hpp" // IWYU pragma: export
+#include "nekoproto/proto/proto_base.hpp"
+#include "nekoproto/communication/communication_base.hpp"
 
 #include <ilias/io/error.hpp>
 #include <ilias/net.hpp>
@@ -21,8 +21,8 @@ NEKO_USE_NAMESPACE
 
 using ilias::IoContext;
 using ilias::IPEndpoint;
-using ilias::TcpClient;
 using ilias::TcpListener;
+using ilias::TcpStream;
 using ilias::UdpSocket;
 using ilias::Err;
 using ilias::sockopt::TcpNoDelay;
@@ -68,12 +68,12 @@ client_loop([[maybe_unused]] ilias::IoContext& ioContext,
             ProtoFactory& protoFactory, // NOLINT(readability-function-cognitive-complexity)
             StreamFlag sendFlag, StreamFlag recvFlag) {
     NEKO_LOG_DEBUG("unit test", "Client connect to service");
-    auto ret = co_await TcpClient::connect(IPEndpoint("127.0.0.1", 10345));
+    auto ret = co_await ilias::TcpStream::connect(IPEndpoint("127.0.0.1", 10345));
     if (!ret) {
         co_return Err(ret.error());
     }
     ret.value().setOption(TcpNoDelay(1));
-    ProtoStreamClient<TcpClient> client(protoFactory, std::move(ret.value()));
+    ProtoStreamClient<ilias::TcpStream> client(protoFactory, std::move(ret.value()));
     NEKO_LOG_DEBUG("unit test", "Client loop started");
     const std::size_t desiredSize = 10 * 1024; // 1MB
     int count                     = 10;
@@ -113,10 +113,10 @@ client_loop([[maybe_unused]] ilias::IoContext& ioContext,
     co_return co_await client.close();
 }
 
-ilias::IoTask<void> handle_loop(ProtoStreamClient<TcpClient>&& pClient,
-                                          StreamFlag sendFlag, // NOLINT(readability-function-cognitive-complexity)
-                                          StreamFlag recvFlag) {
-    ProtoStreamClient<TcpClient> client(std::move(pClient));
+ilias::IoTask<void> handle_loop(ProtoStreamClient<TcpStream>&& pClient,
+                                StreamFlag sendFlag, // NOLINT(readability-function-cognitive-complexity)
+                                StreamFlag recvFlag) {
+    ProtoStreamClient<TcpStream> client(std::move(pClient));
     const std::size_t desiredSize = 10 * 1024; // 1MB
     while (true) {
         NEKO_LOG_DEBUG("unit test", "HandleLoop");
@@ -137,7 +137,7 @@ ilias::IoTask<void> handle_loop(ProtoStreamClient<TcpClient>&& pClient,
         msg1.msg       = generate_random_string(desiredSize);
         msg1.timestamp = (time(NULL));
         msg1.numbers   = (std::vector<int>{1, 2, 3});
-        auto ret1      = co_await client.send(msg->makeProto(), sendFlag);
+        auto ret1      = co_await client.send(msg1.makeProto(), sendFlag);
         if (!ret1) {
             co_await client.close();
             co_return Err(ret1.error());
@@ -169,7 +169,7 @@ ilias::IoTask<void> server_loop([[maybe_unused]] IoContext& ioContext, ProtoFact
     }
     NEKO_LOG_DEBUG("unit test", "accept successed");
     ret.value().first.setOption(TcpNoDelay(1));
-    auto ret1 = co_await handle_loop(ProtoStreamClient<ilias::TcpClient>(protoFactor, std::move(ret.value().first)),
+    auto ret1 = co_await handle_loop(ProtoStreamClient<TcpStream>(protoFactor, std::move(ret.value().first)),
                                      sendFlag, recvFlag);
     if (!ret1 && ret1.error() != ilias::IoError::ConnectionReset) {
         co_return Err(ret1.error());
@@ -181,7 +181,12 @@ ilias::IoTask<void> test(IoContext& ioContext, ProtoFactory& protoFactory, Strea
                                    StreamFlag recvFlag) {
     auto [ret1, ret2] = co_await whenAll(server_loop(ioContext, protoFactory, sendFlag, recvFlag),
                                          client_loop(ioContext, protoFactory, sendFlag, recvFlag));
-    EXPECT_FALSE((!ret1 && ret1.error() != ilias::IoError::ConnectionReset) || (!ret2));
+    if (!ret1 && ret1.error() != ilias::IoError::ConnectionReset) {
+        co_return Err(ret1.error());
+    }
+    if (!ret2) {
+        co_return Err(ret2.error());
+    }
     co_return {};
 }
 
@@ -189,7 +194,11 @@ ilias::IoTask<void> udp_client([[maybe_unused]] IoContext& ioContext, ProtoFacto
                                          StreamFlag sendFlags, StreamFlag recvFlags, const IPEndpoint& bindPoint,
                                          const IPEndpoint& endpoint) {
     NEKO_LOG_DEBUG("unit test", "testing udp client ...");
-    auto udpclient = ilias::Socket::make(AF_INET, SOCK_DGRAM, 0).value();
+    auto socket = ilias::Socket::make(AF_INET, SOCK_DGRAM, 0);
+    if (!socket) {
+        co_return Err(socket.error());
+    }
+    auto udpclient = std::move(socket.value());
 #ifdef _WIN32
     auto fd = udpclient.get();
     // 关闭SIO_UDP_CONNRESET
@@ -210,7 +219,11 @@ ilias::IoTask<void> udp_client([[maybe_unused]] IoContext& ioContext, ProtoFacto
         NEKO_LOG_DEBUG("unit test", "udp bind failed: {}", ret.error().message());
         co_return Err(ret.error());
     }
-    ProtoDatagramClient<UdpSocket> client(protoFactory, UdpSocket::from(std::move(udpclient)).value());
+    auto udpSocket = UdpSocket::from(std::move(udpclient));
+    if (!udpSocket) {
+        co_return Err(udpSocket.error());
+    }
+    ProtoDatagramClient<UdpSocket> client(protoFactory, std::move(udpSocket.value()));
     int count = 10;
     while ((count--) != 0) {
         NEKO_LOG_DEBUG("unit test", "{}th testing...", count);
@@ -250,7 +263,11 @@ ilias::IoTask<void> udp_client_peer([[maybe_unused]] IoContext& ioContext, Proto
                                               StreamFlag sendFlags, StreamFlag recvFlags, const IPEndpoint& bindPoint,
                                               const IPEndpoint& endpoint) {
     NEKO_LOG_DEBUG("unit test", "testing udp client ...");
-    auto udpclient = ilias::Socket::make(AF_INET, SOCK_DGRAM, 0).value();
+    auto socket = ilias::Socket::make(AF_INET, SOCK_DGRAM, 0);
+    if (!socket) {
+        co_return Err(socket.error());
+    }
+    auto udpclient = std::move(socket.value());
 #ifdef _WIN32
     auto fd = udpclient.get();
     // 关闭SIO_UDP_CONNRESET
@@ -271,7 +288,11 @@ ilias::IoTask<void> udp_client_peer([[maybe_unused]] IoContext& ioContext, Proto
         NEKO_LOG_DEBUG("unit test", "udp bind failed: {}", ret.error().message());
         co_return Err(ret.error());
     }
-    ProtoDatagramClient<UdpSocket> client(protoFactory, UdpSocket::from(std::move(udpclient)).value());
+    auto udpSocket = UdpSocket::from(std::move(udpclient));
+    if (!udpSocket) {
+        co_return Err(udpSocket.error());
+    }
+    ProtoDatagramClient<UdpSocket> client(protoFactory, std::move(udpSocket.value()));
     int count = 10;
     while ((count--) != 0) {
         NEKO_LOG_DEBUG("unit test", "{}th testing...", count);
@@ -309,7 +330,10 @@ ilias::IoTask<void> udp_client_peer([[maybe_unused]] IoContext& ioContext, Proto
 ilias::IoTask<void> udp_test(IoContext& ioContext, ProtoFactory& protoFactory, StreamFlag sendFlags,
                                        StreamFlag recvFlags) {
     uint16_t port1 = (rand() % 1000) + 10000;
-    uint16_t port2 = (rand() % 1000) + 10000;
+    uint16_t port2 = 0;
+    do {
+        port2 = (rand() % 1000) + 10000;
+    } while (port2 == port1);
     auto [ret1, ret2] =
         co_await whenAll(udp_client_peer(ioContext, protoFactory, sendFlags, recvFlags, IPEndpoint("127.0.0.1", port1),
                                          IPEndpoint("127.0.0.1", port2)),
@@ -317,9 +341,11 @@ ilias::IoTask<void> udp_test(IoContext& ioContext, ProtoFactory& protoFactory, S
                                     IPEndpoint("127.0.0.1", port1)));
     if (!ret1) {
         NEKO_LOG_DEBUG("unit test", "udp test failed: {}", ret1.error().message());
+        co_return Err(ret1.error());
     }
     if (!ret2) {
         NEKO_LOG_DEBUG("unit test", "udp test failed: {}", ret2.error().message());
+        co_return Err(ret2.error());
     }
     co_return {};
 }
@@ -333,39 +359,47 @@ public:
 };
 
 TEST_F(Communication, VerifyAndThreadAndSlice) {
-    test(ioContext, protoFactory,
-         StreamFlag::VersionVerification | StreamFlag::SerializerInThread | StreamFlag::SliceData,
-         StreamFlag::SerializerInThread)
-        .wait();
+    EXPECT_TRUE(test(ioContext, protoFactory,
+                     StreamFlag::VersionVerification | StreamFlag::SerializerInThread | StreamFlag::SliceData,
+                     StreamFlag::SerializerInThread)
+                    .wait());
 }
 
 TEST_F(Communication, Verify) {
-    test(ioContext, protoFactory, StreamFlag::VersionVerification, StreamFlag::None).wait();
+    EXPECT_TRUE(test(ioContext, protoFactory, StreamFlag::VersionVerification, StreamFlag::None).wait());
 }
 
 TEST_F(Communication, Thread) {
-    test(ioContext, protoFactory, StreamFlag::SerializerInThread, StreamFlag::None).wait();
+    EXPECT_TRUE(test(ioContext, protoFactory, StreamFlag::SerializerInThread, StreamFlag::None).wait());
 }
 
-TEST_F(Communication, Slice) { test(ioContext, protoFactory, StreamFlag::SliceData, StreamFlag::None).wait(); }
+TEST_F(Communication, Slice) {
+    EXPECT_TRUE(test(ioContext, protoFactory, StreamFlag::SliceData, StreamFlag::None).wait());
+}
 
-TEST_F(Communication, None) { test(ioContext, protoFactory, StreamFlag::None, StreamFlag::None).wait(); }
+TEST_F(Communication, None) {
+    EXPECT_TRUE(test(ioContext, protoFactory, StreamFlag::None, StreamFlag::None).wait());
+}
 
 TEST_F(Communication, UdpThreadAndVerify) {
-    udp_test(ioContext, protoFactory, StreamFlag::SerializerInThread | StreamFlag::VersionVerification,
-             StreamFlag::SerializerInThread)
-        .wait();
+    EXPECT_TRUE(udp_test(ioContext, protoFactory, StreamFlag::SerializerInThread | StreamFlag::VersionVerification,
+                         StreamFlag::SerializerInThread)
+                    .wait());
 }
 
 TEST_F(Communication, UdpVerify) {
-    udp_test(ioContext, protoFactory, StreamFlag::VersionVerification, StreamFlag::None).wait();
+    EXPECT_TRUE(
+        udp_test(ioContext, protoFactory, StreamFlag::VersionVerification, StreamFlag::None).wait());
 }
 
 TEST_F(Communication, UdpThread) {
-    udp_test(ioContext, protoFactory, StreamFlag::SerializerInThread, StreamFlag::None).wait();
+    EXPECT_TRUE(
+        udp_test(ioContext, protoFactory, StreamFlag::SerializerInThread, StreamFlag::None).wait());
 }
 
-TEST_F(Communication, UdpNone) { udp_test(ioContext, protoFactory, StreamFlag::None, StreamFlag::None).wait(); }
+TEST_F(Communication, UdpNone) {
+    EXPECT_TRUE(udp_test(ioContext, protoFactory, StreamFlag::None, StreamFlag::None).wait());
+}
 
 #define CUSTOM_MAIN                                                                                                    \
     NEKO_LOG_EXCLUDE("BinarySerializer", "Communication");                                                             \

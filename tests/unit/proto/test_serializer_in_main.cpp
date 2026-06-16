@@ -4,13 +4,13 @@
 #include "nekoproto/serialization/binary_serializer.hpp"
 #include "nekoproto/serialization/json/simd_json_serializer.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
+#include "nekoproto/serialization/parsing/parsers.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/to_string.hpp"
-#include "nekoproto/serialization/types/types.hpp"
 
 NEKO_USE_NAMESPACE
 
-enum class TEnum : uint { TEnum_A = 1, TEnum_B = 2, TEnum_C = 3 };
+enum class TEnum : uint32_t { TEnum_A = 1, TEnum_B = 2, TEnum_C = 3 };
 
 struct StructA {
     int a;

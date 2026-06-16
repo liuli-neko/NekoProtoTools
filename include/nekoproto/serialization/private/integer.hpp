@@ -3,7 +3,9 @@
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/global/log.hpp"
 
+#include <limits>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 NEKO_BEGIN_NAMESPACE
@@ -111,26 +113,36 @@ inline int IntegerDecoder::decode(const uint8_t* buffer, int size, T& value, uin
     NEKO_ASSERT(bitsOffset < 8, "serializer", "bitsOffset must be between 0 and 8");
     NEKO_ASSERT(size > 0, "serializer", "buffer must not be empty");
 
-    uint8_t byte{static_cast<uint8_t>((1U << (8 - bitsOffset)) - 1U)};
-    if ((buffer[0] & byte) < byte) {
-        value = static_cast<T>(buffer[0] & byte);
+    using Value = std::remove_cvref_t<T>;
+    static_assert(std::is_unsigned_v<Value>, "IntegerDecoder output type must be unsigned");
+
+    const uint8_t prefix{static_cast<uint8_t>((1U << (8 - bitsOffset)) - 1U)};
+    if ((buffer[0] & prefix) < prefix) {
+        value = static_cast<T>(buffer[0] & prefix);
         return 1;
     }
-    int current         = 1;
-    int valueBitsOffset = 0;
-    value               = 0;
-    while (current < size && (buffer[current] & 0b10000000U)) {
-        value |= static_cast<T>(buffer[current] & 0b01111111U) << valueBitsOffset;
-        valueBitsOffset += 7;
-        if (valueBitsOffset + 7 > (int)sizeof(T) * 8) {
+
+    constexpr int kValueBits = std::numeric_limits<Value>::digits;
+    constexpr Value kMax     = std::numeric_limits<Value>::max();
+    int current              = 1;
+    int valueBitsOffset      = 0;
+    value                    = 0;
+    while (current < size) {
+        const auto currentByte = buffer[current];
+        const auto chunk       = static_cast<Value>(currentByte & 0b01111111U);
+        if (valueBitsOffset >= kValueBits || chunk > (kMax >> valueBitsOffset)) {
             return -1;
         }
+        value |= chunk << valueBitsOffset;
         ++current;
-    }
-    if (current < size) {
-        value |= static_cast<T>(buffer[current] & 0b01111111U) << valueBitsOffset;
-        value += byte;
-        return current + 1;
+        if ((currentByte & 0b10000000U) == 0) {
+            if (value > kMax - prefix) {
+                return -1;
+            }
+            value += prefix;
+            return current;
+        }
+        valueBitsOffset += 7;
     }
     return -2;
 }

@@ -10,6 +10,7 @@
  */
 #pragma once
 
+#include <array>
 #include <functional>
 #include <ilias/sync/oneshot.hpp>
 #include <ilias/task/group.hpp>
@@ -19,6 +20,7 @@
 #include <tuple>
 #include <type_traits>
 #include <utility> // std::index_sequence, std::make_index_sequence
+#include <vector>
 
 #include "ilias/defines.hpp"
 #include "ilias/io/error.hpp"
@@ -27,6 +29,15 @@
 #include "nekoproto/jsonrpc/jsonrpc_error.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_traits.hpp"
 #include "nekoproto/jsonrpc/message_stream_wrapper.hpp"
+// MARK: Reflection Types
+#include "nekoproto/serialization/parsing/reflection.hpp"
+#include "nekoproto/serialization/parsing/basic.hpp"
+#include "nekoproto/serialization/parsing/map.hpp"
+#include "nekoproto/serialization/parsing/pointer.hpp"
+#include "nekoproto/serialization/parsing/tuple.hpp"
+#include "nekoproto/serialization/parsing/utility.hpp"
+#include "nekoproto/serialization/parsing/variant.hpp"
+#include "nekoproto/serialization/parsing/sequence.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
 NEKO_BEGIN_NAMESPACE
@@ -34,7 +45,7 @@ namespace detail {
 
 template <typename T>
 using IoTask = ilias::IoTask<T>;
-
+// MARK: JsonRpc Method Traits
 template <typename T, class enable = void>
 class RpcMethodTraits; // 主模板前向声明
 
@@ -103,6 +114,7 @@ concept RpcMethodFuncT = requires() { typename RpcMethodTraits<decltype(Ptr)>::F
  *
  */
 using JsonRpcIdType = std::variant<std::monostate, uint64_t, std::string>;
+using JsonRpcResponseValues = std::vector<JsonSerializer::JsonValue>;
 
 // Declaration - implementation moved to src/jsonrpc.cpp
 NEKO_PROTO_API std::string to_string(JsonRpcIdType id);
@@ -124,44 +136,130 @@ struct JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...> {
     ParamsTupleType params;
     JsonRpcIdType id;
 
-    template <typename SerializerT>
-    bool save(SerializerT& serializer) const NEKO_NOEXCEPT {
-        serializer.startObject(-1);
-        if constexpr (sizeof...(ArgNames) == 0) {
-            bool ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                                  NEKO_PROTO_NAME_VALUE_PAIR(id), NEKO_PROTO_NAME_VALUE_PAIR(params));
-            return serializer.endObject() && ret;
-        } else {
-            traits::SerializerHelperObject<const ParamsTupleType, ArgNames...> mParamsHelper(params);
-            auto ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                                  NEKO_PROTO_NAME_VALUE_PAIR(id));
-            if constexpr (RpcMethodTraits<Args...>::NumParams > 0 && RpcMethodTraits<Args...>::ParamsSize > 0) {
-                serializer(make_name_value_pair("params", mParamsHelper));
+    NEKO_SERIALIZER(jsonrpc, method, params, id)
+};
+
+template <typename R, typename W, typename T, ConstexprString... ArgNames>
+struct disable_reflect_parser<R, W, traits::SerializerHelperObject<T, ArgNames...>>
+    : std::true_type {};
+
+template <typename R, typename W, typename... Args, ConstexprString... ArgNames>
+struct disable_reflect_parser<R, W, JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...>>
+    : std::true_type {};
+
+template <typename R, typename W, typename T, ConstexprString... ArgNames>
+struct Parser<R, W, traits::SerializerHelperObject<T, ArgNames...>, void> {
+    using Helper = traits::SerializerHelperObject<T, ArgNames...>;
+
+    template <std::size_t... Is>
+    static ParserResult writeObject(W& writer, typename W::OutputObjectType& object, const Helper& value,
+                                    std::index_sequence<Is...>) {
+        constexpr std::array<std::string_view, sizeof...(ArgNames)> argNames = {ArgNames.view()...};
+        ParserResult result;
+        const auto writeField = [&]<std::size_t I>() {
+            if (result) {
+                result = parser_write_reflect_field<R, W>(writer, object, std::get<I>(value.mTuple), argNames[I],
+                                                          NoTags{});
             }
-            return serializer.endObject() && ret;
+        };
+        (writeField.template operator()<Is>(), ...);
+        return result;
+    }
+
+    template <std::size_t... Is>
+    static ParserResult readObject(typename R::InputValueType in, Helper& value, std::index_sequence<Is...>) {
+        constexpr std::array<std::string_view, sizeof...(ArgNames)> argNames = {ArgNames.view()...};
+        ParserResult result;
+        const auto readField = [&]<std::size_t I>() {
+            if (result) {
+                result = parser_read_reflect_field<R, W>(in, std::get<I>(value.mTuple), argNames[I], NoTags{});
+            }
+        };
+        (readField.template operator()<Is>(), ...);
+        return result;
+    }
+
+    template <typename ParentType, typename Tags>
+    static ParserResult write(W& writer, const Helper& value, const ParentType& parent, const Tags& tags) {
+        if constexpr (sizeof...(ArgNames) > 0) {
+            auto object = parsing::Parent<W>::addObject(writer, sizeof...(ArgNames), parent);
+            return writeObject(writer, object, value, std::make_index_sequence<sizeof...(ArgNames)>{});
+        } else {
+            return parser_write<R, W>(writer, value.mTuple, parent, tags);
         }
     }
 
-    template <typename SerializerT>
-    bool load(SerializerT& serializer) NEKO_NOEXCEPT {
-        serializer.startNode();
-        if constexpr (sizeof...(ArgNames) == 0) {
-            bool ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                                  NEKO_PROTO_NAME_VALUE_PAIR(id));
-            // params maybe is all is std::optional, then server will not send params
-            ret = (serializer(NEKO_PROTO_NAME_VALUE_PAIR(params)) || RpcMethodTraits<Args...>::IsNullAble) && ret;
-            return serializer.finishNode() && ret;
-        } else {
-            traits::SerializerHelperObject<ParamsTupleType, ArgNames...> mParamsHelper(params);
-            bool ret = serializer(NEKO_PROTO_NAME_VALUE_PAIR(jsonrpc), NEKO_PROTO_NAME_VALUE_PAIR(method),
-                                  NEKO_PROTO_NAME_VALUE_PAIR(id));
-            // params maybe is all is std::optional, then server will not send params
-            ret = (serializer(make_name_value_pair("params", mParamsHelper)) || RpcMethodTraits<Args...>::IsNullAble) &&
-                  ret;
-            return serializer.finishNode() && ret;
+    template <typename Tags>
+    static ParserResult read(typename R::InputValueType in, Helper& value, const Tags& tags) {
+        if constexpr (sizeof...(ArgNames) > 0) {
+            auto object = R::toObject(in);
+            if (object) {
+                return readObject(in, value, std::make_index_sequence<sizeof...(ArgNames)>{});
+            }
         }
+        return parser_read<R, W>(in, value.mTuple, tags);
     }
-    NEKO_SERIALIZER(jsonrpc, method, params, id)
+};
+
+template <typename R, typename W, typename... Args, ConstexprString... ArgNames>
+struct Parser<R, W, JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...>, void> {
+    using Request = JsonRpcRequest2<RpcMethodTraits<Args...>, ArgNames...>;
+
+    template <typename ParentType, typename Tags>
+    static ParserResult write(W& writer, const Request& value, const ParentType& parent, const Tags& /*tags*/) {
+        auto object = parsing::Parent<W>::addObject(writer, 4, parent);
+        auto result = parser_write_reflect_field<R, W>(writer, object, value.jsonrpc, "jsonrpc", NoTags{});
+        if (!result) {
+            return result;
+        }
+        result = parser_write_reflect_field<R, W>(writer, object, value.method, "method", NoTags{});
+        if (!result) {
+            return result;
+        }
+        result = parser_write_reflect_field<R, W>(writer, object, value.id, "id", NoTags{});
+        if (!result) {
+            return result;
+        }
+        if constexpr (sizeof...(ArgNames) == 0) {
+            result = parser_write_reflect_field<R, W>(writer, object, value.params, "params", NoTags{});
+        } else if constexpr (RpcMethodTraits<Args...>::NumParams > 0 && RpcMethodTraits<Args...>::ParamsSize > 0) {
+            traits::SerializerHelperObject<const typename Request::ParamsTupleType, ArgNames...> paramsHelper(
+                value.params);
+            result = parser_write_reflect_field<R, W>(writer, object, paramsHelper, "params", NoTags{});
+        }
+        return result;
+    }
+
+    template <typename Tags>
+    static ParserResult read(typename R::InputValueType in, Request& value, const Tags& /*tags*/) {
+        auto object = R::toObject(in);
+        if (!object) {
+            return object.error();
+        }
+        auto result = parser_read_reflect_field<R, W>(in, value.jsonrpc, "jsonrpc", NoTags{});
+        if (!result) {
+            return result;
+        }
+        result = parser_read_reflect_field<R, W>(in, value.method, "method", NoTags{});
+        if (!result) {
+            return result;
+        }
+        result = parser_read_reflect_field<R, W>(in, value.id, "id", NoTags{});
+        if (!result) {
+            return result;
+        }
+        if constexpr (sizeof...(ArgNames) == 0) {
+            result = parser_read_reflect_field<R, W>(in, value.params, "params", NoTags{});
+        } else {
+            traits::SerializerHelperObject<typename Request::ParamsTupleType, ArgNames...> paramsHelper(value.params);
+            result = parser_read_reflect_field<R, W>(in, paramsHelper, "params", NoTags{});
+        }
+        if (!result && RpcMethodTraits<Args...>::IsNullAble &&
+            result.error().ec == sa::make_error_code(sa::ErrorCode::InvalidField)) {
+            return sa::success();
+        }
+        return result;
+    }
 };
 
 struct JsonRpcRequestMethod {
@@ -352,11 +450,11 @@ public:
     RpcMethodWrapper()                                                                       = default;
     RpcMethodWrapper(RpcMethodWrapper&&)                                                     = default;
     virtual ~RpcMethodWrapper()                                                              = default;
-    virtual auto call(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
+    virtual auto call(JsonSerializer::InputSerializer& in, JsonRpcResponseValues& responses,
                       JsonRpcRequestMethod&& method) noexcept -> ilias::Task<void> = 0;
-    auto operator()(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
+    auto operator()(JsonSerializer::InputSerializer& in, JsonRpcResponseValues& responses,
                     JsonRpcRequestMethod&& method) noexcept {
-        return call(in, out, std::move(method));
+        return call(in, responses, std::move(method));
     }
     virtual auto name() noexcept -> std::string_view        = 0;
     virtual auto description() noexcept -> std::string_view = 0;
@@ -383,7 +481,7 @@ class RpcMethodWrapperImpl : public RpcMethodWrapper {
 public:
     using MethodType = typename RpcMethodTypeHelper<T>::MethodType;
     RpcMethodWrapperImpl(T methodData, JsonRpcServerImp* self) : mMethodData(std::move(methodData)), mSelf(self) {}
-    auto call(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
+    auto call(JsonSerializer::InputSerializer& in, JsonRpcResponseValues& responses,
               JsonRpcRequestMethod&& method) noexcept -> ilias::Task<void> override;
     auto name() noexcept -> std::string_view override { return mMethodData->name(); }
     auto description() noexcept -> std::string_view override { return mMethodData->description; }
@@ -403,7 +501,7 @@ public:
     };
 
 private:
-    auto _makeBatch(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out, int batchSize) noexcept
+    auto _makeBatch(const std::vector<JsonSerializer::JsonValue>& requests, JsonRpcResponseValues& responses) noexcept
         -> void;
 
 public:
@@ -442,11 +540,11 @@ public:
 
 private:
     template <typename T>
-    auto _handle(bool success, auto request, auto& out, auto method, T& metadata) noexcept
+    auto _handle(bool success, auto request, auto& responses, auto method, T& metadata) noexcept
         -> ilias::Task<void> {
         if (!success) {
             NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc request");
-            co_return _handleError<T>(out, std::move(method), (int64_t)JsonRpcError::InvalidRequest,
+            co_return _handleError<T>(responses, std::move(method), (int64_t)JsonRpcError::InvalidRequest,
                                       JsonRpcErrorCategory::instance().message((int64_t)JsonRpcError::InvalidRequest));
         }
         auto handle =
@@ -454,7 +552,7 @@ private:
                 ilias::Result<typename T::RawReturnType, std::error_code> result =
                     ilias::Err(ilias::SystemError::Canceled);
                 auto onfinally = [&]() -> ilias::Task<void> {
-                    co_return _processMethodReturn<T>(metadata, std::move(result), out, std::move(method));
+                    co_return _processMethodReturn<T>(metadata, std::move(result), responses, std::move(method));
                 };
                 co_await ([&result, request = std::move(request)](T& metadata) -> ilias::Task<void> {
                     if constexpr (T::NumParams == 0) {
@@ -480,7 +578,7 @@ private:
     }
 
     template <typename T, typename RetT>
-    auto _handleSuccess(T& methodData, JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method,
+    auto _handleSuccess(T& methodData, JsonRpcResponseValues& responses, JsonRpcRequestMethod method,
                         RetT&& ret) noexcept -> void {
         if (std::holds_alternative<std::monostate>(method.id)) { // notification
             return;
@@ -489,20 +587,24 @@ private:
             return;
         }
         if constexpr (std::is_void_v<typename T::RawReturnType>) {
-            if (!out(methodData.response(method.id, nullptr))) {
+            auto response = to_json_value(methodData.response(method.id, nullptr));
+            if (!response.hasValue()) {
                 NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
                 return;
             }
+            responses.emplace_back(std::move(response));
         } else {
-            if (!out(methodData.response(method.id, std::forward<RetT>(ret)))) {
+            auto response = to_json_value(methodData.response(method.id, std::forward<RetT>(ret)));
+            if (!response.hasValue()) {
                 NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
                 return;
             }
+            responses.emplace_back(std::move(response));
         }
     }
 
     template <typename T>
-    auto _handleError(JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method, int64_t code,
+    auto _handleError(JsonRpcResponseValues& responses, JsonRpcRequestMethod method, int64_t code,
                       std::string message) noexcept -> void {
         if (std::holds_alternative<std::monostate>(method.id)) { // notification
             return;
@@ -510,28 +612,30 @@ private:
         if (!method.jsonrpc.has_value() && method.id.index() == 1) { // notification in jsonrpc 1.0
             return;
         }
-        if (!out(T::response(method.id, {code, message}))) {
+        auto response = to_json_value(T::response(method.id, {code, message}));
+        if (!response.hasValue()) {
             NEKO_LOG_ERROR("jsonrpc", "invalid jsonrpc response");
             return;
         }
+        responses.emplace_back(std::move(response));
     }
 
     template <typename T>
     auto _processMethodReturn(T& methodData, ilias::Result<typename T::RawReturnType, std::error_code> result,
-                              JsonSerializer::OutputSerializer& out, JsonRpcRequestMethod method) noexcept -> void {
+                              JsonRpcResponseValues& responses, JsonRpcRequestMethod method) noexcept -> void {
         if constexpr (std::is_void_v<typename T::RawReturnType>) {
             if (result) {
-                return _handleSuccess<T, std::nullptr_t>(methodData, out, std::move(method), nullptr);
+                return _handleSuccess<T, std::nullptr_t>(methodData, responses, std::move(method), nullptr);
             }
             NEKO_LOG_ERROR("jsonrpc", "method {} failed to execute, {}", method.method, result.error().message());
-            return _handleError<T>(out, std::move(method), result.error().value(), result.error().message());
+            return _handleError<T>(responses, std::move(method), result.error().value(), result.error().message());
         } else {
             if (result) {
-                return _handleSuccess<T, typename T::RawReturnType>(methodData, out, std::move(method),
+                return _handleSuccess<T, typename T::RawReturnType>(methodData, responses, std::move(method),
                                                                     std::move(result.value()));
             }
             NEKO_LOG_WARN("jsonrpc", "method {} failed to execute, {}", method.method, result.error().message());
-            return _handleError<T>(out, std::move(method), result.error().value(), result.error().message());
+            return _handleError<T>(responses, std::move(method), result.error().value(), result.error().message());
         }
     }
 
@@ -546,11 +650,11 @@ private:
 };
 
 template <typename T>
-auto RpcMethodWrapperImpl<T>::call(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
+auto RpcMethodWrapperImpl<T>::call(JsonSerializer::InputSerializer& in, JsonRpcResponseValues& responses,
                                    JsonRpcRequestMethod&& method) noexcept -> ilias::Task<void> {
     typename MethodType::RequestType request;
     auto success = in(request);
-    return mSelf->_handle(success, request, out, std::move(method), *mMethodData);
+    return mSelf->_handle(success, request, responses, std::move(method), *mMethodData);
 };
 
 } // namespace detail
@@ -868,7 +972,7 @@ private:
             }
         }
         mBuffer.clear();
-        if (auto out = JsonSerializer::OutputSerializer(mBuffer); out(request)) {
+        if (auto out = JsonSerializer::OutputSerializer(mBuffer); out(request) && out.end()) {
             NEKO_LOG_INFO("jsonrpc", "send {}: {}", notification ? "notification" : "request",
                           std::string_view{mBuffer.data(), mBuffer.size()});
             return {};

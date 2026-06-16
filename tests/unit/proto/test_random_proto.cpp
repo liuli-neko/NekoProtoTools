@@ -5,16 +5,6 @@
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/to_string.hpp"
-#include "nekoproto/serialization/types/array.hpp"         // IWYU pragma: export
-#include "nekoproto/serialization/types/binary_data.hpp"   // IWYU pragma: export
-#include "nekoproto/serialization/types/enum.hpp"          // IWYU pragma: export
-#include "nekoproto/serialization/types/list.hpp"          // IWYU pragma: export
-#include "nekoproto/serialization/types/map.hpp"           // IWYU pragma: export
-#include "nekoproto/serialization/types/set.hpp"           // IWYU pragma: export
-#include "nekoproto/serialization/types/struct_unwrap.hpp" // IWYU pragma: export
-#include "nekoproto/serialization/types/tuple.hpp"         // IWYU pragma: export
-#include "nekoproto/serialization/types/variant.hpp"       // IWYU pragma: export
-#include "nekoproto/serialization/types/vector.hpp"        // IWYU pragma: export
 
 NEKO_USE_NAMESPACE
 
@@ -963,19 +953,29 @@ enum TestEnumBG8AC {
     TestEnumBG8AC61
 };
 
+struct TestEnumBG8ACStruct {
+    TestEnumBG8AC a;
+    TestEnumBG8AC b;
+    TestEnumBG8AC c;
+    TestEnumBG8AC d;
+    TestEnumBG8AC e;
+    TestEnumBG8AC f;
+    TestEnumBG8AC g;
+    TestEnumBG8AC h;
+};
+
 TEST(RandomProtoTest, EnumTest) {
     TestEnumBG8AC proto = TestEnumBG8AC::TestEnumBG8AC0;
     std::vector<char> buffer;
     JsonSerializer::OutputSerializer out(buffer);
-    out.startObject((std::size_t)-1);
-    out(make_name_value_pair<const TestEnumBG8AC&>("a", proto));
-    out(make_name_value_pair<const TestEnumBG8AC&>("b", TestEnumBG8AC::TestEnumBG8AC10));
-    out(make_name_value_pair<const TestEnumBG8AC&>("c", TestEnumBG8AC::TestEnumBG8AC20));
-    out(make_name_value_pair<const TestEnumBG8AC&>("d", TestEnumBG8AC::TestEnumBG8AC30));
-    out(make_name_value_pair<const TestEnumBG8AC&>("e", TestEnumBG8AC::TestEnumBG8AC40));
-    out(make_name_value_pair<const TestEnumBG8AC&>("f", TestEnumBG8AC::TestEnumBG8AC50));
-    out(make_name_value_pair<const TestEnumBG8AC&>("g", TestEnumBG8AC::TestEnumBG8AC60));
-    out(make_name_value_pair<const TestEnumBG8AC&>("h", TestEnumBG8AC::TestEnumBG8AC61));
+    out(TestEnumBG8ACStruct{.a = proto,
+                            .b = TestEnumBG8AC::TestEnumBG8AC10,
+                            .c = TestEnumBG8AC::TestEnumBG8AC20,
+                            .d = TestEnumBG8AC::TestEnumBG8AC30,
+                            .e = TestEnumBG8AC::TestEnumBG8AC40,
+                            .f = TestEnumBG8AC::TestEnumBG8AC50,
+                            .g = TestEnumBG8AC::TestEnumBG8AC60,
+                            .h = TestEnumBG8AC::TestEnumBG8AC61});
     out.end();
     buffer.push_back('\0');
     const char* str = buffer.data();

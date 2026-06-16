@@ -13,6 +13,7 @@
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/global/log.hpp"
 
+#include <optional>
 #include <system_error>
 
 NEKO_BEGIN_NAMESPACE
@@ -24,11 +25,13 @@ struct Error {
 };
 
 enum class ErrorCode : std::uint8_t {
-    Ok           = 0,
-    Unknown      = 1,
-    InvalidIndex = 2,
-    InvalidField = 3,
-    InvalidType  = 4,
+    Ok            = 0,
+    Unknown       = 1,
+    InvalidIndex  = 2,
+    InvalidField  = 3,
+    InvalidType   = 4,
+    ParseError    = 5,
+    InvalidLength = 6,
 };
 
 class ErrorCategory : public std::error_category {
@@ -47,6 +50,10 @@ public:
             return "invalid field";
         case ErrorCode::InvalidType:
             return "invalid type";
+        case ErrorCode::ParseError:
+            return "parse error";
+        case ErrorCode::InvalidLength:
+            return "invalid length";
         default:
             return "unknown error";
         }
@@ -108,6 +115,8 @@ public:
 
     auto hasValue() const -> bool { return std::holds_alternative<T>(mData); }
 
+    auto errorPtr() const noexcept -> const Error* { return std::get_if<Error>(&mData); }
+
     auto value() const -> T {
         if (auto* ptr = std::get_if<T>(&mData)) {
             return *ptr;
@@ -119,7 +128,37 @@ private:
     std::variant<T, Error> mData;
 };
 
-auto make_error_code(ErrorCode ec) noexcept -> std::error_code {
+template <>
+class Result<void> {
+public:
+    Result() = default;
+    Result(const Error& error) : mError(error) {}
+    Result(Error&& error) : mError(std::move(error)) {}
+
+    operator bool() const noexcept { return !mError.has_value(); }
+
+    auto hasError() const noexcept -> bool { return mError.has_value(); }
+    auto hasValue() const noexcept -> bool { return !mError.has_value(); }
+
+    auto error() const -> Error {
+        if (mError) {
+            return *mError;
+        }
+        throw std::runtime_error("result does not contain an error");
+    }
+
+    auto errorPtr() const noexcept -> const Error* {
+        if (mError) {
+            return &*mError;
+        }
+        return nullptr;
+    }
+
+private:
+    std::optional<Error> mError;
+};
+
+inline auto make_error_code(ErrorCode ec) noexcept -> std::error_code {
     static ErrorCategory kCat;
     return {static_cast<int>(ec), kCat};
 }
@@ -129,6 +168,8 @@ inline auto error(std::error_code ec) -> Error { return {ec, ec.message()}; }
 inline auto error(std::string msg) -> Error { return {make_error_code(ErrorCode::Unknown), std::move(msg)}; }
 
 inline auto error(ErrorCode ec, std::string msg) -> Error { return {make_error_code(ec), std::move(msg)}; }
+
+inline auto success() -> Result<void> { return {}; }
 } // namespace sa
 NEKO_END_NAMESPACE
 

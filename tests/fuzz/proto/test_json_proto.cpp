@@ -1,18 +1,6 @@
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/proto/proto_base.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
-#include "nekoproto/serialization/types/array.hpp"
-#include "nekoproto/serialization/types/bitset.hpp"
-#include "nekoproto/serialization/types/deque.hpp"
-#include "nekoproto/serialization/types/list.hpp"
-#include "nekoproto/serialization/types/map.hpp"
-#include "nekoproto/serialization/types/multimap.hpp"
-#include "nekoproto/serialization/types/multiset.hpp"
-#include "nekoproto/serialization/types/pair.hpp"
-#include "nekoproto/serialization/types/set.hpp"
-#include "nekoproto/serialization/types/shared_ptr.hpp"
-#include "nekoproto/serialization/types/tuple.hpp"
-#include "nekoproto/serialization/types/vector.hpp"
 #include <gtest/gtest.h>
 #include <string>
 
