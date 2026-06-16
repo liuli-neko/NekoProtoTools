@@ -144,15 +144,15 @@ ParserResult parser_write_reflect_field(W& writer, typename W::OutputObjectType&
                                            typename parsing::Parent<W>::Object{name, &object});
         }
         return result;
-    }
-    if constexpr (tag_access::has_name(Tags{})) {
+    } else if constexpr (tag_access::has_name(Tags{})) {
         std::string_view fieldName = name;
         auto nextTags              = tag_access::consume_recursive_name(tags);
         fieldName                  = tag_access::recursive_name(tags);
         return parser_write_reflect_field<R, W, T>(writer, object, field, fieldName, nextTags);
+    } else {
+        return parser_context(parser_write<R, W>(writer, field, typename parsing::Parent<W>::Object{name, &object}, tags),
+        "Failed to write field '" + std::string(name) + "': ");
     }
-    return parser_context(parser_write<R, W>(writer, field, typename parsing::Parent<W>::Object{name, &object}, tags),
-                          "Failed to write field '" + std::string(name) + "': ");
 }
 
 template <typename R, typename W, typename T, typename Tags>

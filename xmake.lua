@@ -134,7 +134,7 @@ option_end()
 
 
 if has_config("enable_simdjson") then
-    add_requires("simdjson v3.9.3", {configs = { shared = is_kind("shared")}})
+    add_requires("simdjson", {configs = { shared = false}})
 end
 
 if has_config("enable_rapidjson") then

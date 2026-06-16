@@ -1,4 +1,4 @@
-name: CI for linux by xmake
+name: C/C++ CI on linux-gcc
 
 on:
   push:
