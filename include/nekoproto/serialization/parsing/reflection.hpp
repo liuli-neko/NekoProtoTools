@@ -136,7 +136,7 @@ ParserResult parser_write_reflect_field(W& writer, typename W::OutputObjectType&
         }
     }
 #endif
-    if constexpr (tag_access::has_comment(tags)) {
+    if constexpr (tag_access::has_comment(Tags{})) {
         const auto rest = tag_access::consume_recursive_comment(tags);
         auto result     = parser_write_reflect_field<R, W, T>(writer, object, field, name, rest);
         if (result) {
@@ -145,7 +145,7 @@ ParserResult parser_write_reflect_field(W& writer, typename W::OutputObjectType&
         }
         return result;
     }
-    if constexpr (tag_access::has_name(tags)) {
+    if constexpr (tag_access::has_name(Tags{})) {
         std::string_view fieldName = name;
         auto nextTags              = tag_access::consume_recursive_name(tags);
         fieldName                  = tag_access::recursive_name(tags);
@@ -170,7 +170,7 @@ ParserResult parser_read_reflect_field(typename R::InputValueType in, T& field, 
         return object.error();
     }
     std::string_view fieldName = name;
-    if constexpr (tag_access::has_recursive_name(tags)) {
+    if constexpr (tag_access::has_recursive_name(Tags{})) {
         fieldName = tag_access::recursive_name(tags);
     }
     auto nextTags   = tag_access::consume_recursive_comment(tag_access::consume_recursive_name(tags));

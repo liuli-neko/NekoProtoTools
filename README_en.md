@@ -2,6 +2,7 @@
 
 [![中文](https://img.shields.io/badge/语言-中文-blue.svg)](./README.md)
 [![English](https://img.shields.io/badge/language-English-blue.svg)](./README_en.md)
+![Version](https://img.shields.io/badge/version-0.3.0-green.svg)
 
 ### CI Status
 
@@ -17,10 +18,13 @@
 
 NekoProtoTools is a pure C++ protocol helper library designed to **simplify the definition, serialization/deserialization, and RPC communication of messages (protocols) in C++**.
 
+Current version: **0.3.0**. This release rewires the serialization stack around one generic Parser layer: RapidJSON, simdjson, Binary, XML, and schema generation now share the same type-dispatch rules, while concrete formats provide thin Reader/Writer backends.
+
 Core features of this library:
 
-*   **Simplified Message Definition**: Using templates and macros, you only need to define the fields of your message and declare the members to be processed. Any custom C++ type can then be used as a protocol message.
-*   **Out-of-the-Box Serialization/Deserialization**: Built-in support for common serialization formats like JSON (RapidJSON/SIMDJson) and binary, with easy extension for custom serializers.
+*   **Simplified Message Definition**: Using templates and macros, you only need to define the fields of your message and declare the members to be processed. Any custom C++ type can then be used as a serializable object or protocol message.
+*   **Unified Parser Serialization Layer**: JSON, Binary, XML, and schema generation share one set of type rules; RapidJSON, simdjson, pugixml, and the binary format are thin backends.
+*   **Field-Level Metadata Tags**: `make_tags<Tag>(field)` describes a field or call site instead of permanently annotating the type, so the same type can use different layouts in different contexts.
 *   **Basic Reflection Capability**: Provides a simple reflection mechanism, allowing protocol handling at runtime using name information.
 *   **Lightweight JSON-RPC 2.0 Implementation**: Based on templates and concise interfaces, allowing for convenient definition and implementation of RPC services.
 *   **Type Safety**: Utilizes C++ template metaprogramming for compile-time type checking.
@@ -31,9 +35,12 @@ Core features of this library:
 
 ## 2. Dependencies
 
+*   **C++ Standard**:
+    *   C++23 is recommended. The current xmake default is `stdcxx=23`, with C++20/C++26 configuration entries kept available.
 *   **Serialization Backends**:
-    *   JSON: [RapidJSON](https://rapidjson.org/) or [SIMDJson](https://simdjson.org/) (Optional, enable via build options)
-    *   XML: [RapidXML](https://github.com/dwd/rapidxml) (Optional, enable via build options)
+    *   JSON: [RapidJSON](https://rapidjson.org/) or [simdjson](https://simdjson.org/) (optional, enable via build options). When both are enabled, the default `JsonSerializer` alias selects RapidJSON first.
+    *   XML: [pugixml](https://pugixml.org/) (optional, enable via build options)
+    *   Binary: built-in binary Reader/Writer, no extra third-party dependency required.
     *   *Note: To keep the library lightweight, these serialization libraries are **not directly bundled**. You need to manage these dependencies yourself through options.*
 *   **Communication & RPC (Optional)**:
     *   [Ilias](https://github.com/BusyStudent/ilias) (Used for network communication and asynchronous tasks/coroutines)
@@ -52,18 +59,18 @@ Add the dependency in your `xmake.lua`:
 
 ```lua
 -- xmake.lua
+add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
+
 add_requires("neko-proto-tools", {
     configs = {
-         enable_simdjson = false,    -- Set to true to enable SIMDJson backend
+         enable_simdjson = false,    -- Set to true to enable simdjson backend
          enable_rapidjson = true,    -- Set to true to enable RapidJSON backend
+         enable_pugixml = false,     -- Set to true to enable XML support
          enable_fmt = true,          -- Set to true if fmtlib support is needed (e.g., for logging)
+         enable_protocol = true,     -- Set to true to enable ProtoFactory/IProto
          enable_communication = true,-- Set to true to enable communication features
          enable_jsonrpc = true       -- Set to true to enable JSON-RPC features
     },
-    -- You might need to specify the git repo or use a repository like Btk-Project
-    -- {git = "https://github.com/liuli-neko/neko-proto-tools.git", branch = "main"}
-    -- Add the repository containing the package if it's not in the default xmake-repo
-    -- add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 })
 
 target("your_project")
@@ -179,7 +186,7 @@ int main() {
     // You can pass constructor arguments directly to emplaceProto
     auto user_iproto = UserProfile::emplaceProto(123, "Alice");
 
-    // Serialize to binary data (using the protocol's specified default serializer: JsonSerializer)
+    // Serialize to byte data (using the protocol's specified default serializer: JsonSerializer)
     std::vector<char> user_data = user_iproto.toData();
     std::cout << "UserProfile Serialized Size: " << user_data.size() << " bytes" << std::endl;
 
@@ -224,18 +231,50 @@ int main() {
 
 ### 5.1. Serializer (`Serializer`)
 
-Serializers are responsible for converting C++ objects into byte streams (serialization) and converting byte streams back into C++ objects (deserialization).
+Serializers are responsible for converting C++ objects into byte streams (serialization) and converting byte streams back into C++ objects (deserialization). Since 0.3.0, type dispatch lives in the generic `Parser<Reader, Writer, T>` layer; concrete formats provide Reader/Writer implementations plus optional capabilities.
 
 *   **Built-in Serializers**:
-    *   `JsonSerializer`: Uses RapidJSON or SIMDJson for JSON serialization/deserialization.
-    *   `BinarySerializer`: Provides a compact binary serialization format.
+    *   `JsonSerializer`: Default JSON serializer alias. It uses `RapidJsonSerializer` when RapidJSON is enabled; otherwise it uses `SimdJsonSerializer` when simdjson is enabled.
+    *   `BinarySerializer`: Provides a compact binary serialization format and supports binary layout tags such as `fixedLength` and `unframed`.
     *   `XmlSerializer`: Uses pugixml for XML serialization and deserialization.
 *   **Choosing a Serializer**:
     *   For basic serialization, directly instantiate the required `OutputSerializer` / `InputSerializer`.
     *   For protocol messages (`NEKO_DECLARE_PROTOCOL`), specify the default serializer during declaration.
+*   **Schema Generation**: Include `<nekoproto/serialization/json/schema.hpp>` and call `generate_schema<T>(schema)` to generate a Draft-07 style JSON Schema.
 *   **Serialization Extensions**: Use `detail::CustomParser<R, W, T>` for custom types; new formats implement Reader/Writer backends. See [7. Serialization Extensions](#7-serialization-extensions).
 
-### 5.2. Protocol Management (`ProtoFactory`, `IProto`)
+### 5.2. Field Tags And Call-Site Metadata
+
+`make_tags<Tag>(value_or_accessor)` describes how a field should be handled in the current binding. It is not permanent type metadata, so the same type can use different tags in different structs, backends, or top-level calls.
+
+```cpp
+#include <nekoproto/serialization/binary_serializer.hpp>
+#include <cstdint>
+
+struct Header {
+    std::uint32_t length = 0;
+    std::uint16_t type = 0;
+
+    NEKO_SERIALIZER(make_tags<BinaryTags{.fixedLength = sizeof(std::uint32_t)}>(length),
+                    make_tags<BinaryTags{.fixedLength = sizeof(std::uint16_t)}>(type))
+};
+
+std::vector<char> buffer;
+BinarySerializer::OutputSerializer out(buffer);
+out(make_tags<BinaryTags{.unframed = true}>(Header{12, 3}));
+out.end();
+```
+
+Common built-in tags:
+
+*   `JsonTags{.flat = true}`: flatten reflected object fields into the parent object.
+*   `JsonTags{.skipable = true}`: allow missing fields when reading.
+*   `JsonTags{.rawString = true}`: treat a JSON string as a raw JSON fragment.
+*   `BinaryTags{.fixedLength = N}`: read/write binary scalar values with a fixed width.
+*   `BinaryTags{.unframed = true}`: read/write reflected binary objects without field boundaries; use it at the call site for things such as transport headers, not as type-level metadata.
+*   `rename_tag<"...">` / `comment_tag<"...">`: reflection metadata for field renaming and XML comments.
+
+### 5.3. Protocol Management (`ProtoFactory`, `IProto`)
 
 Use the protocol management mechanism when you need to manage different types of protocols, handle polymorphism, or require runtime type information.
 
@@ -254,7 +293,7 @@ Use the protocol management mechanism when you need to manage different types of
     *   Use `emplaceProto()` to create instances, returning `IProto`.
     *   Use `cast<T>()` to safely cast an `IProto` back to a specific protocol type pointer.
 
-### 5.3. Communication (`Communication`)
+### 5.4. Communication (`Communication`)
 
 This library provides a coroutine-based communication abstraction layer built upon [Ilias](https://github.com/BusyStudent/ilias), designed for conveniently transmitting protocol messages over network connections.
 
@@ -414,7 +453,7 @@ int main() {
 }
 ```
 
-### 5.4. JSON-RPC 2.0
+### 5.5. JSON-RPC 2.0
 
 This library provides a lightweight JSON-RPC 2.0 implementation based on Ilias, allowing for easy definition and invocation of remote procedures.
 
@@ -554,7 +593,9 @@ int main() {
 
 ## 6. Supported Types
 
-Serialization backends include the common Parser set, so standard containers and basic types no longer require separate `serialization/types/*.hpp` headers.
+Serialization backends include the common Parser set, so standard containers and basic types no longer require separate `serialization/types/*.hpp` headers. Since 0.3.0, JSON, Binary, XML, and schema generation reuse the same type rules whenever possible; format-specific behavior is handled by backend capabilities or explicit specializations.
+
+The common Parser set currently covers arithmetic types, strings, enums, `std::optional`, pointers, `std::variant`, `std::tuple`/`std::pair`, sequence containers, sets, maps, `std::array`, `std::bitset`, `std::atomic`, `std::byte`, `BinaryData<T>`, and reflected structs exposed via `NEKO_SERIALIZER` or `Meta<T>`.
 
 more details can be found in the [Supported Types Overview](https://github.com/liuli-neko/NekoProtoTools/wiki/Supported-Types-Overview).
 
@@ -600,9 +641,12 @@ To add a new data format, implement a backend with responsibilities matching the
 **Serializer**
 
 *   [x] Support accessing protocol fields by string name (basic reflection)
-*   [x] Use SIMDJson as JSON input serializer backend (`simdjson::dom`)
+*   [x] Use simdjson as JSON input serializer backend (`simdjson::dom`)
+*   [x] Route RapidJSON, simdjson, Binary, XML, and schema generation through the generic Parser layer
+*   [x] Implement XML Reader/Writer backend with pugixml
+*   [x] Support Draft-07 style JSON Schema generation
 *   [ ] Support `simdjson::ondemand` interface (Explore performance and use case differences with `dom`)
-*   [x] Implement JSON output serializer based on SIMDJson (currently manual implementation, performance needs optimization)
+*   [x] Implement simdjson output through the shared JSON text Writer path
 *   [x] Support more C++ STL containers
 
 **Communication**
@@ -627,6 +671,14 @@ To add a new data format, implement a backend with responsibilities matching the
 
 ## 9. Development History (Selected Milestones)
 
+*   **v0.3.0**
+    *   Reworked the serialization stack so RapidJSON, simdjson, Binary, XML, and schema generation share `Parser<Reader, Writer, T>`.
+    *   Reduced concrete format backends to thin Reader/Writer layers; the old public state-machine API is no longer the extension model for new backends.
+    *   Moved reflection tags from value wrappers to independent field/call-site metadata and removed the old `TaggedValue` style.
+    *   `BinaryTags::fixedLength` and `BinaryTags::unframed` are interpreted by the layer that consumes them; `unframed` is no longer type-level schema metadata.
+    *   Switched XML support to pugixml, including object fields, repeated sibling elements for arrays, node text, and comments.
+    *   Stopped registering the communication `MessageHeader` as a `ProtoFactory` protocol; it is now serialized explicitly by the communication layer with call-site tags.
+
 *   **v0.2.4**
     *   split serialization and protocol management, with serialization as a core module and protocol management as an optional module.
     *   complete JSON-RPC 2.0 protocol support.
@@ -638,7 +690,7 @@ To add a new data format, implement a backend with responsibilities matching the
 *   **v0.2.3**
     *   Unified most serialization calls to parenthesis expression `serializer(variable)`.
     *   Adjusted node expansion rules for `NameValuePair` and nested objects.
-    *   Supported SIMDJson as JSON input serialization backend (`simdjson::dom`).
+    *   Supported simdjson as JSON input serialization backend (`simdjson::dom`).
     *   Supported almost all common STL containers.
     *   Added general support for `std::optional`.
     *   Refactored communication interface to be a wrapper around transport protocols, separating underlying connection management.
