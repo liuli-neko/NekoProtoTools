@@ -20,7 +20,7 @@ reflect-cpp 风格通用 Parser 模型的计划。
 
 ## 可勾选任务列表
 
-- [x] 明确当前边界：通用 Parser + RapidJSON + simdjson + binary + schema，XML 延后。
+- [x] 明确当前边界：通用 Parser + RapidJSON + simdjson + binary + schema + XML。
 - [x] 建立 `include/nekoproto/serialization/parsing/parser.hpp`，承载通用 Parser 主模板和 `parser_read/parser_write`。
 - [x] 让 RapidJSON public serializer 入口调用通用 `parser_write/parser_read`，不直接依赖 `rapid_json_write/read`。
 - [x] 保留 RapidJSON backend/native value 的后端特化，避免把 `RapidJsonValue` 放进通用类型规则。
@@ -523,10 +523,12 @@ Parser 层不应该：
 
 - `test_json_backend`：28/28，覆盖通用 Parser 的 basic、容器、反射、tag 和错误传播路径。
 - `test_simd_json_backend`：8/8，覆盖 simdjson Reader、共享 TextWriter、raw JSON 与 native value 生命周期。
-- `test_binary_serializer`：9/9，覆盖旧 wire layout、fixed-length/type-layout tag、嵌套具名字段、schema 元数据、
+- `test_binary_serializer`：11/11，覆盖旧 wire layout、fixed-length/type-layout tag、嵌套具名字段、schema 元数据、
   宽度不匹配错误和截断输入错误。
 - `test_json_serializer`：RapidJSON 与 simdjson 配置均为 15/15，覆盖主要类型族、复杂对象、
   iostream 和通用 Parser 生成的 JSON Schema。
+- `test_xml`：覆盖 pugixml Reader/Writer、对象字段、数组同名兄弟元素、`xml_content`、rename/comment tags。
+- `test_to_string`：覆盖通用 Parser 的 human-readable writer，并验证字段名可与宏内部 metadata 名称共存。
 - `NekoJsonRpc` 已切换到 `ParserResult` 并可独立构建。
 
 ## 每阶段验收标准

@@ -15,6 +15,7 @@
 
 #include <optional>
 #include <system_error>
+#include <variant>
 
 NEKO_BEGIN_NAMESPACE
 
