@@ -12,6 +12,7 @@
 // #####################################################
 // default JsonSerializer type definition
 #include "nekoproto/global/global.hpp"
+#include "nekoproto/serialization/serializer_base.hpp"
 #if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
 #include "json/rapid_json_serializer.hpp"
 NEKO_BEGIN_NAMESPACE

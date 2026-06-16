@@ -18,11 +18,12 @@ NEKO_PROTO_API std::string to_string(JsonRpcIdType id) {
     }
 }
 
-auto JsonRpcServerImp::_makeBatch(JsonSerializer::InputSerializer& in, JsonSerializer::OutputSerializer& out,
-                                  int batchSize) noexcept -> void {
-    for (int ix = 0; ix < batchSize; ++ix) {
+auto JsonRpcServerImp::_makeBatch(const std::vector<JsonSerializer::JsonValue>& requests,
+                                  JsonRpcResponseValues& responses) noexcept -> void {
+    for (const auto& requestValue : requests) {
+        JsonSerializer::InputSerializer methodIn(requestValue);
         JsonRpcRequestMethod method;
-        if (!in(method)) {
+        if (!methodIn(method)) {
             break;
         }
         if (method.jsonrpc.has_value() && method.jsonrpc.value() != "2.0") {
@@ -31,14 +32,14 @@ auto JsonRpcServerImp::_makeBatch(JsonSerializer::InputSerializer& in, JsonSeria
         }
         auto id = method.id;
         mCurrentIds.emplace_back(id);
-        in.rollbackItem();
         if (auto it = mHandlers.find(method.method); it != mHandlers.end()) {
             NEKO_LOG_INFO("jsonrpc", "spawn taskhandle for method {} with id {}", method.method, to_string(id));
-            mTaskScope.spawn((*it->second)(in, out, std::move(method)));
+            JsonSerializer::InputSerializer requestIn(requestValue);
+            mTaskScope.spawn((*it->second)(requestIn, responses, std::move(method)));
         } else {
             NEKO_LOG_WARN("jsonrpc", "method {} not found!", method.method);
             _handleError<RpcMethodErrorHelper>(
-                out, std::move(method), (int)JsonRpcError::MethodNotFound,
+                responses, std::move(method), (int)JsonRpcError::MethodNotFound,
                 JsonRpcErrorCategory::instance().message((int)JsonRpcError::MethodNotFound));
         }
     }
@@ -63,30 +64,42 @@ auto JsonRpcServerImp::methodDatas(std::string_view name) noexcept -> MethodData
 auto JsonRpcServerImp::processRequest(const char* data, std::size_t size, detail::IMessageStream* client) noexcept
     -> ilias::Task<std::vector<char>> {
     std::vector<char> buffer;
-    JsonSerializer::OutputSerializer out(buffer);
-    JsonSerializer::InputSerializer in(data, size);
-    while ((*data == '\n' || *data == ' ') && size > 0) {
+    while (size > 0 && (*data == '\n' || *data == ' ')) {
         data++;
         size--;
     }
-    bool batchRequest     = false;
-    std::size_t batchSize = 1;
-    if (data[0] == '[') { // batch request
-        batchRequest = true;
-        in.startNode();
-        in(make_size_tag(batchSize));
-        out.startArray(batchSize);
+    JsonSerializer::JsonValue root;
+    JsonSerializer::InputSerializer rootIn(data, size);
+    if (!rootIn(root)) {
+        NEKO_LOG_ERROR("jsonrpc", "parse jsonrpc request failed");
+        co_return buffer;
     }
-    _makeBatch(in, out, (int)batchSize);
+
+    const bool batchRequest = root.isArray();
+    std::vector<JsonSerializer::JsonValue> requests;
+    if (batchRequest) {
+        requests.reserve(root.size());
+        for (std::size_t ix = 0; ix < root.size(); ++ix) {
+            requests.emplace_back(root[ix]);
+        }
+    } else {
+        requests.emplace_back(root);
+    }
+
+    JsonRpcResponseValues responses;
+    _makeBatch(requests, responses);
     co_await mTaskScope.waitAll();
-    NEKO_LOG_INFO("jsonrpc", "Finished processing batch request, batch size {}", batchSize);
+    NEKO_LOG_INFO("jsonrpc", "Finished processing request, batch size {}", requests.size());
     mCurrentIds.clear();
     mCancelHandles.clear();
-    if (batchRequest) {
-        in.finishNode();
-        out.endArray();
-    }
-    if (batchSize > 0) {
+
+    if (!responses.empty()) {
+        JsonSerializer::OutputSerializer out(buffer);
+        if (batchRequest) {
+            out(responses);
+        } else {
+            out(responses.front());
+        }
         out.end();
     }
     if (client != nullptr && buffer.size() > 3) {

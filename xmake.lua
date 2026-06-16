@@ -1,6 +1,6 @@
 set_project("neko-proto-tools")
 add_rules("mode.debug", "mode.release", "mode.releasedbg", "mode.coverage", "mode.asan")
-set_version("0.2.6", {build = "%Y%m%d%H%M"})
+set_version("0.3.0", {build = "%Y%m%d%H%M"})
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 set_warnings("allextra")
 set_encodings("utf-8")
@@ -34,12 +34,12 @@ option("enable_rapidjson")
     set_configvar("NEKO_PROTO_ENABLE_RAPIDJSON", true)
 option_end()
 
-option("enable_rapidxml")
+option("enable_pugixml")
     set_default(false)
     set_showmenu(true)
-    set_description("Enable rapidxml support, should install rapidxml")
+    set_description("Enable pugixml support, should install pugixml")
     set_category("serializer provider")
-    set_configvar("NEKO_PROTO_ENABLE_RAPIDXML", true)
+    set_configvar("NEKO_PROTO_ENABLE_PUGIXML", true)
 option_end()
 
 option("enable_spdlog")
@@ -141,8 +141,8 @@ if has_config("enable_rapidjson") then
     add_requires("rapidjson", {configs = { shared = is_kind("shared")}})
 end
 
-if has_config("enable_rapidxml") then
-    add_requires("rapidxml", {configs = { shared = is_kind("shared")}})
+if has_config("enable_pugixml") then
+    add_requires("pugixml", {configs = { shared = is_kind("shared")}})
 end
 
 if has_config("enable_spdlog") then
@@ -193,7 +193,7 @@ target("NekoSerializer")
                 "enable_stdformat", 
                 "enable_rapidjson", 
                 "enable_simdjson", 
-                "enable_rapidxml", 
+                "enable_pugixml",
                 "enable_protocol",
                 "enable_communication",
                 "enable_jsonrpc",

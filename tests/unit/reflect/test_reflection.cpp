@@ -3,11 +3,7 @@
 #include "nekoproto/global/config.h"
 #include "nekoproto/global/reflect.hpp"
 #include "nekoproto/serialization/private/tags.hpp"
-#include "nekoproto/serialization/private/traits.hpp"
 #include "nekoproto/serialization/reflection.hpp"
-#include "nekoproto/serialization/types/optional.hpp"
-#include "nekoproto/serialization/types/struct_unwrap.hpp"
-#include "nekoproto/serialization/types/vector.hpp"
 
 #include <optional>
 #include <tuple>
@@ -21,8 +17,8 @@ struct Test1 {
 };
 
 TEST(Reflection, Test) {
-    EXPECT_FALSE(traits::can_be_serializable<int*>);
-    EXPECT_TRUE(traits::can_be_serializable<Test1>);
+    EXPECT_FALSE(detail::has_values_meta<int*>);
+    EXPECT_TRUE(detail::has_values_meta<Test1>);
     EXPECT_EQ((detail::member_nameof<0, Test1>), "member1");
     EXPECT_EQ((detail::member_nameof<1, Test1>), "member2");
     EXPECT_EQ((detail::member_nameof<2, Test1>), "member3");
@@ -77,7 +73,7 @@ TEST(Reflection, RefObjectValue) {
     static_assert(!detail::is_local_ref_array<Test2>, "Test2 must not be local_ref_array");
     static_assert(!detail::is_local_ref_value<Test2>, "Test2 must not be local_ref_value");
     static_assert(detail::has_value_function<Test2>, "Test2 must have value function");
-    using FuncType = unwrap_tags_t<std::decay_t<decltype(std::get<2>(Test2::Neko::value.values))>>;
+    using FuncType = std::decay_t<decltype(std::get<2>(Test2::Neko::value.values))>;
     static_assert(detail::is_member_ref_function<FuncType, Test2>, "");
     Test2 test{.member1 = 23, .member2 = 12, .member3 = 45, .member4 = 56};
     Reflect<Test2>::forEach(test, [](auto& field) {
@@ -86,9 +82,11 @@ TEST(Reflection, RefObjectValue) {
     });
     static_assert(std::is_same_v<Reflect<Test2>::value_types, std::tuple<int, int, int, int>>,
                   "Test2 must have 4 members");
-    static_assert(is_tagged_value_v<std::tuple_element_t<
+    static_assert(!is_field_spec_v<std::tuple_element_t<
                       0, std::decay_t<decltype(detail::ReflectHelper<Test2>::getValues(std::declval<Test2&>()))>>>,
-                  "has tag");
+                  "field accessors are stored without tag wrappers");
+    static_assert(std::is_same_v<std::decay_t<decltype(std::get<0>(Reflect<Test2>::field_tags))>, CustomTags>,
+                  "field tags are stored separately");
     Reflect<Test2>::forEach(test, [](auto& field, std::string_view name, const auto& tags) {
         NEKO_LOG_INFO("test", "{}: {}", name, field);
         if constexpr (std::is_same_v<std::decay_t<decltype(tags)>, CustomTags>) {

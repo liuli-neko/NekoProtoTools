@@ -11,8 +11,12 @@
 #pragma once
 
 #include "../json_serializer.hpp"
+#include "../parsing/parser.hpp"
 
+#include <cstdint>
+#include <cstring>
 #include <string>
+#include <string_view>
 #include <vector>
 
 NEKO_BEGIN_NAMESPACE
@@ -165,27 +169,36 @@ public:
     BinaryData(Type* data) : data(data), size(0) {}
 };
 
-template <typename Serializer, typename T>
-inline bool save(Serializer& sa, const BinaryData<T>& value) {
-    std::vector<uint8_t> buf;
-    Base64Covert::Encode(reinterpret_cast<const uint8_t*>(value.data), value.size, buf);
-    buf.push_back('\0');
-    return sa(reinterpret_cast<const char*>(buf.data()));
-}
+namespace detail {
 
-template <typename Serializer, typename T>
-inline bool load(Serializer& sa, BinaryData<T>& value) {
-    std::string sv;
-    if (!sa(sv)) {
-        return false;
+template <typename R, typename W, typename T>
+struct Parser<R, W, BinaryData<T>, void> {
+    template <typename ParentType, typename Tags>
+    static ParserResult write(W& writer, const BinaryData<T>& value, const ParentType& parent, const Tags& tags) {
+        std::vector<uint8_t> buf;
+        Base64Covert::Encode(reinterpret_cast<const uint8_t*>(value.data), value.size, buf);
+        return parser_write<R, W>(writer, std::string_view{reinterpret_cast<const char*>(buf.data()), buf.size()},
+                                  parent, tags);
     }
-    std::vector<uint8_t> buf;
-    auto ret = Base64Covert::Decode(reinterpret_cast<const uint8_t*>(sv.data()), sv.size(), buf);
-    memcpy(value.data, buf.data(), buf.size());
-    return ret;
-}
 
-template <typename T>
-struct is_minimal_serializable<BinaryData<T>, void> : std::true_type {};
+    template <typename Tags>
+    static ParserResult read(typename R::InputValueType in, BinaryData<T>& value, const Tags& tags) {
+        std::string sv;
+        auto result = parser_read<R, W>(in, sv, tags);
+        if (!result) {
+            return parser_context(std::move(result), "Failed to parse encoded binary data: ");
+        }
+        std::vector<uint8_t> buf;
+        auto ret = Base64Covert::Decode(reinterpret_cast<const uint8_t*>(sv.data()), sv.size(), buf);
+        if (!ret) {
+            return parser_error(sa::ErrorCode::ParseError, "Invalid base64 data");
+        }
+        std::memcpy(value.data, buf.data(), buf.size());
+        return sa::success();
+    }
+
+    static parsing::schema::Type toSchema() { return parsing::schema::Type::String{}; }
+};
+} // namespace detail
 
 NEKO_END_NAMESPACE

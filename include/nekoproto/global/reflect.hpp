@@ -68,7 +68,7 @@ struct is_optional<const std::optional<T>&, void> : std::true_type {};
 
 struct any_type { // NOLINT(readability-identifier-naming)
     template <typename T, typename = std::enable_if_t<!is_optional<std::decay_t<T>>::value>>
-    operator T() {}
+    operator T() const noexcept {}
 };
 template <typename T, typename _Cond = void, typename... Args>
 struct can_aggregate_impl : std::false_type {}; // NOLINT(readability-identifier-naming)

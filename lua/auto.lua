@@ -26,8 +26,8 @@ function autofunc.auto_add_packages(target)
         target:add("packages", "rapidjson", {public = true})
     end
     
-    if has_config("enable_rapidxml") then
-        target:add("packages", "rapidxml", {public = true})
+    if has_config("enable_pugixml") then
+        target:add("packages", "pugixml", {public = true})
     end
     
     if has_config("enable_spdlog") then

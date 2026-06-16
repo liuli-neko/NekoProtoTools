@@ -38,6 +38,17 @@ constexpr decltype(auto) init_values_tuple(std::index_sequence<Is...> /*unused*/
 }
 
 template <std::size_t Diameter, std::size_t Offset, std::size_t... Is, typename ArgsTuple>
+constexpr decltype(auto) init_field_values_tuple(std::index_sequence<Is...> /*unused*/, ArgsTuple&& argsTuple) {
+    return std::tuple(field_accessor(std::get<(Is * Diameter) + Offset>(std::forward<ArgsTuple>(argsTuple)))...);
+}
+
+template <std::size_t Diameter, std::size_t Offset, std::size_t... Is, typename ArgsTuple>
+constexpr decltype(auto) init_field_tags_tuple(std::index_sequence<Is...> /*unused*/, ArgsTuple&& /*argsTuple*/) {
+    using Tuple = std::remove_reference_t<ArgsTuple>;
+    return std::tuple(field_tags_v<std::tuple_element_t<(Is * Diameter) + Offset, Tuple>>...);
+}
+
+template <std::size_t Diameter, std::size_t Offset, std::size_t... Is, typename ArgsTuple>
 constexpr decltype(auto) init_names_array(std::index_sequence<Is...> /*unused*/, ArgsTuple&& argsTuple) {
     static_assert(
         ((std::is_convertible_v<std::tuple_element_t<(Is * Diameter) + Offset, std::remove_reference_t<ArgsTuple>>,
@@ -57,6 +68,26 @@ constexpr decltype(auto) init_values_array(std::index_sequence<Is...> /*unused*/
 template <typename... ValueTs>
 using double_type_tuple = decltype(init_values_tuple<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
                                                            std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+
+template <typename... ValueTs>
+using double_field_values_tuple =
+    decltype(init_field_values_tuple<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
+                                           std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+
+template <typename... ValueTs>
+using double_field_tags_tuple =
+    decltype(init_field_tags_tuple<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
+                                         std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+
+template <typename... ValueTs>
+using field_values_tuple =
+    decltype(init_field_values_tuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
+                                           std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+
+template <typename... ValueTs>
+using field_tags_tuple =
+    decltype(init_field_tags_tuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
+                                         std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
 
 template <typename T, class Obj>
 concept is_member_ref_function = requires(T val, Obj& obj) { std::is_lvalue_reference<decltype(val(obj))>::value; };
@@ -83,7 +114,7 @@ struct tuple_unwrap;
 
 template <typename... Args, typename Context>
 struct tuple_unwrap<std::tuple<Args...>, Context> {
-    using type = std::tuple<resolve_member_type_t<unwrap_tags_t<Args>, Context>...>;
+    using type = std::tuple<resolve_member_type_t<field_accessor_t<Args>, Context>...>;
 };
 
 template <typename Tuple, typename Context>
@@ -91,7 +122,7 @@ struct tuple_tags_unwrap;
 
 template <typename... Args, typename Context>
 struct tuple_tags_unwrap<std::tuple<Args...>, Context> {
-    constexpr static auto value = std::make_tuple(unwrap_tags_v<Args>...); // NOLINT
+    constexpr static auto value = std::make_tuple(field_tags_v<Args>...); // NOLINT
 };
 
 template <typename Tuple, typename Context>
@@ -143,10 +174,11 @@ struct Enumerate {
     }
 };
 
-template <typename T>
+template <typename T, typename TagsT>
 struct Object {
     std::array<std::string_view, std::tuple_size_v<T>> names;
     T values;
+    TagsT tags;
 
     constexpr Object()    = default;
     Object(const Object&) = default;
@@ -159,15 +191,21 @@ struct Object {
                                                              std::forward_as_tuple(values...));
         const auto& avalues = detail::init_values_tuple<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
                                                               std::forward_as_tuple(values...));
+        const auto& atags   = detail::init_field_tags_tuple<2, 1>(
+            std::make_index_sequence<sizeof...(ValueTs) / 2>{}, std::forward_as_tuple(values...));
         [this, &avalues]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
-            ((std::get<Is>(this->values) = std::get<Is>(avalues)), ...);
+            ((std::get<Is>(this->values) = field_accessor(std::get<Is>(avalues))), ...);
+        }(std::make_index_sequence<std::tuple_size_v<T>>{});
+        [this, &atags]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
+            ((std::get<Is>(this->tags) = std::get<Is>(atags)), ...);
         }(std::make_index_sequence<std::tuple_size_v<T>>{});
     }
 };
 
-template <typename T>
+template <typename T, typename TagsT>
 struct Array {
     T values;
+    TagsT tags;
 
     Array()             = default;
     Array(const Array&) = default;
@@ -177,8 +215,13 @@ struct Array {
     constexpr Array(ValueTs&&... values) noexcept {
         const auto& avalues = detail::init_values_tuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
                                                               std::forward_as_tuple(values...));
+        const auto& atags   = detail::init_field_tags_tuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
+                                                                  std::forward_as_tuple(values...));
         [this, &avalues]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
-            ((std::get<Is>(this->values) = std::get<Is>(avalues)), ...);
+            ((std::get<Is>(this->values) = field_accessor(std::get<Is>(avalues))), ...);
+        }(std::make_index_sequence<std::tuple_size_v<T>>{});
+        [this, &atags]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
+            ((std::get<Is>(this->tags) = std::get<Is>(atags)), ...);
         }(std::make_index_sequence<std::tuple_size_v<T>>{});
     }
 };
@@ -192,20 +235,20 @@ template <typename... ValueTs>
 Enumerate(ValueTs&&...) -> Enumerate<std::tuple_element_t<0, std::tuple<ValueTs...>>, sizeof...(ValueTs)>;
 
 template <typename... ValueTs>
-Object(ValueTs&&...) -> Object<detail::double_type_tuple<ValueTs...>>;
+Object(ValueTs&&...) -> Object<detail::double_field_values_tuple<ValueTs...>, detail::double_field_tags_tuple<ValueTs...>>;
 
 template <typename... ValueTs>
-Array(ValueTs&&...) -> Array<std::tuple<traits::ref_type<ValueTs>...>>;
+Array(ValueTs&&...) -> Array<detail::field_values_tuple<ValueTs...>, detail::field_tags_tuple<ValueTs...>>;
 
 namespace detail {
 template <typename T, class enable = void>
 struct is_ref_object : std::false_type {}; // NOLINT
-template <typename T>
-struct is_ref_object<Object<T>, void> : std::true_type {};
+template <typename T, typename TagsT>
+struct is_ref_object<Object<T, TagsT>, void> : std::true_type {};
 template <typename T, class enable = void>
 struct is_ref_array : std::false_type {}; // NOLINT
-template <typename T>
-struct is_ref_array<Array<T>, void> : std::true_type {};
+template <typename T, typename TagsT>
+struct is_ref_array<Array<T, TagsT>, void> : std::true_type {};
 
 template <typename T, class enable = void>
 struct is_ref_enumerate : std::false_type {}; // NOLINT
@@ -215,7 +258,7 @@ struct is_ref_enumerate<Enumerate<T, N>, void> : std::true_type {};
 
 template <typename T, typename U, class enable = void>
 struct MemberMetadata {
-    using raw_type                        = unwrap_tags_t<T>;
+    using raw_type                        = field_accessor_t<T>;
     using parent_type                     = U;
     constexpr static bool IsRef           = std::is_reference_v<raw_type>;
     constexpr static bool IsLRef          = std::is_lvalue_reference_v<raw_type>;
@@ -223,15 +266,15 @@ struct MemberMetadata {
     constexpr static bool IsMemberPointer = std::is_member_object_pointer_v<raw_type>;
     constexpr static bool IsOk            = IsRef || IsLambda || IsMemberPointer;
 
-    constexpr static auto tags = unwrap_tags_v<T>; // NOLINT
+    constexpr static auto tags = field_tags_v<T>; // NOLINT
     static constexpr decltype(auto) get(auto&& accessor, U& obj) noexcept {
         using AccessorType = std::decay_t<decltype(accessor)>;
         if constexpr (std::is_member_object_pointer_v<AccessorType>) {
             return obj.*accessor;
         } else if constexpr (is_member_ref_function<AccessorType, U>) {
             return accessor(obj); // lambda 或函数
-        } else if constexpr (is_tagged_value_v<AccessorType>) {
-            return get(accessor.value, obj);
+        } else if constexpr (is_field_spec_v<AccessorType>) {
+            return get(accessor.accessor, obj);
         } else {
             return accessor; // 直接引用
         }
@@ -485,23 +528,23 @@ concept has_name_function = requires {
 template <typename T>
 struct ReflectHelper {
     static constexpr auto getNames() {
-        if constexpr (detail::has_name_function<T>) {
-            return detail::MetaPrivate<T>::names();
+        if constexpr (has_name_function<T>) {
+            return MetaPrivate<T>::names();
         } else {
             return std::array<std::string_view, 0>{};
         }
     }
     template <typename U>
     static constexpr decltype(auto) getValues(U&& obj) {
-        if constexpr (detail::has_value_function_one<T>) {
-            return detail::MetaPrivate<T>::value(std::forward<U>(obj));
+        if constexpr (has_value_function_one<T>) {
+            return MetaPrivate<T>::value(std::forward<U>(obj));
         } else {
             return getValues();
         }
     }
     static constexpr decltype(auto) getValues() {
-        if constexpr (detail::has_value_function<T>) {
-            return detail::MetaPrivate<T>::value();
+        if constexpr (has_value_function<T>) {
+            return MetaPrivate<T>::value();
         } else {
             return std::forward_as_tuple();
         }
@@ -565,10 +608,10 @@ private:
                 static_assert(detail::perform_all_checks<values_type, ContextType>(), "tags checks failed");
                 return (detail::tuple_unwrap_t<values_type, ContextType>*)nullptr;
             } else {
-                static_assert(detail::perform_check<resolve_member_type_t<unwrap_tags_t<values_type>, ContextType>,
-                                                    unwrap_tags_v<values_type>>(),
+                static_assert(detail::perform_check<resolve_member_type_t<field_accessor_t<values_type>, ContextType>,
+                                                    field_tags_v<values_type>>(),
                               "tags checks failed");
-                return (std::tuple<resolve_member_type_t<unwrap_tags_t<values_type>, ContextType>>*)nullptr;
+                return (std::tuple<resolve_member_type_t<field_accessor_t<values_type>, ContextType>>*)nullptr;
             }
         } else {
             return (std::tuple<>*)nullptr;
@@ -579,10 +622,18 @@ private:
             using values_type =
                 std::decay_t<decltype(detail::ReflectHelper<T>::getValues(std::declval<std::decay_t<T>&>()))>;
             using ContextType = std::decay_t<T>;
-            if constexpr (detail::is_std_tuple_v<values_type>) {
+            if constexpr (detail::is_local_ref_object<T> || detail::is_local_ref_array<T>) {
+                return T::Neko::value.tags;
+            } else if constexpr (detail::is_meta_ref_object<T> || detail::is_meta_ref_array<T>) {
+                return Meta<T>::value.tags;
+            } else if constexpr (requires { T::Neko::field_tags; }) {
+                return T::Neko::field_tags;
+            } else if constexpr (requires { Meta<T>::field_tags; }) {
+                return Meta<T>::field_tags;
+            } else if constexpr (detail::is_std_tuple_v<values_type>) {
                 return detail::tuple_tags_unwrap_v<values_type, ContextType>;
             } else {
-                return std::make_tuple(unwrap_tags_v<values_type>);
+                return std::make_tuple(field_tags_v<values_type>);
             }
         } else {
             return std::make_tuple();
@@ -604,7 +655,7 @@ public:
             [&]<std::size_t... Is>(std::index_sequence<Is...>) {
                 auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
                     auto&& val  = detail::value_ref(std::get<I>(values), obj);
-                    auto&& tags = std::get<I>(value_tags);
+                    auto&& tags = std::get<I>(field_tags);
                     // 编译期根据回调函数的签名选择调用方式
                     if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view, decltype(tags)>) {
                         static_assert(detail::is_std_array<names_type>::size == Size,
@@ -631,7 +682,7 @@ public:
             }(std::make_index_sequence<Size>{});
         } else {
             auto&& val  = detail::value_ref(values, obj);
-            auto&& tags = std::get<0>(value_tags);
+            auto&& tags = std::get<0>(field_tags);
             if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view, decltype(tags)>) {
                 static_assert(detail::is_std_array<names_type>::size == 1,
                               "type has no names meta or names size mismatch");
@@ -761,7 +812,7 @@ public:
     }
 
     using value_types                = std::remove_pointer_t<decltype(_types())>;
-    static constexpr auto value_tags = _tags();                             // NOLINT
+    static constexpr auto field_tags = _tags();                             // NOLINT
     static constexpr int value_count = std::tuple_size<value_types>::value; // NOLINT
 };
 

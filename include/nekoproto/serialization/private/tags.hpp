@@ -12,7 +12,10 @@
 
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/global/reflect.hpp"
+#include "nekoproto/global/string_literal.hpp"
 
+#include <cstddef>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -75,6 +78,15 @@ constexpr bool perform_check() {
         return true;
     }
 }
+
+template <typename T>
+constexpr std::string_view tag_string_view(const T& value) {
+    if constexpr (requires { value.view(); }) {
+        return value.view();
+    } else {
+        return std::string_view{value};
+    }
+}
 } // namespace detail
 
 namespace tag_access {
@@ -82,6 +94,8 @@ template <typename T>
 constexpr bool is_flat(const T& tags) {
     if constexpr (requires { tags.flat; }) {
         return tags.flat;
+    } else if constexpr (requires { tags.base; }) {
+        return is_flat(tags.base);
     } else {
         return false;
     }
@@ -91,6 +105,8 @@ template <typename T>
 constexpr bool is_skipable(const T& tags) {
     if constexpr (requires { tags.skipable; }) {
         return tags.skipable;
+    } else if constexpr (requires { tags.base; }) {
+        return is_skipable(tags.base);
     } else {
         return false;
     }
@@ -99,7 +115,32 @@ constexpr bool is_skipable(const T& tags) {
 template <typename T>
 constexpr bool is_fixed_length(const T& tags) {
     if constexpr (requires { tags.fixedLength; }) {
-        return tags.fixedLength;
+        return tags.fixedLength > 0;
+    } else if constexpr (requires { tags.base; }) {
+        return is_fixed_length(tags.base);
+    } else {
+        return false;
+    }
+}
+
+template <typename Value, typename T>
+constexpr std::size_t fixed_length(const T& tags) {
+    if constexpr (requires { tags.fixedLength; }) {
+        const auto size = static_cast<std::size_t>(tags.fixedLength);
+        return size == 1 ? sizeof(Value) : size;
+    } else if constexpr (requires { tags.base; }) {
+        return fixed_length<Value>(tags.base);
+    } else {
+        return 0;
+    }
+}
+
+template <typename T>
+constexpr bool is_unframed(const T& tags) {
+    if constexpr (requires { tags.unframed; }) {
+        return tags.unframed;
+    } else if constexpr (requires { tags.base; }) {
+        return is_unframed(tags.base);
     } else {
         return false;
     }
@@ -109,56 +150,100 @@ template <typename T>
 constexpr bool is_raw_string(const T& tags) {
     if constexpr (requires { tags.rawString; }) {
         return tags.rawString;
+    } else if constexpr (requires { tags.base; }) {
+        return is_raw_string(tags.base);
     } else {
         return false;
     }
 }
+
+template <typename T>
+constexpr std::string_view comment(const T& tags) {
+    static_cast<void>(tags);
+    using Tag = std::remove_cvref_t<T>;
+    if constexpr (requires { Tag::comment; }) {
+        return detail::tag_string_view(Tag::comment);
+    } else {
+        return {};
+    }
+}
+
+template <typename T>
+constexpr std::string_view recursive_comment(const T& tags) {
+    static_cast<void>(tags);
+    using Tag = std::remove_cvref_t<T>;
+    if constexpr (requires { Tag::comment; }) {
+        return detail::tag_string_view(Tag::comment);
+    } else if constexpr (requires { Tag::base; }) {
+        return recursive_comment(Tag::base);
+    } else {
+        return {};
+    }
+}
+
+template <typename T>
+constexpr bool has_comment(const T& tags) {
+    return !comment(tags).empty();
+}
+
+template <typename T>
+constexpr bool has_recursive_comment(const T& tags) {
+    return !recursive_comment(tags).empty();
+}
+
+template <typename T>
+constexpr std::string_view name(const T& tags) {
+    static_cast<void>(tags);
+    using Tag = std::remove_cvref_t<T>;
+    if constexpr (requires { Tag::name; }) {
+        return detail::tag_string_view(Tag::name);
+    } else {
+        return {};
+    }
+}
+
+template <typename T>
+constexpr std::string_view recursive_name(const T& tags) {
+    static_cast<void>(tags);
+    using Tag = std::remove_cvref_t<T>;
+    if constexpr (requires { Tag::name; }) {
+        return detail::tag_string_view(Tag::name);
+    } else if constexpr (requires { Tag::base; }) {
+        return recursive_name(Tag::base);
+    } else {
+        return {};
+    }
+}
+
+template <typename T>
+constexpr bool has_name(const T& tags) {
+    return !name(tags).empty();
+}
+
+template <typename T>
+constexpr bool has_recursive_name(const T& tags) {
+    return !recursive_name(tags).empty();
+}
 } // namespace tag_access
-template <auto Tags, typename InnerValue, char mode = 0>
-struct TaggedValue;
 
-// --- The Core Wrapper Template ---
-template <auto Tags, typename InnerValue>
-struct TaggedValue<Tags, InnerValue, 1> {
-    using raw_type             = InnerValue;
-    using tag_type             = decltype(Tags); // 获取 Tag 的实际类型
-    constexpr static auto tags = Tags;           // NOLINT
-    InnerValue value;
-
-    operator InnerValue() && noexcept { return std::move(value); }
-    operator InnerValue() const& noexcept { return value; }
-    operator InnerValue() & noexcept { return value; }
-    auto operator*() const noexcept { return value; }
-    auto operator->() const noexcept { return &value; }
-    auto operator*() noexcept { return value; }
-    auto operator->() noexcept { return &value; }
-    auto& operator=(InnerValue&& value) noexcept {
-        this->value = std::move(value);
-        return *this;
-    }
-    auto& operator=(const InnerValue& value) noexcept {
-        this->value = value;
-        return *this;
-    }
-    operator raw_type&&() noexcept { return std::move(value); }
-    operator const raw_type&() const noexcept { return value; }
-    operator raw_type&() noexcept { return value; }
+template <auto Tags, typename Accessor>
+struct FieldSpec {
+    using accessor_type        = Accessor;
+    using raw_type             = Accessor;
+    using tag_type             = decltype(Tags);
+    constexpr static auto tags = Tags; // NOLINT
+    Accessor accessor;
 };
 
-template <auto Tags, typename InnerValue>
-struct TaggedValue<Tags, InnerValue, 0> : TaggedValue<Tags, InnerValue, 1> {
-    static_assert(detail::perform_check<InnerValue, Tags>(), "TaggedValue is not valid for this type");
-};
-
-template <auto Tags, typename InnerValue>
-inline constexpr auto make_tags(InnerValue&& value) { // NOLINT
-    if constexpr (detail::is_resolvable_without_context_v<std::decay_t<InnerValue>>) {
+template <auto Tags, typename Accessor>
+inline constexpr auto make_tags(Accessor&& accessor) { // NOLINT
+    if constexpr (detail::is_resolvable_without_context_v<std::decay_t<Accessor>>) {
         // 如果可以，立即用解析出的类型进行检查
-        using ResolvedType = detail::resolve_without_context_t<std::decay_t<InnerValue>>;
+        using ResolvedType = detail::resolve_without_context_t<std::decay_t<Accessor>>;
         static_assert(detail::perform_check<ResolvedType, Tags>(),
                       "Tag check failed for a member of type, please check the tag definition");
     }
-    return TaggedValue<Tags, InnerValue, 1>{std::forward<InnerValue>(value)};
+    return FieldSpec<Tags, Accessor>{std::forward<Accessor>(accessor)};
 }
 
 struct NoTags {
@@ -171,19 +256,123 @@ struct NoTags {
     }
 };
 
-// --- Helper Trait to Identify TaggedValue ---
+template <ConstexprString Comment, auto BaseTags = NoTags{}>
+struct CommentTag {
+    constexpr static auto comment = Comment;  // NOLINT
+    constexpr static auto base    = BaseTags; // NOLINT
+
+    template <auto NewBase>
+    using rebind_base = CommentTag<Comment, NewBase>;
+
+    template <typename T, auto /*tags*/>
+    constexpr static bool constexpr_check() { // NOLINT
+        return detail::perform_check<T, BaseTags>();
+    }
+};
+
+template <ConstexprString Comment, auto BaseTags = NoTags{}>
+inline constexpr auto comment_tag = CommentTag<Comment, BaseTags>{}; // NOLINT
+
+template <ConstexprString Name, auto BaseTags = NoTags{}>
+struct NameTag {
+    constexpr static auto name = Name;     // NOLINT
+    constexpr static auto base = BaseTags; // NOLINT
+
+    template <auto NewBase>
+    using rebind_base = NameTag<Name, NewBase>;
+
+    template <typename T, auto /*tags*/>
+    constexpr static bool constexpr_check() { // NOLINT
+        return detail::perform_check<T, BaseTags>();
+    }
+};
+
+template <ConstexprString Name, auto BaseTags = NoTags{}>
+inline constexpr auto rename_tag = NameTag<Name, BaseTags>{}; // NOLINT
+
+namespace detail {
+template <typename Tag, auto NewBase>
+constexpr auto rebind_tag_base() {
+    using CleanTag = std::remove_cvref_t<Tag>;
+    if constexpr (requires { typename CleanTag::template rebind_base<NewBase>; }) {
+        return typename CleanTag::template rebind_base<NewBase>{};
+    } else {
+        static_assert(always_false_v<CleanTag>,
+                      "Tag wrappers with recursive consumers must provide rebind_base<NewBase>");
+    }
+}
+} // namespace detail
+
+namespace tag_access {
 template <typename T>
-struct is_tagged_value : std::false_type {}; // NOLINT
-template <auto Tags, typename Inner, char mode>
-struct is_tagged_value<TaggedValue<Tags, Inner, mode>> : std::true_type {};
-template <auto Tags, typename Inner, char mode>
-struct is_tagged_value<TaggedValue<Tags, Inner, mode>&> : std::true_type {};
-template <auto Tags, typename Inner, char mode>
-struct is_tagged_value<const TaggedValue<Tags, Inner, mode>> : std::true_type {};
-template <auto Tags, typename Inner, char mode>
-struct is_tagged_value<const TaggedValue<Tags, Inner, mode>&> : std::true_type {};
+constexpr auto consume_comment(const T& tags) {
+    using Tag = std::remove_cvref_t<T>;
+    if constexpr (requires { Tag::comment; Tag::base; }) {
+        return Tag::base;
+    } else {
+        return tags;
+    }
+}
+
 template <typename T>
-inline constexpr bool is_tagged_value_v = is_tagged_value<std::decay_t<T>>::value; // NOLINT
+constexpr auto consume_recursive_comment(const T& tags) {
+    using Tag = std::remove_cvref_t<T>;
+    if constexpr (requires { Tag::comment; Tag::base; }) {
+        return Tag::base;
+    } else if constexpr (requires { Tag::base; }) {
+        if constexpr (has_recursive_comment(Tag::base)) {
+            constexpr auto consumedBase = consume_recursive_comment(Tag::base);
+            return detail::rebind_tag_base<Tag, consumedBase>();
+        } else {
+            return tags;
+        }
+    } else {
+        return tags;
+    }
+}
+
+template <typename T>
+constexpr auto consume_name(const T& tags) {
+    using Tag = std::remove_cvref_t<T>;
+    if constexpr (requires { Tag::name; Tag::base; }) {
+        return Tag::base;
+    } else {
+        return tags;
+    }
+}
+
+template <typename T>
+constexpr auto consume_recursive_name(const T& tags) {
+    using Tag = std::remove_cvref_t<T>;
+    if constexpr (requires { Tag::name; Tag::base; }) {
+        return Tag::base;
+    } else if constexpr (requires { Tag::base; }) {
+        if constexpr (has_recursive_name(Tag::base)) {
+            constexpr auto consumedBase = consume_recursive_name(Tag::base);
+            return detail::rebind_tag_base<Tag, consumedBase>();
+        } else {
+            return tags;
+        }
+    } else {
+        return tags;
+    }
+}
+
+} // namespace tag_access
+
+// --- Helper Trait to Identify FieldSpec ---
+template <typename T>
+struct is_field_spec : std::false_type {}; // NOLINT
+template <auto Tags, typename Accessor>
+struct is_field_spec<FieldSpec<Tags, Accessor>> : std::true_type {};
+template <auto Tags, typename Accessor>
+struct is_field_spec<FieldSpec<Tags, Accessor>&> : std::true_type {};
+template <auto Tags, typename Accessor>
+struct is_field_spec<const FieldSpec<Tags, Accessor>> : std::true_type {};
+template <auto Tags, typename Accessor>
+struct is_field_spec<const FieldSpec<Tags, Accessor>&> : std::true_type {};
+template <typename T>
+inline constexpr bool is_field_spec_v = is_field_spec<std::decay_t<T>>::value; // NOLINT
 
 template <typename T, class enable = void>
 struct unwrap_tags { // NOLINT
@@ -192,8 +381,8 @@ struct unwrap_tags { // NOLINT
 };
 
 template <typename T>
-struct unwrap_tags<T, std::enable_if_t<is_tagged_value_v<T>>> {
-    using type                 = typename std::decay_t<T>::raw_type;
+struct unwrap_tags<T, std::enable_if_t<is_field_spec_v<T>>> {
+    using type                 = typename std::decay_t<T>::accessor_type;
     constexpr static auto tags = std::decay_t<T>::tags; // NOLINT
 };
 
@@ -203,6 +392,21 @@ using unwrap_tags_t = typename unwrap_tags<T>::type;
 template <typename T>
 inline constexpr auto unwrap_tags_v = unwrap_tags<T>::tags; // NOLINT
 
+template <typename T>
+constexpr decltype(auto) field_accessor(T&& value) noexcept {
+    if constexpr (is_field_spec_v<std::remove_cvref_t<T>>) {
+        return (std::forward<T>(value).accessor);
+    } else {
+        return std::forward<T>(value);
+    }
+}
+
+template <typename T>
+using field_accessor_t = unwrap_tags_t<T>;
+
+template <typename T>
+inline constexpr auto field_tags_v = unwrap_tags_v<T>; // NOLINT
+
 /**
  * @brief 上下文感知的成员类型解析器
  *
@@ -211,7 +415,7 @@ inline constexpr auto unwrap_tags_v = unwrap_tags<T>::tags; // NOLINT
  */
 template <typename Accessor, typename HostType>
 struct resolve_member_type { // NOLINT
-    using type = unwrap_tags_t<Accessor>;
+    using type = field_accessor_t<Accessor>;
 };
 
 // 为可调用对象 (如 Lambda) 提供特化版本
@@ -254,32 +458,24 @@ struct JsonTags {
             }
         }
         if constexpr (tags.skipable) {
-            // 如果 skipable 为 true，则包裹的类型必须是可空的类型, 如 std::optional
-            // 或者包含 std::monostate 的 std::variant
-            constexpr bool IsEmptyAble = requires(T value) {
-                { value.reset() }; // 需要支持 reset 操作
-                { *value };        // 需要支持解引用操作
-            } || requires(T value) {
-                { value.index() };                  // 需要支持 index 操作
-                { value.valueless_by_exception() }; // 需要支持 valueless_by_exception 操作
-                { value.template emplace<std::monostate>() };
-            };
-            static_assert(IsEmptyAble, "skipable is true, but the type is not emptyable");
-            return IsEmptyAble;
+            // Missing fields are handled by the enclosing object parser. Any field
+            // type can be skipped because deserialization targets an existing object.
+            return true;
         }
         return true;
     }
 };
 
 struct BinaryTags {
-    bool fixedLength = false;
+    std::size_t fixedLength = 0;
+    bool unframed           = false;
 };
 namespace detail {
 template <typename ValuesTuple, typename ContextType, std::size_t... Is>
 constexpr bool perform_all_checks_impl(std::index_sequence<Is...> /*unused*/) {
     // 对元组中的每一个元素，都调用 perform_check
-    return (perform_check<resolve_member_type_t<unwrap_tags_t<std::tuple_element_t<Is, ValuesTuple>>, ContextType>,
-                          unwrap_tags_v<std::tuple_element_t<Is, ValuesTuple>>>() &&
+    return (perform_check<resolve_member_type_t<field_accessor_t<std::tuple_element_t<Is, ValuesTuple>>, ContextType>,
+                          field_tags_v<std::tuple_element_t<Is, ValuesTuple>>>() &&
             ...);
 }
 

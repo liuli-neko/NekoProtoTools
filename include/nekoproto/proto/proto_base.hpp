@@ -7,13 +7,13 @@
  *
  * @section intro_sec Introduction
  *
- * NekoProtoTools is a c++ library for serialize and deserialize proto message.
- * no external code generator required, more easy to use. but support only c++.
+ * NekoProtoTools is a C++ library for serializing and deserializing protocol messages.
+ * It does not require an external code generator.
  * If you don't need cross language protocols, this would be a good choice
  *
  * @section usage_sec Usage
- * you need only include this header file, and inherit the ProtoBase, and
- * use CS_SERIALIZE specify the members you want to serialize.
+ * Include this header and use NEKO_SERIALIZER to expose message fields,
+ * then use NEKO_DECLARE_PROTOCOL to select a serialization backend.
  *
  * @section example_sec Example
  * @code {.c++}
@@ -25,7 +25,7 @@
  *     int a;
  *     std::string b;
  *
- *     NEKO_SERIALIZE(a, b)
+ *     NEKO_SERIALIZER(a, b)
  *     NEKO_DECLARE_PROTOCOL(ProtoMessage, JsonSerializer)
  * }
  *

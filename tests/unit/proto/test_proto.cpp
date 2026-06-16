@@ -5,7 +5,7 @@
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/to_string.hpp"
-#include "nekoproto/serialization/types/types.hpp"
+#include "nekoproto/serialization/types/binary_data.hpp"
 
 NEKO_USE_NAMESPACE
 

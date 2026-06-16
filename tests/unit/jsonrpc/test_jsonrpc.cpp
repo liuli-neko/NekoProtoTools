@@ -47,6 +47,17 @@ struct MXXParams {
     NEKO_SERIALIZER(param1, param2, param3)
 };
 
+struct UnsupportedRpcValue {
+    UnsupportedRpcValue() {}
+};
+
+static_assert(traits::Serializable<int>);
+static_assert(traits::Serializable<std::string>);
+static_assert(traits::Serializable<std::vector<int>>);
+static_assert(traits::Serializable<MXXParams>);
+static_assert(!traits::Serializable<UnsupportedRpcValue>);
+static_assert(traits::IsSerializable<void>::value);
+
 int add(int aa, int bb) { return aa + bb; }
 
 struct MyFunc {

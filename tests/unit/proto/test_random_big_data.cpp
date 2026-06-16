@@ -10,8 +10,6 @@
 #include "nekoproto/serialization/json/simd_json_serializer.hpp"
 #endif
 #include "nekoproto/serialization/to_string.hpp"    // IWYU pragma: export
-#include "nekoproto/serialization/types/map.hpp"    // IWYU pragma: export
-#include "nekoproto/serialization/types/vector.hpp" // IWYU pragma: export
 
 NEKO_USE_NAMESPACE
 struct TestStruct1 {

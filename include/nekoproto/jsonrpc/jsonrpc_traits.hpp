@@ -24,8 +24,6 @@
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/private/traits.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
-#include "nekoproto/serialization/types/types.hpp"
-#include "nekoproto/serialization/types/unordered_map.hpp"
 
 NEKO_BEGIN_NAMESPACE
 namespace detail {
@@ -43,10 +41,7 @@ namespace traits {
 // MARK: serialization traits
 template <typename T>
 concept Serializable =
-    (traits::has_method_save<std::decay_t<T>, JsonSerializer::OutputSerializer> ||
-     traits::has_function_save<std::decay_t<T>, JsonSerializer::OutputSerializer> || std::is_same_v<T, const char*>) &&
-    (traits::has_method_load<std::decay_t<T>, JsonSerializer::OutputSerializer> ||
-     traits::has_function_load<std::decay_t<T>, JsonSerializer::OutputSerializer> || std::is_same_v<T, const char*>);
+    NEKO_NAMESPACE::detail::parser_serializable<JsonSerializer::Reader, JsonSerializer::Writer, std::decay_t<T>>;
 template <typename T, class enable = void>
 struct IsSerializable : std::false_type {};
 template <Serializable T>
@@ -205,39 +200,6 @@ struct TypeName<const T, void> {
 template <typename T, ConstexprString... ArgNames>
 struct SerializerHelperObject {
     T& mTuple;
-    template <typename Serializer>
-    bool save(Serializer& sa) const NEKO_NOEXCEPT {
-        if constexpr (sizeof...(ArgNames) > 0) {
-            bool ret                                                        = sa.startObject(sizeof...(ArgNames));
-            std::array<std::string_view, sizeof...(ArgNames)> argNamesArray = {ArgNames.view()...};
-            ret = [&sa, &argNamesArray, this]<std::size_t... Is>(std::index_sequence<Is...>) {
-                return ((sa(make_name_value_pair(argNamesArray[Is], std::get<Is>(mTuple)))) && ...);
-            }(std::make_index_sequence<sizeof...(ArgNames)>{});
-            return ret && sa.endObject();
-        } else {
-            return sa(mTuple);
-        }
-    }
-
-    template <typename Serializer>
-    bool load(Serializer& sa) NEKO_NOEXCEPT {
-        if (sa.isObject()) {
-            if constexpr (sizeof...(ArgNames) > 0) {
-                bool ret = sa.startNode();
-                if (ret) {
-                    std::array<std::string_view, sizeof...(ArgNames)> argNamesArray = {ArgNames.view()...};
-                    ret = [&sa, &argNamesArray, this]<std::size_t... Is>(std::index_sequence<Is...>) {
-                        return ((sa(make_name_value_pair(argNamesArray[Is], std::get<Is>(mTuple)))) && ...);
-                    }(std::make_index_sequence<sizeof...(ArgNames)>{});
-                }
-                if (sa.finishNode() && ret) {
-                    return ret;
-                }
-            }
-            return false;
-        }
-        return sa(mTuple);
-    }
 
     struct Neko {
         static constexpr std::array<std::string_view, sizeof...(ArgNames)> names = {ArgNames.view()...}; // NOLINT

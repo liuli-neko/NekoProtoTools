@@ -23,6 +23,12 @@
 #define NEKO_BEGIN_NAMESPACE namespace NEKO_NAMESPACE {
 #define NEKO_END_NAMESPACE   }
 #define NEKO_USE_NAMESPACE   using namespace NEKO_NAMESPACE;
+
+NEKO_BEGIN_NAMESPACE
+template <typename>
+inline constexpr bool always_false_v = false;
+NEKO_END_NAMESPACE
+
 #if defined(_MSVC_LANG) && _MSVC_LANG > __cplusplus
     #define _NEKO_CPP_RAW_VER _MSVC_LANG
 #else

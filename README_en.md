@@ -85,9 +85,6 @@ Only include the basic header file and use the `NEKO_SERIALIZER` macro to mark m
 ```cpp
 #include <nekoproto/serialization/serializer_base.hpp>
 #include <nekoproto/serialization/json_serializer.hpp> // Use JSON serializer
-#include <nekoproto/serialization/types/string.hpp>    // Support for std::string
-#include <nekoproto/serialization/types/vector.hpp>    // Support for std::vector
-// #include <nekoproto/serialization/types/types.hpp>  // Includes all supported type headers
 #include <iostream>
 #include <string>
 #include <vector>
@@ -146,7 +143,6 @@ If you need protocol management, reflection, and polymorphism support, include `
 #include <nekoproto/proto/proto_base.hpp>
 #include <nekoproto/serialization/serializer_base.hpp>
 #include <nekoproto/serialization/json_serializer.hpp> // Specify default serializer
-#include <nekoproto/serialization/types/string.hpp>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -233,11 +229,11 @@ Serializers are responsible for converting C++ objects into byte streams (serial
 *   **Built-in Serializers**:
     *   `JsonSerializer`: Uses RapidJSON or SIMDJson for JSON serialization/deserialization.
     *   `BinarySerializer`: Provides a compact binary serialization format.
-    *   `XmlSerializer`: Provides XML deserialization support (currently deserialization only).
+    *   `XmlSerializer`: Uses pugixml for XML serialization and deserialization.
 *   **Choosing a Serializer**:
     *   For basic serialization, directly instantiate the required `OutputSerializer` / `InputSerializer`.
     *   For protocol messages (`NEKO_DECLARE_PROTOCOL`), specify the default serializer during declaration.
-*   **Custom Serializers**: You can implement the `detail::OutputSerializer<YourSerializer>` and `detail::InputSerializer<YourSerializer>` interfaces to support custom formats. See [7. Custom Serializer](#7-custom-serializer).
+*   **Serialization Extensions**: Use `detail::CustomParser<R, W, T>` for custom types; new formats implement Reader/Writer backends. See [7. Serialization Extensions](#7-serialization-extensions).
 
 ### 5.2. Protocol Management (`ProtoFactory`, `IProto`)
 
@@ -274,8 +270,6 @@ This library provides a coroutine-based communication abstraction layer built up
 #include <nekoproto/communication/communication_base.hpp>
 #include <nekoproto/proto/proto_base.hpp>
 #include <nekoproto/serialization/json_serializer.hpp>
-#include <nekoproto/serialization/types/string.hpp>
-#include <nekoproto/serialization/types/vector.hpp> // Need to include headers for all used types
 
 #include <ilias/net.hpp>         // Ilias network library
 #include <ilias/platform.hpp>  // Ilias platform context
@@ -560,115 +554,44 @@ int main() {
 
 ## 6. Supported Types
 
-This library provides serialization support for numerous C++ standard library types through dedicated header files. You typically need to include the header for the specific type(s) you use (e.g., `nekoproto/serialization/types/vector.hpp` for `std::vector`) or include `nekoproto/serialization/types/types.hpp` to get all of them.
+Serialization backends include the common Parser set, so standard containers and basic types no longer require separate `serialization/types/*.hpp` headers.
 
 more details can be found in the [Supported Types Overview](https://github.com/liuli-neko/NekoProtoTools/wiki/Supported-Types-Overview).
 
 ---
 
-## 7. Custom Serializer
+## 7. Serialization Extensions
 
-If you need to support a serialization format not built into the library, you can implement a custom serializer. You need to inherit from `detail::OutputSerializer<CustomOutputSerializer>` and `detail::InputSerializer<CustomInputSerializer>` and implement their interfaces.
-
-Implementing details can be found in the [Implementing Custom Serializer](https://github.com/liuli-neko/NekoProtoTools/wiki/Implementing-Custom-Serializer).
-
-**Output Serializer Interface Skeleton**:
+To support a custom C++ type, specialize `detail::CustomParser<R, W, T>`. The implementation can reuse existing parsers and work across JSON, Binary, and XML backends.
 
 ```cpp
-#include <nekoproto/serialization/serializer_base.hpp>
+#include <nekoproto/serialization/parsing/parsers.hpp>
 
-using namespace NekoProto; // or NekoProto::detail
-
-class CustomOutputSerializer : public detail::OutputSerializer<CustomOutputSerializer> {
-public:
-    // Constructor, typically receives the output buffer
-    CustomOutputSerializer(std::vector<char>& out_buffer);
-
-    // --- Core save functions ---
-    // Save various basic types
-    bool saveValue(int8_t value); // Note: pass by value for fundamentals
-    bool saveValue(uint8_t value);
-    // ... other integer types (int16, uint16, int32, uint32, int64, uint64)
-    bool saveValue(float value);
-    bool saveValue(double value);
-    bool saveValue(bool value);
-    bool saveValue(const std::string& value); // Pass by const reference for objects
-    // bool saveValue(const char* value); // Optional
-    // bool saveValue(std::string_view value); // Optional (C++17+)
-
-    // Save named value (for object/struct members)
-    // Needs to handle the case where T is std::optional and has no value (usually skip output)
-    template <typename T>
-    bool saveValue(const NameValuePair<T>& value);
-
-    // --- Container/Structure Control ---
-    // Start array/list, size is the number of elements
-    bool startArray(std::size_t size);
-    // End array/list
-    bool endArray();
-    // Start object/struct, size is the number of members (might be -1 if unknown beforehand)
-    bool startObject(std::size_t size);
-    // End object/struct
-    bool endObject();
-
-    // --- Special Tag Handling ---
-    // Save container size tag (often used during array serialization, consistent with size in startArray)
-    template <typename T>
-    bool saveValue(SizeTag<T> const& size);
-
-    // End the entire serialization process, ensure all buffers are written
-    // Destructor should also ensure end() is called or writing is completed
-    bool end();
+struct StrongId {
+    std::uint64_t value = 0;
 };
+
+namespace NekoProto::detail {
+template <typename R, typename W>
+struct CustomParser<R, W, StrongId> {
+    template <typename Parent, typename Tags>
+    static ParserResult write(W& writer, const StrongId& id, const Parent& parent, const Tags& tags) {
+        return parser_write<R, W>(writer, id.value, parent, tags);
+    }
+
+    template <typename Tags>
+    static ParserResult read(typename R::InputValueType in, StrongId& id, const Tags& tags) {
+        return parser_read<R, W>(in, id.value, tags);
+    }
+
+    static parsing::schema::Type toSchema() {
+        return parser_schema<R, W, std::uint64_t>();
+    }
+};
+} // namespace NekoProto::detail
 ```
 
-**Input Serializer Interface Skeleton**:
-
-```cpp
-#include <nekoproto/serialization/serializer_base.hpp>
-
-using namespace NekoProto; // or NekoProto::detail
-
-class CustomInputSerializer : public detail::InputSerializer<CustomInputSerializer> {
-public:
-    // Constructor, typically receives the input buffer (pointer and size, or view)
-    CustomInputSerializer(const char* input_buffer, std::size_t size);
-    // Or use string_view or other input source
-    // CustomInputSerializer(std::string_view input_data);
-
-    // --- Status Check ---
-    // Return if the serializer is in a valid state (e.g., hasn't reached end, no parse errors)
-    explicit operator bool() const;
-
-    // --- Core load functions ---
-    // Load various basic types into the reference parameter
-    bool loadValue(int8_t& value);
-    bool loadValue(uint8_t& value);
-    // ... other integer types (int16, uint16, int32, uint32, int64, uint64)
-    bool loadValue(float& value);
-    bool loadValue(double& value);
-    bool loadValue(bool& value);
-    bool loadValue(std::string& value);
-
-    // Load named value (for object/struct members)
-    // Needs to be able to find the value by name and load it into value.value
-    template <typename T>
-    bool loadValue(const NameValuePair<T>& value); // Load into value.value
-
-    // --- Container/Structure Control ---
-    // Enter a node/element (e.g., move into an array)
-    // Might not be needed for all formats
-    bool startNode();
-    // Finish processing the current node/element (e.g., array fully read, return to parent)
-    // Might not be needed for all formats
-    bool finishNode();
-
-    // --- Special Tag Handling (Optional) ---
-    // Load container size tag (usually called before processing an array)
-    template <typename T>
-    bool loadValue(SizeTag<T>& value); // value.size will be populated
-};
-```
+To add a new data format, implement a backend with responsibilities matching the existing `rapid::Reader/Writer` or `binary::Reader/Writer`, then call `parser_write` and `parser_read` from its serializer entry points.
 
 ---
 
@@ -714,7 +637,7 @@ public:
 
 *   **v0.2.3**
     *   Unified most serialization calls to parenthesis expression `serializer(variable)`.
-    *   Special structures like `NameValuePair`, `SizeTag` no longer trigger node expansion; other objects without the `minimal_serializable` attribute trigger node expansion (like JSON nesting).
+    *   Adjusted node expansion rules for `NameValuePair` and nested objects.
     *   Supported SIMDJson as JSON input serialization backend (`simdjson::dom`).
     *   Supported almost all common STL containers.
     *   Added general support for `std::optional`.
