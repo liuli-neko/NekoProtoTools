@@ -5,7 +5,7 @@ target("test_json_serializer")
     add_defines("NEKO_PROTO_STATIC")
     add_includedirs("$(projectdir)/include")
     add_deps("NekoSerializer")
-    add_tests("cpp23", {group = "proto", run_timeout = 5000, languages = "c++23"})
+    add_tests("cpp" .. tostring(get_config("stdcxx")), {group = "proto", run_timeout = 5000, languages = stdcxx()})
     if is_plat("linux") then
         add_ldflags("-lgmock", {force = true})
     end
