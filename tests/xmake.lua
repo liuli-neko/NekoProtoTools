@@ -45,6 +45,11 @@ for _, file in ipairs(os.files("./**/test_*.cpp")) do
         goto continue
     end
 
+    local group = path.filename(path.directory(file))
+    if group == nil or group == "" or group == "." then
+        group = "base"
+    end
+
     -- Otherwise, create a target for this file, in most case, it should enough
     target(name)
         add_includedirs("$(projectdir)/include")
@@ -54,11 +59,12 @@ for _, file in ipairs(os.files("./**/test_*.cpp")) do
         add_defines("SIMDJSON_EXCEPTIONS=1")
         add_defines("NEKO_PROTO_STATIC")
         add_files(file, "../src/proto_base.cpp", "../src/jsonrpc.cpp")
+        set_group(group)
         -- set test in different cpp versions
         local cpp_versions = {stdcxx()}
         for i = 1, #cpp_versions do
-            add_tests(string.gsub(cpp_versions[i], '+', 'p', 2), 
-                      {group = "proto", 
+            add_tests(cpp_versions[i]:gsub("%+", "p", 2), 
+                      {group = group, 
                        kind = "binary", 
                        files = {"../src/proto_base.cpp", "../src/jsonrpc.cpp", file}, 
                        languages = cpp_versions[i], 

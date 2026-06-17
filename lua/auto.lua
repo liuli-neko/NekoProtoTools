@@ -40,6 +40,7 @@ function autofunc.auto_add_packages(target)
     
     if has_config("enable_communication") or has_config("enable_jsonrpc") then
         target:add("packages", "ilias", {public = true})
+        target:add("packages", "zeus_expected", {public = true})
     end
     
     if has_config("enable_tests") then

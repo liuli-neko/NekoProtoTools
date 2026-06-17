@@ -159,6 +159,13 @@ if has_config("enable_communication") or has_config("enable_jsonrpc") then
         -- configurations of required libraries
         add_requireconfs("**ilias", {version = "0.4.2", configs = { shared = is_kind("shared"), stdcxx = get_config("stdcxx")}})
     end
+    -- ilias requires zeus expected in c++20
+    -- if get_config("stdcxx") == 20 then
+    --     add_requires("zeus_expected")
+    --     if not has_config("3rd_custom") then
+    --         add_requireconfs("**zeus_expected", {version = "x.x.x", configs = { shared = is_kind("shared")}})
+    --     end
+    -- end
 end
 
 if has_config("enable_tests") then

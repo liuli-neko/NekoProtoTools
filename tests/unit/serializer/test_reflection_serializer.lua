@@ -4,11 +4,11 @@ target("test_reflection_serializer")
     add_defines("NEKO_PROTO_STATIC")
     add_includedirs("$(projectdir)/include")
     add_deps("NekoSerializer")
-    add_tests("cpp23", {group = "proto", run_timeout = 5000, languages = "c++23"})
+    add_tests("cpp" .. tostring(get_config("stdcxx")), {group = "serializer", run_timeout = 5000, languages = stdcxx()})
     if is_plat("linux") then
         add_ldflags("-lgmock", {force = true})
     end
-    set_group("proto")
+    set_group("serializer")
     add_files("test_reflection_serializer.cpp")
     on_load(function (target)
         import("lua.auto", {rootdir = os.projectdir()})
