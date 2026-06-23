@@ -9,6 +9,16 @@
 #include "nekoproto/serialization/serializer_base.hpp"
 
 NEKO_USE_NAMESPACE
+
+template <typename T>
+struct JsonRpcCompatTraits : detail::JsonRpcMethodTraits<detail::RpcMethodTraits<T>> {
+    using RpcTraits = detail::RpcMethodTraits<T>;
+    using RawReturnType = typename RpcTraits::RawReturnType;
+    using RawParamsType = typename RpcTraits::RawParamsType;
+    using FunctionType = typename RpcTraits::FunctionType;
+    constexpr static int NumParams = RpcTraits::NumParams;
+};
+
 struct TestStruct {
     int a;
     std::string b;
@@ -111,7 +121,7 @@ TEST(RefectNames, Test) { // NOLINT
 TEST(RpcMethodTraitsTest, FunctionType) {
     // Case 1: 无参，void 返回
     {
-        using Traits = detail::RpcMethodTraits<void()>;
+        using Traits = JsonRpcCompatTraits<void()>;
         static_assert(std::is_same_v<Traits::RawReturnType, void>);
         static_assert(std::is_same_v<Traits::ReturnType, std::optional<std::nullptr_t>>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<>>);
@@ -123,7 +133,7 @@ TEST(RpcMethodTraitsTest, FunctionType) {
     }
     // Case 2: 单参数不可序列化，void 返回
     {
-        using Traits = detail::RpcMethodTraits<void(std::string)>;
+        using Traits = JsonRpcCompatTraits<void(std::string)>;
         static_assert(std::is_same_v<Traits::RawReturnType, void>);
         static_assert(std::is_same_v<Traits::ReturnType, std::optional<std::nullptr_t>>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<std::string>>);
@@ -135,7 +145,7 @@ TEST(RpcMethodTraitsTest, FunctionType) {
     }
     // Case 3: 单参数可序列化，void 返回
     {
-        using Traits = detail::RpcMethodTraits<void(TestStruct)>;
+        using Traits = JsonRpcCompatTraits<void(TestStruct)>;
         static_assert(std::is_same_v<Traits::RawReturnType, void>);
         static_assert(std::is_same_v<Traits::ReturnType, std::optional<std::nullptr_t>>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<TestStruct>>);
@@ -147,7 +157,7 @@ TEST(RpcMethodTraitsTest, FunctionType) {
     }
     // Case 4: 多参数，void 返回
     {
-        using Traits = detail::RpcMethodTraits<void(TestStruct, std::string)>;
+        using Traits = JsonRpcCompatTraits<void(TestStruct, std::string)>;
         static_assert(std::is_same_v<Traits::RawReturnType, void>);
         static_assert(std::is_same_v<Traits::ReturnType, std::optional<std::nullptr_t>>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<TestStruct, std::string>>);
@@ -160,7 +170,7 @@ TEST(RpcMethodTraitsTest, FunctionType) {
 
     // Case 5: 无参，可序列化返回
     {
-        using Traits = detail::RpcMethodTraits<TestStruct()>;
+        using Traits = JsonRpcCompatTraits<TestStruct()>;
         static_assert(std::is_same_v<Traits::RawReturnType, TestStruct>);
         static_assert(std::is_same_v<Traits::ReturnType, std::optional<TestStruct>>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<>>);
@@ -172,7 +182,7 @@ TEST(RpcMethodTraitsTest, FunctionType) {
     }
     // Case 6: 单参数不可序列化，可序列化返回
     {
-        using Traits = detail::RpcMethodTraits<TestStruct(std::string)>;
+        using Traits = JsonRpcCompatTraits<TestStruct(std::string)>;
         static_assert(std::is_same_v<Traits::RawReturnType, TestStruct>);
         static_assert(std::is_same_v<Traits::ReturnType, std::optional<TestStruct>>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<std::string>>);
@@ -184,7 +194,7 @@ TEST(RpcMethodTraitsTest, FunctionType) {
     }
     // Case 7: 单参数可序列化，可序列化返回
     {
-        using Traits = detail::RpcMethodTraits<TestStruct(TestStruct)>;
+        using Traits = JsonRpcCompatTraits<TestStruct(TestStruct)>;
         static_assert(std::is_same_v<Traits::RawReturnType, TestStruct>);
         static_assert(std::is_same_v<Traits::ReturnType, std::optional<TestStruct>>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<TestStruct>>);
@@ -196,7 +206,7 @@ TEST(RpcMethodTraitsTest, FunctionType) {
     }
     // Case 8: 多参数，可序列化返回
     {
-        using Traits = detail::RpcMethodTraits<TestStruct(TestStruct, std::string)>;
+        using Traits = JsonRpcCompatTraits<TestStruct(TestStruct, std::string)>;
         static_assert(std::is_same_v<Traits::RawReturnType, TestStruct>);
         static_assert(std::is_same_v<Traits::ReturnType, std::optional<TestStruct>>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<TestStruct, std::string>>);
@@ -209,7 +219,7 @@ TEST(RpcMethodTraitsTest, FunctionType) {
 
     // Case 9: 无参，不可序列化返回
     {
-        using Traits = detail::RpcMethodTraits<int()>;
+        using Traits = JsonRpcCompatTraits<int()>;
         static_assert(std::is_same_v<Traits::RawReturnType, int>);
         static_assert(std::is_same_v<Traits::ReturnType, std::optional<int>>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<>>);
@@ -221,7 +231,7 @@ TEST(RpcMethodTraitsTest, FunctionType) {
     }
     // Case 10: 单参数不可序列化，不可序列化返回
     {
-        using Traits = detail::RpcMethodTraits<int(std::string)>;
+        using Traits = JsonRpcCompatTraits<int(std::string)>;
         static_assert(std::is_same_v<Traits::RawReturnType, int>);
         static_assert(std::is_same_v<Traits::ReturnType, std::optional<int>>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<std::string>>);
@@ -233,7 +243,7 @@ TEST(RpcMethodTraitsTest, FunctionType) {
     }
     // Case 11: 单参数可序列化，不可序列化返回
     {
-        using Traits = detail::RpcMethodTraits<int(TestStruct)>;
+        using Traits = JsonRpcCompatTraits<int(TestStruct)>;
         static_assert(std::is_same_v<Traits::RawReturnType, int>);
         static_assert(std::is_same_v<Traits::ReturnType, std::optional<int>>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<TestStruct>>);
@@ -245,7 +255,7 @@ TEST(RpcMethodTraitsTest, FunctionType) {
     }
     // Case 12: 多参数，不可序列化返回
     {
-        using Traits = detail::RpcMethodTraits<int(TestStruct, std::string)>;
+        using Traits = JsonRpcCompatTraits<int(TestStruct, std::string)>;
         static_assert(std::is_same_v<Traits::RawReturnType, int>);
         static_assert(std::is_same_v<Traits::ReturnType, std::optional<int>>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<TestStruct, std::string>>);
@@ -257,7 +267,7 @@ TEST(RpcMethodTraitsTest, FunctionType) {
     }
     // Case 13: 元组参数，可序列化返回
     {
-        using Traits = detail::RpcMethodTraits<int(std::tuple<int, std::string>)>;
+        using Traits = JsonRpcCompatTraits<int(std::tuple<int, std::string>)>;
         static_assert(std::is_same_v<Traits::RawReturnType, int>);
         static_assert(std::is_same_v<Traits::ReturnType, std::optional<int>>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<std::tuple<int, std::string>>>);
@@ -272,7 +282,7 @@ TEST(RpcMethodTraitsTest, FunctionType) {
 TEST(RpcMethodTraitsTest, FreeFunctions) {
     // Case 1: 无参，void 返回
     {
-        using Traits = detail::RpcMethodTraits<decltype(&free_func_void)>;
+        using Traits = JsonRpcCompatTraits<decltype(&free_func_void)>;
         static_assert(std::is_same_v<Traits::RawReturnType, void>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<>>);
         static_assert(std::is_same_v<Traits::ParamsTupleType, std::tuple<>>);
@@ -283,7 +293,7 @@ TEST(RpcMethodTraitsTest, FreeFunctions) {
     }
     // Case 2: 单参数，非 void 返回
     {
-        using Traits = detail::RpcMethodTraits<decltype(&free_func_one_arg)>;
+        using Traits = JsonRpcCompatTraits<decltype(&free_func_one_arg)>;
         static_assert(std::is_same_v<Traits::RawReturnType, int>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<int>>);
         static_assert(std::is_same_v<Traits::ParamsTupleType, std::tuple<int>>);
@@ -294,7 +304,7 @@ TEST(RpcMethodTraitsTest, FreeFunctions) {
     }
     // Case 3: 多参数
     {
-        using Traits = detail::RpcMethodTraits<decltype(&free_func_multi_args)>;
+        using Traits = JsonRpcCompatTraits<decltype(&free_func_multi_args)>;
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<int, const std::string&>>);
         static_assert(std::is_same_v<Traits::ParamsTupleType, std::tuple<int, std::string>>); // 检查是否移除了 const&
         static_assert(Traits::NumParams == 2);
@@ -304,7 +314,7 @@ TEST(RpcMethodTraitsTest, FreeFunctions) {
     }
     // Case 4: 可自动展开的结构体参数
     {
-        using Traits = detail::RpcMethodTraits<decltype(&free_func_auto_expand)>;
+        using Traits = JsonRpcCompatTraits<decltype(&free_func_auto_expand)>;
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<TestStruct>>);
         static_assert(std::is_same_v<Traits::ParamsTupleType, TestStruct>);
         static_assert(Traits::NumParams == 1);
@@ -314,7 +324,7 @@ TEST(RpcMethodTraitsTest, FreeFunctions) {
     }
     // Case 5: 单个 tuple 参数
     {
-        using Traits = detail::RpcMethodTraits<decltype(&free_func_tuple_arg)>;
+        using Traits = JsonRpcCompatTraits<decltype(&free_func_tuple_arg)>;
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<std::tuple<int, bool>>>);
         static_assert(std::is_same_v<Traits::ParamsTupleType, std::tuple<int, bool>>);
         static_assert(Traits::NumParams == 1);
@@ -327,7 +337,7 @@ TEST(RpcMethodTraitsTest, FreeFunctions) {
 TEST(RpcMethodTraitsTest, MemberFunctions) {
     // Case 1: 静态成员函数 (用法同自由函数)
     {
-        using Traits = detail::RpcMethodTraits<decltype(&TestStructWithFunc::staticTestFunc)>;
+        using Traits = JsonRpcCompatTraits<decltype(&TestStructWithFunc::staticTestFunc)>;
         static_assert(std::is_same_v<Traits::RawReturnType, void>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<int>>);
         static_assert(Traits::NumParams == 1);
@@ -337,7 +347,7 @@ TEST(RpcMethodTraitsTest, MemberFunctions) {
     }
     // Case 2: 普通成员函数
     {
-        using Traits = detail::RpcMethodTraits<decltype(&TestStructWithFunc::testFunc)>;
+        using Traits = JsonRpcCompatTraits<decltype(&TestStructWithFunc::testFunc)>;
         static_assert(std::is_same_v<Traits::RawReturnType, void>);
         // 注意：成员函数的第一个参数(this指针)不应被萃取出来
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<int>>);
@@ -346,7 +356,7 @@ TEST(RpcMethodTraitsTest, MemberFunctions) {
     }
     // Case 3: 无参成员函数
     {
-        using Traits = detail::RpcMethodTraits<decltype(&TestStructWithFunc::testFuncNoArgs)>;
+        using Traits = JsonRpcCompatTraits<decltype(&TestStructWithFunc::testFuncNoArgs)>;
         static_assert(std::is_same_v<Traits::RawReturnType, void>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<>>);
         static_assert(Traits::NumParams == 0);
@@ -354,7 +364,7 @@ TEST(RpcMethodTraitsTest, MemberFunctions) {
     }
     // Case 4: const 成员函数
     {
-        using Traits = detail::RpcMethodTraits<decltype(&TestStructWithFunc::constTestFunc)>;
+        using Traits = JsonRpcCompatTraits<decltype(&TestStructWithFunc::constTestFunc)>;
         static_assert(std::is_same_v<Traits::RawReturnType, int>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<int>>);
         static_assert(Traits::NumParams == 1);
@@ -366,7 +376,7 @@ TEST(RpcMethodTraitsTest, LambdasAndFunctors) {
     // Case 1: 无捕获 Lambda
     {
         auto ll      = [](const int& ii) -> double { return ii; };
-        using Traits = detail::RpcMethodTraits<decltype(ll)>;
+        using Traits = JsonRpcCompatTraits<decltype(ll)>;
         static_assert(std::is_same_v<Traits::RawReturnType, double>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<const int&>>);
         static_assert(std::is_same_v<Traits::ParamsTupleType, std::tuple<int>>);
@@ -379,14 +389,14 @@ TEST(RpcMethodTraitsTest, LambdasAndFunctors) {
             (void)ss;
             (void)xx;
         };
-        using Traits = detail::RpcMethodTraits<decltype(ll)>;
+        using Traits = JsonRpcCompatTraits<decltype(ll)>;
         static_assert(std::is_same_v<Traits::RawReturnType, void>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<std::string>>);
         static_assert(Traits::NumParams == 1);
     }
     // Case 3: 函数对象 (Functor)
     {
-        using Traits = detail::RpcMethodTraits<MyFunctor>;
+        using Traits = JsonRpcCompatTraits<MyFunctor>;
         static_assert(std::is_same_v<Traits::RawReturnType, bool>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<int, const std::string&>>);
         static_assert(std::is_same_v<Traits::ParamsTupleType, std::tuple<int, std::string>>);
@@ -398,7 +408,7 @@ TEST(RpcMethodTraitsTest, StdFunction) {
     // std::function 的萃取结果应与其包装的签名一致
     {
         using FuncType = std::function<int(TestStruct, bool)>;
-        using Traits   = detail::RpcMethodTraits<FuncType>;
+        using Traits   = JsonRpcCompatTraits<FuncType>;
 
         static_assert(std::is_same_v<Traits::RawReturnType, int>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<TestStruct, bool>>);

@@ -225,6 +225,7 @@ if has_config("enable_jsonrpc") then
             set_configvar("NEKO_PROTO_STATIC", true)
         end
         add_headerfiles("include/(nekoproto/jsonrpc/**.hpp)")
+        add_headerfiles("include/(nekoproto/rpc/**.hpp)")
         add_includedirs("include")
         -- 添加非模板函数的实现文件
         add_files("src/jsonrpc.cpp")
