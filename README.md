@@ -634,6 +634,7 @@ struct CustomParser<R, W, StrongId> {
 
 *   [x] 支持 JSON-RPC 2.0 协议规范。
 *   [x] 兼容 JSON-RPC 1.0 协议。
+*   [ ] RPC 前端与后端分离重构，设计文档见 [`docs/rpc_refactor_plan.md`](docs/rpc_refactor_plan.md)。
 *   [ ] JSON-RPC 扩展。
 *   [x] 新增服务器内置方法：
     - `rpc.get_method_list`: 获取当前服务端所有方法列表

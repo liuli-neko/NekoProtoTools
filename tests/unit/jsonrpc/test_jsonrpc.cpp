@@ -108,6 +108,32 @@ struct Protocol {
     RpcMethodF<MyFunc::execute, "a", "b"> funcAdd2;
 };
 
+struct NestedLeaf {
+    RpcMethod<int(int), "sum", "value"> sum;
+    NEKO_SERIALIZER(sum)
+};
+
+struct NestedBranch {
+    NestedLeaf b;
+    NEKO_SERIALIZER(b)
+};
+
+struct NestedApi {
+    NestedBranch a;
+    RpcMethod<int(int), "root", "value"> root;
+    NEKO_SERIALIZER(a, root)
+};
+
+struct CommonApi {
+    RpcMethod<std::string(), "version"> version;
+    NEKO_SERIALIZER(version)
+};
+
+struct NoPrefixApi {
+    CommonApi common;
+    NEKO_SERIALIZER(make_tags<rpc_no_prefix_tag>(common))
+};
+
 class JsonRpcTest : public ::testing::Test {
 public:
     void SetUp() override {}
@@ -119,14 +145,17 @@ public:
 TEST_F(JsonRpcTest, BindAndCall) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
-    auto listenerRet =
-        detail::make_tcp_stream_server("tcp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS)).wait();
-    server.setListener(std::move(listenerRet.value()));
-    auto tcpclient = detail::make_tcp_stream_client("tcp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS)).wait();
-    if (!tcpclient) {
-        std::cout << tcpclient.error().message() << std::endl;
-    }
-    client.setTransport(std::move(tcpclient.value()));
+    auto serverEndpoint = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS) +
+                                                          "-127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS)))
+                              .wait()
+                              .value();
+    auto clientEndpoint = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS) +
+                                                          "-127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS)))
+                              .wait()
+                              .value();
+
+    server.addTransport(std::move(serverEndpoint));
+    client.setTransport(std::move(clientEndpoint));
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server->test2 = [](int a1, int b1) -> ilias::IoTask<void> {
@@ -388,6 +417,29 @@ TEST_F(JsonRpcTest, Batch) {
             ])")
                    .wait();
     std::cout << std::string_view{ret.data(), ret.size()} << std::endl;
+}
+
+TEST_F(JsonRpcTest, NestedApiNames) {
+    JsonRpcServer<NestedApi> server{*gContext};
+
+    EXPECT_EQ(server->root.name(), "root");
+    EXPECT_EQ(server->a.b.sum.name(), "a.b.sum");
+
+    server->a.b.sum = [](int value) -> ilias::IoTask<int> { co_return value + 1; };
+    auto ret = server.callMethod(R"({"jsonrpc":"2.0","method":"a.b.sum","params":[41],"id":1})").wait();
+    auto text = std::string_view{ret.data(), ret.size()};
+    EXPECT_NE(text.find(R"("result":42)"), std::string_view::npos);
+}
+
+TEST_F(JsonRpcTest, NoPrefixTagKeepsCppPath) {
+    JsonRpcServer<NoPrefixApi> server{*gContext};
+
+    EXPECT_EQ(server->common.version.name(), "version");
+
+    server->common.version = []() -> ilias::IoTask<std::string> { co_return "1.0"; };
+    auto ret = server.callMethod(R"({"jsonrpc":"2.0","method":"version","params":[],"id":1})").wait();
+    auto text = std::string_view{ret.data(), ret.size()};
+    EXPECT_NE(text.find(R"("result":"1.0")"), std::string_view::npos);
 }
 
 TEST_F(JsonRpcTest, Notification) {
