@@ -113,6 +113,28 @@ TEST(Reflection, RefObjectValue) {
     EXPECT_EQ(names[3], "member4");
 }
 
+consteval bool test_named_for_each_meta() {
+    std::array<std::string_view, Reflect<Test2>::value_count> names{};
+    std::size_t count = 0;
+    bool hasCustomTag = false;
+    bool hasJsonTag = false;
+    bool hasBinaryTag = false;
+    Reflect<Test2>::forEachMeta([&]<typename Field>(std::type_identity<Field>, std::string_view name, const auto& tags) {
+        names[count++] = name;
+        if constexpr (std::is_same_v<std::decay_t<decltype(tags)>, CustomTags>) {
+            hasCustomTag = true;
+        } else if constexpr (std::is_same_v<std::decay_t<decltype(tags)>, JsonTags>) {
+            hasJsonTag = true;
+        } else if constexpr (std::is_same_v<std::decay_t<decltype(tags)>, BinaryTags>) {
+            hasBinaryTag = true;
+        }
+    });
+    return count == Reflect<Test2>::value_count && names[0] == "member1" && names[1] == "member2" &&
+           names[2] == "member3" && names[3] == "member4" && hasCustomTag && hasJsonTag && hasBinaryTag;
+}
+
+static_assert(test_named_for_each_meta());
+
 struct Test3 {
     struct Private {
         int member1 = 213;
@@ -152,6 +174,30 @@ TEST(Reflection, RefObjectArray) {
     EXPECT_STREQ(test.member2.c_str(), "3453123");
     EXPECT_EQ(test.prr.member1, 244);
 }
+
+consteval bool test_positional_for_each_meta() {
+    std::size_t count = 0;
+    bool hasInt = false;
+    bool hasString = false;
+    bool hasBinaryTag = false;
+    bool hasJsonTag = false;
+    Reflect<Test3>::forEachMeta([&]<typename Field>(std::type_identity<Field>, const auto& tags) {
+        ++count;
+        if constexpr (std::is_same_v<Field, int>) {
+            hasInt = true;
+        } else if constexpr (std::is_same_v<Field, std::string>) {
+            hasString = true;
+        }
+        if constexpr (std::is_same_v<std::decay_t<decltype(tags)>, BinaryTags>) {
+            hasBinaryTag = true;
+        } else if constexpr (std::is_same_v<std::decay_t<decltype(tags)>, JsonTags>) {
+            hasJsonTag = true;
+        }
+    });
+    return count == Reflect<Test3>::value_count && hasInt && hasString && hasBinaryTag && hasJsonTag;
+}
+
+static_assert(test_positional_for_each_meta());
 
 struct Test4 {
     int member1 = 213;

@@ -25,8 +25,8 @@ Core features of this library:
 *   **Simplified Message Definition**: Using templates and macros, you only need to define the fields of your message and declare the members to be processed. Any custom C++ type can then be used as a serializable object or protocol message.
 *   **Unified Parser Serialization Layer**: JSON, Binary, XML, and schema generation share one set of type rules; RapidJSON, simdjson, pugixml, and the binary format are thin backends.
 *   **Field-Level Metadata Tags**: `make_tags<Tag>(field)` describes a field or call site instead of permanently annotating the type, so the same type can use different layouts in different contexts.
-*   **Basic Reflection Capability**: Provides a simple reflection mechanism, allowing protocol handling at runtime using name information.
-*   **Lightweight JSON-RPC 2.0 Implementation**: Based on templates and concise interfaces, allowing for convenient definition and implementation of RPC services.
+*   **Basic Static Reflection Capability**: Provides a simple static reflection mechanism for compile-time type checks and metadata extraction.
+*   **Generic RPC Frontend With Replaceable Backends**: RPC method declarations, registration, and calls are not tied to a specific wire protocol. Built-in backends currently include JSON-RPC and the compact binary `BinaryRpcBackend`.
 *   **Type Safety**: Utilizes C++ template metaprogramming for compile-time type checking.
 
 **Why This Library?**: Developers should focus their energy on business logic itself, rather than the tedious and error-prone construction and maintenance of protocols. This library aims to provide a stable, testable infrastructure to reduce the complexity of protocol handling.
@@ -453,141 +453,324 @@ int main() {
 }
 ```
 
-### 5.5. JSON-RPC 2.0
+### 5.5. Generic RPC Frontend
 
-This library provides a lightweight JSON-RPC 2.0 implementation based on Ilias, allowing for easy definition and invocation of remote procedures.
+The RPC module is now split into a generic frontend plus replaceable backends. `RpcMethod`, protocol sets, and the server/client calling API are no longer tied to JSON-RPC. JSON-RPC 2.0 is one built-in backend that handles the request/response envelope, ids, batch calls, notifications, parameter encoding, and error mapping.
 
-*   **Required Header**: `#include <nekoproto/jsonrpc/jsonrpc.hpp>`
-*   **Core Concepts**:
-    *   **RPC Module Definition**: Use a `struct` to define a module containing all RPC methods.
-    *   **`RpcMethod<Signature, "method_name">`**: Declare an RPC method within the module, specifying its function signature (`Signature`) and its method name in the JSON-RPC protocol (`"method_name"`). Supports all serializable types as parameters and return values.
-    *   **`JsonRpcServer<ModuleType>`**: RPC server class used to host the RPC module and handle client requests.
-    *   **`JsonRpcClient<ModuleType>`**: RPC client class used to connect to the server and invoke remote methods.
-    *   **Async Support**: Method implementations can return `ilias::Task<ResultType>` or `ilias::IoTask<ResultType>` to support asynchronous operations.
-*  **Server built-in methods**: 
-    * rpc.get_method_list:      Get a list of all methods on the current server
-    * rpc.get_bind_method_list: Get a list of all bound methods on the current server
-    * rpc.get_method_info:      Get a description of a specified method
-    * rpc.get_method_info_list: Get descriptions of all methods
-
-
-**Example**:
+*   **Generic Header**: `#include <nekoproto/rpc/rpc.hpp>`
+*   **JSON-RPC Backend**: `#include <nekoproto/jsonrpc/backend.hpp>`, or include the compatibility aggregate header `#include <nekoproto/jsonrpc/jsonrpc.hpp>`
+*   **Generic API**: `RpcServer<Backend, ProtocolSets...>` / `RpcClient<Backend, ProtocolSets...>`
+*   **Convenience Aliases**: `JsonRpcServer<Api>` is equivalent to `RpcServer<JsonRpcBackend, Api>`, and `JsonRpcClient<Api>` is equivalent to `RpcClient<JsonRpcBackend, Api>`
+*   **Async Support**: Method implementations can return plain values, `void`, or `ilias::IoTask<T>`. Client calls uniformly return `ilias::IoTask<T>`.
 
 ```cpp
-#include <nekoproto/jsonrpc/jsonrpc.hpp>
+#include <nekoproto/rpc/rpc.hpp>
+#include <nekoproto/jsonrpc/backend.hpp>
+#include <nekoproto/serialization/serializer_base.hpp>
+
 #include <ilias/platform.hpp>
 #include <ilias/task.hpp>
-#include <numeric> // for std::accumulate
-#include <iostream>
-#include <vector>
+#include <numeric>
 #include <string>
+#include <vector>
 
 NEKO_USE_NAMESPACE
-using namespace ilias;
 
-// 1. Define RPC service module and methods
-struct CalculatorModule {
-    // Method name "add", accepts two ints, returns int
-    RpcMethod<int(int, int), "add"> add;
-    // Method name "sum", accepts vector<int>, returns int
-    RpcMethod<int(std::vector<int>), "sum"> sum;
+struct CalculatorApi {
+    RpcMethod<int(int, int), "add", "lhs", "rhs"> add;
+    RpcMethod<int(std::vector<int>), "sum", "items"> sum;
+
+    NEKO_SERIALIZER(add, sum)
 };
 
-// 2. Implement server logic
-ilias::Task<> run_server(PlatformContext& context) {
-    JsonRpcServer<CalculatorModule> rpc_server; // Create server instance
+struct CommonApi {
+    RpcMethod<std::string(), "version"> version;
 
-    // --- Bind method implementations ---
-    // Can use lambdas, function pointers, std::function, etc.
-    rpc_server->add = [](int a, int b) -> int {
-        std::cout << "Server: add(" << a << ", " << b << ") called." << std::endl;
-        return a + b;
-    };
+    NEKO_SERIALIZER(version)
+};
 
-    // Coroutine method binding, returns ilias::IoTask<> (runs in IO context)
-    rpc_server->sum = [](std::vector<int> vec) -> ilias::IoTask<int> {
-        std::cout << "Server: sum(...) called asynchronously." << std::endl;
-        // Can execute other coroutine functions using co_await here
-        int result = std::accumulate(vec.begin(), vec.end(), 0);
-        co_return result; // Use co_return to return the result
-    };
+struct AppApi {
+    CalculatorApi calc;
+    CommonApi common;
 
-    // Start the server, listening on the specified address and port
-    std::string listen_address = "tcp://127.0.0.1:12335";
-    auto start_result = co_await rpc_server.start(listen_address);
-    if (!start_result) {
-        std::cerr << "Server failed to start: " << start_result.error().message() << std::endl;
-        co_return;
-    }
-    std::cout << "RPC Server listening on " << listen_address << std::endl;
-
-    // Wait for server stop signal (e.g., Ctrl+C or explicit stop)
-    co_await rpc_server.wait();
-    std::cout << "RPC Server stopped." << std::endl;
-}
-
-// 3. Implement client logic
-ilias::Task<> run_client(PlatformContext& context) {
-    JsonRpcClient<CalculatorModule> rpc_client; // Create client instance
-
-    // Connect to the server
-    std::string server_address = "tcp://127.0.0.1:12335";
-    auto connect_result = co_await rpc_client.connect(server_address);
-    if (!connect_result) {
-        std::cerr << "Client failed to connect: " << connect_result.error().message() << std::endl;
-        co_return;
-    }
-    std::cout << "Client connected to " << server_address << std::endl;
-
-    // --- Call remote methods ---
-    // Call add method
-    // The result is wrapped in ilias::Result<>
-    auto add_result = co_await rpc_client->add(10, 5);
-    if (add_result) {
-        std::cout << "Client: add(10, 5) = " << add_result.value() << std::endl; // Output: 15
-    } else {
-        // Handle error, e.g., connection issue or server-side exception
-        std::cerr << "Client: add call failed: " << add_result.error().message() << std::endl;
-    }
-
-    // Call sum method (async on server)
-    std::vector<int> nums = {1, 2, 3, 4, 5};
-    auto sum_result = co_await rpc_client->sum(nums);
-    if (sum_result) {
-        std::cout << "Client: sum({1,2,3,4,5}) = " << sum_result.value() << std::endl; // Output: 15
-    } else {
-         std::cerr << "Client: sum call failed: " << sum_result.error().message() << std::endl;
-    }
-
-    // Calling a non-existent method:
-    // Direct call like `rpc_client->multiply(2, 3)` would cause a compile error
-    // as `multiply` is not defined in `CalculatorModule`.
-    // To simulate calling a method the server doesn't have, you'd need manual
-    // JSON-RPC request construction, which isn't shown here. The server would
-    // typically return a standard JSON-RPC error ("Method not found").
-
-    rpc_client.close(); // Disconnect (closes underlying connection)
-    std::cout << "Client disconnected." << std::endl;
-}
+    // calc is registered as "calc.add" / "calc.sum".
+    // common keeps the C++ access path client->common.version(),
+    // while the remote method name is just "version".
+    NEKO_SERIALIZER(calc, make_tags<rpc_no_prefix_tag>(common))
+};
 
 int main() {
-    PlatformContext context;
+    ilias::PlatformContext context;
+    RpcServer<JsonRpcBackend, AppApi> server{context};
 
-    // Start server and client tasks
-    ilias_go run_server(context);
-    // Add delay before starting client
-    ilias_go ilias::sleep_for(std::chrono::milliseconds(100)).then([&]() {
-        return run_client(context);
-    });
+    server->calc.add = [](int lhs, int rhs) -> ilias::IoTask<int> {
+        co_return lhs + rhs;
+    };
+    server->calc.sum = [](std::vector<int> items) -> ilias::IoTask<int> {
+        co_return std::accumulate(items.begin(), items.end(), 0);
+    };
+    server->common.version = []() -> ilias::IoTask<std::string> {
+        co_return "1.0";
+    };
 
-
-    context.run(); // Run event loop
-
-    // Server might need explicit stopping mechanism in a real application
-    return 0;
+    auto response = server.callMethod(
+        R"({"jsonrpc":"2.0","method":"calc.add","params":[2,3],"id":1})"
+    ).wait();
+    std::string_view json{response.data(), response.size()};
 }
-
 ```
+
+Common call patterns:
+
+*   `server->method = func`: Bind a statically declared method from a protocol set.
+*   `server.bindMethod("name", func)` / `server.bindMethod<func>()`: Dynamically register an extra method.
+*   `client->calc.add(1, 2)`: Call a remote method through the C++ protocol path.
+*   `client.callRemote<int>("calc.add", 1, 2)`: Dynamically call by remote method name.
+*   `client->rpc.getMethodList()`: Call the built-in introspection methods.
+*   `client.notifyRemote<void>("name", args...)` or `client->method.notification(args...)`: Send a notification.
+*   `server.processMessage(bytes)` / `server.callMethod(json)`: Process one complete message without owning a connection. This is useful for tests, stdio, pipes, or custom dispatch.
+
+Servers and clients include a default `rpc` member for built-in introspection. Its remote method names use the `rpc.` prefix:
+
+*   `rpc.get_method_list`: Get all methods on the current server.
+*   `rpc.get_bind_method_list`: Get all currently bound methods on the server.
+*   `rpc.get_method_info`: Get the description of one method.
+*   `rpc.get_method_info_list`: Get descriptions for all methods.
+
+```cpp
+auto methods = client->rpc.getMethodList().wait();
+auto info = client->rpc.getMethodInfo("calc.add").wait();
+```
+
+RPC namespaces are derived by expanding reflected fields in protocol sets:
+
+```cpp
+struct AdminApi {
+    RpcMethod<void(), "reload"> reload;
+    NEKO_SERIALIZER(reload)
+};
+
+struct UserApi {
+    RpcMethod<std::string(std::uint64_t), "name", "id"> name;
+    NEKO_SERIALIZER(name)
+};
+
+struct Api {
+    AdminApi admin;
+    UserApi user;
+
+    NEKO_SERIALIZER(
+        admin,                                      // remote name "admin.reload"
+        make_tags<rpc_prefix_tag<"account">>(user) // remote name "account.name"
+    )
+};
+```
+
+`rpc_prefix_tag<"...">` and `rpc_no_prefix_tag` only affect the full remote method name; they do not change the C++ member access path. Full-name conflicts surface during registration, so prefer explicit prefixes when APIs may collide.
+
+The RPC frontend only handles method metadata, registration, binding, calls, and dispatch. It does not own listening, handshakes, authentication, or session management. Transport entry points are split into two layers:
+
+*   `RpcMessageEndpoint`: An endpoint that already sends and receives complete RPC messages. It fits datagrams, WebSocket messages, stdio/LSP adapters, or any outer protocol that already performs framing.
+*   `ilias::Stream`: A byte stream. Turning bytes into complete RPC messages is backend-specific. `RpcServer` / `RpcClient` accept a stream only when the backend provides `makeEndpoint(stream)`.
+
+A custom complete-message endpoint only needs to satisfy this concept:
+
+```cpp
+template <typename T>
+concept RpcMessageEndpoint = requires(T endpoint,
+                                      std::vector<std::byte>& out,
+                                      std::span<const std::byte> in) {
+    { endpoint.recv(out) } -> std::same_as<ilias::IoTask<void>>;
+    { endpoint.send(in) } -> std::same_as<ilias::IoTask<void>>;
+    { endpoint.close() } -> std::same_as<void>;
+    { endpoint.cancel() } -> std::same_as<void>;
+};
+```
+
+For stream-like transports, a backend can provide a non-intrusive hook:
+
+```cpp
+struct MyRpcBackend {
+    template <ilias::Stream StreamT>
+    static auto makeEndpoint(StreamT stream); // returns an RpcMessageEndpoint
+};
+```
+
+`BinaryRpcBackend` reads the fixed Neko-RPC header directly from the stream, then uses the method, extension, and payload sizes from the header to read the rest of the frame. It does not wrap frames in an additional generic length prefix. `JsonRpcBackend` owns its own stream framing rule. Unit tests use the lightweight in-memory `ilias::DuplexStream` instead of binding sockets:
+
+```cpp
+#include <ilias/io/duplex.hpp>
+
+auto [clientStream, serverStream] = ilias::DuplexStream::make(65536);
+
+RpcServer<BinaryRpcBackend, AppApi> server{context};
+RpcClient<BinaryRpcBackend, AppApi> client{context};
+
+server.addEndpoint(std::move(serverStream));
+client.setEndpoint(std::move(clientStream));
+```
+
+Ilias also provides `ilias::PipePair`, but it is a one-way OS pipe. Bidirectional RPC over pipes needs two pipe pairs or a custom composed read/write stream. Tests prefer `DuplexStream` because it is lighter and does not consume ports. When interoperating with external JSON-RPC peers, provide a JSON-RPC endpoint/backend hook that matches the peer framing, such as LSP `Content-Length`, newline-delimited JSON, WebSocket messages, or datagrams, instead of fixing one stream framing in the RPC frontend.
+
+### 5.6. Custom RPC Backend Extension
+
+RPC backends follow the same extension principle as serializers: no base-class inheritance and no changes to `RpcMethod`; backend capabilities are consumed through template use sites. `RpcDispatcher` and `RpcClient` currently need the following minimal backend surface. The concrete request/response wire shape, parameter view, id type, and error mapping are backend-defined.
+
+```cpp
+struct MyRpcBackend {
+    using Id = /* request id type */;
+    using Message = std::vector<char>;
+    using ResponseValues = /* backend-local response accumulator */;
+
+    struct DecodedRequest {
+        /* method name, id, params view, raw request value ... */
+    };
+
+    struct DecodeResult {
+        bool ok = false;
+        bool batch = false;
+        std::vector<DecodedRequest> requests;
+    };
+
+    struct EncodedRequest {
+        Message message;
+        Id id;
+    };
+
+    static DecodeResult decodeIncoming(std::span<const std::byte> message);
+    static std::string_view methodName(const DecodedRequest& request) noexcept;
+    static const Id& id(const DecodedRequest& request) noexcept;
+    static bool expectsResponse(const DecodedRequest& request) noexcept;
+
+    template <typename Method>
+    static ilias::Result</* decoded params tuple */, std::error_code>
+    decodeParams(const DecodedRequest& request);
+
+    template <typename Method>
+    static ilias::IoTask<typename Method::RawReturnType>
+    invoke(Method& method, /* decoded params tuple */ params);
+
+    template <typename Method>
+    static void appendMethodReturn(
+        ResponseValues& responses,
+        const DecodedRequest& request,
+        ilias::Result<typename Method::RawReturnType, std::error_code> result
+    );
+
+    static void appendError(ResponseValues& responses,
+                            const DecodedRequest& request,
+                            std::error_code error);
+    static Message encodeResponses(const ResponseValues& responses, bool batch);
+
+    template <typename Method, typename... Args>
+    static ilias::Result<EncodedRequest, std::error_code>
+    encodeRequest(Method& method, bool notification, std::uint64_t& nextId, Args&&... args);
+
+    template <typename Method>
+    static ilias::Result<typename Method::RawReturnType, std::error_code>
+    decodeResponse(std::span<const std::byte> message, const Id& expectedId);
+
+    static std::error_code clientNotInitError();
+    static std::error_code notificationOk();
+
+    template <ilias::Stream StreamT>
+    static auto makeEndpoint(StreamT stream); // optional: returns RpcMessageEndpoint
+};
+```
+
+If you want a lighter non-human-readable RPC protocol, use the built-in `NekoRpcBackend<Serializer, CodecId>`. It keeps only the required RPC semantics: request, response, notification, cancellation, error, version, and reserved extension bits. Parameters and return values are handled by the replaceable serializer policy. The default alias is `BinaryRpcBackend`.
+
+`Neko-RPC Core v1`:
+
+```text
+transport:
+  RpcMessageEndpoint handles complete messages.
+  ilias::Stream framing is defined by backend::makeEndpoint(stream).
+  UDP/datagram transports can treat one datagram as one complete message.
+
+fixed header, big-endian:
+  magic        u16   0x4e52        // "NR"
+  version      u8    1
+  kind         u8    1=request, 2=response, 3=notify, 4=cancel, 5=hello
+  flags        u8    bit0=error, bit1=method_id, bit2=has_extensions, other bits reserved
+  codec        u8    0=BinarySerializer, 1=JsonSerializer, 2=XmlSerializer, 128..255=user
+  ext_size     u16   extension TLV bytes, 0 if none
+  id           u64   request/response/cancel id, 0 for notify
+  method_size  u32   method bytes; response/cancel use 0
+  payload_size u32   serialized params/result/error bytes
+
+body:
+  method bytes
+  extension TLV bytes
+  payload bytes
+```
+
+Core message semantics are fixed and do not use omitted fields:
+
+*   **request**: `kind=1`, must include `id`, `method`, and `payload`. The payload is `std::tuple<Args...>` or a backend-defined parameter object.
+*   **response**: `kind=2`, must include `id`. Success payload is the return value; `void` returns an empty payload. Failure sets `flags.error` and uses a fixed error object as the payload.
+*   **notify**: `kind=3`, must include `method`, uses `id=0`, and does not receive a server response.
+*   **cancel**: `kind=4`, uses `id` to identify the request to cancel and does not need method/payload.
+*   **hello**: `kind=5`, optional. It can negotiate codec, compression, maximum frame size, method id tables, and similar connection-level features through extension TLVs. Payload is empty.
+
+Extension TLV is recommended as `type: u16, size: u16, value: bytes`. The highest bit of `type` can mark a critical extension: unknown non-critical TLVs may be skipped, while unknown critical TLVs should reject the message or connection.
+
+The error object stays minimal:
+
+```cpp
+struct NekoRpcError {
+    std::int32_t code = 0;
+    std::string message;
+    std::vector<std::byte> data;
+
+    NEKO_SERIALIZER(code, message, data)
+};
+```
+
+`NekoRpcBackend` is a serializer-policy backend:
+
+```cpp
+template <typename Serializer>
+struct NekoRpcBackend {
+    using Message = std::vector<char>;
+    using Id = std::uint64_t;
+
+    // Header read/write is fixed big-endian binary so messages can be routed
+    // before the payload codec is known.
+    // Payload is written/read by Serializer::OutputSerializer/InputSerializer.
+};
+
+using BinaryRpcBackend = NekoRpcBackend<BinarySerializer>;
+```
+
+Usage is the same as JSON-RPC, with only the backend type changed:
+
+```cpp
+RpcServer<BinaryRpcBackend, AppApi> server{context};
+RpcClient<BinaryRpcBackend, AppApi> client{context};
+
+server->calc.add = [](int lhs, int rhs) -> ilias::IoTask<int> {
+    co_return lhs + rhs;
+};
+```
+
+Tradeoffs:
+
+*   **Simpler than JSON-RPC**: no JSON object field names, `jsonrpc` version field, 1.0/2.0 compatibility, omitted `params`, `id=null` semantics, or batch special cases.
+*   **Lighter than gRPC/Cap'n Proto**: no required IDL, code generation, HTTP/2, streaming lifecycle, or capability model.
+*   **Closer to this library than plain MessagePack-RPC**: the wire header is fixed and the payload serializer is replaceable. If MessagePack interoperability is needed, add a `MsgPackSerializer` backend and use `NekoRpcBackend<MsgPackSerializer, CodecId>`.
+*   **Controlled extension surface**: extensions go through reserved `flags`, `kind` values, and TLV. Unknown non-critical TLVs can be skipped; critical TLVs can reject the connection or message.
+*   **Clear performance path**: the server first reads a fixed header to obtain method/id/payload information, then parses parameters with the serializer selected by the method signature.
+
+Batch is intentionally not part of the first core binary protocol. Multiple requests can be sent as consecutive frames. If batch is needed later, it can be added as a new `kind=batch` whose payload is a list of frames or requests. Keeping it out of v1 makes cancellation, timeout, and error mapping simpler.
+
+Design check:
+
+*   **Generality**: The RPC frontend keeps only method metadata, registration, binding, calls, and complete-message endpoints. JSON-RPC ids, batch handling, request/response envelopes, and wire error mapping live in `JsonRpcBackend`.
+*   **Minimal Interface**: The current backend interface follows the actual use sites in `RpcDispatcher` / `RpcClient`; it does not add listeners, sessions, transport ownership, or inheritance layers. Stream support is attached through the optional static `makeEndpoint` hook.
+*   **Non-Intrusive Extension**: Protocol structs only need `RpcMethod` fields and reflection metadata. Naming policy is attached at the field use site through `make_tags<rpc_prefix_tag>` / `make_tags<rpc_no_prefix_tag>`.
+*   **Consistent With Serialization Extensions**: Serialization extends through `detail::CustomParser<R, W, T>`, while RPC backends extend through static functions and concept-style requirements. Both avoid requiring business types to inherit framework base classes.
+*   **Future Improvements**: Add an explicit `RpcBackend` concept and `BackendSerializable<Backend, T>` checks for clearer diagnostics. Common `invoke` / tuple expansion helpers could also reduce boilerplate for custom backends.
 
 ---
 
@@ -655,17 +838,22 @@ To add a new data format, implement a backend with responsibilities matching the
 *   [ ] Support more underlying transport protocols (e.g., WebSocket, QUIC - possibly via Ilias or other libraries)
 *   [ ] Enhance communication layer atomicity: Ensure complete processing of data frames, maintaining consistent data stream state even during cancellation operations. May require adjusting to a small-frame sending mechanism.
 
-**JSON-RPC**
+**RPC**
 
 *   [x] Support JSON-RPC 2.0 protocol specification.
 *   [x] Compatibility with JSON-RPC 1.0 protocol (Optional).
-*   [ ] Support for JSON-RPC extensions (e.g., custom error codes, metadata).
-*   [x] add built-in methods to the server:
+*   [x] Split the RPC frontend from the JSON-RPC backend. See [`docs/rpc_refactor_plan.md`](docs/rpc_refactor_plan.md).
+*   [ ] Add explicit framing adapters for external JSON-RPC interoperability, such as LSP `Content-Length`, newline-delimited JSON, WebSocket messages, and datagrams.
+*   [x] Add `NekoRpcBackend<Serializer>` / `BinaryRpcBackend` with a fixed binary frame header and replaceable payload serializer.
+*   [ ] Add optional TLV extensions for `NekoRpcBackend`, such as hello negotiation, method id tables, and compression.
+*   [ ] Add explicit `RpcBackend` / `BackendSerializable` concepts for clearer custom-backend diagnostics.
+*   [ ] Support for JSON-RPC extensions.
+*   [x] Add the default `rpc` introspection member:
     - `rpc.get_method_list`: Get a list of all methods on the current server
     - `rpc.get_bind_method_list`: Get a list of all bound methods on the current server
     - `rpc.get_method_info`: Get a description of a specified method
     - `rpc.get_method_info_list`: Get descriptions of all methods
-*   [x] Support named parameters, allowing method declarations or bindings to specify parameter names. Methods with specified names will pass parameters as `JsonObject`, while others will pass them as `JsonArray` by position.
+*   [x] Support named parameters, allowing method declarations or bindings to specify parameter names. Methods with specified names pass parameters as JSON objects; others pass them as JSON arrays by position.
 
 ---
 
@@ -678,6 +866,8 @@ To add a new data format, implement a backend with responsibilities matching the
     *   `BinaryTags::fixedLength` and `BinaryTags::unframed` are interpreted by the layer that consumes them; `unframed` is no longer type-level schema metadata.
     *   Switched XML support to pugixml, including object fields, repeated sibling elements for arrays, node text, and comments.
     *   Stopped registering the communication `MessageHeader` as a `ProtoFactory` protocol; it is now serialized explicitly by the communication layer with call-site tags.
+    *   Split the RPC frontend from the JSON-RPC backend: `RpcServer<Backend, ProtocolSets...>` / `RpcClient<Backend, ProtocolSets...>` are now the generic entry points, while `JsonRpcServer` / `JsonRpcClient` remain JSON-RPC backend aliases.
+    *   Added `NekoRpcBackend<Serializer>` / `BinaryRpcBackend`, a compact binary RPC frame with a replaceable payload serializer.
 
 *   **v0.2.4**
     *   split serialization and protocol management, with serialization as a core module and protocol management as an optional module.

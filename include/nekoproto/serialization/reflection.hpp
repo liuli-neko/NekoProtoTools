@@ -21,7 +21,6 @@
 #include <tuple>
 #include <type_traits>
 #include <utility> // For std::index_sequence
-#include <variant>
 
 #include "private/tags.hpp"
 #include "private/traits.hpp"
@@ -814,6 +813,40 @@ public:
     using value_types                = std::remove_pointer_t<decltype(_types())>;
     static constexpr auto field_tags = _tags();                             // NOLINT
     static constexpr int value_count = std::tuple_size<value_types>::value; // NOLINT
+
+    template <typename CallAbleT>
+    static constexpr void forEachMeta(CallAbleT&& func) noexcept {
+        if constexpr (!detail::has_values_meta<T>) {
+            static_assert(detail::has_values_meta<T>, "type has no values meta");
+        }
+        constexpr auto fieldNames = names();
+        using names_type          = std::decay_t<decltype(fieldNames)>;
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
+                using Field = std::tuple_element_t<I, value_types>;
+                using FieldTag = std::type_identity<Field>;
+                auto&& tags    = std::get<I>(field_tags);
+                if constexpr (std::is_invocable_v<CallAbleT&, FieldTag, std::string_view, decltype(tags)>) {
+                    static_assert(detail::is_std_array<names_type>::size == value_count,
+                                  "type has no names meta or names size mismatch");
+                    func(FieldTag{}, fieldNames[I], tags);
+                } else if constexpr (std::is_invocable_v<CallAbleT&, std::string_view, decltype(tags)>) {
+                    static_assert(detail::is_std_array<names_type>::size == value_count,
+                                  "type has no names meta or names size mismatch");
+                    func(fieldNames[I], tags);
+                } else if constexpr (std::is_invocable_v<CallAbleT&, FieldTag, decltype(tags)>) {
+                    func(FieldTag{}, tags);
+                } else if constexpr (std::is_invocable_v<CallAbleT&, decltype(tags)>) {
+                    func(tags);
+                } else {
+                    static_assert(!detail::has_values_meta<T>,
+                                  "Callback function signature not supported. Supported: (type, name, tags), "
+                                  "(name, tags), (type, tags), (tags)");
+                }
+            };
+            ((invoke(std::integral_constant<std::size_t, Is>{})), ...);
+        }(std::make_index_sequence<value_count>{});
+    }
 };
 
 template <typename T>

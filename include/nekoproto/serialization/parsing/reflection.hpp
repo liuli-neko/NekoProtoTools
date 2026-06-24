@@ -83,34 +83,27 @@ void parser_schema_add_reflect_field(parsing::schema::Type::Object& object, std:
     }
 }
 
-template <typename R, typename W, typename T, std::size_t... Is>
-parsing::schema::Type parser_schema_named_reflection(std::index_sequence<Is...>) {
+template <typename R, typename W, typename T>
+parsing::schema::Type parser_schema_named_reflection() {
     parsing::schema::Type::Object object;
-    constexpr auto names = Reflect<T>::names();
-    constexpr auto tags  = Reflect<T>::field_tags;
-    using Fields         = typename Reflect<T>::value_types;
-    (parser_schema_add_reflect_field<R, W, std::tuple_element_t<Is, Fields>>(object, names[Is], std::get<Is>(tags)),
-     ...);
+    Reflect<T>::forEachMeta([&]<typename Field>(std::type_identity<Field>, std::string_view name, const auto& tags) {
+        parser_schema_add_reflect_field<R, W, Field>(object, name, tags);
+    });
     return object;
 }
 
-template <typename R, typename W, typename T, std::size_t... Is>
-parsing::schema::Type parser_schema_positional_reflection(std::index_sequence<Is...>) {
+template <typename R, typename W, typename T>
+parsing::schema::Type parser_schema_positional_reflection() {
     parsing::schema::Type::Array array;
-    using Fields        = typename Reflect<T>::value_types;
-    constexpr auto tags = Reflect<T>::field_tags;
-    const auto addField = [&array, &tags]<std::size_t I>() {
-        using Field           = std::tuple_element_t<I, Fields>;
-        auto fieldSchema      = parser_schema<R, W, Field>();
-        const auto& fieldTags = std::get<I>(tags);
-        if (tag_access::is_fixed_length(fieldTags)) {
-            fieldSchema.fixedLength = tag_access::fixed_length<std::decay_t<Field>>(fieldTags);
+    Reflect<T>::forEachMeta([&]<typename Field>(std::type_identity<Field>, const auto& tags) {
+        auto fieldSchema = parser_schema<R, W, Field>();
+        if (tag_access::is_fixed_length(tags)) {
+            fieldSchema.fixedLength = tag_access::fixed_length<std::decay_t<Field>>(tags);
         }
         array.prefixItems.emplace_back(std::move(fieldSchema));
-    };
-    (addField.template operator()<Is>(), ...);
-    array.minItems        = sizeof...(Is);
-    array.maxItems        = sizeof...(Is);
+    });
+    array.minItems        = Reflect<T>::value_count;
+    array.maxItems        = Reflect<T>::value_count;
     array.additionalItems = false;
     return array;
 }
@@ -303,9 +296,9 @@ struct Parser<R, W, T,
     static parsing::schema::Type toSchema() {
         parsing::schema::Type schema;
         if constexpr (has_names_meta<T>) {
-            schema = parser_schema_named_reflection<R, W, T>(std::make_index_sequence<Reflect<T>::value_count>{});
+            schema = parser_schema_named_reflection<R, W, T>();
         } else {
-            schema = parser_schema_positional_reflection<R, W, T>(std::make_index_sequence<Reflect<T>::value_count>{});
+            schema = parser_schema_positional_reflection<R, W, T>();
         }
         return schema;
     }

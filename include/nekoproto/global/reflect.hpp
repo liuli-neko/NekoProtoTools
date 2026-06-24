@@ -440,13 +440,20 @@ struct func_nameof_impl {                                         // NOLINT
     // int __cdecl free_func_one_arg(int)>(void)
     static constexpr auto full_function_name =                                                   // NOLINT
         name.substr(characteristicString.size(), name.size() - characteristicString.size() - 6); // NOLINT
-    static constexpr auto end    = full_function_name.find_first_of('(');                        // NOLINT
-    static constexpr auto begin1 = full_function_name.substr(0, end).find_last_of(' ');          // NOLINT
-    static constexpr auto begin2 = full_function_name.substr(0, end).find_last_of("::");         // NOLINT
-    static constexpr auto begin  = begin2 != std::string_view::npos ? begin2 + 1 : begin1 + 1;   // NOLINT
-    static_assert(begin2 != std::string_view::npos || begin1 != std::string_view::npos, "function begin not found");
+    static constexpr auto end = full_function_name.find_last_of('(');                            // NOLINT
     static_assert(end != std::string_view::npos, "function end not found");
-    static constexpr auto tmp                   = full_function_name.substr(begin, end - begin); // NOLINT
+    static constexpr auto before_params = full_function_name.substr(0, end);                     // NOLINT
+    static constexpr std::string_view cdecl = "__cdecl ";                                        // NOLINT
+    static constexpr auto cdecl_pos = before_params.find(cdecl);                                 // NOLINT
+    static constexpr auto name_begin =                                                          // NOLINT
+        cdecl_pos == std::string_view::npos ? before_params.find_last_of(' ') + 1
+                                            : cdecl_pos + cdecl.size();
+    static_assert(name_begin != std::string_view::npos, "function begin not found");
+    static constexpr auto qualified_name = before_params.substr(name_begin);                     // NOLINT
+    static constexpr std::string_view scope = "::";                                              // NOLINT
+    static constexpr auto scope_pos = qualified_name.rfind(scope);                               // NOLINT
+    static constexpr auto tmp =                                                                  // NOLINT
+        scope_pos == std::string_view::npos ? qualified_name : qualified_name.substr(scope_pos + scope.size());
     static constexpr std::string_view func_name = join_v<tmp>;                                   // NOLINT
 #else
     static_assert(false, "unsupported compiler");

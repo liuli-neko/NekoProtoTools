@@ -25,7 +25,6 @@
 #include <cctype>
 #include <istream>
 #include <iterator>
-#include <ostream>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -36,7 +35,7 @@ NEKO_BEGIN_NAMESPACE
 
 namespace detail {
 
-inline bool isValidXmlName(std::string_view name) {
+inline bool is_valid_xml_name(std::string_view name) {
     if (name.empty()) {
         return false;
     }
@@ -47,25 +46,20 @@ inline bool isValidXmlName(std::string_view name) {
     if (!isStart(static_cast<unsigned char>(name.front()))) {
         return false;
     }
-    for (const char ch : name.substr(1)) {
-        if (!isContinue(static_cast<unsigned char>(ch))) {
-            return false;
-        }
-    }
-    return true;
+    return std::ranges::all_of(name.substr(1), isContinue);
 }
 
 template <typename T>
-std::string defaultXmlRootName() {
-    constexpr auto name = class_nameof<std::remove_cvref_t<T>>;
-    if (isValidXmlName(name)) {
-        return std::string{name};
+std::string default_xml_root_name() {
+    constexpr auto Name = class_nameof<std::remove_cvref_t<T>>;
+    if (is_valid_xml_name(Name)) {
+        return std::string{Name};
     }
     return "root";
 }
 
 template <typename BufferT>
-void appendXml(BufferT& buffer, std::string_view xml) {
+void append_xml(BufferT& buffer, std::string_view xml) {
     if constexpr (requires { buffer.insert(buffer.end(), xml.begin(), xml.end()); }) {
         buffer.insert(buffer.end(), xml.begin(), xml.end());
     } else if constexpr (requires { buffer.write(xml.data(), static_cast<std::streamsize>(xml.size())); }) {
@@ -133,9 +127,9 @@ struct PugiXmlBackend {
 
     template <typename BufferT, typename T>
     static sa::Result<void> write(OutputState<BufferT>& state, const T& value) {
-        const auto rootName = state.configuredRootName.empty() ? detail::defaultXmlRootName<T>() :
+        const auto rootName = state.configuredRootName.empty() ? detail::default_xml_root_name<T>() :
                                                                  state.configuredRootName;
-        if (!detail::isValidXmlName(rootName)) {
+        if (!detail::is_valid_xml_name(rootName)) {
             state.hasRoot = false;
             return sa::error(sa::ErrorCode::InvalidField, "Invalid XML root name '" + rootName + "'");
         }
@@ -154,7 +148,7 @@ struct PugiXmlBackend {
         }
         if (!state.flushed) {
             const auto output = state.writer.str(state.indentation);
-            detail::appendXml(state.buffer, output);
+            detail::append_xml(state.buffer, output);
             state.flushed = true;
         }
         return result;

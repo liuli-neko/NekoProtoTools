@@ -90,6 +90,11 @@ ilias::IoTask<std::string> test_optional_params(std::optional<MXXParams> params)
     co_return "no params";
 };
 
+static_assert(NekoProto::detail::func_nameof<add> == "add");
+static_assert(NekoProto::detail::func_nameof<MyFunc::execute> == "execute");
+static_assert(NekoProto::detail::func_nameof<testxx> == "testxx");
+static_assert(NekoProto::detail::func_nameof<test_optional_params> == "test_optional_params");
+
 extern int test1(int, int);
 struct Protocol {
     RpcMethod<int(int, int), "test1", "num1", "num2"> test1;

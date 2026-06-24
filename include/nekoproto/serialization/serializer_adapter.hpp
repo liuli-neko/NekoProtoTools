@@ -5,7 +5,6 @@
 
 #include <concepts>
 #include <cstddef>
-#include <type_traits>
 #include <utility>
 
 NEKO_BEGIN_NAMESPACE
