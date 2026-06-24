@@ -1,4 +1,4 @@
-#include <ilias/net.hpp>
+#include <ilias/io/duplex.hpp>
 #include <ilias/platform.hpp>
 #include <iostream>
 
@@ -10,9 +10,8 @@
 #include "ilias/io/error.hpp"
 #include "ilias/result.hpp" // IWYU pragma: export
 #include "nekoproto/global/global.hpp"
-#include "nekoproto/jsonrpc/jsonrpc.hpp"
+#include "nekoproto/jsonrpc/backend.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_traits.hpp"
-#include "nekoproto/jsonrpc/message_stream_wrapper.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
 NEKO_USE_NAMESPACE
@@ -142,20 +141,17 @@ public:
     static ilias::PlatformContext* gContext;
 };
 
+template <typename Server, typename Client>
+static void connectWithDuplex(Server& server, Client& client) {
+    auto [clientStream, serverStream] = ilias::DuplexStream::make(65536);
+    server.addEndpoint(std::move(serverStream));
+    client.setEndpoint(std::move(clientStream));
+}
+
 TEST_F(JsonRpcTest, BindAndCall) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
-    auto serverEndpoint = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS) +
-                                                          "-127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS)))
-                              .wait()
-                              .value();
-    auto clientEndpoint = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS) +
-                                                          "-127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS)))
-                              .wait()
-                              .value();
-
-    server.addTransport(std::move(serverEndpoint));
-    client.setTransport(std::move(clientEndpoint));
+    connectWithDuplex(server, client);
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server->test2 = [](int a1, int b1) -> ilias::IoTask<void> {
@@ -268,21 +264,11 @@ TEST_F(JsonRpcTest, BindAndCall) {
     server.close();
 }
 
-TEST_F(JsonRpcTest, BindAndCallUdp) {
+TEST_F(JsonRpcTest, BindAndCallDuplex) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    auto udptp1 = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS) +
-                                                  "-127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS)))
-                      .wait()
-                      .value();
-    auto udptp2 = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS) +
-                                                  "-127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS)))
-                      .wait()
-                      .value();
-
-    server.addTransport(std::move(udptp1));
-    client.setTransport(std::move(udptp2));
+    connectWithDuplex(server, client);
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server->test2 = [](int a1, int b1) -> ilias::IoTask<void> {
@@ -446,17 +432,7 @@ TEST_F(JsonRpcTest, Notification) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    auto udptp1 = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS) +
-                                                  "-127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS)))
-                      .wait()
-                      .value();
-    auto udptp2 = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS) +
-                                                  "-127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS)))
-                      .wait()
-                      .value();
-
-    server.addTransport(std::move(udptp1));
-    client.setTransport(std::move(udptp2));
+    connectWithDuplex(server, client);
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server->test2 = [](int a1, int b1) -> ilias::IoTask<void> {
@@ -492,98 +468,72 @@ TEST_F(JsonRpcTest, Basic) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    auto udptp1 = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS) +
-                                                  "-127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS)))
-                      .wait()
-                      .value();
-    auto udptp2 = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS) +
-                                                  "-127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS)))
-                      .wait()
-                      .value();
-
-    server.addTransport(std::move(udptp1));
-    client.setTransport(std::move(udptp2));
+    connectWithDuplex(server, client);
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server.bindMethod<"aa", "bb">("test11",
                                   traits::FunctionT<ilias::IoTask<int>(int, int)>(
                                       [](int aa, int bb) -> ilias::IoTask<int> { co_return (aa * 10) + bb; }));
+    auto methodDatas = server.methodDatas();
 
-    auto methods = client.callRemote<std::vector<std::string>>("rpc.get_method_list").wait();
+    auto methods = client->rpc.getMethodList().wait();
     ASSERT_TRUE(methods.has_value());
-    EXPECT_EQ(methods.value().size(), 18);
-    int idx = 0;
-    EXPECT_EQ(methods.value()[idx++], "add");
-    EXPECT_EQ(methods.value()[idx++], "execute");
-    EXPECT_EQ(methods.value()[idx++], "rpc.get_bind_method_list");
-    EXPECT_EQ(methods.value()[idx++], "rpc.get_method_info");
-    EXPECT_EQ(methods.value()[idx++], "rpc.get_method_info_list");
-    EXPECT_EQ(methods.value()[idx++], "rpc.get_method_list");
-    EXPECT_EQ(methods.value()[idx++], "test1");
-    EXPECT_EQ(methods.value()[idx++], "test10");
-    EXPECT_EQ(methods.value()[idx++], "test11");
-    EXPECT_EQ(methods.value()[idx++], "test2");
-    EXPECT_EQ(methods.value()[idx++], "test3");
-    EXPECT_EQ(methods.value()[idx++], "test4");
-    EXPECT_EQ(methods.value()[idx++], "test5");
-    EXPECT_EQ(methods.value()[idx++], "test6");
-    EXPECT_EQ(methods.value()[idx++], "test7");
-    EXPECT_EQ(methods.value()[idx++], "test8");
-    EXPECT_EQ(methods.value()[idx++], "test9");
-
-    idx     = 0;
-    methods = client.callRemote<std::vector<std::string>>("rpc.get_bind_method_list").wait();
+    EXPECT_EQ(methods.value().size(), 14 + JsonRpcServer<>::BuiltinMethodsCount);
+    for (size_t idx = 0; idx < methods.value().size(); idx ++) {
+        EXPECT_EQ(methods.value()[idx], methodDatas[idx].name);
+    }
+    
+    methods = client->rpc.getBindedMethodList().wait();
     ASSERT_TRUE(methods.has_value());
-    EXPECT_EQ(methods.value().size(), 8);
-    EXPECT_EQ(methods.value()[idx++], "add");
-    EXPECT_EQ(methods.value()[idx++], "execute");
-    EXPECT_EQ(methods.value()[idx++], "rpc.get_bind_method_list");
-    EXPECT_EQ(methods.value()[idx++], "rpc.get_method_info");
-    EXPECT_EQ(methods.value()[idx++], "rpc.get_method_info_list");
-    EXPECT_EQ(methods.value()[idx++], "rpc.get_method_list");
-    EXPECT_EQ(methods.value()[idx++], "test1");
+    EXPECT_EQ(methods.value().size(), 4 + JsonRpcServer<>::BuiltinMethodsCount);
+    int idx     = 0;
+    for (auto method : methodDatas) {
+        if (method.isBind) {
+            EXPECT_EQ(methods.value()[idx++], method.name);
+        }
+    }
 
-    auto methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test1").wait();
+    auto methodInfo = client->rpc.getMethodInfo("test1").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "int test1(int num1, int num2)");
 
-    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test2").wait();
+    methodInfo = client->rpc.getMethodInfo("test2").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "void test2(int num1, int num2)");
 
-    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test3").wait();
+    methodInfo = client->rpc.getMethodInfo("test3").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "void test3()");
 
-    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test4").wait();
+    methodInfo = client->rpc.getMethodInfo("test4").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "int test4()");
 
-    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test5").wait();
+    methodInfo = client->rpc.getMethodInfo("test5").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "std::string test5(std::string, double)");
 
-    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test6").wait();
+    methodInfo = client->rpc.getMethodInfo("test6").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "std::string test6(std::tuple<int, double, bool>)");
 
-    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test7").wait();
+    methodInfo = client->rpc.getMethodInfo("test7").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "std::string test7()");
 
-    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test8").wait();
+    methodInfo = client->rpc.getMethodInfo("test8").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "int test8(std::nullptr_t)");
 
-    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test9").wait();
+    methodInfo = client->rpc.getMethodInfo("test9").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "std::vector<int> test9(std::vector<bool>)");
 
-    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test10").wait();
+    methodInfo = client->rpc.getMethodInfo("test10").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "Copytest test10(int)");
 
-    methodInfo = client.callRemote<std::string>("rpc.get_method_info", "test11").wait();
+    methodInfo = client->rpc.getMethodInfo("test11").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_EQ(methodInfo.value(), "int test11(int aa, int bb)");
 
@@ -607,9 +557,9 @@ TEST_F(JsonRpcTest, Basic) {
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result.value(), 3);
 
-    auto methodInfoList = client.callRemote<std::vector<std::string>>("rpc.get_method_info_list").wait();
+    auto methodInfoList = client->rpc.getMethodInfoList().wait();
     ASSERT_TRUE(methodInfoList.has_value());
-    EXPECT_EQ(methodInfoList.value().size(), 18);
+    EXPECT_EQ(methodInfoList.value().size(), 14 + JsonRpcServer<>::BuiltinMethodsCount);
 
     server.bindMethod<>("test112", traits::FunctionT<ilias::IoTask<void>()>([]() -> ilias::IoTask<void> {
                             std::cout << "test112: sleep 5s start" << std::endl;

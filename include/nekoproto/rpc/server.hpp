@@ -5,30 +5,27 @@
 #include <list>
 #include <memory>
 #include <string_view>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
+#include "nekoproto/rpc/builtin.hpp"
 #include "nekoproto/rpc/dispatcher.hpp"
+#include "nekoproto/rpc/endpoint.hpp"
 #include "nekoproto/rpc/registry.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
 template <typename Backend, typename... ProtocolSets>
 class RpcServer : public ProtocolSets... {
-    static_assert(sizeof...(ProtocolSets) > 0, "RpcServer requires at least one API/protocol struct");
 
 private:
     using Dispatcher = detail::RpcDispatcher<Backend>;
     using MethodData = typename Dispatcher::MethodData;
-
-    struct BuiltinRpc {
-        RpcMethod<std::vector<std::string>(), "rpc.get_method_list"> getMethodList;
-        RpcMethod<std::vector<std::string>(), "rpc.get_method_info_list"> getMethodInfoList;
-        RpcMethod<std::string(std::string), "rpc.get_method_info", "method_name"> getMethodInfo;
-        RpcMethod<std::vector<std::string>(), "rpc.get_bind_method_list"> getBindedMethodList;
-    };
+    RpcBuiltinMethods mRpc;
 
 public:
-    explicit RpcServer(ilias::IoContext& ctx) : ProtocolSets()..., mDispatcher(ctx), mScope() { _init(); }
+    explicit RpcServer(ilias::IoContext& ctx) : ProtocolSets()..., mRpc(), mDispatcher(ctx), mScope() { _init(); }
     ~RpcServer() {
         close();
         wait().wait();
@@ -54,27 +51,20 @@ public:
         return mDispatcher.getCurrentIds();
     }
 
-    template <RpcEndpoint EndpointT>
+    template <RpcMessageEndpoint EndpointT>
     auto addEndpoint(EndpointT endpoint) noexcept -> void {
         auto item = mEndpoints.emplace(mEndpoints.end(),
-                                       std::make_unique<detail::RpcEndpointWrapper<EndpointT>>(std::move(endpoint)));
+                                       std::make_unique<detail::RpcMessageEndpointWrapper<EndpointT>>(std::move(endpoint)));
         mScope.spawn([this, item]() -> ilias::Task<void> {
             co_await mDispatcher.receiveLoop((*item).get());
             mEndpoints.erase(item);
         });
     }
 
-    auto addEndpoint(std::unique_ptr<detail::IRpcEndpoint> endpoint) noexcept -> void {
-        auto item = mEndpoints.emplace(mEndpoints.end(), std::move(endpoint));
-        mScope.spawn([this, item]() -> ilias::Task<void> {
-            co_await mDispatcher.receiveLoop((*item).get());
-            mEndpoints.erase(item);
-        });
-    }
-
-    template <RpcEndpoint EndpointT>
-    auto addTransport(EndpointT endpoint) noexcept -> void {
-        addEndpoint(std::move(endpoint));
+    template <typename StreamT>
+        requires detail::RpcStreamBackend<Backend, StreamT>
+    auto addEndpoint(StreamT stream) noexcept -> void {
+        addEndpoint(Backend::makeEndpoint(std::move(stream)));
     }
 
     template <ConstexprString... ArgNames, typename RetT, typename... Args>
@@ -101,23 +91,26 @@ public:
         co_return co_await mDispatcher.processMessage(message, nullptr);
     }
 
-    auto callMethod(std::string_view json) noexcept -> ilias::Task<typename Backend::Message> {
+    auto callMethod(std::string_view message) noexcept -> ilias::Task<typename Backend::Message> {
         co_return co_await mDispatcher.processMessage(
-            {reinterpret_cast<const std::byte*>(json.data()), json.size()}, nullptr);
+            {reinterpret_cast<const std::byte*>(message.data()), message.size()}, nullptr);
     }
 
     auto methodDatas() noexcept -> std::vector<MethodData> { return mDispatcher.methodDatas(); }
     auto methodDatas(std::string_view name) noexcept -> MethodData { return mDispatcher.methodDatas(name); }
 
+public:
+    static constexpr int BuiltinMethodsCount = Reflect<RpcBuiltinMethods>::value_count;
+
 private:
     template <typename Protocol>
-    void _registerProtocol(Protocol& protocol) {
-        detail::forEachRpcMethod(protocol, [this](auto& method) { mDispatcher.registerRpcMethod(method); });
+    void _registerProtocol(Protocol& protocol, std::string_view prefix = {}) {
+        detail::forEachRpcMethod(protocol, [this](auto& method) { mDispatcher.registerRpcMethod(method); }, prefix);
     }
 
     auto _init() noexcept -> void {
         (_registerProtocol(static_cast<ProtocolSets&>(*this)), ...);
-        _registerProtocol(mRpc);
+        _registerProtocol(mRpc, "rpc");
         mRpc.getMethodInfo = [this](std::string methodName) -> ilias::IoTask<std::string> {
             if (auto ret = mDispatcher.methodDatas(methodName); !ret.name.empty()) {
                 co_return std::string(ret.description);
@@ -150,9 +143,8 @@ private:
     }
 
 private:
-    BuiltinRpc mRpc;
     Dispatcher mDispatcher;
-    std::list<std::unique_ptr<detail::IRpcEndpoint>> mEndpoints;
+    std::list<std::unique_ptr<detail::IRpcMessageEndpoint>> mEndpoints;
     ilias::TaskGroup<void> mScope;
 };
 

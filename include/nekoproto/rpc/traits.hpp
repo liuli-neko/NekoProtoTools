@@ -12,6 +12,8 @@
 #include <variant>
 #include <vector>
 
+#include <ilias/io.hpp>
+
 #include "nekoproto/global/config.h"
 #include "nekoproto/global/reflect.hpp"
 #include "nekoproto/rpc/error.hpp"

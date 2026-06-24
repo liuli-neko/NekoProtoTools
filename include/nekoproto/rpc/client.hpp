@@ -4,8 +4,12 @@
 #include <ilias/platform.hpp>
 #include <memory>
 #include <span>
+#include <string_view>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
+#include "nekoproto/rpc/builtin.hpp"
 #include "nekoproto/rpc/endpoint.hpp"
 #include "nekoproto/rpc/registry.hpp"
 
@@ -13,11 +17,14 @@ NEKO_BEGIN_NAMESPACE
 
 template <typename Backend, typename... ProtocolSets>
 class RpcClient : public ProtocolSets... {
-    static_assert(sizeof...(ProtocolSets) > 0, "RpcClient requires at least one API/protocol struct");
 
 public:
-    explicit RpcClient(ilias::IoContext& /*unused*/) : ProtocolSets()... {
+    RpcBuiltinMethods rpc;
+    static constexpr int BuiltinMethodsCount = Reflect<RpcBuiltinMethods>::value_count;
+
+    explicit RpcClient(ilias::IoContext& /*unused*/) : ProtocolSets()..., rpc() {
         (_registerProtocol(static_cast<ProtocolSets&>(*this)), ...);
+        _registerProtocol(rpc, "rpc");
     }
     ~RpcClient() { close(); }
 
@@ -33,16 +40,15 @@ public:
 
     auto isConnected() const noexcept -> bool { return mEndpoint != nullptr; }
 
-    template <RpcEndpoint EndpointT>
+    template <RpcMessageEndpoint EndpointT>
     auto setEndpoint(EndpointT endpoint) noexcept -> void {
-        mEndpoint = std::make_unique<detail::RpcEndpointWrapper<EndpointT>>(std::move(endpoint));
+        mEndpoint = std::make_unique<detail::RpcMessageEndpointWrapper<EndpointT>>(std::move(endpoint));
     }
 
-    auto setEndpoint(std::unique_ptr<detail::IRpcEndpoint> endpoint) noexcept -> void { mEndpoint = std::move(endpoint); }
-
-    template <RpcEndpoint EndpointT>
-    auto setTransport(EndpointT endpoint) noexcept -> void {
-        setEndpoint(std::move(endpoint));
+    template <typename StreamT>
+        requires detail::RpcStreamBackend<Backend, StreamT>
+    auto setEndpoint(StreamT stream) noexcept -> void {
+        setEndpoint(Backend::makeEndpoint(std::move(stream)));
     }
 
     template <typename RetT, ConstexprString... ArgNames, typename... Args>
@@ -81,8 +87,8 @@ public:
 
 private:
     template <typename Protocol>
-    void _registerProtocol(Protocol& protocol) {
-        detail::forEachRpcMethod(protocol, [this](auto& method) { _registerRpcMethod(method); });
+    void _registerProtocol(Protocol& protocol, std::string_view prefix = {}) {
+        detail::forEachRpcMethod(protocol, [this](auto& method) { _registerRpcMethod(method); }, prefix);
     }
 
     template <typename T>
@@ -131,7 +137,7 @@ private:
     }
 
 private:
-    std::unique_ptr<detail::IRpcEndpoint> mEndpoint = nullptr;
+    std::unique_ptr<detail::IRpcMessageEndpoint> mEndpoint = nullptr;
     std::uint64_t mId = 0;
     ilias::Mutex mMutex;
 };
