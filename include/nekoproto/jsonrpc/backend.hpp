@@ -1,13 +1,20 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 
-#include "ilias/io/error.hpp"
-#include "ilias/result.hpp"
+#include <ilias/io/error.hpp>
+#include <ilias/io/method.hpp>
+#include <ilias/io/traits.hpp>
+#include <ilias/result.hpp>
+
 #include "nekoproto/jsonrpc/jsonrpc_error.hpp"
 #include "nekoproto/jsonrpc/protocol.hpp"
 #include "nekoproto/rpc/client.hpp"
@@ -28,7 +35,7 @@ struct JsonRpcBackend {
     };
 
     struct DecodeResult {
-        bool ok = false;
+        bool ok    = false;
         bool batch = false;
         std::vector<DecodedRequest> requests;
     };
@@ -38,6 +45,11 @@ struct JsonRpcBackend {
         Id id;
     };
 
+private:
+    template <ilias::Stream StreamT>
+    class StreamEndpoint;
+
+public:
     static DecodeResult decodeIncoming(std::span<const std::byte> message) {
         DecodeResult result;
         auto data = reinterpret_cast<const char*>(message.data());
@@ -53,7 +65,7 @@ struct JsonRpcBackend {
             return result;
         }
 
-        result.ok = true;
+        result.ok    = true;
         result.batch = root.isArray();
         std::vector<JsonSerializer::JsonValue> rawRequests;
         if (result.batch) {
@@ -177,9 +189,9 @@ struct JsonRpcBackend {
         }
         using ErrorTraits = detail::RpcMethodTraits<void(void)>;
         detail::JsonRpcResponse<ErrorTraits> response;
-        response.id = request.method.id;
+        response.id    = request.method.id;
         response.error = detail::JsonRpcErrorResponse{static_cast<int64_t>(error.value()), error.message()};
-        auto value = to_json_value(response);
+        auto value     = to_json_value(response);
         if (value.hasValue()) {
             responses.emplace_back(std::move(value));
         }
@@ -248,7 +260,64 @@ struct JsonRpcBackend {
     static std::error_code clientNotInitError() { return JsonRpcError::ClientNotInit; }
     static std::error_code notificationOk() { return JsonRpcError::Ok; }
 
+    template <ilias::Stream StreamT>
+    static auto makeEndpoint(StreamT stream) {
+        return StreamEndpoint<StreamT>{std::move(stream)};
+    }
+
 private:
+    template <ilias::Stream StreamT>
+    class StreamEndpoint {
+    public:
+        explicit StreamEndpoint(StreamT stream) : mStream(std::move(stream)) {}
+
+        auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<void> {
+            ILIAS_CO_TRY(auto size, co_await ilias::io::readU32Le(mStream));
+            buffer.resize(size);
+            if (size == 0U) {
+                co_return {};
+            }
+
+            ILIAS_CO_TRY(auto bodysize, co_await ilias::io::readAll(mStream, std::span<std::byte>{buffer.data(), buffer.size()}));
+            if (bodysize != buffer.size()) {
+                co_return ilias::Err(ilias::IoError::UnexpectedEOF);
+            }
+            co_return {};
+        }
+
+        auto send(std::span<const std::byte> buffer) -> ilias::IoTask<void> {
+            if (buffer.size() > std::numeric_limits<std::uint32_t>::max()) {
+                co_return ilias::Err(JsonRpcError::InvalidRequest);
+            }
+            ILIAS_CO_TRYV(co_await ilias::io::writeU32Le(mStream, static_cast<std::uint32_t>(buffer.size())));
+            ILIAS_CO_TRY(auto sendedSize, co_await ilias::io::writeAll(mStream, buffer));
+            if (sendedSize != buffer.size()) {
+                co_return ilias::Err(ilias::IoError::WriteZero);
+            }
+            if (auto flushRet = co_await mStream.flush(); !flushRet) {
+                co_return ilias::Err(flushRet.error());
+            }
+            co_return {};
+        }
+
+        auto close() -> void {
+            if constexpr (requires(StreamT& stream) { stream.close(); }) {
+                mStream.close();
+            }
+        }
+
+        auto cancel() -> void {
+            if constexpr (requires(StreamT& stream) { stream.cancel(); }) {
+                mStream.cancel();
+            } else {
+                close();
+            }
+        }
+
+    private:
+        StreamT mStream;
+    };
+
     template <typename Method, typename Request, typename... Args>
     static void fillParams(Request& request, Args&&... args) {
         using JsonTraits = detail::JsonRpcMethodTraits<typename Method::MethodTraits>;

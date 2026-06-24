@@ -5,6 +5,8 @@
 #include <tuple>
 #include <type_traits>
 
+#include <ilias/io.hpp>
+
 #include "nekoproto/rpc/traits.hpp"
 
 NEKO_BEGIN_NAMESPACE

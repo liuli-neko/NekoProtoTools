@@ -1,5 +1,7 @@
 #pragma once
 
+#include "nekoproto/rpc/backend.hpp"
+#include "nekoproto/rpc/builtin.hpp"
 #include "nekoproto/rpc/client.hpp"
 #include "nekoproto/rpc/dispatcher.hpp"
 #include "nekoproto/rpc/endpoint.hpp"
