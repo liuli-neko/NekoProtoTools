@@ -190,7 +190,7 @@ public:
         using ErrorTraits = detail::RpcMethodTraits<void(void)>;
         detail::JsonRpcResponse<ErrorTraits> response;
         response.id    = request.method.id;
-        response.error = detail::JsonRpcErrorResponse{static_cast<int64_t>(error.value()), error.message()};
+        response.error = makeErrorResponse(error);
         auto value     = to_json_value(response);
         if (value.hasValue()) {
             responses.emplace_back(std::move(value));
@@ -266,6 +266,35 @@ public:
     }
 
 private:
+    static auto makeErrorResponse(std::error_code error) -> detail::JsonRpcErrorResponse {
+        return detail::JsonRpcErrorResponse{jsonRpcErrorCode(error), error.message()};
+    }
+
+    static auto jsonRpcErrorCode(std::error_code error) -> std::int64_t {
+        if (&error.category() != &RpcErrorCategory::instance()) {
+            return static_cast<std::int64_t>(error.value());
+        }
+
+        switch (static_cast<RpcError>(error.value())) {
+        case RpcError::Ok:
+            return static_cast<std::int64_t>(JsonRpcError::Ok);
+        case RpcError::InvalidRequest:
+            return static_cast<std::int64_t>(JsonRpcError::InvalidRequest);
+        case RpcError::MethodNotFound:
+            return static_cast<std::int64_t>(JsonRpcError::MethodNotFound);
+        case RpcError::InvalidParams:
+            return static_cast<std::int64_t>(JsonRpcError::InvalidParams);
+        case RpcError::InternalError:
+            return static_cast<std::int64_t>(JsonRpcError::InternalError);
+        case RpcError::MethodNotBind:
+        case RpcError::ClientNotInit:
+        case RpcError::ResponseIdNotMatch:
+            return static_cast<std::int64_t>(JsonRpcError::ServerErrorStart) -
+                   (static_cast<std::int64_t>(error.value()) - 1);
+        }
+        return static_cast<std::int64_t>(JsonRpcError::InternalError);
+    }
+
     template <ilias::Stream StreamT>
     class StreamEndpoint {
     public:

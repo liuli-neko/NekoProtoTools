@@ -9,13 +9,13 @@ if has_config("enable_jsonrpc") then
             add_tests(cpp_versions[i]:gsub("%+", "p", 2), {
                 group = "rpc",
                 kind = "binary",
-                files = {"test_neko_rpc_backend.cpp"},
+                files = {"../../../src/rpc.cpp", "test_neko_rpc_backend.cpp"},
                 languages = cpp_versions[i],
                 run_timeout = 30000
             })
         end
         set_group("rpc")
-        add_files("test_neko_rpc_backend.cpp", "$(projectdir)/src/jsonrpc.cpp")
+        add_files("test_neko_rpc_backend.cpp", "$(projectdir)/src/rpc.cpp")
         on_load(function (target)
             import("lua.auto", {rootdir = os.projectdir()})
             auto().auto_add_packages(target)

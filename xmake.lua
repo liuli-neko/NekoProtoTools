@@ -228,7 +228,7 @@ if has_config("enable_jsonrpc") then
         add_headerfiles("include/(nekoproto/rpc/**.hpp)")
         add_includedirs("include")
         -- 添加非模板函数的实现文件
-        add_files("src/jsonrpc.cpp")
+        add_files("src/jsonrpc.cpp", "src/rpc.cpp")
 
         on_load(function (target) 
             import("lua.auto", {rootdir = os.projectdir()})
