@@ -4,6 +4,9 @@
 #include <string>
 
 namespace NEKO_NAMESPACE::detail {
+using ilias::hostToNetwork;
+using ilias::networkToHost;
+using ilias::unstoppable;
 
 NEKO_PROTO_API std::string to_string(JsonRpcIdType id) {
     switch (id.index()) {
@@ -18,7 +21,7 @@ NEKO_PROTO_API std::string to_string(JsonRpcIdType id) {
     }
 }
 
-auto MessageStream<UdpStream, void>::recv(std::vector<std::byte>& buffer) -> IoTask<void> {
+auto RpcMessageEndpointWrapper<IliasUdpSocket, void>::recv(std::vector<std::byte>& buffer) -> IoTask<void> {
     if (!mClient) {
         co_return Err(JsonRpcError::ClientNotInit);
     }
@@ -35,12 +38,12 @@ auto MessageStream<UdpStream, void>::recv(std::vector<std::byte>& buffer) -> IoT
             buffer.resize(ret.value().first + current);
             co_return {};
         } else {
-            co_return Err<Error>(ret.error());
+            co_return Err(ret.error());
         }
     }
 }
 
-auto MessageStream<UdpStream, void>::send(std::span<const std::byte> data) -> IoTask<void> {
+auto RpcMessageEndpointWrapper<IliasUdpSocket, void>::send(std::span<const std::byte> data) -> IoTask<void> {
     if (!mClient) {
         co_return Err(JsonRpcError::ClientNotInit);
     }
@@ -58,24 +61,24 @@ auto MessageStream<UdpStream, void>::send(std::span<const std::byte> data) -> Io
         }
     }
     if (!ret) {
-        co_return Err<Error>(ret.error());
+        co_return Err(ret.error());
     }
     co_return {};
 }
 
-auto MessageStream<UdpStream, void>::close() -> void {
+auto RpcMessageEndpointWrapper<IliasUdpSocket, void>::close() -> void {
     if (mClient) {
         mClient.close();
     }
 }
 
-auto MessageStream<UdpStream, void>::cancel() -> void {
+auto RpcMessageEndpointWrapper<IliasUdpSocket, void>::cancel() -> void {
     if (mClient) {
         mClient.cancel();
     }
 }
 
-auto MessageStream<IliasDynStream, void>::recv(std::vector<std::byte>& buffer) -> IoTask<void> {
+auto RpcMessageEndpointWrapper<IliasDynStream, void>::recv(std::vector<std::byte>& buffer) -> IoTask<void> {
     if (!mClient) {
         co_return Err(JsonRpcError::ClientNotInit);
     }
@@ -101,7 +104,7 @@ auto MessageStream<IliasDynStream, void>::recv(std::vector<std::byte>& buffer) -
     }
 }
 
-auto MessageStream<IliasDynStream, void>::send(std::span<const std::byte> data) -> IoTask<void> {
+auto RpcMessageEndpointWrapper<IliasDynStream, void>::send(std::span<const std::byte> data) -> IoTask<void> {
     if (!mClient) {
         co_return Err(JsonRpcError::ClientNotInit);
     }
@@ -121,42 +124,20 @@ auto MessageStream<IliasDynStream, void>::send(std::span<const std::byte> data) 
     }
     co_return {};
 }
-auto MessageStream<IliasDynStream, void>::close() -> void {
+auto RpcMessageEndpointWrapper<IliasDynStream, void>::close() -> void {
     if (mClient) {
         mClient.close();
     }
 }
 
-auto MessageStream<IliasDynStream, void>::cancel() -> void {
+auto RpcMessageEndpointWrapper<IliasDynStream, void>::cancel() -> void {
     // TODO: Ilias::DynStream has no cancel support
 }
 
-auto MessageStream<TcpListener, void>::close() -> void {
-    if (mListener) {
-        mListener.close();
-    }
-}
-
-auto MessageStream<TcpListener, void>::cancel() -> void {
-    if (mListener) {
-        mListener.cancel();
-    }
-}
-
-auto MessageStream<TcpListener, void>::accept() -> IoTask<MessageStream<IliasDynStream>> {
-    if (!mListener) {
-        co_return Err(JsonRpcError::ClientNotInit);
-    }
-    if (auto ret = co_await mListener.accept(); ret) {
-        co_return MessageStream<IliasDynStream>(std::move(ret.value().first));
-    } else {
-        co_return Err(ret.error());
-    }
-}
 NEKO_PROTO_API
-auto make_tcp_stream_client(IPEndpoint ipendpoint) -> IoTask<MessageStream<IliasDynStream>> {
+auto make_tcp_stream_client(IPEndpoint ipendpoint) -> IoTask<RpcMessageEndpointWrapper<IliasDynStream>> {
     if (auto ret1 = co_await ilias::TcpStream::connect(ipendpoint); ret1) {
-        co_return MessageStream<IliasDynStream>(std::move(ret1.value()));
+        co_return RpcMessageEndpointWrapper<IliasDynStream>(std::move(ret1.value()));
     } else {
         co_return Err(ret1.error());
     }
@@ -165,7 +146,7 @@ auto make_tcp_stream_client(IPEndpoint ipendpoint) -> IoTask<MessageStream<Ilias
 // tcp://127.0.0.1:8080
 // 127.0.0.1:8080
 NEKO_PROTO_API
-auto make_tcp_stream_client(std::string_view url) -> IoTask<MessageStream<IliasDynStream>> {
+auto make_tcp_stream_client(std::string_view url) -> IoTask<RpcMessageEndpointWrapper<IliasDynStream>> {
     std::string_view ipstr;
     if (url.substr(0, 6) == "tcp://") {
         ipstr = url.substr(6);
@@ -179,16 +160,16 @@ auto make_tcp_stream_client(std::string_view url) -> IoTask<MessageStream<IliasD
     co_return co_await make_tcp_stream_client(ipendpoint.value());
 }
 NEKO_PROTO_API
-auto make_tcp_stream_client(const char* url) -> IoTask<MessageStream<IliasDynStream>> {
+auto make_tcp_stream_client(const char* url) -> IoTask<RpcMessageEndpointWrapper<IliasDynStream>> {
     return make_tcp_stream_client(std::string_view(url));
 }
 NEKO_PROTO_API
-auto make_tcp_stream_client(const std::string& url) -> IoTask<MessageStream<IliasDynStream>> {
+auto make_tcp_stream_client(const std::string& url) -> IoTask<RpcMessageEndpointWrapper<IliasDynStream>> {
     return make_tcp_stream_client(std::string_view(url));
 }
 NEKO_PROTO_API
 auto make_udp_stream_client(IPEndpoint bindIpendpoint, IPEndpoint remoteIpendpoint)
-    -> IoTask<MessageStream<UdpStream>> {
+    -> IoTask<RpcMessageEndpointWrapper<IliasUdpSocket>> {
     if (auto ret = ilias::Socket::make(bindIpendpoint.family(), SOCK_DGRAM, 0); ret) {
         auto socket = std::move(ret.value());
         socket.setOption(ilias::sockopt::ReuseAddress(1));
@@ -197,7 +178,7 @@ auto make_udp_stream_client(IPEndpoint bindIpendpoint, IPEndpoint remoteIpendpoi
             co_return Err(ret1.error());
         }
         auto udpclient = IliasUdpSocket::from(std::move(socket));
-        co_return MessageStream<UdpStream>(std::move(udpclient.value()), remoteIpendpoint);
+        co_return RpcMessageEndpointWrapper<IliasUdpSocket>(std::move(udpclient.value()), remoteIpendpoint);
     } else {
         co_return Err(ret.error());
     }
@@ -206,7 +187,7 @@ auto make_udp_stream_client(IPEndpoint bindIpendpoint, IPEndpoint remoteIpendpoi
 // like udp://127.0.0.1:12345-127.0.0.1:12346
 // 127.0.0.1:12345-127.0.0.1:12346
 NEKO_PROTO_API
-auto make_udp_stream_client(std::string_view url) -> IoTask<MessageStream<UdpStream>> {
+auto make_udp_stream_client(std::string_view url) -> IoTask<RpcMessageEndpointWrapper<IliasUdpSocket>> {
     std::string_view bindRemoteIp;
     if (url.substr(0, 6) == "udp://") {
         bindRemoteIp = url.substr(6);
@@ -225,53 +206,13 @@ auto make_udp_stream_client(std::string_view url) -> IoTask<MessageStream<UdpStr
     co_return co_await make_udp_stream_client(bindIpendpoint.value(), remoteIpendpoint.value());
 }
 NEKO_PROTO_API
-auto make_udp_stream_client(const char* url) -> IoTask<MessageStream<UdpStream>> {
+auto make_udp_stream_client(const char* url) -> IoTask<RpcMessageEndpointWrapper<IliasUdpSocket>> {
     return make_udp_stream_client(std::string_view(url));
 }
 NEKO_PROTO_API
-auto make_udp_stream_client(const std::string& url) -> IoTask<MessageStream<UdpStream>> {
+auto make_udp_stream_client(const std::string& url) -> IoTask<RpcMessageEndpointWrapper<IliasUdpSocket>> {
     co_return co_await make_udp_stream_client(std::string_view(url));
 }
-NEKO_PROTO_API
-auto make_tcp_stream_server(IPEndpoint ipendpoint) -> IoTask<MessageStream<TcpListener>> {
-    if (auto ret = ilias::Socket::make(ipendpoint.family(), SOCK_STREAM, IPPROTO_TCP); ret) {
-        ret.value().setOption(ilias::sockopt::ReuseAddress(1));
-        if (auto ret1 = ret.value().bind(ipendpoint); ret1) {
-            auto ret2 = ret.value().listen();
-            if (!ret2) {
-                co_return Err(ret2.error());
-            }
-            co_return MessageStream<TcpListener>(IliasTcpListener::from(std::move(ret.value())).value());
-        } else {
-            co_return Err(ret1.error());
-        }
-    } else {
-        co_return Err(ret.error());
-    }
-}
-NEKO_PROTO_API
-auto make_tcp_stream_server(std::string_view url) -> IoTask<MessageStream<TcpListener>> {
-    std::string_view ipstr;
-    if (url.substr(0, 6) == "tcp://") {
-        ipstr = url.substr(6);
-    } else {
-        ipstr = url;
-    }
-    auto ipendpoint = IPEndpoint::fromString(ipstr);
-    if (!ipendpoint) {
-        co_return Err(ilias::IoError::InvalidArgument);
-    }
-    co_return co_await make_tcp_stream_server(ipendpoint.value());
-}
-NEKO_PROTO_API
-auto make_tcp_stream_server(const char* url) -> IoTask<MessageStream<TcpListener>> {
-    return make_tcp_stream_server(std::string_view(url));
-}
-NEKO_PROTO_API
-auto make_tcp_stream_server(const std::string& url) -> IoTask<MessageStream<TcpListener>> {
-    return make_tcp_stream_server(std::string_view(url));
-}
-
 } // namespace NEKO_NAMESPACE::detail
 
 namespace NEKO_NAMESPACE {
