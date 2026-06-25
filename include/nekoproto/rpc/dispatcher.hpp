@@ -12,13 +12,14 @@
 #include <vector>
 
 #include "nekoproto/global/log.hpp"
+#include "nekoproto/rpc/concepts.hpp"
 #include "nekoproto/rpc/endpoint.hpp"
 #include "nekoproto/rpc/method.hpp"
 
 NEKO_BEGIN_NAMESPACE
 namespace detail {
 
-template <typename Backend>
+template <RpcBackend Backend>
 class RpcMethodWrapperBase {
 public:
     RpcMethodWrapperBase()                  = default;
@@ -47,10 +48,10 @@ struct RpcMethodTypeHelper<std::unique_ptr<T>> {
     using MethodType = T;
 };
 
-template <typename Backend>
+template <RpcBackend Backend>
 class RpcDispatcher;
 
-template <typename Backend, typename T>
+template <RpcBackend Backend, typename T>
 class RpcMethodWrapperImpl : public RpcMethodWrapperBase<Backend> {
 public:
     using MethodType = typename RpcMethodTypeHelper<T>::MethodType;
@@ -67,7 +68,7 @@ private:
     RpcDispatcher<Backend>* mSelf = nullptr;
 };
 
-template <typename Backend>
+template <RpcBackend Backend>
 class RpcDispatcher {
 public:
     using Id = typename Backend::Id;
@@ -233,11 +234,11 @@ private:
     ilias::TaskGroup<void> mTaskScope;
     std::map<std::string, std::unique_ptr<RpcMethodWrapperBase<Backend>>> mHandlers;
 
-    template <typename B, typename T>
+    template <RpcBackend B, typename T>
     friend class RpcMethodWrapperImpl;
 };
 
-template <typename Backend, typename T>
+template <RpcBackend Backend, typename T>
 auto RpcMethodWrapperImpl<Backend, T>::call(const typename Backend::DecodedRequest& request,
                                             typename Backend::ResponseValues& responses) noexcept -> ilias::Task<void> {
     return mSelf->_handle(request, responses, *mMethodData);

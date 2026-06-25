@@ -7,14 +7,21 @@
 NEKO_BEGIN_NAMESPACE
 
 enum class RpcError {
-    Ok                 = 0,
-    MethodNotBind      = 1,
-    ClientNotInit      = 2,
-    ResponseIdNotMatch = 3,
-    InvalidRequest     = 4,
-    MethodNotFound     = 5,
-    InvalidParams      = 6,
-    InternalError      = 7,
+    Ok                                = 0,
+    MethodNotBind                     = 1,
+    ClientNotInit                     = 2,
+    ResponseIdNotMatch                = 3,
+    InvalidRequest                    = 4,
+    MethodNotFound                    = 5,
+    InvalidParams                     = 6,
+    InternalError                     = 7,
+    MethodIdNotNegotiated             = 8,
+    MethodTableOutdated               = 9,
+    MethodIdNotFound                  = 10,
+    MethodIdRemoved                   = 11,
+    MethodSignatureMismatch           = 12,
+    MethodIdRequiredButUnsupported    = 13,
+    CompressionRequiredButUnsupported = 14,
 };
 
 class NEKO_PROTO_API RpcErrorCategory : public std::error_category {
