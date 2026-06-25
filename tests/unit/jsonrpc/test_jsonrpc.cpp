@@ -12,6 +12,7 @@
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/jsonrpc/backend.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_traits.hpp"
+#include "nekoproto/jsonrpc/message_stream_wrapper.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
 NEKO_USE_NAMESPACE
@@ -147,8 +148,19 @@ public:
 };
 
 template <typename Server, typename Client>
-static void connectWithDuplex(Server& server, Client& client) {
+static void connect_endpoint(Server& server, Client& client) {
+#if 1
+    auto serverStream = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS) +
+                                                        "-127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS)))
+                            .wait()
+                            .value();
+    auto clientStream = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS) +
+                                                        "-127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS)))
+                            .wait()
+                            .value();
+#else
     auto [clientStream, serverStream] = ilias::DuplexStream::make(65536);
+#endif
     server.addEndpoint(std::move(serverStream));
     client.setEndpoint(std::move(clientStream));
 }
@@ -156,7 +168,7 @@ static void connectWithDuplex(Server& server, Client& client) {
 TEST_F(JsonRpcTest, BindAndCall) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
-    connectWithDuplex(server, client);
+    connect_endpoint(server, client);
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server->test2 = [](int a1, int b1) -> ilias::IoTask<void> {
@@ -273,7 +285,7 @@ TEST_F(JsonRpcTest, BindAndCallDuplex) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    connectWithDuplex(server, client);
+    connect_endpoint(server, client);
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server->test2 = [](int a1, int b1) -> ilias::IoTask<void> {
@@ -437,7 +449,7 @@ TEST_F(JsonRpcTest, Notification) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    connectWithDuplex(server, client);
+    connect_endpoint(server, client);
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server->test2 = [](int a1, int b1) -> ilias::IoTask<void> {
@@ -473,7 +485,7 @@ TEST_F(JsonRpcTest, Basic) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    connectWithDuplex(server, client);
+    connect_endpoint(server, client);
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server.bindMethod<"aa", "bb">("test11",

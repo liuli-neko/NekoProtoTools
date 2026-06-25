@@ -34,8 +34,11 @@ public:
     virtual auto cancel() -> void                                               = 0;
 };
 
+template <typename T, typename = void>
+class RpcMessageEndpointWrapper;
+
 template <RpcMessageEndpoint T>
-class RpcMessageEndpointWrapper : public IRpcMessageEndpoint {
+class RpcMessageEndpointWrapper<T, void> : public IRpcMessageEndpoint {
 public:
     explicit RpcMessageEndpointWrapper(T&& endpoint) : mEndpoint(std::move(endpoint)) {}
     auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<void> override { return mEndpoint.recv(buffer); }
@@ -51,6 +54,12 @@ template <typename Backend, typename StreamT>
 concept RpcStreamBackend = ilias::Stream<StreamT> && requires(StreamT stream) {
     { Backend::makeEndpoint(std::move(stream)) } -> RpcMessageEndpoint;
 };
+
+template <typename T, class enable = void>
+struct is_rpc_endpoint : std::false_type {};
+
+template <RpcMessageEndpoint T>
+struct is_rpc_endpoint<T, std::enable_if_t<std::is_base_of_v<IRpcMessageEndpoint, T>>> : std::true_type {};
 
 } // namespace detail
 

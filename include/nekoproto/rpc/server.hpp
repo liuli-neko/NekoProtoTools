@@ -1,7 +1,7 @@
 #pragma once
 
-#include <ilias/task/scope.hpp>
 #include <ilias/platform.hpp>
+#include <ilias/task/scope.hpp>
 #include <list>
 #include <memory>
 #include <string_view>
@@ -53,8 +53,13 @@ public:
 
     template <RpcMessageEndpoint EndpointT>
     auto addEndpoint(EndpointT endpoint) noexcept -> void {
-        auto item = mEndpoints.emplace(mEndpoints.end(),
-                                       std::make_unique<detail::RpcMessageEndpointWrapper<EndpointT>>(std::move(endpoint)));
+        auto item = mEndpoints.end();
+        if constexpr (detail::is_rpc_endpoint<EndpointT>::value) {
+            item = mEndpoints.emplace(mEndpoints.end(), std::make_unique<EndpointT>(std::move(endpoint)));
+        } else {
+            item = mEndpoints.emplace(
+                mEndpoints.end(), std::make_unique<detail::RpcMessageEndpointWrapper<EndpointT>>(std::move(endpoint)));
+        }
         mScope.spawn([this, item]() -> ilias::Task<void> {
             co_await mDispatcher.receiveLoop((*item).get());
             mEndpoints.erase(item);

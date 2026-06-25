@@ -10,8 +10,8 @@
  */
 #pragma once
 
-#include <ilias/io/error.hpp>
 #include <ilias/io/dyn_traits.hpp>
+#include <ilias/io/error.hpp>
 #include <ilias/io/traits.hpp>
 #include <ilias/net/sockopt.hpp>
 #include <ilias/net/system.hpp>
@@ -26,6 +26,7 @@
 #include "ilias/defines.hpp"
 #include "ilias/task/utils.hpp"
 #include "nekoproto/global/global.hpp"
+#include "nekoproto/rpc/endpoint.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
@@ -45,38 +46,14 @@ concept MessageStreamClient = requires(T client, std::vector<std::byte>& buffer)
     } -> std::same_as<void>;
 };
 
-template <typename T>
-concept MessageStreamListener = requires(T server) {
-    {
-        server.accept() // must return a valid client, if return same client, the server will be closed
-    };
-    {
-        server.close() // close the server
-    } -> std::same_as<void>;
-    {
-        server.cancel() // cancel current operation
-    } -> std::same_as<void>;
-};
-
 namespace detail {
-using Error = std::error_code;
 using ilias::IoTask;
 using ilias::IPEndpoint;
 using ilias::Task;
 using IliasDynStream   = ilias::DynStream;
-using IliasTcpListener = ilias::TcpListener;
 using IliasUdpSocket   = ilias::UdpSocket;
-using ilias::hostToNetwork;
-using ilias::networkToHost;
 using ilias::Err;
-using ilias::unstoppable;
 
-template <typename T, class enable = void>
-class MessageStream;
-
-struct UdpStream {};
-struct TcpStream {};
-struct TcpListener {};
 /**
  * @brief 数据包接收，负责拆包，默认为最大长度1500的UDP包
  *
@@ -84,14 +61,15 @@ struct TcpListener {};
  * @tparam N
  */
 template <>
-class NEKO_PROTO_API MessageStream<UdpStream, void> {
+class NEKO_PROTO_API RpcMessageEndpointWrapper<IliasUdpSocket, void> : public IRpcMessageEndpoint {
 public:
-    MessageStream(IliasUdpSocket&& client, IPEndpoint endpoint) : mClient(std::move(client)), mEndpoint(endpoint) {}
+    RpcMessageEndpointWrapper(IliasUdpSocket&& client, IPEndpoint endpoint)
+        : mClient(std::move(client)), mEndpoint(endpoint) {}
 
-    auto recv(std::vector<std::byte>& buffer) -> IoTask<void>;
-    auto send(std::span<const std::byte> data) -> IoTask<void>;
-    auto close() -> void;
-    auto cancel() -> void;
+    auto recv(std::vector<std::byte>& buffer) -> IoTask<void> override;
+    auto send(std::span<const std::byte> data) -> IoTask<void> override;
+    auto close() -> void override;
+    auto cancel() -> void override;
 
 private:
     IliasUdpSocket mClient;
@@ -105,117 +83,41 @@ private:
  * @tparam N
  */
 template <>
-class NEKO_PROTO_API MessageStream<IliasDynStream, void> {
+class NEKO_PROTO_API RpcMessageEndpointWrapper<IliasDynStream, void> : public IRpcMessageEndpoint {
 public:
-    MessageStream() = default;
-    MessageStream(IliasDynStream&& client) : mClient(std::move(client)) {}
+    RpcMessageEndpointWrapper() = default;
+    RpcMessageEndpointWrapper(IliasDynStream&& client) : mClient(std::move(client)) {}
 
-    auto recv(std::vector<std::byte>& buffer) -> IoTask<void>;
-    auto send(std::span<const std::byte> data) -> IoTask<void>;
-    auto close() -> void;
-    auto cancel() -> void;
+    auto recv(std::vector<std::byte>& buffer) -> IoTask<void> override;
+    auto send(std::span<const std::byte> data) -> IoTask<void> override;
+    auto close() -> void override;
+    auto cancel() -> void override;
 
 private:
     IliasDynStream mClient;
 };
 
-template <>
-class NEKO_PROTO_API MessageStream<TcpListener, void> {
-public:
-    MessageStream(IliasTcpListener&& listener) : mListener(std::move(listener)) {}
-
-    auto close() -> void;
-    auto cancel() -> void;
-    auto accept() -> IoTask<MessageStream<IliasDynStream>>;
-
-private:
-    IliasTcpListener mListener;
-};
-
-class IMessageStream {
-public:
-    IMessageStream()          = default;
-    virtual ~IMessageStream() = default;
-
-    virtual auto recv(std::vector<std::byte>& buffer) -> IoTask<void>    = 0;
-    virtual auto send(std::span<const std::byte> buffer) -> IoTask<void> = 0;
-    virtual auto close() -> void                                         = 0;
-    virtual auto cancel() -> void                                        = 0;
-};
-
-template <MessageStreamClient T>
-class MessageStreamWrapper : public IMessageStream {
-public:
-    MessageStreamWrapper(T&& client) : mClient(std::move(client)) {}
-    auto recv(std::vector<std::byte>& buffer) -> IoTask<void> override { return mClient.recv(buffer); }
-    auto send(std::span<const std::byte> buffer) -> IoTask<void> override { return mClient.send(buffer); }
-    auto close() -> void override { return mClient.close(); }
-    auto cancel() -> void override { return mClient.cancel(); }
-
-private:
-    T mClient;
-};
-
-class IMessageListener {
-public:
-    IMessageListener()          = default;
-    virtual ~IMessageListener() = default;
-
-    virtual auto accept() -> IoTask<std::unique_ptr<IMessageStream>> = 0;
-    virtual auto close() -> void                                     = 0;
-    virtual auto cancel() -> void                                    = 0;
-};
-
-template <MessageStreamListener T>
-class MessageListenerWrapper : public IMessageListener {
-public:
-    MessageListenerWrapper(T&& listener) : mListener(std::move(listener)) {}
-    auto accept() -> IoTask<std::unique_ptr<IMessageStream>> override {
-        if (auto ret = co_await mListener.accept(); ret) {
-            using ClientT = std::decay_t<decltype(*ret)>;
-            if constexpr (std::is_same_v<ClientT, std::unique_ptr<IMessageStream>>) {
-                co_return std::move(*ret);
-            } else {
-                co_return std::make_unique<MessageStreamWrapper<ClientT>>(std::move(*ret));
-            }
-        } else {
-            co_return Err(ret.error());
-        }
-    }
-    auto close() -> void override { return mListener.close(); }
-    auto cancel() -> void override { return mListener.cancel(); }
-
-private:
-    T mListener;
-};
 NEKO_PROTO_API
-auto make_tcp_stream_client(IPEndpoint ipendpoint) -> IoTask<MessageStream<IliasDynStream>>;
+auto make_tcp_stream_client(IPEndpoint ipendpoint) -> IoTask<RpcMessageEndpointWrapper<IliasDynStream>>;
 // tcp://127.0.0.1:8080
 // 127.0.0.1:8080
 NEKO_PROTO_API
-auto make_tcp_stream_client(std::string_view url) -> IoTask<MessageStream<IliasDynStream>>;
+auto make_tcp_stream_client(std::string_view url) -> IoTask<RpcMessageEndpointWrapper<IliasDynStream>>;
 NEKO_PROTO_API
-auto make_tcp_stream_client(const char* url) -> IoTask<MessageStream<IliasDynStream>>;
+auto make_tcp_stream_client(const char* url) -> IoTask<RpcMessageEndpointWrapper<IliasDynStream>>;
 NEKO_PROTO_API
-auto make_tcp_stream_client(const std::string& url) -> IoTask<MessageStream<IliasDynStream>>;
+auto make_tcp_stream_client(const std::string& url) -> IoTask<RpcMessageEndpointWrapper<IliasDynStream>>;
 NEKO_PROTO_API
-auto make_udp_stream_client(IPEndpoint bindIpendpoint, IPEndpoint remoteIpendpoint) -> IoTask<MessageStream<UdpStream>>;
+auto make_udp_stream_client(IPEndpoint bindIpendpoint, IPEndpoint remoteIpendpoint)
+    -> IoTask<RpcMessageEndpointWrapper<IliasUdpSocket>>;
 // like udp://127.0.0.1:12345-127.0.0.1:12346
 // 127.0.0.1:12345-127.0.0.1:12346
 NEKO_PROTO_API
-auto make_udp_stream_client(std::string_view url) -> IoTask<MessageStream<UdpStream>>;
+auto make_udp_stream_client(std::string_view url) -> IoTask<RpcMessageEndpointWrapper<IliasUdpSocket>>;
 NEKO_PROTO_API
-auto make_udp_stream_client(const char* url) -> IoTask<MessageStream<UdpStream>>;
+auto make_udp_stream_client(const char* url) -> IoTask<RpcMessageEndpointWrapper<IliasUdpSocket>>;
 NEKO_PROTO_API
-auto make_udp_stream_client(const std::string& url) -> IoTask<MessageStream<UdpStream>>;
-NEKO_PROTO_API
-auto make_tcp_stream_server(IPEndpoint ipendpoint) -> IoTask<MessageStream<TcpListener>>;
-NEKO_PROTO_API
-auto make_tcp_stream_server(std::string_view url) -> IoTask<MessageStream<TcpListener>>;
-NEKO_PROTO_API
-auto make_tcp_stream_server(const char* url) -> IoTask<MessageStream<TcpListener>>;
-NEKO_PROTO_API
-auto make_tcp_stream_server(const std::string& url) -> IoTask<MessageStream<TcpListener>>;
+auto make_udp_stream_client(const std::string& url) -> IoTask<RpcMessageEndpointWrapper<IliasUdpSocket>>;
 } // namespace detail
 
 NEKO_END_NAMESPACE

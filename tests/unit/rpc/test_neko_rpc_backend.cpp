@@ -10,6 +10,7 @@
 #include <ilias/platform.hpp>
 #include <ilias/task.hpp>
 
+#include "nekoproto/jsonrpc/message_stream_wrapper.hpp"
 #include "nekoproto/rpc/rpc.hpp"
 
 NEKO_USE_NAMESPACE
@@ -31,6 +32,24 @@ auto contains(const std::vector<std::string>& values, std::string_view expected)
     return std::any_of(values.begin(), values.end(), [expected](const std::string& value) {
         return value == expected;
     });
+}
+
+template <typename Server, typename Client>
+ void connect_endpoint(Server& server, Client& client) {
+#if 1
+    auto serverStream = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12337 + NEKO_CPP_PLUS) +
+                                                        "-127.0.0.1:" + std::to_string(12338 + NEKO_CPP_PLUS)))
+                            .wait()
+                            .value();
+    auto clientStream = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12338 + NEKO_CPP_PLUS) +
+                                                        "-127.0.0.1:" + std::to_string(12337 + NEKO_CPP_PLUS)))
+                            .wait()
+                            .value();
+#else
+    auto [clientStream, serverStream] = ilias::DuplexStream::make(65536);
+#endif
+    server.addEndpoint(std::move(serverStream));
+    client.setEndpoint(std::move(clientStream));
 }
 
 } // namespace
@@ -63,10 +82,7 @@ TEST(NekoRpcBackend, CallsThroughIliasDuplexStreamEndpoint) {
     context.install();
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context};
-    auto [clientStream, serverStream] = ilias::DuplexStream::make(65536);
-
-    server.addEndpoint(std::move(serverStream));
-    client.setEndpoint(std::move(clientStream));
+    connect_endpoint(server, client);
 
     server->add = [](int lhs, int rhs) -> ilias::IoTask<int> {
         co_return lhs + rhs;
@@ -112,10 +128,7 @@ TEST(NekoRpcBackend, BuiltinMethodsAvailableOnClientByDefault) {
     context.install();
     RpcServer<BinaryRpcBackend> server{context};
     RpcClient<BinaryRpcBackend> client{context};
-    auto [clientStream, serverStream] = ilias::DuplexStream::make(65536);
-
-    server.addEndpoint(std::move(serverStream));
-    client.setEndpoint(std::move(clientStream));
+    connect_endpoint(server, client);
 
     auto methods = client->rpc.getMethodList().wait();
     ASSERT_TRUE(methods.has_value()) << methods.error().message();
