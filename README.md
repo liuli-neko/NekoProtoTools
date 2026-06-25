@@ -698,6 +698,8 @@ body:
 
 extension TLV 建议固定为 `type: u16, size: u16, value: bytes`。`type` 的最高位可作为 critical 标记：不认识的非 critical TLV 可以跳过，不认识的 critical TLV 应拒绝消息或拒绝连接。
 
+`method_id` 是 Neko-RPC backend 的 wire-level 可选扩展，属于后端协商出的传输优化，不进入通用 RPC 调用接口；初版实现通过 hello 同步连接期 full table，默认设计见 [`docs/rpc_method_id_design.md`](docs/rpc_method_id_design.md)。`rpc.get_method_list` / `rpc.get_method_info` 这些默认内建方法则是普通 RPC introspection，返回字符串方法名和描述；它们不改变 wire 格式，也不等同于已协商的 method id 表，最多只能作为构建或校验该表的输入。
+
 错误对象保持最小固定形状：
 
 ```cpp
@@ -752,7 +754,7 @@ server->calc.add = [](int lhs, int rhs) -> ilias::IoTask<int> {
 *   **最小接口**：当前后端接口是按 `RpcDispatcher` / `RpcClient` 的实际使用点形成的最小能力集合，未额外引入 listener、session、transport 或继承层次；stream 支持通过可选 `makeEndpoint` 静态 hook 接入。
 *   **非侵入扩展**：协议 struct 只需要 `RpcMethod` 字段和反射信息；命名策略通过 `make_tags<rpc_prefix_tag>` / `make_tags<rpc_no_prefix_tag>` 附着在字段使用点。
 *   **和序列化扩展一致**：序列化类型用 `detail::CustomParser<R, W, T>` 扩展，RPC 后端用静态函数和 concept 约束扩展；两者都避免要求业务类型继承框架基类。
-*   **后续可改进点**：可以补一个显式 `RpcBackend` concept 和 `BackendSerializable<Backend, T>` 检查，让自定义后端的错误信息更集中；也可以把常见的 `invoke` / tuple 参数展开做成默认 helper，进一步缩小后端需要手写的代码。
+*   **后续可改进点**：常见的 `invoke` / tuple 参数展开可以做成默认 helper，进一步缩小后端需要手写的代码。
 
 ---
 
@@ -826,8 +828,9 @@ struct CustomParser<R, W, StrongId> {
 *   [x] RPC 前端与 JSON-RPC 后端分离，设计文档见 [`docs/rpc_refactor_plan.md`](docs/rpc_refactor_plan.md)。
 *   [ ] 为外部 JSON-RPC 互通补充明确的 framing adapter，例如 LSP `Content-Length`、newline-delimited JSON、WebSocket message、datagram。
 *   [x] 增加 `NekoRpcBackend<Serializer>` / `BinaryRpcBackend`，提供固定二进制帧头和可替换 payload serializer。
-*   [ ] 为 `NekoRpcBackend` 补充 hello 协商、method id 表和压缩等可选 TLV 扩展。
-*   [ ] 增加显式 `RpcBackend` / `BackendSerializable` concept，改善自定义后端诊断。
+*   [x] 为 `NekoRpcBackend` 补充初版 hello 协商和连接期 full-table method id 优化，设计见 [`docs/rpc_method_id_design.md`](docs/rpc_method_id_design.md)。
+*   [ ] 继续完善 `NekoRpcBackend` 的动态 method id 表更新、delta/signature/兼容错误模型和压缩 TLV。
+*   [x] 增加显式 `RpcBackend` / `BackendSerializable` concept，改善自定义后端诊断。
 *   [ ] JSON-RPC 扩展。
 *   [x] 新增默认 `rpc` introspection 成员：
     - `rpc.get_method_list`: 获取当前服务端所有方法列表

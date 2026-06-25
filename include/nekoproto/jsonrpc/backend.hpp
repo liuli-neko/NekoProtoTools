@@ -18,6 +18,7 @@
 #include "nekoproto/jsonrpc/jsonrpc_error.hpp"
 #include "nekoproto/jsonrpc/protocol.hpp"
 #include "nekoproto/rpc/client.hpp"
+#include "nekoproto/rpc/concepts.hpp"
 #include "nekoproto/rpc/error.hpp"
 #include "nekoproto/rpc/server.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
@@ -50,6 +51,15 @@ private:
     class StreamEndpoint;
 
 public:
+    template <typename T>
+    static consteval bool serializable() {
+        if constexpr (std::is_void_v<T>) {
+            return true;
+        } else {
+            return traits::Serializable<T>;
+        }
+    }
+
     static DecodeResult decodeIncoming(std::span<const std::byte> message) {
         DecodeResult result;
         auto data = reinterpret_cast<const char*>(message.data());
@@ -109,6 +119,8 @@ public:
         -> ilias::Result<typename detail::JsonRpcMethodTraits<typename Method::MethodTraits>::ParamsTupleType,
                          std::error_code> {
         using Request = typename Method::template ApplyArgNames<detail::JsonRpcRequest2>;
+        static_assert(BackendSerializable<JsonRpcBackend, Request>,
+                      "JsonRpcBackend: method parameters are not serializable by JsonSerializer");
         Request decoded;
         JsonSerializer::InputSerializer in(request.value);
         if (in(decoded)) {
@@ -170,6 +182,8 @@ public:
             return;
         }
         using Response = detail::JsonRpcResponse<typename Method::MethodTraits>;
+        static_assert(BackendSerializable<JsonRpcBackend, Response>,
+                      "JsonRpcBackend: method return type is not serializable by JsonSerializer");
         Response response;
         response.id = request.method.id;
         if constexpr (std::is_void_v<typename Method::RawReturnType>) {
@@ -216,6 +230,8 @@ public:
     static auto encodeRequest(Method& method, bool notification, std::uint64_t& nextId, Args&&... args)
         -> ilias::Result<EncodedRequest, std::error_code> {
         using Request = typename Method::template ApplyArgNames<detail::JsonRpcRequest2>;
+        static_assert(BackendSerializable<JsonRpcBackend, Request>,
+                      "JsonRpcBackend: request parameters are not serializable by JsonSerializer");
         Request request;
         request.method = std::string(method.name());
         if (notification) {
@@ -237,6 +253,8 @@ public:
     static auto decodeResponse(std::span<const std::byte> buffer, const Id& expectedId)
         -> ilias::Result<typename Method::RawReturnType, std::error_code> {
         using Response = detail::JsonRpcResponse<typename Method::MethodTraits>;
+        static_assert(BackendSerializable<JsonRpcBackend, Response>,
+                      "JsonRpcBackend: response type is not serializable by JsonSerializer");
         Response response;
         JsonSerializer::InputSerializer in(reinterpret_cast<const char*>(buffer.data()), buffer.size());
         if (!in(response)) {
@@ -265,6 +283,11 @@ public:
         return StreamEndpoint<StreamT>{std::move(stream)};
     }
 
+    template <RpcMessageEndpoint EndpointT>
+    static auto makeEndpoint(EndpointT endpoint) {
+        return endpoint;
+    }
+
 private:
     static auto makeErrorResponse(std::error_code error) -> detail::JsonRpcErrorResponse {
         return detail::JsonRpcErrorResponse{jsonRpcErrorCode(error), error.message()};
@@ -279,6 +302,13 @@ private:
         case RpcError::Ok:
             return static_cast<std::int64_t>(JsonRpcError::Ok);
         case RpcError::InvalidRequest:
+        case RpcError::MethodIdNotNegotiated:
+        case RpcError::MethodTableOutdated:
+        case RpcError::MethodIdNotFound:
+        case RpcError::MethodIdRemoved:
+        case RpcError::MethodSignatureMismatch:
+        case RpcError::MethodIdRequiredButUnsupported:
+        case RpcError::CompressionRequiredButUnsupported:
             return static_cast<std::int64_t>(JsonRpcError::InvalidRequest);
         case RpcError::MethodNotFound:
             return static_cast<std::int64_t>(JsonRpcError::MethodNotFound);
@@ -300,21 +330,22 @@ private:
     public:
         explicit StreamEndpoint(StreamT stream) : mStream(std::move(stream)) {}
 
-        auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<void> {
+        auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t> {
             ILIAS_CO_TRY(auto size, co_await ilias::io::readU32Le(mStream));
             buffer.resize(size);
             if (size == 0U) {
-                co_return {};
+                co_return buffer.size();
             }
 
-            ILIAS_CO_TRY(auto bodysize, co_await ilias::io::readAll(mStream, std::span<std::byte>{buffer.data(), buffer.size()}));
+            ILIAS_CO_TRY(auto bodysize,
+                         co_await ilias::io::readAll(mStream, std::span<std::byte>{buffer.data(), buffer.size()}));
             if (bodysize != buffer.size()) {
                 co_return ilias::Err(ilias::IoError::UnexpectedEOF);
             }
-            co_return {};
+            co_return buffer.size();
         }
 
-        auto send(std::span<const std::byte> buffer) -> ilias::IoTask<void> {
+        auto send(std::span<const std::byte> buffer) -> ilias::IoTask<std::size_t> {
             if (buffer.size() > std::numeric_limits<std::uint32_t>::max()) {
                 co_return ilias::Err(JsonRpcError::InvalidRequest);
             }
@@ -326,7 +357,7 @@ private:
             if (auto flushRet = co_await mStream.flush(); !flushRet) {
                 co_return ilias::Err(flushRet.error());
             }
-            co_return {};
+            co_return buffer.size();
         }
 
         auto close() -> void {
@@ -340,6 +371,26 @@ private:
                 mStream.cancel();
             } else {
                 close();
+            }
+        }
+
+        auto shutdown() -> ilias::IoTask<void> {
+            if constexpr (requires(StreamT& stream) { stream.shutdown(); }) {
+                if (auto ret = co_await flush(); !ret) {
+                    co_return ilias::Err(ret.error());
+                }
+                co_return co_await mStream.shutdown();
+            } else {
+                close();
+                co_return {};
+            }
+        }
+
+        auto flush() -> ilias::IoTask<void> {
+            if constexpr (requires(StreamT& stream) { stream.flush(); }) {
+                co_return co_await mStream.flush();
+            } else {
+                co_return {};
             }
         }
 

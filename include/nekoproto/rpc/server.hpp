@@ -4,19 +4,22 @@
 #include <ilias/task/scope.hpp>
 #include <list>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
+#include "nekoproto/global/log.hpp"
 #include "nekoproto/rpc/builtin.hpp"
+#include "nekoproto/rpc/concepts.hpp"
 #include "nekoproto/rpc/dispatcher.hpp"
 #include "nekoproto/rpc/endpoint.hpp"
 #include "nekoproto/rpc/registry.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
-template <typename Backend, typename... ProtocolSets>
+template <RpcBackend Backend, typename... ProtocolSets>
 class RpcServer : public ProtocolSets... {
 
 private:
@@ -39,6 +42,35 @@ public:
             endpoint->cancel();
         }
         mScope.stop();
+        for (auto& endpoint : mEndpoints) {
+            endpoint->close();
+        }
+    }
+
+    auto flush() noexcept -> ilias::IoTask<void> {
+        for (auto& endpoint : mEndpoints) {
+            if (auto ret = co_await endpoint->flush(); !ret) {
+                co_return ilias::Err(ret.error());
+            }
+        }
+        co_return {};
+    }
+
+    auto shutdown() noexcept -> ilias::Task<void> {
+        for (auto& endpoint : mEndpoints) {
+            if (auto ret = co_await endpoint->flush(); !ret) {
+                NEKO_LOG_WARN("rpc", "flush rpc endpoint failed: {}", ret.error().message());
+            }
+        }
+        for (auto& endpoint : mEndpoints) {
+            if (auto ret = co_await endpoint->shutdown(); !ret) {
+                NEKO_LOG_WARN("rpc", "shutdown rpc endpoint failed: {}", ret.error().message());
+            }
+        }
+        for (auto& endpoint : mEndpoints) {
+            endpoint->cancel();
+        }
+        co_await mScope.shutdown();
         for (auto& endpoint : mEndpoints) {
             endpoint->close();
         }
@@ -69,7 +101,13 @@ public:
     template <typename StreamT>
         requires detail::RpcStreamBackend<Backend, StreamT>
     auto addEndpoint(StreamT stream) noexcept -> void {
-        addEndpoint(Backend::makeEndpoint(std::move(stream)));
+        if constexpr (requires(StreamT value, std::vector<MethodData> methods) {
+                          { Backend::makeServerEndpoint(std::move(value), std::move(methods)) } -> RpcMessageEndpoint;
+                      }) {
+            addEndpoint(Backend::makeServerEndpoint(std::move(stream), methodDatas()));
+        } else {
+            addEndpoint(Backend::makeEndpoint(std::move(stream)));
+        }
     }
 
     template <ConstexprString... ArgNames, typename RetT, typename... Args>
@@ -77,6 +115,7 @@ public:
         static_assert(sizeof...(ArgNames) == 0 || sizeof...(ArgNames) == sizeof...(Args),
                       "bindMethod: The number of parameters and names do not match.");
         mDispatcher.bindRpcMethod(name, std::move(func), traits::ArgNamesHelper<ArgNames...>{});
+        _refreshEndpointMethodTables();
     }
 
     template <auto Ptr, ConstexprString... ArgNames>
@@ -85,11 +124,13 @@ public:
         mDispatcher.bindRpcMethod(detail::RpcMethodF<Ptr, ArgNames...>::MethodName,
                                   traits::FunctionT<std::remove_pointer_t<decltype(Ptr)>>(Ptr),
                                   traits::ArgNamesHelper<ArgNames...>{});
+        _refreshEndpointMethodTables();
     }
 
     template <ConstexprString... ArgNames, typename RetT, typename... Args>
     auto bindMethod(std::string_view name, traits::FunctionT<ilias::IoTask<RetT>(Args...)> func) noexcept -> void {
         mDispatcher.bindRpcMethod(name, std::move(func), traits::ArgNamesHelper<ArgNames...>{});
+        _refreshEndpointMethodTables();
     }
 
     auto processMessage(std::span<const std::byte> message) noexcept -> ilias::Task<typename Backend::Message> {
@@ -145,6 +186,28 @@ private:
             }
             co_return methodList;
         };
+    }
+
+    auto _methodMetadata() noexcept -> std::vector<detail::RpcMethodMetadata> {
+        std::vector<detail::RpcMethodMetadata> methods;
+        for (const auto& item : methodDatas()) {
+            methods.push_back({
+                .name        = std::string(item.name),
+                .description = std::string(item.description),
+                .isBind      = item.isBind,
+            });
+        }
+        return methods;
+    }
+
+    auto _refreshEndpointMethodTables() noexcept -> void {
+        auto methods = _methodMetadata();
+        for (auto& endpoint : mEndpoints) {
+            auto ret = endpoint->refreshRpcMethods(methods).wait();
+            if (!ret) {
+                NEKO_LOG_WARN("rpc", "refresh rpc method table failed: {}", ret.error().message());
+            }
+        }
     }
 
 private:

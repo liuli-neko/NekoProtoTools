@@ -30,22 +30,6 @@
 
 NEKO_BEGIN_NAMESPACE
 
-template <typename T>
-concept MessageStreamClient = requires(T client, std::vector<std::byte>& buffer) {
-    {
-        client.recv(buffer) // must return a valid and complete jsonrpc request or response
-    } -> std::same_as<ilias::IoTask<void>>;
-    {
-        client.send(buffer) // while provide a valid and complete jsonrpc response
-    } -> std::same_as<ilias::IoTask<void>>;
-    {
-        client.close() // close the connection
-    } -> std::same_as<void>;
-    {
-        client.cancel() // cancel current operation
-    } -> std::same_as<void>;
-};
-
 namespace detail {
 using ilias::IoTask;
 using ilias::IPEndpoint;
@@ -66,10 +50,12 @@ public:
     RpcMessageEndpointWrapper(IliasUdpSocket&& client, IPEndpoint endpoint)
         : mClient(std::move(client)), mEndpoint(endpoint) {}
 
-    auto recv(std::vector<std::byte>& buffer) -> IoTask<void> override;
-    auto send(std::span<const std::byte> data) -> IoTask<void> override;
+    auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<size_t> override;
+    auto send(std::span<const std::byte> data) -> ilias::IoTask<size_t> override;
     auto close() -> void override;
     auto cancel() -> void override;
+    auto shutdown() -> ilias::IoTask<void> override;
+    auto flush() -> ilias::IoTask<void> override;
 
 private:
     IliasUdpSocket mClient;
@@ -88,10 +74,12 @@ public:
     RpcMessageEndpointWrapper() = default;
     RpcMessageEndpointWrapper(IliasDynStream&& client) : mClient(std::move(client)) {}
 
-    auto recv(std::vector<std::byte>& buffer) -> IoTask<void> override;
-    auto send(std::span<const std::byte> data) -> IoTask<void> override;
+    auto recv(std::vector<std::byte>& buffer) -> IoTask<size_t> override;
+    auto send(std::span<const std::byte> data) -> IoTask<size_t> override;
     auto close() -> void override;
     auto cancel() -> void override;
+    auto shutdown() -> ilias::IoTask<void> override;
+    auto flush() -> ilias::IoTask<void> override;
 
 private:
     IliasDynStream mClient;

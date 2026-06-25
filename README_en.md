@@ -715,6 +715,8 @@ Core message semantics are fixed and do not use omitted fields:
 
 Extension TLV is recommended as `type: u16, size: u16, value: bytes`. The highest bit of `type` can mark a critical extension: unknown non-critical TLVs may be skipped, while unknown critical TLVs should reject the message or connection.
 
+`method_id` is an optional Neko-RPC backend wire-level extension. It is a backend-negotiated transport optimization and does not enter the generic RPC calling API; the first implementation syncs a connection-lifetime full table through hello, and the design lives in [`docs/rpc_method_id_design.md`](docs/rpc_method_id_design.md). The default built-in methods such as `rpc.get_method_list` and `rpc.get_method_info` are normal RPC introspection calls that return string method names and descriptions. They do not change the wire format and are not the negotiated method id table, although they can be used as input when building or validating one.
+
 The error object stays minimal:
 
 ```cpp
@@ -770,7 +772,7 @@ Design check:
 *   **Minimal Interface**: The current backend interface follows the actual use sites in `RpcDispatcher` / `RpcClient`; it does not add listeners, sessions, transport ownership, or inheritance layers. Stream support is attached through the optional static `makeEndpoint` hook.
 *   **Non-Intrusive Extension**: Protocol structs only need `RpcMethod` fields and reflection metadata. Naming policy is attached at the field use site through `make_tags<rpc_prefix_tag>` / `make_tags<rpc_no_prefix_tag>`.
 *   **Consistent With Serialization Extensions**: Serialization extends through `detail::CustomParser<R, W, T>`, while RPC backends extend through static functions and concept-style requirements. Both avoid requiring business types to inherit framework base classes.
-*   **Future Improvements**: Add an explicit `RpcBackend` concept and `BackendSerializable<Backend, T>` checks for clearer diagnostics. Common `invoke` / tuple expansion helpers could also reduce boilerplate for custom backends.
+*   **Future Improvements**: Common `invoke` / tuple expansion helpers could reduce boilerplate for custom backends.
 
 ---
 
@@ -845,8 +847,9 @@ To add a new data format, implement a backend with responsibilities matching the
 *   [x] Split the RPC frontend from the JSON-RPC backend. See [`docs/rpc_refactor_plan.md`](docs/rpc_refactor_plan.md).
 *   [ ] Add explicit framing adapters for external JSON-RPC interoperability, such as LSP `Content-Length`, newline-delimited JSON, WebSocket messages, and datagrams.
 *   [x] Add `NekoRpcBackend<Serializer>` / `BinaryRpcBackend` with a fixed binary frame header and replaceable payload serializer.
-*   [ ] Add optional TLV extensions for `NekoRpcBackend`, such as hello negotiation, method id tables, and compression.
-*   [ ] Add explicit `RpcBackend` / `BackendSerializable` concepts for clearer custom-backend diagnostics.
+*   [x] Add the first `NekoRpcBackend` hello negotiation and connection-lifetime full-table method id optimization. See [`docs/rpc_method_id_design.md`](docs/rpc_method_id_design.md).
+*   [ ] Continue `NekoRpcBackend` dynamic method id table updates, delta/signature/compatibility error handling, and compression TLVs.
+*   [x] Add explicit `RpcBackend` / `BackendSerializable` concepts for clearer custom-backend diagnostics.
 *   [ ] Support for JSON-RPC extensions.
 *   [x] Add the default `rpc` introspection member:
     - `rpc.get_method_list`: Get a list of all methods on the current server

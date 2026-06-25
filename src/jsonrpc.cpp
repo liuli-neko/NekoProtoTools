@@ -21,7 +21,7 @@ NEKO_PROTO_API std::string to_string(JsonRpcIdType id) {
     }
 }
 
-auto RpcMessageEndpointWrapper<IliasUdpSocket, void>::recv(std::vector<std::byte>& buffer) -> IoTask<void> {
+auto RpcMessageEndpointWrapper<IliasUdpSocket, void>::recv(std::vector<std::byte>& buffer) -> IoTask<std::size_t> {
     if (!mClient) {
         co_return Err(JsonRpcError::ClientNotInit);
     }
@@ -43,7 +43,7 @@ auto RpcMessageEndpointWrapper<IliasUdpSocket, void>::recv(std::vector<std::byte
     }
 }
 
-auto RpcMessageEndpointWrapper<IliasUdpSocket, void>::send(std::span<const std::byte> data) -> IoTask<void> {
+auto RpcMessageEndpointWrapper<IliasUdpSocket, void>::send(std::span<const std::byte> data) -> IoTask<std::size_t> {
     if (!mClient) {
         co_return Err(JsonRpcError::ClientNotInit);
     }
@@ -78,7 +78,11 @@ auto RpcMessageEndpointWrapper<IliasUdpSocket, void>::cancel() -> void {
     }
 }
 
-auto RpcMessageEndpointWrapper<IliasDynStream, void>::recv(std::vector<std::byte>& buffer) -> IoTask<void> {
+auto RpcMessageEndpointWrapper<IliasUdpSocket, void>::shutdown() -> ilias::IoTask<void> { co_return {}; }
+
+auto RpcMessageEndpointWrapper<IliasUdpSocket, void>::flush() -> ilias::IoTask<void> { co_return {}; }
+
+auto RpcMessageEndpointWrapper<IliasDynStream, void>::recv(std::vector<std::byte>& buffer) -> IoTask<std::size_t> {
     if (!mClient) {
         co_return Err(JsonRpcError::ClientNotInit);
     }
@@ -97,14 +101,14 @@ auto RpcMessageEndpointWrapper<IliasDynStream, void>::recv(std::vector<std::byte
     }
     auto ret = co_await (mClient.readAll({buffer.data(), size}) | unstoppable());
     if (ret && ret.value() == size) {
-        co_return {};
+        co_return ret.value();
     } else {
         mClient.close();
         co_return Err(ret.error_or(ilias::IoError::Unknown));
     }
 }
 
-auto RpcMessageEndpointWrapper<IliasDynStream, void>::send(std::span<const std::byte> data) -> IoTask<void> {
+auto RpcMessageEndpointWrapper<IliasDynStream, void>::send(std::span<const std::byte> data) -> IoTask<std::size_t> {
     if (!mClient) {
         co_return Err(JsonRpcError::ClientNotInit);
     }
@@ -122,7 +126,7 @@ auto RpcMessageEndpointWrapper<IliasDynStream, void>::send(std::span<const std::
         mClient.close();
         co_return Err(ret.error_or(ilias::IoError::Unknown));
     }
-    co_return {};
+    co_return ret.value();
 }
 auto RpcMessageEndpointWrapper<IliasDynStream, void>::close() -> void {
     if (mClient) {
@@ -132,6 +136,20 @@ auto RpcMessageEndpointWrapper<IliasDynStream, void>::close() -> void {
 
 auto RpcMessageEndpointWrapper<IliasDynStream, void>::cancel() -> void {
     // TODO: Ilias::DynStream has no cancel support
+}
+
+auto RpcMessageEndpointWrapper<IliasDynStream, void>::shutdown() -> ilias::IoTask<void> {
+    if (mClient) {
+        co_return co_await mClient.shutdown();
+    }
+    co_return {};
+}
+
+auto RpcMessageEndpointWrapper<IliasDynStream, void>::flush() -> ilias::IoTask<void> {
+    if (mClient) {
+        co_return co_await mClient.flush();
+    }
+    co_return {};
 }
 
 NEKO_PROTO_API
