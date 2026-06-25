@@ -103,7 +103,7 @@ struct is_std_array : std::false_type {}; // NOLINT(readability-identifier-namin
 
 template <typename T, size_t N>
 struct is_std_array<std::array<T, N>> : std::true_type {
-    using value_type = T;
+    using value_type             = T;
     constexpr static size_t size = N;
 };
 
@@ -303,8 +303,8 @@ constexpr auto neko_get_valid_enum_names(std::index_sequence<N...> seq) noexcept
     for (auto idx : vstr) {
         if (!idx.empty()) {
             // Valid name
-            iter->first  = T(ns);
-            auto pos = idx.find_last_of(':');
+            iter->first = T(ns);
+            auto pos    = idx.find_last_of(':');
             if (pos != std::string_view::npos) {
                 iter->second = idx.substr(pos + 1);
             } else {
@@ -331,8 +331,8 @@ struct function_traits<R (*)(Args...), void> {
     using return_type = R;
     using arg_tuple   = std::tuple<Args...>;
     template <typename Ret, template <typename...> class T>
-    using args_in = T<Ret, Args...>;
-    using function_type = R(Args...);
+    using args_in               = T<Ret, Args...>;
+    using function_type         = R(Args...);
     using function_pointer_type = R (*)(Args...);
 };
 
@@ -442,19 +442,18 @@ struct func_nameof_impl {                                         // NOLINT
         name.substr(characteristicString.size(), name.size() - characteristicString.size() - 6); // NOLINT
     static constexpr auto end = full_function_name.find_last_of('(');                            // NOLINT
     static_assert(end != std::string_view::npos, "function end not found");
-    static constexpr auto before_params = full_function_name.substr(0, end);                     // NOLINT
-    static constexpr std::string_view cdecl = "__cdecl ";                                        // NOLINT
-    static constexpr auto cdecl_pos = before_params.find(cdecl);                                 // NOLINT
-    static constexpr auto name_begin =                                                          // NOLINT
-        cdecl_pos == std::string_view::npos ? before_params.find_last_of(' ') + 1
-                                            : cdecl_pos + cdecl.size();
+    static constexpr auto before_params      = full_function_name.substr(0, end); // NOLINT
+    static constexpr std::string_view xcdecl = "__cdecl ";                        // NOLINT
+    static constexpr auto cdecl_pos          = before_params.find(xcdecl);        // NOLINT
+    static constexpr auto name_begin         =                                    // NOLINT
+        cdecl_pos == std::string_view::npos ? before_params.find_last_of(' ') + 1 : cdecl_pos + xcdecl.size();
     static_assert(name_begin != std::string_view::npos, "function begin not found");
-    static constexpr auto qualified_name = before_params.substr(name_begin);                     // NOLINT
-    static constexpr std::string_view scope = "::";                                              // NOLINT
-    static constexpr auto scope_pos = qualified_name.rfind(scope);                               // NOLINT
-    static constexpr auto tmp =                                                                  // NOLINT
+    static constexpr auto qualified_name    = before_params.substr(name_begin); // NOLINT
+    static constexpr std::string_view scope = "::";                             // NOLINT
+    static constexpr auto scope_pos         = qualified_name.rfind(scope);      // NOLINT
+    static constexpr auto tmp               =                                   // NOLINT
         scope_pos == std::string_view::npos ? qualified_name : qualified_name.substr(scope_pos + scope.size());
-    static constexpr std::string_view func_name = join_v<tmp>;                                   // NOLINT
+    static constexpr std::string_view func_name = join_v<tmp>; // NOLINT
 #else
     static_assert(false, "unsupported compiler");
 #endif
