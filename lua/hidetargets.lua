@@ -1,27 +1,45 @@
-if is_plat("linux") then 
+if is_plat("linux") then
     target("coverage-report")
         set_kind("phony")
-        set_default(true)
-        -- 执行脚本命令
+
         on_run(function (target)
             print("Generating coverage report...")
-            -- 在这里编写您想要执行的脚本命令
-            os.execv("lcov ", {"--capture", 
-                "--directory", os.projectdir() .. "/build/.objs/", 
-                "--output-file", os.projectdir() .. "/build/coverage.info",
-                "--exclude", "/usr/include/*",
-                "--exclude", "/usr/local/include/*",
+
+            local projectdir = os.projectdir()
+            local builddir = path.join(projectdir, "build")
+            local objdir = path.join(builddir, ".objs")
+            local infofile = path.join(builddir, "coverage.info")
+            local reportdir = path.join(builddir, "coverage-report")
+
+            os.execv("lcov", {
+                "--capture",
+                "--directory", objdir,
+                "--base-directory", projectdir,
+                "--output-file", infofile,
+
+                -- GCC/gcov 生成的“未执行 block 但行有 hit count”的异常，按 lcov 提示归零
+                "--rc", "geninfo_unexecuted_blocks=1",
+
+                -- 如果还遇到 function end line 推导问题，可以打开这个
+                -- 这会牺牲部分 function 范围信息，但 line coverage 仍然可用
+                "--rc", "derive_function_end_line=0",
+
+                "--no-external",
                 "--exclude", "*.xmake/packages/*",
                 "--exclude", "*modules/Ilias/*",
-                "--exclude", "*/tests/test_*",
-                "--directory", os.projectdir()})
-            os.execv("genhtml ", {
-                "--output-directory", os.projectdir() .. "/build/coverage-report",
-                "--title", "'Coverage Report'", 
-                os.projectdir() .. "/build/coverage.info"})
+                "--ignore-errors", "unused",
+                -- 你原来的 */tests/test_* 匹配不到 tests/unit/proto/test_proto.cpp
+                "--exclude", path.join(projectdir, "tests/*")
+            })
+
+            os.execv("genhtml", {
+                "--output-directory", reportdir,
+                "--title", "Coverage Report",
+                infofile
+            })
         end)
     target_end()
-end 
+end
 
 task("check")
     set_menu({

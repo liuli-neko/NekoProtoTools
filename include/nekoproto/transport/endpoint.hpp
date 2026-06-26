@@ -202,7 +202,7 @@ public:
             co_return ilias::Err(mMessageTooLarge);
         }
         ILIAS_CO_TRYV(co_await ilias::io::writeU32Le(mStream, static_cast<std::uint32_t>(buffer.size())));
-        ILIAS_CO_TRY(auto writtenSize, (co_await ilias::io::writeAll(mStream, buffer) | ilias::unstoppable));
+        ILIAS_CO_TRY(auto writtenSize, co_await (ilias::io::writeAll(mStream, buffer) | ilias::unstoppable()));
         if (writtenSize != buffer.size()) {
             co_return ilias::Err(ilias::IoError::WriteZero);
         }

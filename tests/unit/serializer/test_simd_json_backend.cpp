@@ -6,6 +6,8 @@
 
 #include <gtest/gtest.h>
 
+#ifdef NEKO_PROTO_ENABLE_SIMDJSON
+
 #include "nekoproto/serialization/json/simd_json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 
@@ -153,5 +155,7 @@ TEST(SimdJsonBackend, InvalidJsonReturnsParseError) {
     EXPECT_EQ(input.error()->ec, sa::make_error_code(sa::ErrorCode::ParseError));
     EXPECT_NE(input.error()->msg.find("simdjson parse error"), std::string::npos);
 }
+
+#endif
 
 #include "../common/common_main.cpp.in" // IWYU pragma: export

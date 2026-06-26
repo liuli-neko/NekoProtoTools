@@ -28,6 +28,10 @@ NEKO_USE_NAMESPACE
 
 enum class TEnum : uint32_t { TEnum_A = 1, TEnum_B = 2, TEnum_C = 3 };
 
+struct TEnumStruct {
+    TEnum h;
+};
+
 NEKO_BEGIN_NAMESPACE
 template <>
 struct Meta<TEnum> {
@@ -35,6 +39,9 @@ struct Meta<TEnum> {
     static constexpr auto value = Enumerate{
         "TEnum_A", TEnum::TEnum_A, "TEnum_B", TEnum::TEnum_B, "TEnum_C", TEnum::TEnum_C}; // NOLINT
 };
+
+template <>
+struct is_flat_tag<TEnumStruct> : std::true_type {};
 NEKO_END_NAMESPACE
 
 struct StructA {
@@ -45,7 +52,7 @@ struct StructA {
     std::list<int> e;
     std::map<std::string, int> f;
     std::array<int, 5> g;
-    TEnum h;
+    TEnumStruct hxx;
 };
 
 struct TestA {
@@ -92,7 +99,7 @@ struct TestP {
     std::array<int, 5> g         = {1, 2, 3, 4, 5};
     TEnum h                      = TEnum::TEnum_A;
     StructA i = {1, "hello", true, 3.14, {1, 2, 3, 4, 5}, {{"a", 1}, {"b", 2}, {"c", 3}},
-                 {1, 2, 3, 4, 5}, TEnum::TEnum_A};
+                 {1, 2, 3, 4, 5}, {TEnum::TEnum_A}};
     std::tuple<int, std::string> j = {1, "hello"};
     std::vector<int> k             = {1, 2, 3, 4, 5};
     TestD l;
@@ -200,12 +207,13 @@ TestP make_test_object() {
     value.g = {1, 2, 3};
     value.h = TEnum::TEnum_A;
     value.i = {1, "hello", true, 3.141592654, {1, 2, 3}, {{"a", 1}, {"b", 2}},
-               {1, 2, 3}, TEnum::TEnum_A};
+               {1, 2, 3}, {TEnum::TEnum_A}};
     value.j = {1, "hello"};
     value.k = {1, 2, 3, 4, 5};
 #if NEKO_CPP_PLUS >= 17
     std::get<1>(value.l.a).c = TestA{1221, "this is a test for optional"};
 #endif
+
     return value;
 }
 
@@ -225,7 +233,7 @@ void expect_test_object_eq(const TestP& actual, const TestP& expected) {
     EXPECT_EQ(actual.i.e, expected.i.e);
     EXPECT_EQ(actual.i.f, expected.i.f);
     EXPECT_EQ(actual.i.g, expected.i.g);
-    EXPECT_EQ(actual.i.h, expected.i.h);
+    EXPECT_EQ(actual.i.hxx.h, expected.i.hxx.h);
     EXPECT_EQ(actual.j, expected.j);
     EXPECT_EQ(actual.k, expected.k);
 #if NEKO_CPP_PLUS >= 17
@@ -482,7 +490,7 @@ TEST(JsonSerializerTest, ReflectedObjectRoundTripsThroughPublicEntry) {
     EXPECT_NE(json.find(R"("h":"TEnum_A")"), std::string::npos);
     EXPECT_NE(json.find(R"("j":[1,"hello"])"), std::string::npos);
     EXPECT_NE(json.find(R"("c":{"a":1221,"b":"this is a test for optional"})"), std::string::npos);
-
+    NEKO_LOG_INFO("test", "json: {}", json);
     TestP decoded;
     ASSERT_TRUE(read_json(json, decoded));
     expect_test_object_eq(decoded, source);

@@ -24,7 +24,7 @@ NEKO_BEGIN_NAMESPACE
 namespace detail {
 // 默认情况：无法在没有上下文的情况下解析
 template <typename T>
-struct is_resolvable_without_context : std::false_type {};
+struct is_resolvable_without_context : std::false_type {}; // NOLINT
 
 // 特化：成员对象指针是可以在没有上下文的情况下解析的
 template <typename MemberType, typename ClassType>
@@ -34,7 +34,7 @@ template <typename Fn>
 struct is_resolvable_without_context<std::is_invocable<Fn>> : std::true_type {};
 
 template <typename T>
-inline constexpr bool is_resolvable_without_context_v = is_resolvable_without_context<T>::value;
+inline constexpr bool is_resolvable_without_context_v = is_resolvable_without_context<T>::value; // NOLINT
 
 // --- 相应的解析器 ---
 
@@ -89,13 +89,21 @@ constexpr std::string_view tag_string_view(const T& value) {
 }
 } // namespace detail
 
+template <typename T, class = void>
+struct is_flat_tag : std::false_type {}; // NOLINT
+
+template <typename T, class = void>
+struct is_unframed_tag : std::false_type {}; // NOLINT
+
 namespace tag_access {
-template <typename T>
+template <typename Value, typename T>
 constexpr bool is_flat(const T& tags) {
     if constexpr (requires { tags.flat; }) {
         return tags.flat;
     } else if constexpr (requires { tags.base; }) {
-        return is_flat(tags.base);
+        return is_flat<Value>(tags.base);
+    } else if constexpr (is_flat_tag<Value>::value) {
+        return true;
     } else {
         return false;
     }
@@ -135,12 +143,14 @@ constexpr std::size_t fixed_length(const T& tags) {
     }
 }
 
-template <typename T>
+template <typename Value, typename T>
 constexpr bool is_unframed(const T& tags) {
     if constexpr (requires { tags.unframed; }) {
         return tags.unframed;
     } else if constexpr (requires { tags.base; }) {
-        return is_unframed(tags.base);
+        return is_unframed<Value>(tags.base);
+    } else if constexpr (is_unframed_tag<Value>::value) {
+        return true;
     } else {
         return false;
     }
@@ -307,7 +317,10 @@ namespace tag_access {
 template <typename T>
 constexpr auto consume_comment(const T& tags) {
     using Tag = std::remove_cvref_t<T>;
-    if constexpr (requires { Tag::comment; Tag::base; }) {
+    if constexpr (requires {
+                      Tag::comment;
+                      Tag::base;
+                  }) {
         return Tag::base;
     } else {
         return tags;
@@ -317,12 +330,15 @@ constexpr auto consume_comment(const T& tags) {
 template <typename T>
 constexpr auto consume_recursive_comment(const T& tags) {
     using Tag = std::remove_cvref_t<T>;
-    if constexpr (requires { Tag::comment; Tag::base; }) {
+    if constexpr (requires {
+                      Tag::comment;
+                      Tag::base;
+                  }) {
         return Tag::base;
     } else if constexpr (requires { Tag::base; }) {
         if constexpr (has_recursive_comment(Tag::base)) {
-            constexpr auto consumedBase = consume_recursive_comment(Tag::base);
-            return detail::rebind_tag_base<Tag, consumedBase>();
+            constexpr auto ConsumedBase = consume_recursive_comment(Tag::base);
+            return detail::rebind_tag_base<Tag, ConsumedBase>();
         } else {
             return tags;
         }
@@ -334,7 +350,10 @@ constexpr auto consume_recursive_comment(const T& tags) {
 template <typename T>
 constexpr auto consume_name(const T& tags) {
     using Tag = std::remove_cvref_t<T>;
-    if constexpr (requires { Tag::name; Tag::base; }) {
+    if constexpr (requires {
+                      Tag::name;
+                      Tag::base;
+                  }) {
         return Tag::base;
     } else {
         return tags;
@@ -344,12 +363,15 @@ constexpr auto consume_name(const T& tags) {
 template <typename T>
 constexpr auto consume_recursive_name(const T& tags) {
     using Tag = std::remove_cvref_t<T>;
-    if constexpr (requires { Tag::name; Tag::base; }) {
+    if constexpr (requires {
+                      Tag::name;
+                      Tag::base;
+                  }) {
         return Tag::base;
     } else if constexpr (requires { Tag::base; }) {
         if constexpr (has_recursive_name(Tag::base)) {
-            constexpr auto consumedBase = consume_recursive_name(Tag::base);
-            return detail::rebind_tag_base<Tag, consumedBase>();
+            constexpr auto ConsumedBase = consume_recursive_name(Tag::base);
+            return detail::rebind_tag_base<Tag, ConsumedBase>();
         } else {
             return tags;
         }
