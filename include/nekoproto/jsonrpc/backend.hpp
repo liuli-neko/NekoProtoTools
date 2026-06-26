@@ -46,10 +46,6 @@ struct JsonRpcBackend {
         Id id;
     };
 
-private:
-    template <ilias::Stream StreamT>
-    class StreamEndpoint;
-
 public:
     template <typename T>
     static consteval bool serializable() {
@@ -280,10 +276,10 @@ public:
 
     template <ilias::Stream StreamT>
     static auto makeEndpoint(StreamT stream) {
-        return StreamEndpoint<StreamT>{std::move(stream)};
+        return detail::LengthPrefixedStreamMessageEndpoint<StreamT>{std::move(stream), JsonRpcError::InvalidRequest};
     }
 
-    template <RpcMessageEndpoint EndpointT>
+    template <MessageEndpoint EndpointT>
     static auto makeEndpoint(EndpointT endpoint) {
         return endpoint;
     }
@@ -324,79 +320,6 @@ private:
         }
         return static_cast<std::int64_t>(JsonRpcError::InternalError);
     }
-
-    template <ilias::Stream StreamT>
-    class StreamEndpoint {
-    public:
-        explicit StreamEndpoint(StreamT stream) : mStream(std::move(stream)) {}
-
-        auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t> {
-            ILIAS_CO_TRY(auto size, co_await ilias::io::readU32Le(mStream));
-            buffer.resize(size);
-            if (size == 0U) {
-                co_return buffer.size();
-            }
-
-            ILIAS_CO_TRY(auto bodysize,
-                         co_await ilias::io::readAll(mStream, std::span<std::byte>{buffer.data(), buffer.size()}));
-            if (bodysize != buffer.size()) {
-                co_return ilias::Err(ilias::IoError::UnexpectedEOF);
-            }
-            co_return buffer.size();
-        }
-
-        auto send(std::span<const std::byte> buffer) -> ilias::IoTask<std::size_t> {
-            if (buffer.size() > std::numeric_limits<std::uint32_t>::max()) {
-                co_return ilias::Err(JsonRpcError::InvalidRequest);
-            }
-            ILIAS_CO_TRYV(co_await ilias::io::writeU32Le(mStream, static_cast<std::uint32_t>(buffer.size())));
-            ILIAS_CO_TRY(auto sendedSize, co_await ilias::io::writeAll(mStream, buffer));
-            if (sendedSize != buffer.size()) {
-                co_return ilias::Err(ilias::IoError::WriteZero);
-            }
-            if (auto flushRet = co_await mStream.flush(); !flushRet) {
-                co_return ilias::Err(flushRet.error());
-            }
-            co_return buffer.size();
-        }
-
-        auto close() -> void {
-            if constexpr (requires(StreamT& stream) { stream.close(); }) {
-                mStream.close();
-            }
-        }
-
-        auto cancel() -> void {
-            if constexpr (requires(StreamT& stream) { stream.cancel(); }) {
-                mStream.cancel();
-            } else {
-                close();
-            }
-        }
-
-        auto shutdown() -> ilias::IoTask<void> {
-            if constexpr (requires(StreamT& stream) { stream.shutdown(); }) {
-                if (auto ret = co_await flush(); !ret) {
-                    co_return ilias::Err(ret.error());
-                }
-                co_return co_await mStream.shutdown();
-            } else {
-                close();
-                co_return {};
-            }
-        }
-
-        auto flush() -> ilias::IoTask<void> {
-            if constexpr (requires(StreamT& stream) { stream.flush(); }) {
-                co_return co_await mStream.flush();
-            } else {
-                co_return {};
-            }
-        }
-
-    private:
-        StreamT mStream;
-    };
 
     template <typename Method, typename Request, typename... Args>
     static void fillParams(Request& request, Args&&... args) {

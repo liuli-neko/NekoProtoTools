@@ -583,7 +583,8 @@ concept RpcMessageEndpoint = requires(T endpoint,
     { endpoint.recv(out) } -> std::same_as<ilias::IoTask<void>>;
     { endpoint.send(in) } -> std::same_as<ilias::IoTask<void>>;
     { endpoint.close() } -> std::same_as<void>;
-    { endpoint.cancel() } -> std::same_as<void>;
+    { endpoint.shutdown() } -> std::same_as<ilias::IoTask<void>>;
+    { endpoint.flush() } -> std::same_as<ilias::IoTask<void>>;
 };
 ```
 

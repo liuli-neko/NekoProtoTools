@@ -2,6 +2,8 @@
 
 #include <ilias/platform.hpp>
 #include <ilias/task/scope.hpp>
+#include <concepts>
+#include <functional>
 #include <list>
 #include <memory>
 #include <string>
@@ -25,31 +27,35 @@ class RpcServer : public ProtocolSets... {
 private:
     using Dispatcher = detail::RpcDispatcher<Backend>;
     using MethodData = typename Dispatcher::MethodData;
+    using EndpointRefresh = std::function<ilias::IoTask<void>(std::vector<detail::RpcMethodMetadata>)>;
+
+    struct EndpointSlot {
+        std::unique_ptr<detail::IMessageEndpoint> endpoint;
+        EndpointRefresh refreshRpcMethods;
+    };
+
     RpcBuiltinMethods mRpc;
 
 public:
     explicit RpcServer(ilias::IoContext& ctx) : ProtocolSets()..., mRpc(), mDispatcher(ctx), mScope() { _init(); }
     ~RpcServer() {
         close();
-        wait().wait();
     }
 
     auto operator->() noexcept -> RpcServer* { return this; }
     auto operator->() const noexcept -> const RpcServer* { return this; }
 
     auto close() noexcept -> void {
-        for (auto& endpoint : mEndpoints) {
-            endpoint->cancel();
-        }
         mScope.stop();
+        wait().wait();
         for (auto& endpoint : mEndpoints) {
-            endpoint->close();
+            endpoint.endpoint->close();
         }
     }
 
     auto flush() noexcept -> ilias::IoTask<void> {
         for (auto& endpoint : mEndpoints) {
-            if (auto ret = co_await endpoint->flush(); !ret) {
+            if (auto ret = co_await endpoint.endpoint->flush(); !ret) {
                 co_return ilias::Err(ret.error());
             }
         }
@@ -58,21 +64,18 @@ public:
 
     auto shutdown() noexcept -> ilias::Task<void> {
         for (auto& endpoint : mEndpoints) {
-            if (auto ret = co_await endpoint->flush(); !ret) {
+            if (auto ret = co_await endpoint.endpoint->flush(); !ret) {
                 NEKO_LOG_WARN("rpc", "flush rpc endpoint failed: {}", ret.error().message());
             }
         }
         for (auto& endpoint : mEndpoints) {
-            if (auto ret = co_await endpoint->shutdown(); !ret) {
+            if (auto ret = co_await endpoint.endpoint->shutdown(); !ret) {
                 NEKO_LOG_WARN("rpc", "shutdown rpc endpoint failed: {}", ret.error().message());
             }
         }
-        for (auto& endpoint : mEndpoints) {
-            endpoint->cancel();
-        }
         co_await mScope.shutdown();
         for (auto& endpoint : mEndpoints) {
-            endpoint->close();
+            endpoint.endpoint->close();
         }
     }
 
@@ -83,18 +86,31 @@ public:
         return mDispatcher.getCurrentIds();
     }
 
-    template <RpcMessageEndpoint EndpointT>
+    template <MessageEndpoint EndpointT>
     auto addEndpoint(EndpointT endpoint) noexcept -> void {
-        auto item = mEndpoints.end();
-        if constexpr (detail::is_rpc_endpoint<EndpointT>::value) {
-            item = mEndpoints.emplace(mEndpoints.end(), std::make_unique<EndpointT>(std::move(endpoint)));
+        EndpointSlot slot;
+        if constexpr (detail::is_message_endpoint<EndpointT>::value) {
+            auto owned             = std::make_unique<EndpointT>(std::move(endpoint));
+            slot.refreshRpcMethods = _makeRefreshCallback(owned.get());
+            slot.endpoint          = std::move(owned);
         } else {
-            item = mEndpoints.emplace(
-                mEndpoints.end(), std::make_unique<detail::RpcMessageEndpointWrapper<EndpointT>>(std::move(endpoint)));
+            using Wrapper          = detail::MessageEndpointWrapper<EndpointT>;
+            auto owned             = std::make_unique<Wrapper>(std::move(endpoint));
+            slot.refreshRpcMethods = _makeWrappedRefreshCallback(owned.get());
+            slot.endpoint          = std::move(owned);
         }
+        auto item = mEndpoints.emplace(mEndpoints.end(), std::move(slot));
         mScope.spawn([this, item]() -> ilias::Task<void> {
-            co_await mDispatcher.receiveLoop((*item).get());
-            mEndpoints.erase(item);
+            struct EraseGuard {
+                using type     = std::list<EndpointSlot>;
+                using iterator = typename type::iterator;
+                EraseGuard(type& endpoints, iterator it) : mEndpoints(endpoints), mIt(it) { mIt = it; }
+                ~EraseGuard() { mEndpoints.erase(mIt); }
+                type& mEndpoints;
+                iterator mIt;
+            };
+            EraseGuard guard(mEndpoints, item);
+            co_await mDispatcher.receiveLoop(item->endpoint.get());
         });
     }
 
@@ -102,7 +118,7 @@ public:
         requires detail::RpcStreamBackend<Backend, StreamT>
     auto addEndpoint(StreamT stream) noexcept -> void {
         if constexpr (requires(StreamT value, std::vector<MethodData> methods) {
-                          { Backend::makeServerEndpoint(std::move(value), std::move(methods)) } -> RpcMessageEndpoint;
+                          { Backend::makeServerEndpoint(std::move(value), std::move(methods)) } -> MessageEndpoint;
                       }) {
             addEndpoint(Backend::makeServerEndpoint(std::move(stream), methodDatas()));
         } else {
@@ -203,7 +219,7 @@ private:
     auto _refreshEndpointMethodTables() noexcept -> void {
         auto methods = _methodMetadata();
         for (auto& endpoint : mEndpoints) {
-            auto ret = endpoint->refreshRpcMethods(methods).wait();
+            auto ret = endpoint.refreshRpcMethods(methods).wait();
             if (!ret) {
                 NEKO_LOG_WARN("rpc", "refresh rpc method table failed: {}", ret.error().message());
             }
@@ -211,8 +227,34 @@ private:
     }
 
 private:
+    template <typename EndpointT>
+    static auto _makeRefreshCallback(EndpointT* endpoint) -> EndpointRefresh {
+        return [endpoint](std::vector<detail::RpcMethodMetadata> methods) -> ilias::IoTask<void> {
+            if constexpr (requires(EndpointT& value, std::vector<detail::RpcMethodMetadata> items) {
+                              { value.refreshRpcMethods(std::move(items)) } -> std::same_as<ilias::IoTask<void>>;
+                          }) {
+                co_return co_await endpoint->refreshRpcMethods(std::move(methods));
+            } else {
+                co_return {};
+            }
+        };
+    }
+
+    template <typename EndpointT>
+    static auto _makeWrappedRefreshCallback(detail::MessageEndpointWrapper<EndpointT>* endpoint) -> EndpointRefresh {
+        return [endpoint](std::vector<detail::RpcMethodMetadata> methods) -> ilias::IoTask<void> {
+            if constexpr (requires(EndpointT& value, std::vector<detail::RpcMethodMetadata> items) {
+                              { value.refreshRpcMethods(std::move(items)) } -> std::same_as<ilias::IoTask<void>>;
+                          }) {
+                co_return co_await endpoint->wrappedEndpoint().refreshRpcMethods(std::move(methods));
+            } else {
+                co_return {};
+            }
+        };
+    }
+
     Dispatcher mDispatcher;
-    std::list<std::unique_ptr<detail::IRpcMessageEndpoint>> mEndpoints;
+    std::list<EndpointSlot> mEndpoints;
     ilias::TaskGroup<void> mScope;
 };
 
