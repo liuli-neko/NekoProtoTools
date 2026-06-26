@@ -70,7 +70,7 @@ local function default_test_config(file)
         table.insert(config.defines, "NEKO_VERBOSE_LOGS")
     elseif group == "rpc" then
         config.enabled = has_config("enable_jsonrpc")
-        config.deps = {"NekoJsonRpc"}
+        config.deps = {"NekoJsonRpc", "NekoSerializer"}
     elseif group == "communication" then
         config.enabled = has_config("enable_communication")
         config.deps = {"NekoProtoBase"}
