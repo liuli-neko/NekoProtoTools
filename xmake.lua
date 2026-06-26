@@ -226,6 +226,7 @@ if has_config("enable_jsonrpc") then
         end
         add_headerfiles("include/(nekoproto/jsonrpc/**.hpp)")
         add_headerfiles("include/(nekoproto/rpc/**.hpp)")
+        add_headerfiles("include/(nekoproto/transport/**.hpp)")
         add_includedirs("include")
         -- 添加非模板函数的实现文件
         add_files("src/jsonrpc.cpp", "src/rpc.cpp")
@@ -252,6 +253,7 @@ if has_config("enable_protocol") then
         add_files("src/proto_base.cpp")
         if has_config("enable_communication") then
             add_headerfiles("include/(nekoproto/communication/**.hpp)")
+            add_headerfiles("include/(nekoproto/transport/**.hpp)")
             add_files("src/communication_base.cpp")
         end
 

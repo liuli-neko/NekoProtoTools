@@ -266,7 +266,7 @@ public:
         return StreamEndpoint<StreamT>{std::move(stream), EndpointRole::Plain, Options{}, {}};
     }
 
-    template <RpcMessageEndpoint EndpointT>
+    template <MessageEndpoint EndpointT>
     static auto makeEndpoint(EndpointT endpoint) {
         return endpoint;
     }
@@ -508,37 +508,15 @@ private:
         }
 
         auto close() -> void {
-            if constexpr (requires(StreamT& stream) { stream.close(); }) {
-                mStream.close();
-            }
-        }
-
-        auto cancel() -> void {
-            if constexpr (requires(StreamT& stream) { stream.cancel(); }) {
-                mStream.cancel();
-            } else {
-                close();
-            }
+            detail::close_stream(mStream);
         }
 
         auto shutdown() -> ilias::IoTask<void> {
-            if constexpr (requires(StreamT& stream) { stream.shutdown(); }) {
-                if (auto ret = co_await flush(); !ret) {
-                    co_return ilias::Err(ret.error());
-                }
-                co_return co_await mStream.shutdown();
-            } else {
-                close();
-                co_return {};
-            }
+            co_return co_await detail::shutdown_stream(mStream);
         }
 
         auto flush() -> ilias::IoTask<void> {
-            if constexpr (requires(StreamT& stream) { stream.flush(); }) {
-                co_return co_await mStream.flush();
-            } else {
-                co_return {};
-            }
+            co_return co_await detail::flush_stream(mStream);
         }
 
     private:
@@ -587,7 +565,7 @@ private:
             if (ret.value() != frame.size()) {
                 co_return ilias::Err(ilias::IoError::WriteZero);
             }
-            if (auto flushRet = co_await mStream.flush(); !flushRet) {
+            if (auto flushRet = co_await detail::flush_stream(mStream); !flushRet) {
                 co_return ilias::Err(flushRet.error());
             }
             co_return {};

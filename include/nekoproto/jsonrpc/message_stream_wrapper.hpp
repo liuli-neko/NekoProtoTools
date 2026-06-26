@@ -38,74 +38,30 @@ using IliasDynStream   = ilias::DynStream;
 using IliasUdpSocket   = ilias::UdpSocket;
 using ilias::Err;
 
-/**
- * @brief 数据包接收，负责拆包，默认为最大长度1500的UDP包
- *
- * @tparam T
- * @tparam N
- */
-template <>
-class NEKO_PROTO_API RpcMessageEndpointWrapper<IliasUdpSocket, void> : public IRpcMessageEndpoint {
-public:
-    RpcMessageEndpointWrapper(IliasUdpSocket&& client, IPEndpoint endpoint)
-        : mClient(std::move(client)), mEndpoint(endpoint) {}
-
-    auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<size_t> override;
-    auto send(std::span<const std::byte> data) -> ilias::IoTask<size_t> override;
-    auto close() -> void override;
-    auto cancel() -> void override;
-    auto shutdown() -> ilias::IoTask<void> override;
-    auto flush() -> ilias::IoTask<void> override;
-
-private:
-    IliasUdpSocket mClient;
-    IPEndpoint mEndpoint;
-};
-
-/**
- * @brief 数据包接收，负责拆包
- *
- * @tparam T
- * @tparam N
- */
-template <>
-class NEKO_PROTO_API RpcMessageEndpointWrapper<IliasDynStream, void> : public IRpcMessageEndpoint {
-public:
-    RpcMessageEndpointWrapper() = default;
-    RpcMessageEndpointWrapper(IliasDynStream&& client) : mClient(std::move(client)) {}
-
-    auto recv(std::vector<std::byte>& buffer) -> IoTask<size_t> override;
-    auto send(std::span<const std::byte> data) -> IoTask<size_t> override;
-    auto close() -> void override;
-    auto cancel() -> void override;
-    auto shutdown() -> ilias::IoTask<void> override;
-    auto flush() -> ilias::IoTask<void> override;
-
-private:
-    IliasDynStream mClient;
-};
+using IliasLengthPrefixedMessageEndpoint = LengthPrefixedStreamMessageEndpoint<IliasDynStream>;
+using IliasChunkedDatagramMessageEndpoint = ChunkedDatagramMessageEndpoint<IliasUdpSocket, IPEndpoint>;
 
 NEKO_PROTO_API
-auto make_tcp_stream_client(IPEndpoint ipendpoint) -> IoTask<RpcMessageEndpointWrapper<IliasDynStream>>;
+auto make_tcp_stream_client(IPEndpoint ipendpoint) -> IoTask<IliasLengthPrefixedMessageEndpoint>;
 // tcp://127.0.0.1:8080
 // 127.0.0.1:8080
 NEKO_PROTO_API
-auto make_tcp_stream_client(std::string_view url) -> IoTask<RpcMessageEndpointWrapper<IliasDynStream>>;
+auto make_tcp_stream_client(std::string_view url) -> IoTask<IliasLengthPrefixedMessageEndpoint>;
 NEKO_PROTO_API
-auto make_tcp_stream_client(const char* url) -> IoTask<RpcMessageEndpointWrapper<IliasDynStream>>;
+auto make_tcp_stream_client(const char* url) -> IoTask<IliasLengthPrefixedMessageEndpoint>;
 NEKO_PROTO_API
-auto make_tcp_stream_client(const std::string& url) -> IoTask<RpcMessageEndpointWrapper<IliasDynStream>>;
+auto make_tcp_stream_client(const std::string& url) -> IoTask<IliasLengthPrefixedMessageEndpoint>;
 NEKO_PROTO_API
 auto make_udp_stream_client(IPEndpoint bindIpendpoint, IPEndpoint remoteIpendpoint)
-    -> IoTask<RpcMessageEndpointWrapper<IliasUdpSocket>>;
+    -> IoTask<IliasChunkedDatagramMessageEndpoint>;
 // like udp://127.0.0.1:12345-127.0.0.1:12346
 // 127.0.0.1:12345-127.0.0.1:12346
 NEKO_PROTO_API
-auto make_udp_stream_client(std::string_view url) -> IoTask<RpcMessageEndpointWrapper<IliasUdpSocket>>;
+auto make_udp_stream_client(std::string_view url) -> IoTask<IliasChunkedDatagramMessageEndpoint>;
 NEKO_PROTO_API
-auto make_udp_stream_client(const char* url) -> IoTask<RpcMessageEndpointWrapper<IliasUdpSocket>>;
+auto make_udp_stream_client(const char* url) -> IoTask<IliasChunkedDatagramMessageEndpoint>;
 NEKO_PROTO_API
-auto make_udp_stream_client(const std::string& url) -> IoTask<RpcMessageEndpointWrapper<IliasUdpSocket>>;
+auto make_udp_stream_client(const std::string& url) -> IoTask<IliasChunkedDatagramMessageEndpoint>;
 } // namespace detail
 
 NEKO_END_NAMESPACE

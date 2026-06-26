@@ -126,7 +126,7 @@ public:
         return {};
     }
 
-    auto processMessage(std::span<const std::byte> data, IRpcMessageEndpoint* endpoint = nullptr) noexcept
+    auto processMessage(std::span<const std::byte> data, IMessageEndpoint* endpoint = nullptr) noexcept
         -> ilias::Task<Message> {
         Message buffer;
         auto decoded = Backend::decodeIncoming(data);
@@ -164,11 +164,11 @@ public:
         co_return buffer;
     }
 
-    auto receiveLoop(IRpcMessageEndpoint* endpoint) noexcept -> ilias::Task<void> {
+    auto receiveLoop(IMessageEndpoint* endpoint) noexcept -> ilias::Task<void> {
         while (endpoint != nullptr) {
             std::vector<std::byte> buffer;
             if (auto ret = co_await endpoint->recv(buffer); ret && !buffer.empty()) {
-                co_await (processMessage(buffer, endpoint) | ilias::unstoppable());
+                co_await (processMessage(buffer, endpoint));
             } else {
                 break;
             }

@@ -99,7 +99,6 @@ concept RpcEndpoint = requires(T endpoint, std::vector<std::byte>& out, std::spa
     { endpoint.recv(out) } -> std::same_as<ilias::IoTask<void>>;
     { endpoint.send(in) } -> std::same_as<ilias::IoTask<void>>;
     { endpoint.close() } -> std::same_as<void>;
-    { endpoint.cancel() } -> std::same_as<void>;
 };
 ```
 

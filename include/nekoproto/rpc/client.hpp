@@ -34,7 +34,6 @@ public:
 
     auto close() noexcept -> void {
         if (mEndpoint != nullptr) {
-            mEndpoint->cancel();
             mEndpoint->close();
         }
     }
@@ -62,12 +61,12 @@ public:
 
     auto isConnected() const noexcept -> bool { return mEndpoint != nullptr; }
 
-    template <RpcMessageEndpoint EndpointT>
+    template <MessageEndpoint EndpointT>
     auto setEndpoint(EndpointT endpoint) noexcept -> void {
-        if constexpr (detail::is_rpc_endpoint<EndpointT>::value) {
+        if constexpr (detail::is_message_endpoint<EndpointT>::value) {
             mEndpoint = std::make_unique<EndpointT>(std::move(endpoint));
         } else {
-            mEndpoint = std::make_unique<detail::RpcMessageEndpointWrapper<EndpointT>>(std::move(endpoint));
+            mEndpoint = std::make_unique<detail::MessageEndpointWrapper<EndpointT>>(std::move(endpoint));
         }
     }
 
@@ -75,7 +74,7 @@ public:
         requires detail::RpcStreamBackend<Backend, StreamT>
     auto setEndpoint(StreamT stream) noexcept -> void {
         if constexpr (requires(StreamT value) {
-                          { Backend::makeClientEndpoint(std::move(value)) } -> RpcMessageEndpoint;
+                          { Backend::makeClientEndpoint(std::move(value)) } -> MessageEndpoint;
                       }) {
             setEndpoint(Backend::makeClientEndpoint(std::move(stream)));
         } else {
@@ -145,10 +144,10 @@ private:
             co_return ilias::Err(encoded.error());
         }
         auto& request = encoded.value();
-        auto sendRet  = co_await mEndpoint->send(
-            {reinterpret_cast<const std::byte*>(request.message.data()), request.message.size()});
-        if (!sendRet) {
-            co_return ilias::Err(sendRet.error());
+        ILIAS_CO_TRY(auto sendRet, co_await mEndpoint->send(
+            {reinterpret_cast<const std::byte*>(request.message.data()), request.message.size()}));
+        if (sendRet != request.message.size()) {
+            co_return ilias::Err(ilias::IoError::Other);
         }
         if (!metadata.isNotification()) {
             std::vector<std::byte> buffer;
@@ -171,7 +170,7 @@ private:
     }
 
 private:
-    std::unique_ptr<detail::IRpcMessageEndpoint> mEndpoint = nullptr;
+    std::unique_ptr<detail::IMessageEndpoint> mEndpoint = nullptr;
     std::uint64_t mId                                      = 0;
     ilias::Mutex mMutex;
 };

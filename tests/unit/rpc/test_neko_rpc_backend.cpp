@@ -156,7 +156,7 @@ TEST(NekoRpcBackend, CallsThroughIliasDuplexStreamEndpoint) {
     server.close();
 }
 
-TEST(NekoRpcBackend, MakeEndpointAcceptsIliasStreamAndRpcMessageEndpoint) {
+TEST(NekoRpcBackend, MakeEndpointAcceptsIliasStreamAndMessageEndpoint) {
     ilias::PlatformContext context;
     context.install();
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context};
@@ -165,11 +165,11 @@ TEST(NekoRpcBackend, MakeEndpointAcceptsIliasStreamAndRpcMessageEndpoint) {
 
     auto [clientStream, serverStream] = ilias::DuplexStream::make(65536);
     auto rawClientEndpoint            = BinaryRpcBackend::makeEndpoint(std::move(clientStream));
-    static_assert(RpcMessageEndpoint<decltype(rawClientEndpoint)>);
+    static_assert(MessageEndpoint<decltype(rawClientEndpoint)>);
     auto clientEndpoint = BinaryRpcBackend::makeEndpoint(std::move(rawClientEndpoint));
-    static_assert(RpcMessageEndpoint<decltype(clientEndpoint)>);
+    static_assert(MessageEndpoint<decltype(clientEndpoint)>);
     auto serverEndpoint = BinaryRpcBackend::makeEndpoint(std::move(serverStream));
-    static_assert(RpcMessageEndpoint<decltype(serverEndpoint)>);
+    static_assert(MessageEndpoint<decltype(serverEndpoint)>);
 
     std::uint64_t nextId = 0;
     auto request         = BinaryRpcBackend::encodeRequest(server->add, false, nextId, 20, 22);
