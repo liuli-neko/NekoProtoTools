@@ -5,19 +5,6 @@
 
 namespace NEKO_NAMESPACE::detail {
 
-NEKO_PROTO_API std::string to_string(JsonRpcIdType id) {
-    switch (id.index()) {
-    case 0:
-        return "null";
-    case 1:
-        return std::to_string(std::get<1>(id));
-    case 2:
-        return std::get<2>(id);
-    default:
-        return "unknown";
-    }
-}
-
 NEKO_PROTO_API
 auto make_tcp_stream_client(IPEndpoint ipendpoint) -> IoTask<IliasLengthPrefixedMessageEndpoint> {
     if (auto ret1 = co_await ilias::TcpStream::connect(ipendpoint); ret1) {

@@ -149,7 +149,7 @@ public:
 
 template <typename Server, typename Client>
 static void connect_endpoint(Server& server, Client& client) {
-#if 1
+#if 0
     auto serverStream = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS) +
                                                         "-127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS)))
                             .wait()
@@ -443,6 +443,18 @@ TEST_F(JsonRpcTest, NoPrefixTagKeepsCppPath) {
     auto ret = server.callMethod(R"({"jsonrpc":"2.0","method":"version","params":[],"id":1})").wait();
     auto text = std::string_view{ret.data(), ret.size()};
     EXPECT_NE(text.find(R"("result":"1.0")"), std::string_view::npos);
+}
+
+TEST_F(JsonRpcTest, InvalidStreamClientUrlsFailBeforeOpeningSockets) {
+    EXPECT_FALSE(detail::make_tcp_stream_client("tcp://not-an-endpoint").wait().has_value());
+
+    const std::string tcpUrl = "not-an-endpoint";
+    EXPECT_FALSE(detail::make_tcp_stream_client(tcpUrl).wait().has_value());
+
+    EXPECT_FALSE(detail::make_udp_stream_client("udp://127.0.0.1:12345").wait().has_value());
+
+    const std::string udpUrl = "udp://not-an-endpoint-127.0.0.1:12346";
+    EXPECT_FALSE(detail::make_udp_stream_client(udpUrl).wait().has_value());
 }
 
 TEST_F(JsonRpcTest, Notification) {

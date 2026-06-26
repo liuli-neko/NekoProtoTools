@@ -23,8 +23,6 @@ namespace detail {
 using JsonRpcIdType = std::variant<std::monostate, uint64_t, std::string>;
 using JsonRpcResponseValues = std::vector<JsonSerializer::JsonValue>;
 
-NEKO_PROTO_API std::string to_string(JsonRpcIdType id);
-
 template <typename MethodTraits, ConstexprString... ArgNames>
 struct JsonRpcRequest2 {
     using JsonTraits = JsonRpcMethodTraits<MethodTraits>;
