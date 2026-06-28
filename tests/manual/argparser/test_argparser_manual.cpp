@@ -9,6 +9,7 @@
 #include <vector>
 
 NEKO_USE_NAMESPACE
+using namespace NEKO_NAMESPACE::argparser;
 
 enum class BuildMode {
     Debug,
@@ -28,10 +29,12 @@ struct ServeNetworkOptions {
 
     struct Neko {
         constexpr static auto value = // NOLINT
-            Object("host", make_tags<ArgTags<"host", "", "listen host">{.required = true}>(
-                               &ServeNetworkOptions::host),
-                   "port", make_tags<ArgTags<"port", "", "listen port">{.rangeMin = 1, .rangeMax = 65536}>(
-                               &ServeNetworkOptions::port));
+            Object("host",
+                   make_tags<arg_name<"host", "", arg_help<"listen host", ArgTags{.required = true}>>>(
+                       &ServeNetworkOptions::host),
+                   "port",
+                   make_tags<arg_name<"port", "", arg_help<"listen port", ArgTags{.rangeMin = 1, .rangeMax = 65536}>>>(
+                       &ServeNetworkOptions::port));
     };
 };
 
@@ -45,13 +48,15 @@ struct ServeCommand {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("network", &ServeCommand::network, "verbose",
-                   make_tags<ArgTags<"verbose", "v", "enable verbose output">{.flag = true}>(
+                   make_tags<arg_name<"verbose", "v", arg_help<"enable verbose output", ArgTags{.flag = true}>>>(
                        &ServeCommand::verbose),
-                   "config", make_tags<ArgTags<"config", "c", "config file">{}>(&ServeCommand::config),
+                   "config",
+                   make_tags<arg_name<"config", "c", arg_help<"config file">>>(&ServeCommand::config),
                    "include",
-                   make_tags<ArgTags<"include", "I", "extra include directory">{.repeatable = true}>(
+                   make_tags<arg_name<"include", "I",
+                                      arg_help<"extra include directory", ArgTags{.repeatable = true}>>>(
                        &ServeCommand::includeDirs),
-                   "root", make_tags<ArgTags<"root", "", "document root">{.positional = true}>(
+                   "root", make_tags<arg_name<"root", "", arg_help<"document root", ArgTags{.positional = true}>>>(
                                &ServeCommand::root));
     };
 };
@@ -67,17 +72,24 @@ struct BuildCommand {
 
     struct Neko {
         constexpr static auto value = // NOLINT
-            Object("jobs", make_tags<ArgTags<"jobs", "j", "parallel jobs">{.rangeMin = 1, .rangeMax = 65}>(
+            Object("jobs", make_tags<arg_name<"jobs", "j",
+                                                arg_help<"parallel jobs", ArgTags{.rangeMin = 1, .rangeMax = 65}>>>(
                                &BuildCommand::jobs),
                    "release",
-                   make_tags<ArgTags<"release", "r", "release build">{.flag = true}>(&BuildCommand::release),
-                   "dryRun", make_tags<ArgTags<"dry-run", "", "show work without executing">{.flag = true}>(
+                   make_tags<arg_name<"release", "r", arg_help<"release build", ArgTags{.flag = true}>>>(
+                       &BuildCommand::release),
+                   "dryRun", make_tags<arg_name<"dry-run", "", arg_help<"show work without executing",
+                                                                         ArgTags{.flag = true}>>>(
                                  &BuildCommand::dryRun),
-                   "output", make_tags<ArgTags<"output", "o", "output directory">{}>(&BuildCommand::output),
-                   "mode", make_tags<ArgTags<"mode", "m", "build mode", "debug", "release">{}>(&BuildCommand::mode),
-                   "define", make_tags<ArgTags<"define", "D", "preprocessor definition">{.repeatable = true}>(
+                   "output", make_tags<arg_name<"output", "o", arg_help<"output directory">>>(&BuildCommand::output),
+                   "mode",
+                   make_tags<arg_name<"mode", "m",
+                                      arg_help<"build mode", arg_choices<ArgTags{}, "debug", "release">>>>(
+                       &BuildCommand::mode),
+                   "define", make_tags<arg_name<"define", "D",
+                                                   arg_help<"preprocessor definition", ArgTags{.repeatable = true}>>>(
                                  &BuildCommand::defines),
-                   "target", make_tags<ArgTags<"target", "", "target name">{.positional = true}>(
+                   "target", make_tags<arg_name<"target", "", arg_help<"target name", ArgTags{.positional = true}>>>(
                                  &BuildCommand::target));
     };
 };
@@ -85,15 +97,17 @@ struct BuildCommand {
 struct ToolCommands {
     ServeCommand serve;
     BuildCommand build;
-    ArgCommand<"clean"> clean;
+    ArgCommand clean;
 
     struct Neko {
         constexpr static auto value = // NOLINT
-            Object("serve", make_tags<ArgTags<"serve", "", "run an HTTP-like demo server">{.command = true}>(
+            Object("serve", make_tags<arg_name<"serve", "",
+                                                arg_help<"run an HTTP-like demo server", ArgTags{.command = true}>>>(
                                 &ToolCommands::serve),
-                   "build", make_tags<ArgTags<"build", "", "build a target">{.command = true}>(
+                   "build", make_tags<arg_name<"build", "", arg_help<"build a target", ArgTags{.command = true}>>>(
                                 &ToolCommands::build),
-                   "clean", make_tags<ArgTags<"clean", "", "remove generated files">{.command = true}>(
+                   "clean", make_tags<arg_name<"clean", "",
+                                                arg_help<"remove generated files", ArgTags{.command = true}>>>(
                                 &ToolCommands::clean));
     };
 };
@@ -108,17 +122,20 @@ struct StandaloneOptions {
 
     struct Neko {
         constexpr static auto value = // NOLINT
-            Object("verbose", make_tags<ArgTags<"verbose", "v", "enable verbose output">{.flag = true}>(
+            Object("verbose", make_tags<arg_name<"verbose", "v",
+                                                   arg_help<"enable verbose output", ArgTags{.flag = true}>>>(
                                   &StandaloneOptions::verbose),
-                   "count", make_tags<ArgTags<"count", "c", "repeat count">{}>(&StandaloneOptions::count),
+                   "count", make_tags<arg_name<"count", "c", arg_help<"repeat count">>>(&StandaloneOptions::count),
                    "output",
-                   make_tags<ArgTags<"output", "o", "optional output file">{.required = true}>(
+                   make_tags<arg_name<"output", "o", arg_help<"optional output file", ArgTags{.required = true}>>>(
                        &StandaloneOptions::output),
                    "include",
-                   make_tags<ArgTags<"include", "I", "repeatable include directory">{.repeatable = true}>(
+                   make_tags<arg_name<"include", "I",
+                                      arg_help<"repeatable include directory", ArgTags{.repeatable = true}>>>(
                        &StandaloneOptions::includeDirs),
                    "network", &StandaloneOptions::network, "input",
-                   make_tags<ArgTags<"input", "", "input file">{.positional = true}>(&StandaloneOptions::input));
+                   make_tags<arg_name<"input", "", arg_help<"input file", ArgTags{.positional = true}>>>(
+                       &StandaloneOptions::input));
     };
 };
 
@@ -176,7 +193,7 @@ void print(const BuildCommand& command) {
     std::cout << "target = " << command.target << '\n';
 }
 
-void print(const ArgCommand<"clean">& /*unused*/) {
+void print(const ArgCommand& /*unused*/) {
     std::cout << "command = clean\n";
     std::cout << "no command-specific options\n";
 }
