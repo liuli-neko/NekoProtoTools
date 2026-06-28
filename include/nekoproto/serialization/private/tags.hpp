@@ -80,13 +80,20 @@ constexpr bool perform_check() {
 }
 
 template <typename T>
-constexpr std::string_view tag_string_view(const T& value) {
-    if constexpr (requires { value.view(); }) {
+auto constexpr make_tag_value_common(T& value) {
+    if constexpr (std::is_array_v<T>) {
+        // make to std::vector
+        return std::vector<std::decay_t<T>>{std::begin(value), std::end(value)};
+    } else if constexpr (NEKO_NAMESPACE::detail::is_std_array<std::decay_t<T>>::value) {
+        // make to std::vector
+        return std::vector<typename std::decay_t<T>::value_type>{std::begin(value), std::end(value)};
+    } else if constexpr (is_constexpr_string<T>::value) {
         return value.view();
     } else {
-        return std::string_view{value};
+        return std::forward<T>(value);
     }
 }
+
 } // namespace detail
 
 template <typename T, class = void>
@@ -96,6 +103,78 @@ template <typename T, class = void>
 struct is_unframed_tag : std::false_type {}; // NOLINT
 
 namespace tag_access {
+#define NEKO_DEFINE_NESTED_TAG(Type, name, fname)                                                                      \
+    template <typename T>                                                                                              \
+    constexpr Type fname(const T& tags) {                                                                              \
+        static_cast<void>(tags);                                                                                       \
+        using Tag = std::remove_cvref_t<T>;                                                                            \
+        if constexpr (requires { tags.name; }) {                                                                       \
+            return NEKO_NAMESPACE::detail::make_tag_value_common(tags.name);                                           \
+        } else {                                                                                                       \
+            return {};                                                                                                 \
+        }                                                                                                              \
+    }                                                                                                                  \
+    template <typename T>                                                                                              \
+    constexpr Type recursive_##fname(const T& tags) {                                                                  \
+        static_cast<void>(tags);                                                                                       \
+        using Tag = std::remove_cvref_t<T>;                                                                            \
+        if constexpr (requires { tags.name; }) {                                                                       \
+            return NEKO_NAMESPACE::detail::make_tag_value_common(tags.name);                                           \
+        } else if constexpr (requires { tags.base; }) {                                                                \
+            return recursive_##fname(tags.base);                                                                       \
+        } else {                                                                                                       \
+            return {};                                                                                                 \
+        }                                                                                                              \
+    }                                                                                                                  \
+    template <typename T>                                                                                              \
+    constexpr bool has_##fname(const T& tags) {                                                                        \
+        static_cast<void>(tags);                                                                                       \
+        using Tag = std::remove_cvref_t<T>;                                                                            \
+        return requires { tags.name; };                                                                                \
+    }                                                                                                                  \
+    template <typename T>                                                                                              \
+    constexpr bool has_recursive_##fname(const T& tags) {                                                              \
+        using Tag = std::remove_cvref_t<T>;                                                                            \
+        if constexpr (requires { tags.name; }) {                                                                       \
+            return true;                                                                                               \
+        } else if constexpr (requires { tags.base; }) {                                                                \
+            return has_recursive_##fname(tags.base);                                                                   \
+        } else {                                                                                                       \
+            return false;                                                                                              \
+        }                                                                                                              \
+    }                                                                                                                  \
+    template <typename T>                                                                                              \
+    constexpr auto consume_##fname(const T& tags) {                                                                    \
+        using Tag = std::remove_cvref_t<T>;                                                                            \
+        if constexpr (requires {                                                                                       \
+                          tags.name;                                                                                   \
+                          tags.base;                                                                                   \
+                      }) {                                                                                             \
+            return tags.base;                                                                                          \
+        } else {                                                                                                       \
+            return tags;                                                                                               \
+        }                                                                                                              \
+    }                                                                                                                  \
+    template <typename T>                                                                                              \
+    constexpr auto consume_recursive_##fname(const T& tags) {                                                          \
+        using Tag = std::remove_cvref_t<T>;                                                                            \
+        if constexpr (requires {                                                                                       \
+                          tags.name;                                                                                   \
+                          tags.base;                                                                                   \
+                      }) {                                                                                             \
+            return tags.base;                                                                                          \
+        } else if constexpr (requires { tags.base; }) {                                                                \
+            if constexpr (has_recursive_##fname(tags.base)) {                                                          \
+                constexpr auto ConsumedBase = consume_recursive_##fname(tags.base);                                    \
+                return NEKO_NAMESPACE::detail::rebind_tag_base<Tag, ConsumedBase>();                                   \
+            } else {                                                                                                   \
+                return tags;                                                                                           \
+            }                                                                                                          \
+        } else {                                                                                                       \
+            return tags;                                                                                               \
+        }                                                                                                              \
+    }
+
 template <typename Value, typename T>
 constexpr bool is_flat(const T& tags) {
     if constexpr (requires { tags.flat; }) {
@@ -166,74 +245,6 @@ constexpr bool is_raw_string(const T& tags) {
         return false;
     }
 }
-
-template <typename T>
-constexpr std::string_view comment(const T& tags) {
-    static_cast<void>(tags);
-    using Tag = std::remove_cvref_t<T>;
-    if constexpr (requires { Tag::comment; }) {
-        return detail::tag_string_view(Tag::comment);
-    } else {
-        return {};
-    }
-}
-
-template <typename T>
-constexpr std::string_view recursive_comment(const T& tags) {
-    static_cast<void>(tags);
-    using Tag = std::remove_cvref_t<T>;
-    if constexpr (requires { Tag::comment; }) {
-        return detail::tag_string_view(Tag::comment);
-    } else if constexpr (requires { Tag::base; }) {
-        return recursive_comment(Tag::base);
-    } else {
-        return {};
-    }
-}
-
-template <typename T>
-constexpr bool has_comment(const T& tags) {
-    return !comment(tags).empty();
-}
-
-template <typename T>
-constexpr bool has_recursive_comment(const T& tags) {
-    return !recursive_comment(tags).empty();
-}
-
-template <typename T>
-constexpr std::string_view name(const T& tags) {
-    static_cast<void>(tags);
-    using Tag = std::remove_cvref_t<T>;
-    if constexpr (requires { Tag::name; }) {
-        return detail::tag_string_view(Tag::name);
-    } else {
-        return {};
-    }
-}
-
-template <typename T>
-constexpr std::string_view recursive_name(const T& tags) {
-    static_cast<void>(tags);
-    using Tag = std::remove_cvref_t<T>;
-    if constexpr (requires { Tag::name; }) {
-        return detail::tag_string_view(Tag::name);
-    } else if constexpr (requires { Tag::base; }) {
-        return recursive_name(Tag::base);
-    } else {
-        return {};
-    }
-}
-
-template <typename T>
-constexpr bool has_name(const T& tags) {
-    return !name(tags).empty();
-}
-
-template <typename T>
-constexpr bool has_recursive_name(const T& tags) {
-    return !recursive_name(tags).empty();
-}
 } // namespace tag_access
 
 template <auto Tags, typename Accessor>
@@ -268,8 +279,8 @@ struct NoTags {
 
 template <ConstexprString Comment, auto BaseTags = NoTags{}>
 struct CommentTag {
-    constexpr static auto comment = Comment;  // NOLINT
-    constexpr static auto base    = BaseTags; // NOLINT
+    constexpr static auto comment = Comment.view(); // NOLINT
+    constexpr static auto base    = BaseTags;       // NOLINT
 
     template <auto NewBase>
     using rebind_base = CommentTag<Comment, NewBase>;
@@ -285,8 +296,8 @@ inline constexpr auto comment_tag = CommentTag<Comment, BaseTags>{}; // NOLINT
 
 template <ConstexprString Name, auto BaseTags = NoTags{}>
 struct NameTag {
-    constexpr static auto name = Name;     // NOLINT
-    constexpr static auto base = BaseTags; // NOLINT
+    constexpr static auto name = Name.view(); // NOLINT
+    constexpr static auto base = BaseTags;    // NOLINT
 
     template <auto NewBase>
     using rebind_base = NameTag<Name, NewBase>;
@@ -314,72 +325,8 @@ constexpr auto rebind_tag_base() {
 } // namespace detail
 
 namespace tag_access {
-template <typename T>
-constexpr auto consume_comment(const T& tags) {
-    using Tag = std::remove_cvref_t<T>;
-    if constexpr (requires {
-                      Tag::comment;
-                      Tag::base;
-                  }) {
-        return Tag::base;
-    } else {
-        return tags;
-    }
-}
-
-template <typename T>
-constexpr auto consume_recursive_comment(const T& tags) {
-    using Tag = std::remove_cvref_t<T>;
-    if constexpr (requires {
-                      Tag::comment;
-                      Tag::base;
-                  }) {
-        return Tag::base;
-    } else if constexpr (requires { Tag::base; }) {
-        if constexpr (has_recursive_comment(Tag::base)) {
-            constexpr auto ConsumedBase = consume_recursive_comment(Tag::base);
-            return detail::rebind_tag_base<Tag, ConsumedBase>();
-        } else {
-            return tags;
-        }
-    } else {
-        return tags;
-    }
-}
-
-template <typename T>
-constexpr auto consume_name(const T& tags) {
-    using Tag = std::remove_cvref_t<T>;
-    if constexpr (requires {
-                      Tag::name;
-                      Tag::base;
-                  }) {
-        return Tag::base;
-    } else {
-        return tags;
-    }
-}
-
-template <typename T>
-constexpr auto consume_recursive_name(const T& tags) {
-    using Tag = std::remove_cvref_t<T>;
-    if constexpr (requires {
-                      Tag::name;
-                      Tag::base;
-                  }) {
-        return Tag::base;
-    } else if constexpr (requires { Tag::base; }) {
-        if constexpr (has_recursive_name(Tag::base)) {
-            constexpr auto ConsumedBase = consume_recursive_name(Tag::base);
-            return detail::rebind_tag_base<Tag, ConsumedBase>();
-        } else {
-            return tags;
-        }
-    } else {
-        return tags;
-    }
-}
-
+NEKO_DEFINE_NESTED_TAG(std::string_view, comment, comment)
+NEKO_DEFINE_NESTED_TAG(std::string_view, name, name)
 } // namespace tag_access
 
 // --- Helper Trait to Identify FieldSpec ---

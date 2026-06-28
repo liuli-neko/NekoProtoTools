@@ -138,4 +138,16 @@ struct ConstexprString {
 template <std::size_t N>
 ConstexprString(const char (&)[N]) -> ConstexprString<N - 1>;
 
+template <ConstexprString Str>
+[[nodiscard]]
+consteval auto operator""_cs() noexcept {
+    return Str;
+}
+
+template <typename T, class enable = void>
+struct is_constexpr_string : std::false_type {}; // NOLINT
+
+template <std::size_t N>
+struct is_constexpr_string<ConstexprString<N>, void> : std::true_type {};
+
 NEKO_END_NAMESPACE
