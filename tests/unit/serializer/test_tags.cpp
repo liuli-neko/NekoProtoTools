@@ -129,21 +129,22 @@ TEST(SerializationTags, AccessorsResolveDirectAndNestedTagFlags) {
     constexpr auto Tags =
         comment_tag<"outer comment", rename_tag<"wire_name", JsonTags{.flat = true, .skipable = true}>>;
 
-    static_assert(tag_query::has_comment(Tags));
-    static_assert(tag_query::comment(Tags) == "outer comment");
-    static_assert(tag_query::has_name(Tags));
-    static_assert(tag_query::name(Tags) == "wire_name");
-    static_assert(tag_query::flat<TypeLevelFlatTagInner>(Tags));
-    static_assert(tag_query::skipable(Tags));
+    static_assert(tag_query::has<tag_prop::comment>(Tags));
+    static_assert(tag_query::get<tag_prop::comment>(Tags) == "outer comment");
+    static_assert(tag_query::has<tag_prop::name>(Tags));
+    static_assert(tag_query::get<tag_prop::name>(Tags) == "wire_name");
+    static_assert(tag_query::get<tag_prop::flat<TypeLevelFlatTagInner>>(Tags));
+    static_assert(tag_query::get<tag_prop::skipable>(Tags));
 }
 
 TEST(SerializationTags, TypeLevelTagsAreVisibleThroughNoTags) {
-    static_assert(tag_query::flat<TypeLevelFlatTagInner>(NoTags{}));
-    static_assert(!tag_query::flat<int>(NoTags{}));
-    static_assert(tag_query::unframed<TypeLevelUnframedHeader>(NoTags{}));
-    static_assert(!tag_query::unframed<std::uint16_t>(NoTags{}));
-    static_assert(tag_query::fixed_length<std::uint32_t>(BinaryTags{.fixedLength = true}) == sizeof(std::uint32_t));
-    static_assert(tag_query::fixed_length<std::uint32_t>(BinaryTags{.fixedLength = 2}) == 2U);
+    static_assert(tag_query::get<tag_prop::flat<TypeLevelFlatTagInner>>(NoTags{}));
+    static_assert(!tag_query::get<tag_prop::flat<int>>(NoTags{}));
+    static_assert(tag_query::get<tag_prop::unframed<TypeLevelUnframedHeader>>(NoTags{}));
+    static_assert(!tag_query::get<tag_prop::unframed<std::uint16_t>>(NoTags{}));
+    static_assert(tag_query::get<tag_prop::fixed_length<std::uint32_t>>(BinaryTags{.fixedLength = true}) ==
+                  sizeof(std::uint32_t));
+    static_assert(tag_query::get<tag_prop::fixed_length<std::uint32_t>>(BinaryTags{.fixedLength = 2}) == 2U);
 }
 
 TEST(SerializationTags, MakeTagsExposeAccessorAndWrappedTag) {
@@ -152,8 +153,8 @@ TEST(SerializationTags, MakeTagsExposeAccessorAndWrappedTag) {
     static_assert(is_field_spec_v<decltype(spec)>);
     static_assert(std::is_same_v<detail::resolve_without_context_t<decltype(&TypeLevelFlatTagInner::code)>, int>);
     static_assert(std::is_same_v<resolve_member_type_t<field_accessor_t<decltype(spec)>, TypeLevelFlatTagInner>, int>);
-    static_assert(tag_query::name(field_tags_v<decltype(spec)>) == "wire_code");
-    static_assert(tag_query::skipable(field_tags_v<decltype(spec)>));
+    static_assert(tag_query::get<tag_prop::name>(field_tags_v<decltype(spec)>) == "wire_code");
+    static_assert(tag_query::get<tag_prop::skipable>(field_tags_v<decltype(spec)>));
 }
 
 TEST(SerializationTags, SerializerMacroStripsMakeTagsWhenBuildingReflectionNames) {
@@ -169,13 +170,13 @@ TEST(SerializationTags, SerializerMacroStripsMakeTagsWhenBuildingReflectionNames
     constexpr auto optionalTags = std::get<2>(Reflect<MacroParsedTaggedObject>::field_tags);
     constexpr auto nestedTags   = std::get<3>(Reflect<MacroParsedTaggedObject>::field_tags);
 
-    static_assert(tag_query::raw_string(rawTags));
-    static_assert(tag_query::comment(renamedTags) == "doc keeps parser depth");
-    static_assert(tag_query::name(renamedTags) == "wire(alias)");
-    static_assert(tag_query::skipable(renamedTags));
-    static_assert(tag_query::skipable(optionalTags));
-    static_assert(tag_query::comment(nestedTags) == "flattened docs");
-    static_assert(tag_query::flat<TypeLevelFlatTagInner>(nestedTags));
+    static_assert(tag_query::get<tag_prop::raw_string>(rawTags));
+    static_assert(tag_query::get<tag_prop::comment>(renamedTags) == "doc keeps parser depth");
+    static_assert(tag_query::get<tag_prop::name>(renamedTags) == "wire(alias)");
+    static_assert(tag_query::get<tag_prop::skipable>(renamedTags));
+    static_assert(tag_query::get<tag_prop::skipable>(optionalTags));
+    static_assert(tag_query::get<tag_prop::comment>(nestedTags) == "flattened docs");
+    static_assert(tag_query::get<tag_prop::flat<TypeLevelFlatTagInner>>(nestedTags));
 
     constexpr auto innerNames = Reflect<TypeLevelFlatTagInner>::names();
     static_assert(innerNames.size() == 2);

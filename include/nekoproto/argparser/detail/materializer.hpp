@@ -184,24 +184,6 @@ std::error_code assign_default_value(const T& defaultValue, auto& value, char se
 }
 
 template <typename T>
-inline constexpr bool is_range_value_v = // NOLINT
-    std::is_arithmetic_v<std::remove_cvref_t<T>> && !std::is_same_v<std::remove_cvref_t<T>, bool>;
-
-template <typename T>
-inline constexpr bool is_range_supported_v = []() consteval { // NOLINT
-    using RawT = std::remove_cvref_t<T>;
-    if constexpr (is_range_value_v<RawT>) {
-        return true;
-    } else if constexpr (is_arg_optional_v<RawT>) {
-        return is_range_value_v<optional_value_t<RawT>>;
-    } else if constexpr (is_vector_v<RawT>) {
-        return is_range_value_v<vector_value_t<RawT>>;
-    } else {
-        return false;
-    }
-}();
-
-template <typename T>
 inline constexpr bool is_choice_value_v = // NOLINT
     is_string_like_v<T> || std::is_enum_v<std::remove_cvref_t<T>>;
 
@@ -337,10 +319,10 @@ std::error_code assign_text_to_field(const ArgSpec& spec, FieldT& field, std::st
 
 template <typename FieldT, typename Tags>
 std::error_code assign_default_to_field(const ArgSpec& spec, FieldT& field, const Tags& tags) {
-    if constexpr (tag_query::has_default_value(decltype(tags){})) {
+    if constexpr (tag_query::has<tag_prop::default_value>(decltype(tags){})) {
         const auto caseInsensitiveEnum = spec.caseInsensitiveChoices && !spec.choices.empty();
         if (auto error =
-                assign_default_value(tag_query::default_value(tags), field, spec.separator, caseInsensitiveEnum)) {
+                assign_default_value(tag_query::get<tag_prop::default_value>(tags), field, spec.separator, caseInsensitiveEnum)) {
             return error;
         }
         return validate_field_value(field, spec);

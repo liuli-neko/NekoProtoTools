@@ -60,7 +60,7 @@ consteval bool tuple_types_unique() {
 
 template <typename T, std::size_t I>
 consteval bool field_is_command() {
-    return tag_query::command(std::get<I>(Reflect<std::remove_cvref_t<T>>::field_tags));
+    return tag_query::get<tag_prop::command>(std::get<I>(Reflect<std::remove_cvref_t<T>>::field_tags));
 }
 
 template <typename T>
@@ -148,7 +148,7 @@ template <typename T, std::size_t I>
 std::string command_name_at() {
     constexpr auto Names = Reflect<std::remove_cvref_t<T>>::names();
     constexpr auto Tags  = std::get<I>(Reflect<std::remove_cvref_t<T>>::field_tags);
-    constexpr auto Name  = tag_query::long_name(Tags);
+    constexpr auto Name  = tag_query::get<tag_prop::long_name>(Tags);
     if constexpr (!Name.empty()) {
         return std::string(Name);
     } else {
@@ -245,11 +245,11 @@ std::string format_command_help(const ArgParserConfig& config) {
         result.append("  -V, --version\n");
     }
     Reflect<std::remove_cvref_t<T>>::forEachMeta([&result](std::string_view name, const auto& tags) {
-        if (!tag_query::hidden(tags)) {
+        if (!tag_query::get<tag_prop::hidden>(tags)) {
             result.append("  ");
-            std::string_view cname = tag_query::long_name(tags).empty() ? name : tag_query::long_name(tags);
+            std::string_view cname = tag_query::get<tag_prop::long_name>(tags).empty() ? name : tag_query::get<tag_prop::long_name>(tags);
             result.append(cname);
-            const auto help = tag_query::help(tags);
+            const auto help = tag_query::get<tag_prop::help>(tags);
             if (!help.empty()) {
                 result.append("\n      ");
                 result.append(help);
@@ -273,7 +273,7 @@ bool try_format_command_help(std::string_view command, const ArgParserConfig& co
     ArgParserConfig commandConfig = config;
     commandConfig.programName     = programName;
     commandConfig.usage           = {};
-    const auto commandHelp        = tag_query::help(tags);
+    const auto commandHelp        = tag_query::get<tag_prop::help>(tags);
     if (!commandHelp.empty()) {
         commandConfig.description = commandHelp;
     }
@@ -300,7 +300,7 @@ std::string format_context_help(int argc, const char* const* argv, ArgParserConf
             bool matched             = false;
             Reflect<std::remove_cvref_t<T>>::forEachMeta(
                 [&]<typename U>(std::type_identity<U>, std::string_view name, const auto& tags) {
-                    std::string_view cname = tag_query::long_name(tags).empty() ? name : tag_query::long_name(tags);
+                    std::string_view cname = tag_query::get<tag_prop::long_name>(tags).empty() ? name : tag_query::get<tag_prop::long_name>(tags);
                     if (cname == command) {
                         matched = try_format_command_help<U>(command, config, result, tags);
                     }
