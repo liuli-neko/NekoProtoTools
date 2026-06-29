@@ -718,6 +718,67 @@ inline std::error_code apply_implicit_spec(ArgSpec& spec) {
     return {};
 }
 
+inline bool looks_like_negative_number(std::string_view token) {
+    if (token.size() < 2 || token[0] != '-') {
+        return false;
+    }
+
+    std::size_t index = 1;
+    if (index < token.size() && token[index] == '.') {
+        ++index;
+    }
+    if (index >= token.size() || !std::isdigit(static_cast<unsigned char>(token[index]))) {
+        return false;
+    }
+    while (index < token.size() && std::isdigit(static_cast<unsigned char>(token[index]))) {
+        ++index;
+    }
+    if (index < token.size() && token[index] == '.') {
+        ++index;
+        if (index >= token.size() || !std::isdigit(static_cast<unsigned char>(token[index]))) {
+            return false;
+        }
+        while (index < token.size() && std::isdigit(static_cast<unsigned char>(token[index]))) {
+            ++index;
+        }
+    }
+    return index == token.size();
+}
+
+inline bool looks_like_option_boundary_for_implicit(std::string_view token, const ArgParserConfig& config) {
+    if (token == "--") {
+        return true;
+    }
+    if (config.addHelp && is_help_token(token)) {
+        return true;
+    }
+    if (config.addVersion && !config.version.empty() && is_version_token(token)) {
+        return true;
+    }
+    if (token.starts_with("--")) {
+        return true;
+    }
+    return is_option_token(token) && !looks_like_negative_number(token);
+}
+
+inline std::error_code apply_option_spec(std::vector<ArgSpec>& specs, ArgSpec& spec, int argc, const char* const* argv,
+                                         int& idx, std::string_view value, bool valueInline,
+                                         const ArgParserConfig& config) {
+    if (spec.flag || valueInline) {
+        return apply_spec(spec, value);
+    }
+    if (idx + 1 < argc && argv[idx + 1] != nullptr) {
+        const std::string_view nextValue = argv[idx + 1];
+        if (!spec.hasImplicit || !looks_like_option_boundary_for_implicit(nextValue, config)) {
+            return apply_spec(spec, argv[++idx]);
+        }
+    }
+    if (spec.hasImplicit) {
+        return apply_implicit_spec(spec);
+    }
+    return make_error_code(ArgParserError::MissingValue);
+}
+
 inline std::error_code apply_positional(std::vector<ArgSpec>& specs, const std::vector<std::size_t>& positionalSpecs,
                                         std::size_t& positionalIndex, std::string_view value) {
     if (positionalIndex >= positionalSpecs.size()) {
@@ -774,6 +835,91 @@ inline std::string format_number(double value) {
     return stream.str();
 }
 
+inline std::string format_option_label(const ArgSpec& spec) {
+    auto append_name = [](std::string& out, std::string_view prefix, std::string_view name) {
+        if (!out.empty()) {
+            out.append(", ");
+        }
+        out.append(prefix);
+        out.append(name);
+    };
+
+    std::string result;
+    if (spec.positional) {
+        result.append(spec.longName);
+    } else {
+        if (!spec.shortName.empty()) {
+            append_name(result, "-", spec.shortName);
+        }
+        for (const auto alias : spec.aliases) {
+            if (alias.size() == 1) {
+                append_name(result, "-", alias);
+            }
+        }
+        append_name(result, "--", spec.longName);
+        for (const auto alias : spec.aliases) {
+            if (alias.size() > 1) {
+                append_name(result, "--", alias);
+            }
+        }
+    }
+    if (!spec.flag && !spec.positional) {
+        result.append(" <");
+        result.append(spec.valueName.empty() ? "value" : spec.valueName);
+        result.push_back('>');
+    }
+    return result;
+}
+
+inline void append_option_details(std::string& result, const ArgSpec& spec) {
+    if (spec.required) {
+        result.append(" (required)");
+    }
+    if (spec.hasRange) {
+        result.append(" (range: [");
+        result.append(format_number(spec.rangeMin));
+        result.append(", ");
+        result.append(format_number(spec.rangeMax));
+        result.append("))");
+    }
+    if (spec.hasDefault) {
+        result.append(" (default: ");
+        result.append(spec.defaultValue);
+        result.push_back(')');
+    }
+    if (spec.hasImplicit) {
+        result.append(" (implicit: ");
+        result.append(spec.implicitValue);
+        result.push_back(')');
+    }
+    if (!spec.envName.empty()) {
+        result.append(" (env: ");
+        result.append(spec.envName);
+        result.push_back(')');
+    }
+    if (!spec.choices.empty()) {
+        result.append(" (choices: {");
+        for (std::size_t idx = 0; idx < spec.choices.size(); ++idx) {
+            if (idx != 0) {
+                result.append(", ");
+            }
+            result.append(spec.choices[idx]);
+        }
+        result.append("})");
+    }
+}
+
+inline void append_option_entry(std::string& result, const ArgSpec& spec) {
+    result.append("  ");
+    result.append(format_option_label(spec));
+    append_option_details(result, spec);
+    if (!spec.help.empty()) {
+        result.append("\n      ");
+        result.append(spec.help);
+    }
+    result.push_back('\n');
+}
+
 inline std::string format_help_from_specs(const std::vector<ArgSpec>& specs, const ArgParserConfig& config) {
     std::string result;
     if (!config.usage.empty()) {
@@ -794,60 +940,46 @@ inline std::string format_help_from_specs(const std::vector<ArgSpec>& specs, con
     if (config.addVersion && !config.version.empty()) {
         result.append("  -V, --version\n");
     }
+    const bool hasGroups = std::any_of(specs.begin(), specs.end(), [](const auto& spec) {
+        return !spec.hidden && !spec.group.empty();
+    });
+    if (!hasGroups) {
+        for (const auto& spec : specs) {
+            if (spec.hidden) {
+                continue;
+            }
+            append_option_entry(result, spec);
+        }
+        return result;
+    }
+
     for (const auto& spec : specs) {
-        if (spec.hidden) {
+        if (spec.hidden || !spec.group.empty()) {
             continue;
         }
-        result.append("  ");
-        if (!spec.shortName.empty()) {
-            result.push_back('-');
-            result.append(spec.shortName);
-            result.append(", ");
+        append_option_entry(result, spec);
+    }
+
+    std::vector<std::string_view> groups;
+    for (const auto& spec : specs) {
+        if (spec.hidden || spec.group.empty()) {
+            continue;
         }
-        if (!spec.positional) {
-            result.append("--");
+        if (std::find(groups.begin(), groups.end(), spec.group) == groups.end()) {
+            groups.push_back(spec.group);
         }
-        result.append(spec.longName);
-        if (!spec.flag && !spec.positional) {
-            result.append(" <");
-            result.append(spec.valueName.empty() ? "value" : spec.valueName);
-            result.push_back('>');
-        }
-        if (spec.required) {
-            result.append(" (required)");
-        }
-        if (spec.hasRange) {
-            result.append(" (range: [");
-            result.append(format_number(spec.rangeMin));
-            result.append(", ");
-            result.append(format_number(spec.rangeMax));
-            result.append("))");
-        }
-        if (spec.hasDefault) {
-            result.append(" (default: ");
-            result.append(spec.defaultValue);
-            result.push_back(')');
-        }
-        if (!spec.envName.empty()) {
-            result.append(" (env: ");
-            result.append(spec.envName);
-            result.push_back(')');
-        }
-        if (!spec.choices.empty()) {
-            result.append(" (choices: {");
-            for (std::size_t idx = 0; idx < spec.choices.size(); ++idx) {
-                if (idx != 0) {
-                    result.append(", ");
-                }
-                result.append(spec.choices[idx]);
-            }
-            result.append("})");
-        }
-        if (!spec.help.empty()) {
-            result.append("\n      ");
-            result.append(spec.help);
-        }
+    }
+
+    for (const auto group : groups) {
         result.push_back('\n');
+        result.append(group);
+        result.append(":\n");
+        for (const auto& spec : specs) {
+            if (spec.hidden || spec.group != group) {
+                continue;
+            }
+            append_option_entry(result, spec);
+        }
     }
     return result;
 }
@@ -973,13 +1105,7 @@ std::error_code parse_options_into(T& object, int argc, const char* const* argv,
                 }
                 return make_error_code(ArgParserError::UnknownOption);
             }
-            if (!spec->flag && !valueInline) {
-                if (idx + 1 >= argc || argv[idx + 1] == nullptr) {
-                    return make_error_code(ArgParserError::MissingValue);
-                }
-                value = argv[++idx];
-            }
-            if (auto error = apply_spec(*spec, value)) {
+            if (auto error = apply_option_spec(specs, *spec, argc, argv, idx, value, valueInline, config)) {
                 return error;
             }
             continue;
@@ -1039,13 +1165,7 @@ std::error_code parse_options_into(T& object, int argc, const char* const* argv,
                 }
                 return make_error_code(ArgParserError::UnknownOption);
             }
-            if (!spec->flag && !valueInline) {
-                if (idx + 1 >= argc || argv[idx + 1] == nullptr) {
-                    return make_error_code(ArgParserError::MissingValue);
-                }
-                value = argv[++idx];
-            }
-            if (auto error = apply_spec(*spec, value)) {
+            if (auto error = apply_option_spec(specs, *spec, argc, argv, idx, value, valueInline, config)) {
                 return error;
             }
             continue;
