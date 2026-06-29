@@ -449,6 +449,66 @@ TEST(ArgParser, ValueNameAndEnvAreShownInHelp) {
     EXPECT_NE(help.find("--level <LEVELS>"), std::string::npos);
 }
 
+struct AliasImplicitGroupOptions {
+    std::string color;
+    std::string output;
+    bool verbose = false;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("color",
+                   make_tags<arg_name<"color", "c",
+                                      arg_aliases<arg_group<"Display",
+                                                            arg_implicit<"auto"_cs,
+                                                                         arg_help<"color mode">>>,
+                                                  "C", "colour">>>(&AliasImplicitGroupOptions::color),
+                   "output",
+                   make_tags<arg_name<"output", "o",
+                                      arg_group<"Paths",
+                                                arg_value_name<"PATH", arg_help<"output file">>>>>(
+                       &AliasImplicitGroupOptions::output),
+                   "verbose",
+                   make_tags<arg_name<"verbose", "v",
+                                      arg_group<"General",
+                                                arg_help<"enable verbose output", ArgTags{.flag = true}>>>>(
+                       &AliasImplicitGroupOptions::verbose));
+    };
+};
+
+TEST(ArgParser, AliasesAreAcceptedForLongAndShortOptions) {
+    const char* argv[] = {"demo", "--colour", "always", "-o", "out.txt", "-v"};
+
+    auto result = parser<AliasImplicitGroupOptions>(static_cast<int>(std::size(argv)), argv);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    EXPECT_EQ(result->color, "always");
+    EXPECT_EQ(result->output, "out.txt");
+    EXPECT_TRUE(result->verbose);
+}
+
+TEST(ArgParser, ImplicitValueIsUsedWhenNextTokenLooksLikeAnotherOption) {
+    const char* argv[] = {"demo", "-C", "--output", "out.txt"};
+
+    auto result = parser<AliasImplicitGroupOptions>(static_cast<int>(std::size(argv)), argv);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    EXPECT_EQ(result->color, "auto");
+    EXPECT_EQ(result->output, "out.txt");
+}
+
+TEST(ArgParser, HelpShowsAliasesImplicitValuesAndGroups) {
+    ArgParserConfig config;
+    config.programName = "demo";
+
+    auto help = format_help<AliasImplicitGroupOptions>(config);
+
+    NEKO_LOG_INFO("test", "Alias/implicit/group help: {}", help);
+    EXPECT_NE(help.find("Options:\n  -h, --help\n"), std::string::npos);
+    EXPECT_NE(help.find("Display:\n  -c, -C, --color, --colour <value> (implicit: auto)"), std::string::npos);
+    EXPECT_NE(help.find("Paths:\n  -o, --output <PATH>"), std::string::npos);
+    EXPECT_NE(help.find("General:\n  -v, --verbose"), std::string::npos);
+}
+
 TEST(ArgParser, UnknownCommand) {
     const char* argv[] = {"tool", "deploy"};
 

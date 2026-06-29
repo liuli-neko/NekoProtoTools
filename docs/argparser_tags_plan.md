@@ -33,10 +33,17 @@ common command-line interfaces pleasant to describe from metadata.
 
 ## Later Candidates
 
-- [ ] `arg_aliases<...>`: additional option spellings. One-character aliases are treated as short aliases; longer
-  aliases are treated as long aliases.
-- [ ] `arg_implicit<Value>`: non-bool options may use an implicit value when present without an explicit value.
-- [ ] `arg_group<Name>`: help section grouping.
+- [x] `arg_aliases<...>`:
+  - Additional option spellings. One-character aliases are treated as short aliases; longer aliases are treated as
+    long aliases.
+  - Help prints the canonical spelling first and then the aliases.
+- [x] `arg_implicit<Value>`:
+  - Non-flag options may omit an explicit value and fall back to an implicit one.
+  - The implicit value is used when the next token looks like another option or when the option appears at the end of
+    argv.
+- [x] `arg_group<Name>`:
+  - Help-only section grouping.
+  - Ungrouped options stay under `Options:`; named groups are emitted as additional help sections in declaration order.
 - [ ] `arg_conflicts<...>` and `arg_requires<...>`: post-parse cross-field validation.
 - [ ] `arg_deprecated<Message>`: keep old options while warning or hiding them.
 - [ ] `arg_case_insensitive_choices`: opt-in relaxed choice matching.
@@ -47,3 +54,4 @@ common command-line interfaces pleasant to describe from metadata.
 - Range syntax is half-open: `[min, max)`.
 - Negative values after an option are consumed as values; positional negative values may still look like options unless
   the user uses `--`.
+- For `arg_implicit`, values that literally start with `-` should be passed inline, e.g. `--name=-value`.
