@@ -67,13 +67,13 @@ local function default_test_config(file)
         config.enabled = has_config("enable_jsonrpc")
         config.deps = {"NekoJsonRpc", "NekoSerializer"}
         config.run_timeout = 5000
-        table.insert(config.defines, "NEKO_VERBOSE_LOGS")
+        -- table.insert(config.defines, "NEKO_VERBOSE_LOGS")
     elseif group == "rpc" then
         config.enabled = has_config("enable_jsonrpc")
         config.deps = {"NekoJsonRpc", "NekoSerializer"}
     elseif group == "communication" then
         config.enabled = has_config("enable_communication")
-        config.deps = {"NekoProtoBase"}
+        config.deps = {"NekoCommunication"}
         config.run_timeout = 5000
     elseif group == "proto" then
         config.enabled = has_config("enable_protocol") and
@@ -85,6 +85,8 @@ local function default_test_config(file)
     elseif group == "reflect" then
         config.deps = {"NekoSerializer"}
         config.run_timeout = 5000
+    elseif group == "argparser" then 
+        config.deps = {"NekoArgParser"}
     else
         append_values(config.files, "../src/proto_base.cpp", "../src/jsonrpc.cpp")
     end

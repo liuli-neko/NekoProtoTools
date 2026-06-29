@@ -14,9 +14,19 @@ function autofunc.target_autoclean(target)
     os.tryrm(target:targetdir() .. "/" .. target:basename() .. ".exp")
     os.tryrm(target:targetdir() .. "/" .. target:basename() .. ".ilk")
     os.tryrm(target:targetdir() .. "/compile." .. target:basename() .. ".pdb")
+    if is_plat("linux") then
+        if target:kind() == "static" then
+            os.tryrm(target:targetdir() .. "/lib" .. target:basename() .. ".so")
+        elseif target:kind() == "shared" then
+            os.tryrm(target:targetdir() .. "/lib" .. target:basename() .. ".a")
+        end
+    end
 end
 
-function autofunc.auto_add_packages(target)
+function autofunc.auto_add_packages(target, options)
+    options = options or {}
+    local uses_ilias = options.uses_ilias or false
+
     if has_config("enable_simdjson") then
         target:add("packages", "simdjson", {public = true})
         target:add("defines", "SIMDJSON_EXCEPTIONS=1")
@@ -38,7 +48,7 @@ function autofunc.auto_add_packages(target)
         target:add("packages", "fmt", {public = true})
     end
     
-    if has_config("enable_communication") or has_config("enable_jsonrpc") then
+    if uses_ilias then
         target:add("packages", "ilias", {public = true})
         target:add("packages", "zeus_expected", {public = true})
     end
@@ -53,7 +63,7 @@ function autofunc.auto_add_packages(target)
         target:add("packages", "cereal", {public = true})
     end
 
-    if has_config("use_io_uring") then
+    if uses_ilias and has_config("use_io_uring") then
         target:add("defines", "ILIAS_USE_IO_URING", {public = true})
     end
 

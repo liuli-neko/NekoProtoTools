@@ -81,15 +81,7 @@ inline ParserResult parser_read(typename R::InputValueType in, T& value, const T
 template <typename R, typename W, typename T, typename ParentType, typename Tags>
 inline ParserResult parser_write(W& writer, const T& value, const ParentType& parent, const Tags& tags) {
     using ValueType = std::decay_t<T>;
-    using TagType   = std::remove_cvref_t<Tags>;
-    if constexpr (tag_access::has_recursive_comment(TagType{})) {
-        const auto rest = tag_access::consume_recursive_comment(tags);
-        auto result     = parser_write<R, W>(writer, value, parent, rest);
-        if (result) {
-            parsing::Parent<W>::addComment(writer, tag_access::recursive_comment(tags), parent);
-        }
-        return result;
-    } else if constexpr (requires { Parser<R, W, ValueType>::write(writer, value, parent, tags); }) {
+    if constexpr (requires { Parser<R, W, ValueType>::write(writer, value, parent, tags); }) {
         return Parser<R, W, ValueType>::write(writer, value, parent, tags);
     } else {
         static_assert(always_false_v<T>, "No Parser or CustomParser write support for this type/reader/writer");
@@ -101,10 +93,7 @@ inline ParserResult parser_write(W& writer, const T& value, const ParentType& pa
 template <typename R, typename W, typename T, typename Tags>
 inline ParserResult parser_read(typename R::InputValueType in, T& value, const Tags& tags) {
     using ValueType = std::decay_t<T>;
-    using TagType   = std::remove_cvref_t<Tags>;
-    if constexpr (tag_access::has_recursive_comment(TagType{})) {
-        return parser_read<R, W>(in, value, tag_access::consume_recursive_comment(tags));
-    } else if constexpr (requires { Parser<R, W, ValueType>::read(in, value, tags); }) {
+    if constexpr (requires { Parser<R, W, ValueType>::read(in, value, tags); }) {
         return Parser<R, W, ValueType>::read(in, value, tags);
     } else {
         static_assert(always_false_v<T>, "No Parser or CustomParser read support for this type/reader/writer");

@@ -13,6 +13,7 @@
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/global/log.hpp"
 #include "nekoproto/global/reflect.hpp"
+#include "nekoproto/global/reflection_tags.hpp"
 
 #include <any>
 #include <array>

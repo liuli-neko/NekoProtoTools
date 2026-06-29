@@ -2,7 +2,6 @@
 
 #include "nekoproto/global/config.h"
 #include "nekoproto/global/reflect.hpp"
-#include "nekoproto/serialization/private/tags.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
 #include <optional>

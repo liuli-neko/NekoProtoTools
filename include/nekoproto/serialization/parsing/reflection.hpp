@@ -34,7 +34,7 @@ bool parser_should_skip_empty_field(const FieldT& field, const Tags& /*tags*/) {
 
 template <typename FieldT, typename Tags>
 ParserResult parser_read_missing_field(FieldT& field, std::string_view name, const Tags& tags) {
-    if (tag_access::is_skipable(tags)) {
+    if (tag_query::is_skipable(tags)) {
         return sa::success();
     }
     using ValueType = std::decay_t<FieldT>;
@@ -60,10 +60,10 @@ inline void parser_schema_add_required(parsing::schema::Type::Object& object, st
 template <typename R, typename W, typename FieldT, typename Tags>
 void parser_schema_add_reflect_field(parsing::schema::Type::Object& object, std::string_view name, const Tags& tags) {
     auto fieldSchema = parser_schema<R, W, std::decay_t<FieldT>>();
-    if (tag_access::is_fixed_length(tags)) {
-        fieldSchema.fixedLength = tag_access::fixed_length<std::decay_t<FieldT>>(tags);
+    if (tag_query::is_fixed_length(tags)) {
+        fieldSchema.fixedLength = tag_query::fixed_length<std::decay_t<FieldT>>(tags);
     }
-    if (tag_access::is_flat<std::decay_t<FieldT>>(tags)) {
+    if (tag_query::is_flat<std::decay_t<FieldT>>(tags)) {
         const auto& unwrapped = parsing::schema::unwrapOptional(fieldSchema);
         if (const auto* nested = std::get_if<parsing::schema::Type::Object>(&unwrapped.value)) {
             object.properties.insert(nested->properties.begin(), nested->properties.end());
@@ -75,12 +75,12 @@ void parser_schema_add_reflect_field(parsing::schema::Type::Object& object, std:
     }
 
     auto fieldName = std::string(name);
-    if constexpr (tag_access::has_recursive_name(Tags{})) {
-        fieldName = std::string(tag_access::recursive_name(tags));
+    if constexpr (tag_query::has_name(Tags{})) {
+        fieldName = std::string(tag_query::name(tags));
     }
     object.properties.insert_or_assign(fieldName, std::move(fieldSchema));
     if constexpr (!traits::optional_like_type<std::decay_t<FieldT>>::value) {
-        if (!tag_access::is_skipable(tags)) {
+        if (!tag_query::is_skipable(tags)) {
             parser_schema_add_required(object, std::move(fieldName));
         }
     }
@@ -100,8 +100,8 @@ parsing::schema::Type parser_schema_positional_reflection() {
     parsing::schema::Type::Array array;
     Reflect<T>::forEachMeta([&]<typename Field>(std::type_identity<Field>, const auto& tags) {
         auto fieldSchema = parser_schema<R, W, Field>();
-        if (tag_access::is_fixed_length(tags)) {
-            fieldSchema.fixedLength = tag_access::fixed_length<std::decay_t<Field>>(tags);
+        if (tag_query::is_fixed_length(tags)) {
+            fieldSchema.fixedLength = tag_query::fixed_length<std::decay_t<Field>>(tags);
         }
         array.prefixItems.emplace_back(std::move(fieldSchema));
     });
@@ -117,7 +117,7 @@ ParserResult parser_write_reflect_field(W& writer, typename W::OutputObjectType&
     using FieldType = std::decay_t<T>;
     if constexpr (has_values_meta<FieldType> && has_names_meta<FieldType> &&
                   !disable_reflect_parser<R, W, FieldType>::value) {
-        if (tag_access::is_flat<FieldType>(tags)) {
+        if (tag_query::is_flat<FieldType>(tags)) {
             return parser_write_reflect_fields<R, W>(writer, object, field);
         }
     }
@@ -132,23 +132,19 @@ ParserResult parser_write_reflect_field(W& writer, typename W::OutputObjectType&
         }
     }
 #endif
-    if constexpr (tag_access::has_comment(Tags{})) {
-        const auto rest = tag_access::consume_recursive_comment(tags);
-        auto result     = parser_write_reflect_field<R, W, T>(writer, object, field, name, rest);
-        if (result) {
-            parsing::Parent<W>::addComment(writer, tag_access::recursive_comment(tags),
-                                           typename parsing::Parent<W>::Object{name, &object});
-        }
-        return result;
-    } else if constexpr (tag_access::has_name(Tags{})) {
-        std::string_view fieldName = name;
-        auto nextTags              = tag_access::consume_recursive_name(tags);
-        fieldName                  = tag_access::recursive_name(tags);
-        return parser_write_reflect_field<R, W, T>(writer, object, field, fieldName, nextTags);
-    } else {
-        return parser_context(parser_write<R, W>(writer, field, typename parsing::Parent<W>::Object{name, &object}, tags),
-        "Failed to write field '" + std::string(name) + "': ");
+    std::string_view fieldName = name;
+    if constexpr (tag_query::has_name(Tags{})) {
+        fieldName = tag_query::name(tags);
     }
+    const auto parent = typename parsing::Parent<W>::Object{fieldName, &object};
+    auto result       = parser_context(parser_write<R, W>(writer, field, parent, tags),
+                                       "Failed to write field '" + std::string(fieldName) + "': ");
+    if (result) {
+        if constexpr (tag_query::has_comment(Tags{})) {
+            parsing::Parent<W>::addComment(writer, tag_query::comment(tags), parent);
+        }
+    }
+    return result;
 }
 
 template <typename R, typename W, typename T, typename Tags>
@@ -157,7 +153,7 @@ ParserResult parser_read_reflect_field(typename R::InputValueType in, T& field, 
     using FieldType = std::decay_t<T>;
     if constexpr (has_values_meta<FieldType> && has_names_meta<FieldType> &&
                   !disable_reflect_parser<R, W, FieldType>::value) {
-        if (tag_access::is_flat<FieldType>(tags)) {
+        if (tag_query::is_flat<FieldType>(tags)) {
             return parser_read_reflect_fields<R, W>(in, field);
         }
     }
@@ -166,13 +162,12 @@ ParserResult parser_read_reflect_field(typename R::InputValueType in, T& field, 
         return object.error();
     }
     std::string_view fieldName = name;
-    if constexpr (tag_access::has_recursive_name(Tags{})) {
-        fieldName = tag_access::recursive_name(tags);
+    if constexpr (tag_query::has_name(Tags{})) {
+        fieldName = tag_query::name(tags);
     }
-    auto nextTags   = tag_access::consume_recursive_comment(tag_access::consume_recursive_name(tags));
     auto fieldValue = R::objectField(object.value(), fieldName);
     if (!fieldValue) {
-        return parser_read_missing_field(field, fieldName, nextTags);
+        return parser_read_missing_field(field, fieldName, tags);
     }
     if (R::isEmpty(fieldValue.value())) {
         if constexpr (traits::optional_like_type<FieldType>::value) {
@@ -180,7 +175,7 @@ ParserResult parser_read_reflect_field(typename R::InputValueType in, T& field, 
             return sa::success();
         }
     }
-    return parser_context(parser_read<R, W>(fieldValue.value(), field, nextTags),
+    return parser_context(parser_read<R, W>(fieldValue.value(), field, tags),
                           "Failed to parse field '" + std::string(fieldName) + "': ");
 }
 
@@ -219,7 +214,7 @@ struct Parser<R, W, T,
     static ParserResult write(W& writer, const T& value, const ParentType& parent, const Tags& tags) {
         if constexpr (has_names_meta<T>) {
             if constexpr (parsing::supports_unframed_objects<R, W>) {
-                if (tag_access::is_unframed<std::decay_t<T>>(tags)) {
+                if (tag_query::is_unframed<std::decay_t<T>>(tags)) {
                     parsing::Parent<W>::beginUnframedObject(writer, parent);
                     ParserResult result;
                     Reflect<T>::forEach(value, [&writer, &result](const auto& field, std::string_view name,
@@ -241,9 +236,15 @@ struct Parser<R, W, T,
             std::size_t index = 0;
             Reflect<T>::forEach(value, [&writer, &array, &result, &index](auto&& field, const auto& tags) {
                 if (result) {
+                    const auto parent = typename parsing::Parent<W>::Array{&array};
                     result = parser_context(
-                        parser_write<R, W>(writer, field, typename parsing::Parent<W>::Array{&array}, tags),
+                        parser_write<R, W>(writer, field, parent, tags),
                         "Failed to write reflected element " + std::to_string(index) + ": ");
+                    if (result) {
+                        if constexpr (tag_query::has_comment(std::remove_cvref_t<decltype(tags)>{})) {
+                            parsing::Parent<W>::addComment(writer, tag_query::comment(tags), parent);
+                        }
+                    }
                 }
                 ++index;
             });
@@ -255,7 +256,7 @@ struct Parser<R, W, T,
     static ParserResult read(typename R::InputValueType in, T& value, const Tags& tags) {
         if constexpr (has_names_meta<T>) {
             if constexpr (parsing::supports_unframed_objects<R, W>) {
-                if (tag_access::is_unframed<std::decay_t<T>>(tags)) {
+                if (tag_query::is_unframed<std::decay_t<T>>(tags)) {
                     ParserResult result;
                     auto current = in;
                     Reflect<T>::forEach(value,

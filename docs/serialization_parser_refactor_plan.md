@@ -304,6 +304,8 @@ Parser 层不应该：
 
 - tags 的语义统一为“当前 value 在当前绑定位置上的元数据”。反射字段、外层成员、root 调用都可以给
   当前 value 传 tags；类型本身不因为自己的定义而永久携带 tags。
+- tags 不是“按顺序嵌套的一串可消费 wrapper”，而是“当前绑定位置上的属性集合”。序列化层对 tag 的解释应当
+  按 feature 独立判断，而不是依赖 `consume -> rebuild -> 继续递归` 的链式处理模型。
 - C++26 注解接入时，注解解析层应直接生成字段 metadata：`name/accessor/tags`。这些 tags 与宏
   `make_tags<...>(field)` 生成的 tags 等价，不需要额外 wrapper。
 - 宏生成的反射元数据使用 `Neko::field_tags`，手写 `Meta<T>` 也应使用 `field_tags` 表示字段 tags；
@@ -313,6 +315,9 @@ Parser 层不应该：
 - 如果一个 struct 作为另一个 struct 的成员被标了 tags，这些 tags 只作用于这个成员槽位；进入该
   struct 自己的字段遍历后，只使用其内部字段各自的 tags，不与外层 tags 合并。
 - Reflection 将原始 `Tags` 对象直接传给 `Parser<Reader, Writer, T>`，不压缩为公共 runtime context。
+- `FieldSpec`、`optional<T>`、`shared_ptr<T>`、`unique_ptr<T>`、`variant<Ts...>` 这类“同一槽位的透明包装”
+  可以继续把当前 tags 透传给其内部值；`struct/object`、`tuple/pair`、`array/sequence`、`map` 这类“进入子槽位”
+  的结构边界不继续向子元素传播外层 tags。
 - `skipable` 由 reflection/object-field parser 消费：命名字段缺失时成功并保留目标对象原值；显式 null 仍交给字段类型 Parser 判断。
 - 未标记 `skipable` 的 optional 字段缺失时 reset；普通字段缺失时失败。
 - 对 positional/定序格式，不存在“命名键缺失”；长度/读取位置满足即视为字段存在，null 是否有效仍由类型决定。
@@ -321,6 +326,122 @@ Parser 层不应该：
 - `fixedLength` 是当前字段/值的宽度修饰，`unframed` 是当前 object 值在当前绑定位置上的布局修饰；
   仅声明相应 capability 的后端消费。
 - JSON 收到 `fixedLength/unframed` 时保持普通具名 JSON 表达。
+
+### Tag API 收敛目标
+
+对序列化模块，保留的核心 API 尽量只覆盖“绑定”和“查询”两层：
+
+- 绑定层：
+  - `make_tags<Tags>(accessor)`
+  - `FieldSpec<Tags, Accessor>`
+  - `field_accessor(...)`
+  - `field_tags_v<T>`
+- 查询层：
+  - `tag_query::has_name(tags)` / `tag_query::name(tags)`
+  - `tag_query::has_comment(tags)` / `tag_query::comment(tags)`
+  - `tag_query::is_flat<T>(tags)`
+  - `tag_query::is_skipable(tags)`
+  - `tag_query::is_raw_string(tags)`
+  - `tag_query::is_fixed_length(tags)` / `tag_query::fixed_length<T>(tags)`
+  - `tag_query::is_unframed<T>(tags)`
+
+查询层的统一约束：
+
+- 查询 API 只表达“当前 tags 是否携带某语义”和“该语义的值是什么”。
+- 查询 API 不暴露“消费当前 tag 后的剩余 tags”。
+- 查询 API 不要求 tags 一定有 `base`，只要能被对应 query adapter 读取即可。
+- 当前 struct-based tags 可以继续通过 `base` 兼容实现；未来 C++26 注解可通过 annotation adapter
+  直接实现同一组 query，不必保留链式 wrapper 结构。
+
+序列化路径中计划逐步停止使用的 API：
+
+- `recursive_*`
+- `has_recursive_*`
+- `consume_*`
+- `consume_recursive_*`
+- `rebind_tag_base`
+
+说明：
+
+- 这些 API 已从 serialization tag 查询层删除，避免后续继续使用。
+- serialization parser 不再依赖它们建立语义，也不再要求“多次 rename/comment 后重建剩余 tags”。
+
+### 序列化中的 Tag 消费边界
+
+目标是把“谁负责解释什么 tag”固定下来，避免同一个 tag 在多层重复消费，或者被错误地下传到子字段。
+
+1. 通用 parser 入口
+
+- 不负责 `name`、`flat`、`skipable`、`fixedLength`、`unframed` 的消费。
+- 可保留对“附着在当前 parent 上的注释类信息”的统一处理，但实现上不再依赖 `consume_recursive_comment`。
+- 更推荐 comment 和 field-name 一样，在实际拥有 parent/object-field 语义的地方消费。
+
+2. reflection object-field parser
+
+- 消费 `name`：决定 object field key。
+- 消费 `skipable`：决定命名字段缺失时的行为。
+- 消费 `flat`：决定是否把子 object 展开到父 object。
+- 消费 `comment`：决定是否在该字段对应的父节点位置附加注释。
+- 不把以上 tag 继续传给该 struct 的内部字段。
+
+3. reflection positional parser
+
+- 不消费 `name`、`skipable`、`flat`。
+- 只按 positional 规则处理长度与索引错误。
+- 字段各自只看自己的 field tags。
+
+4. struct parser（当前 value 自身）
+
+- 消费 `unframed`：只改变“当前 object 值在当前绑定位置上的布局”。
+- 不把 `unframed` 继续传给成员字段。
+
+5. basic/string/arithmetic parser
+
+- string parser 消费 `rawString`。
+- arithmetic / binary-capable parser 消费 `fixedLength`。
+- 它们只影响当前 value 的编解码，不影响外层 object/array 结构。
+
+6. transparent wrapper parser
+
+- `FieldSpec`、`optional<T>`、`shared_ptr<T>`、`unique_ptr<T>`、`variant<Ts...>` 继续透传 tags。
+- 原因：它们仍然代表“同一个逻辑槽位中的值”，不是新的字段层级。
+
+7. structural container parser
+
+- `tuple/pair`、`array/vector/list/deque/set/...`、`map/...` 不透传外层 tags 给元素。
+- 原因：元素已经进入新的子槽位；如果元素需要 tags，应由它们自己的反射字段 metadata 或显式绑定提供。
+
+### 设计约束
+
+- 多次 `rename` 在 serializer 中没有明确语义；采用“最多一个生效值”的查询模型即可。
+- 多次 `comment` 如需兼容旧写法，也只定义“当前查询返回一个 comment”，不要求支持按顺序层层消费。
+- 不同 tag 的消费顺序不应构成公开语义。实现可以按 `if (flat) ...; if (has_name) ...; if (skipable) ...`
+  组织，但外部不应依赖 tag 的链式顺序。
+- 对 serializer 而言，tag 的问题规模不能通过“递归去掉一个 tag 后继续求解”自然缩小；更合适的模型是
+  “针对当前 binding 做一组独立 query”。
+
+### 代码迁移方向
+
+1. 先引入统一查询层
+
+- 在 `serialization/private/tags.hpp` 中新增或重命名一组 query 风格入口，名称尽量去掉 `recursive`/`consume`。
+- 现有 struct-based tags 先在内部通过 `base` 实现这些 query，保证行为兼容。
+
+2. 改写 serialization parser 使用方式
+
+- `parsing/parser.hpp` 去掉对 `consume_recursive_comment` 的依赖。
+- `parsing/reflection.hpp` 中对 object field 的写入/读取改为“同层 query + 同层消费”，不再 rebuild 剩余 tags。
+- `sequence/map/tuple` 保持不透传外层 tags；`optional/pointer/variant` 明确保留透传并补注释说明语义。
+
+3. 收紧旧 API 边界
+
+- 删除 serialization 里的 `consume_*` / `rebind_tag_base`，避免新代码继续依赖。
+- 测试从“链式拆解是否存在”改为“最终序列化语义是否正确”。
+
+4. 为 C++26 注解预留适配点
+
+- 注解层只需产出字段 metadata 或实现相同的 query adapter。
+- serializer 不感知 tag 的底层表示是当前 struct、annotation adapter，还是未来别的 metadata provider。
 
 已补测试：
 
@@ -359,11 +480,74 @@ Parser 层不应该：
 - Parser write/read 直接模板化接收原始 `Tags`。
 - tag 在实际消费层解释，未消费的后端专用 tag 可以被其他后端忽略。
 - Parser 返回 `sa::Result<void>`，错误信息沿字段名和元素索引逐层追加上下文。
+- 建立“透明包装透传、结构边界截断”的 tag 传播规则，并在 parser 实现中固定下来。
 
 验收：
 
 - `Parser` 头不包含 RapidJSON。
 - RapidJSON serializer 能通过 `Parser<Reader, Writer, T>` 写入和读取 basic 类型。
+
+### Phase 1.5: Tag Query 收敛
+
+目标：让 serialization 不再依赖链式 tag 消费模型。
+
+工作：
+
+- 在 `serialization/private/tags.hpp` 中补齐 query 风格 API。
+- 删除 `recursive_* / consume_* / rebind_tag_base`。
+- `parser.hpp` 与 `parsing/reflection.hpp` 改为 query 风格实现，不再对 `name/comment` 做“消费后递归重入”。
+- 明确 `optional/pointer/variant` 透传 tags，`struct/sequence/map/tuple` 不透传外层 tags。
+
+执行 Checklist：
+
+- [x] 保留 `NEKO_DEFINE_NESTED_TAG` 宏，作为后续批量新增 tag query 的生成工具。
+- [x] 收窄 `NEKO_DEFINE_NESTED_TAG`，只生成 `tag_query::xxx(tags)` 和 `tag_query::has_xxx(tags)`。
+- [x] 删除 serialization tag 查询层的 `tag_access` 命名空间。
+- [x] 删除 serialization tag 查询层的 `recursive_*` / `has_recursive_*` / `consume_*` / `consume_recursive_*`。
+- [x] 删除 `CommentTag` / `NameTag` 的 `rebind_base` 以及 `detail::rebind_tag_base`。
+- [x] `basic.hpp` 使用 `tag_query` 读取 `rawString` / `fixedLength`。
+- [x] `parser.hpp` 移除通用入口里的 comment 递归消费逻辑。
+- [x] `reflection.hpp` 的 named object field 写入使用 `tag_query` 查询 `name/comment/skipable/flat`。
+- [x] `reflection.hpp` 的 named object field 读取不再 rebuild 剩余 tags。
+- [x] `reflection.hpp` 的 positional field comment 写入移动到 positional field 槽位。
+- [x] `test_tags.cpp` 从验证链式拆解改为验证最终 query 语义。
+- [x] `test_xml.cpp` 改为验证 `tag_query` comment/name 查询以及 XML comment 输出。
+- [x] 运行 `xmake run test_tags`。
+- [x] 运行 `xmake run test_xml`。
+- [x] 运行 `xmake run test_json_backend`。
+- [x] 运行 `xmake run test_binary_serializer`。
+- [x] argparser 模块同步收敛到 query 风格 API，删除自己的 `tag_access` 命名空间。
+- [x] argparser tag 查询改为复用 `NEKO_DEFINE_NESTED_TAG`，避免每个 tag 手写重复 query 函数。
+- [x] 删除 argparser tag 中无用的 `rebind_base` 符号。
+- [x] 确认 serialization/argparser 内不再保留 `tag_access` / `recursive_*` / `consume_*` / `rebind_base`。
+- [x] 运行 `xmake build test_argparser`。
+- [x] 新增公共反射 tag 头 `global/reflection_tags.hpp`，承载 `FieldSpec` / `make_tags` / `NoTags` / `field_tags_v`。
+- [x] 将 `NEKO_DEFINE_NESTED_TAG` 从 serialization private 头移到 `global/reflection_tags.hpp`，供 serialization / argparser / rpc 共用。
+- [x] `serialization/private/tags.hpp` 收敛为 serialization 具体 tag 与 query 语义，不再定义反射基础设施。
+- [x] `rpc/tags.hpp` 改为依赖公共反射 tag 头，并删除残留 `rebind_base`。
+
+验收：
+
+- serialization 目录内不再需要 `consume_recursive_*`。
+- serialization 目录内不再需要 `rebind_tag_base`。
+- 现有 JSON/binary tag 行为测试继续通过。
+
+### Follow-up: ProtoBase 与 ilias 隔离检查
+
+背景：`xmake build test_json_serializer` 在当前 static 配置下链接到了旧的 `libNekoProtoBase.so`，该共享库带有 `libilias.so.0` 依赖，导致 proto 单测被 communication/runtime 依赖穿透。
+
+执行 Checklist：
+
+- [x] 确认当前配置为 `kind=static`、`enable_communication=false`、`enable_jsonrpc=false`。
+- [x] 确认 `include/nekoproto/proto/proto_base.hpp` 与 `src/proto_base.cpp` 不直接引用 ilias。
+- [x] 确认当前 `NekoProtoBase` 目标只编译 `src/proto_base.cpp`，不包含 `src/communication_base.cpp`。
+- [x] 确认 `libNekoProtoBase.a` 内只有 `proto_base.cpp.o`，且没有 ilias 未定义符号。
+- [x] 确认 build 目录残留旧 `libNekoProtoBase.so`，其 dynamic section 里有 `NEEDED libilias.so.0`。
+- [x] 确认 `test_json_serializer` 链接命令使用 `-Lbuild/linux/x86_64/debug -lNekoProtoBase`，因此会优先命中同目录旧 `.so`。
+- [x] 扩展 `target_autoclean`，按当前 static/shared kind 清掉同名冲突产物，避免旧 `.so` / `.a` 截胡。
+- [x] 将 communication 代码从 `NekoProtoBase` 目标拆出为独立 `NekoCommunication` 目标。
+- [x] 收窄 `auto_add_packages` 对 ilias 的注入范围，只给显式 `uses_ilias` 的目标添加。
+- [x] communication 单测改依赖新的 `NekoCommunication` 目标，而不是依赖 `NekoProtoBase` 承载 transport 能力。
 
 ### Phase 2: RapidJSON 变成薄后端
 
@@ -474,7 +658,7 @@ Parser 层不应该：
 | --- | --- | --- | --- |
 | `private/helpers.hpp` | `NameValuePair`、旧 CRTP serializer、basic `save/load` | 字段 helper 保留或迁到 `parsing/field.hpp`；basic parser 迁到 `parsing/basic.hpp` | 全部后端迁移后删除旧 CRTP 和 basic `save/load` |
 | `private/traits.hpp` | save/load 探测、optional-like、minimal traits | traits 拆到 `parsing/traits.hpp` | 新 serializer 不再用 save/load 探测后收缩 |
-| `private/tags.hpp` | tag 定义与 tag_access | 保留；原始 tag 直接传入 Parser | 不删除，只整理 |
+| `private/tags.hpp` | tag 定义与 `tag_query` | 保留；原始 tag 直接传入 Parser | 不删除，只整理 |
 | `types/atomic.hpp` | 已有 Parser 雏形 + 旧 save/load | 通用 `Parser<Reader,Writer,std::atomic<T>>` | 后端全迁后删旧 save/load |
 | `types/optional.hpp` | 已有 Parser 雏形 + 旧 save/load | 通用 `Parser<Reader,Writer,std::optional<T>>` | 后端全迁后删旧 save/load |
 | `types/vector/list/deque/array.hpp` | 旧数组 save/load | `parsing/sequence.hpp` 或文件内通用 Parser | 对应测试通过后删旧实现 |

@@ -3,8 +3,8 @@
 #include <string_view>
 #include <type_traits>
 
+#include "nekoproto/global/reflection_tags.hpp"
 #include "nekoproto/global/string_literal.hpp"
-#include "nekoproto/serialization/private/tags.hpp"
 
 NEKO_BEGIN_NAMESPACE
 
@@ -12,9 +12,6 @@ template <ConstexprString Prefix, auto BaseTags = NoTags{}>
 struct RpcPrefixTag {
     constexpr static auto prefix = Prefix;
     constexpr static auto base   = BaseTags;
-
-    template <auto NewBase>
-    using rebind_base = RpcPrefixTag<Prefix, NewBase>;
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() {
@@ -26,9 +23,6 @@ template <auto BaseTags = NoTags{}>
 struct RpcNoPrefixTag {
     constexpr static bool noPrefix = true;
     constexpr static auto base     = BaseTags;
-
-    template <auto NewBase>
-    using rebind_base = RpcNoPrefixTag<NewBase>;
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() {
