@@ -17,12 +17,10 @@ enum class BuildMode {
     Release,
 };
 
-NEKO_BEGIN_NAMESPACE
 template <>
-struct Meta<::BuildMode, void> {
+struct NEKO_NAMESPACE::Meta<::BuildMode, void> {
     constexpr static auto value = Enumerate("debug", ::BuildMode::Debug, "release", ::BuildMode::Release);
 };
-NEKO_END_NAMESPACE
 
 void set_test_env(const char* name, const char* value) {
 #ifdef _WIN32
@@ -346,6 +344,44 @@ TEST(ArgParser, HelpShowsDefaultValues) {
     EXPECT_NE(help.find("--count <value> (range: [1, 10)) (default: 5)"), std::string::npos);
     EXPECT_NE(help.find("--output <value> (default: build)"), std::string::npos);
     EXPECT_NE(help.find("--mode <value> (default: release) (choices: {debug, release})"), std::string::npos);
+}
+
+struct ParallelTagOptions {
+    int count = 0;
+    std::string output;
+    bool verbose = false;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("count",
+                   make_tags<arg_name<"count", "c">, arg_help<"count value">,
+                             ArgTags{.required = true, .rangeMin = 2, .rangeMax = 5}>(&ParallelTagOptions::count),
+                   "output",
+                   make_tags<arg_name<"output", "o">, arg_help<"output directory">, arg_default<"dist"_cs>>(
+                       &ParallelTagOptions::output),
+                   "verbose",
+                   make_tags<arg_name<"verbose", "v">, arg_help<"enable verbose output">, ArgTags{.flag = true}>(
+                       &ParallelTagOptions::verbose));
+    };
+};
+
+TEST(ArgParser, ParallelTagsComposeArgMetadata) {
+    const char* argv[] = {"demo", "--count", "3", "-v"};
+
+    auto result = parser<ParallelTagOptions>(static_cast<int>(std::size(argv)), argv);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    EXPECT_EQ(result->count, 3);
+    EXPECT_EQ(result->output, "dist");
+    EXPECT_TRUE(result->verbose);
+
+    ArgParserConfig config;
+    config.programName = "demo";
+    auto help          = format_help<ParallelTagOptions>(config);
+
+    EXPECT_NE(help.find("-c, --count <value> (required) (range: [2, 5))"), std::string::npos);
+    EXPECT_NE(help.find("-o, --output <value> (default: dist)"), std::string::npos);
+    EXPECT_NE(help.find("-v, --verbose"), std::string::npos);
 }
 
 struct AdvancedTagOptions {

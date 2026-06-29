@@ -7,8 +7,8 @@
 #include <iterator>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -84,16 +84,6 @@ struct FieldSpec {
     Accessor accessor;
 };
 
-template <auto Tags, typename Accessor>
-inline constexpr auto make_tags(Accessor&& accessor) { // NOLINT
-    if constexpr (detail::is_resolvable_without_context_v<std::decay_t<Accessor>>) {
-        using ResolvedType = detail::resolve_without_context_t<std::decay_t<Accessor>>;
-        static_assert(detail::perform_check<ResolvedType, Tags>(),
-                      "Tag check failed for a member of type, please check the tag definition");
-    }
-    return FieldSpec<Tags, Accessor>{std::forward<Accessor>(accessor)};
-}
-
 struct NoTags {
     template <typename T>
         requires(std::is_class_v<T> && std::is_default_constructible_v<T> && std::is_aggregate_v<T> &&
@@ -103,6 +93,60 @@ struct NoTags {
         return T{};
     }
 };
+
+template <auto... Tags>
+struct TagList {
+    using type = std::tuple<decltype(Tags)...>;
+    constexpr auto size() const { return sizeof...(Tags); }
+    constexpr auto tuple() const { return std::make_tuple(Tags...); }
+    template <typename T, auto /*self*/>
+    constexpr static bool constexpr_check() {
+        return (detail::perform_check<T, Tags>() && ...);
+    }
+};
+
+template <typename T>
+struct is_tag_list : std::false_type {};
+
+template <auto... Tags>
+struct is_tag_list<TagList<Tags...>> : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_tag_list_v = is_tag_list<T>::value;
+
+namespace detail {
+
+template <auto... Tags>
+struct normalize_tags {
+    constexpr static auto value = TagList<Tags...>{};
+};
+
+template <>
+struct normalize_tags<> {
+    constexpr static auto value = NoTags{};
+};
+
+template <auto Tag>
+struct normalize_tags<Tag> {
+    constexpr static auto value = Tag;
+};
+
+template <auto... Tags>
+inline constexpr auto normalize_tags_v = normalize_tags<Tags...>::value;
+
+} // namespace detail
+
+template <auto... Tags, typename Accessor>
+inline constexpr auto make_tags(Accessor&& accessor) { // NOLINT
+    constexpr auto NormalizedTags = detail::normalize_tags_v<Tags...>;
+
+    if constexpr (detail::is_resolvable_without_context_v<std::decay_t<Accessor>>) {
+        using ResolvedType = detail::resolve_without_context_t<std::decay_t<Accessor>>;
+        static_assert(detail::perform_check<ResolvedType, NormalizedTags>(),
+                      "Tag check failed for a member of type, please check the tag definition");
+    }
+    return FieldSpec<NormalizedTags, Accessor>{std::forward<Accessor>(accessor)};
+}
 
 template <typename T>
 struct is_field_spec : std::false_type {}; // NOLINT
@@ -191,7 +235,88 @@ constexpr bool perform_all_checks() {
 } // namespace detail
 NEKO_END_NAMESPACE
 
-#define NEKO_DEFINE_NESTED_TAG(Type, member, fname)                                                                    \
+#define _NEKO_DEFINE_TAG_HAS_QUERY(member, fname)                                                                      \
+    template <typename T>                                                                                              \
+    constexpr bool has_##fname(const T& tags) {                                                                        \
+        static_cast<void>(tags);                                                                                       \
+        if constexpr (requires { tags.member; }) {                                                                     \
+            return true;                                                                                               \
+        } else if constexpr (requires { tags.base; }) {                                                                \
+            return has_##fname(tags.base);                                                                             \
+        } else {                                                                                                       \
+            return false;                                                                                              \
+        }                                                                                                              \
+    }                                                                                                                  \
+    template <auto... Tags>                                                                                            \
+    constexpr bool has_##fname(const NEKO_NAMESPACE::TagList<Tags...>& tags) {                                         \
+        static_cast<void>(tags);                                                                                       \
+        return (has_##fname(Tags) || ...);                                                                             \
+    }
+
+#define _NEKO_DEFINE_TAG_LIST_QUERY(Type, fname)                                                                       \
+    template <auto Head, auto... Tail>                                                                                 \
+    constexpr Type _neko_##fname##_from_tag_list() {                                                                   \
+        if constexpr (has_##fname(Head)) {                                                                             \
+            return fname(Head);                                                                                        \
+        } else if constexpr (sizeof...(Tail) > 0) {                                                                    \
+            return _neko_##fname##_from_tag_list<Tail...>();                                                           \
+        } else {                                                                                                       \
+            return {};                                                                                                 \
+        }                                                                                                              \
+    }                                                                                                                  \
+    template <auto... Tags>                                                                                            \
+    constexpr Type fname(const NEKO_NAMESPACE::TagList<Tags...>& tags) {                                               \
+        static_cast<void>(tags);                                                                                       \
+        if constexpr (sizeof...(Tags) > 0) {                                                                           \
+            return _neko_##fname##_from_tag_list<Tags...>();                                                           \
+        } else {                                                                                                       \
+            return {};                                                                                                 \
+        }                                                                                                              \
+    }
+
+#define _NEKO_DEFINE_TAG_DEDUCED_LIST_QUERY(fname, MissingMessage)                                                     \
+    template <auto Head, auto... Tail>                                                                                 \
+    constexpr decltype(auto) _neko_##fname##_from_tag_list() {                                                         \
+        if constexpr (has_##fname(Head)) {                                                                             \
+            return fname(Head);                                                                                        \
+        } else if constexpr (sizeof...(Tail) > 0) {                                                                    \
+            return _neko_##fname##_from_tag_list<Tail...>();                                                           \
+        } else {                                                                                                       \
+            static_assert(NEKO_NAMESPACE::always_false_v<std::remove_cvref_t<decltype(Head)>>, MissingMessage);        \
+        }                                                                                                              \
+    }                                                                                                                  \
+    template <auto... Tags>                                                                                            \
+    constexpr decltype(auto) fname(const NEKO_NAMESPACE::TagList<Tags...>& tags) {                                     \
+        static_cast<void>(tags);                                                                                       \
+        if constexpr (sizeof...(Tags) > 0) {                                                                           \
+            return _neko_##fname##_from_tag_list<Tags...>();                                                           \
+        } else {                                                                                                       \
+            static_assert(NEKO_NAMESPACE::always_false_v<std::remove_cvref_t<decltype(tags)>>, MissingMessage);        \
+        }                                                                                                              \
+    }
+
+#define _NEKO_DEFINE_TYPE_TAG_LIST_QUERY(Type, fname)                                                                  \
+    template <typename Value, auto Head, auto... Tail>                                                                 \
+    constexpr Type _neko_##fname##_from_tag_list() {                                                                   \
+        if constexpr (has_##fname(Head)) {                                                                             \
+            return fname<Value>(Head);                                                                                 \
+        } else if constexpr (sizeof...(Tail) > 0) {                                                                    \
+            return _neko_##fname##_from_tag_list<Value, Tail...>();                                                    \
+        } else {                                                                                                       \
+            return fname<Value>(NEKO_NAMESPACE::NoTags{});                                                             \
+        }                                                                                                              \
+    }                                                                                                                  \
+    template <typename Value, auto... Tags>                                                                            \
+    constexpr Type fname(const NEKO_NAMESPACE::TagList<Tags...>& tags) {                                               \
+        static_cast<void>(tags);                                                                                       \
+        if constexpr (sizeof...(Tags) > 0) {                                                                           \
+            return _neko_##fname##_from_tag_list<Value, Tags...>();                                                    \
+        } else {                                                                                                       \
+            return fname<Value>(NEKO_NAMESPACE::NoTags{});                                                             \
+        }                                                                                                              \
+    }
+
+#define NEKO_DEFINE_TAG_QUERY(Type, member, fname)                                                                     \
     template <typename T>                                                                                              \
     constexpr Type fname(const T& tags) {                                                                              \
         static_cast<void>(tags);                                                                                       \
@@ -203,14 +328,38 @@ NEKO_END_NAMESPACE
             return {};                                                                                                 \
         }                                                                                                              \
     }                                                                                                                  \
+    _NEKO_DEFINE_TAG_HAS_QUERY(member, fname)                                                                          \
+    _NEKO_DEFINE_TAG_LIST_QUERY(Type, fname)
+
+#define NEKO_DEFINE_TAG_VALUE_QUERY(member, fname, MissingMessage)                                                     \
     template <typename T>                                                                                              \
-    constexpr bool has_##fname(const T& tags) {                                                                        \
+    constexpr decltype(auto) fname(const T& tags) {                                                                    \
+        using Tag = std::remove_cvref_t<T>;                                                                            \
         static_cast<void>(tags);                                                                                       \
         if constexpr (requires { tags.member; }) {                                                                     \
-            return true;                                                                                               \
+            return NEKO_NAMESPACE::detail::make_tag_value_common(tags.member);                                         \
         } else if constexpr (requires { tags.base; }) {                                                                \
-            return has_##fname(tags.base);                                                                             \
+            return fname(tags.base);                                                                                   \
         } else {                                                                                                       \
-            return false;                                                                                              \
+            static_assert(NEKO_NAMESPACE::always_false_v<Tag>, MissingMessage);                                        \
         }                                                                                                              \
-    }
+    }                                                                                                                  \
+    _NEKO_DEFINE_TAG_HAS_QUERY(member, fname)                                                                          \
+    _NEKO_DEFINE_TAG_DEDUCED_LIST_QUERY(fname, MissingMessage)
+
+#define NEKO_DEFINE_TYPE_TAG_QUERY(Type, member, fname)                                                                \
+    template <typename Value, typename T>                                                                              \
+    constexpr Type fname(const T& tags) {                                                                              \
+        static_cast<void>(tags);                                                                                       \
+        if constexpr (requires { tags.member; }) {                                                                     \
+            return tags.member;                                                                                        \
+        } else if constexpr (requires { tags.base; }) {                                                                \
+            return fname<Value>(tags.base);                                                                            \
+        } else if constexpr (requires { is_##member##_tag<Value>::value; }) {                                          \
+            return is_##member##_tag<Value>::value;                                                                    \
+        } else {                                                                                                       \
+            return {};                                                                                                 \
+        }                                                                                                              \
+    }                                                                                                                  \
+    _NEKO_DEFINE_TAG_HAS_QUERY(member, fname)                                                                          \
+    _NEKO_DEFINE_TYPE_TAG_LIST_QUERY(Type, fname)

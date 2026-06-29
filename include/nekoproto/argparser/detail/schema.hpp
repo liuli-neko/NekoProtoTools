@@ -172,11 +172,11 @@ ArgSpec make_arg_spec(std::string_view prefix, std::string_view reflectedName, c
     spec.envName                = std::string(tag_query::env_name(tags));
     spec.group                  = std::string(tag_query::group(tags));
     spec.deprecatedMessage      = std::string(tag_query::deprecated_message(tags));
-    spec.required               = tag_query::is_required(tags);
-    spec.positional             = tag_query::is_positional(tags);
-    spec.flag                   = field_type_is_flag<FieldT>(tag_query::is_flag(tags));
-    spec.repeatable             = tag_query::is_repeatable(tags) || is_vector_v<FieldT>;
-    spec.hidden                 = tag_query::is_hidden(tags);
+    spec.required               = tag_query::required(tags);
+    spec.positional             = tag_query::positional(tags);
+    spec.flag                   = field_type_is_flag<FieldT>(tag_query::flag(tags));
+    spec.repeatable             = tag_query::repeatable(tags) || is_vector_v<FieldT>;
+    spec.hidden                 = tag_query::hidden(tags);
     spec.hasRange               = tag_query::has_range(tags);
     spec.hasDefault             = tag_query::has_default_value(tags);
     spec.hasImplicit            = tag_query::has_implicit_value(tags);

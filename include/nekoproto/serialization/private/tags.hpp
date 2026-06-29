@@ -30,43 +30,14 @@ struct is_unframed_tag : std::false_type {}; // NOLINT
 
 namespace tag_query {
 
-NEKO_DEFINE_NESTED_TAG(std::string_view, comment, comment)
-NEKO_DEFINE_NESTED_TAG(std::string_view, name, name)
+NEKO_DEFINE_TAG_QUERY(std::string_view, comment, comment)
+NEKO_DEFINE_TAG_QUERY(std::string_view, name, name)
+NEKO_DEFINE_TAG_QUERY(std::size_t, fixedLength, fixed_length)
+NEKO_DEFINE_TAG_QUERY(bool, rawString, raw_string)
+NEKO_DEFINE_TAG_QUERY(bool, skipable, skipable)
 
-template <typename Value, typename T>
-constexpr bool is_flat(const T& tags) {
-    if constexpr (requires { tags.flat; }) {
-        return tags.flat;
-    } else if constexpr (requires { tags.base; }) {
-        return is_flat<Value>(tags.base);
-    } else if constexpr (is_flat_tag<Value>::value) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
-template <typename T>
-constexpr bool is_skipable(const T& tags) {
-    if constexpr (requires { tags.skipable; }) {
-        return tags.skipable;
-    } else if constexpr (requires { tags.base; }) {
-        return is_skipable(tags.base);
-    } else {
-        return false;
-    }
-}
-
-template <typename T>
-constexpr bool is_fixed_length(const T& tags) {
-    if constexpr (requires { tags.fixedLength; }) {
-        return tags.fixedLength > 0;
-    } else if constexpr (requires { tags.base; }) {
-        return is_fixed_length(tags.base);
-    } else {
-        return false;
-    }
-}
+NEKO_DEFINE_TYPE_TAG_QUERY(bool, flat, flat)
+NEKO_DEFINE_TYPE_TAG_QUERY(bool, unframed, unframed)
 
 template <typename Value, typename T>
 constexpr std::size_t fixed_length(const T& tags) {
@@ -77,30 +48,6 @@ constexpr std::size_t fixed_length(const T& tags) {
         return fixed_length<Value>(tags.base);
     } else {
         return 0;
-    }
-}
-
-template <typename Value, typename T>
-constexpr bool is_unframed(const T& tags) {
-    if constexpr (requires { tags.unframed; }) {
-        return tags.unframed;
-    } else if constexpr (requires { tags.base; }) {
-        return is_unframed<Value>(tags.base);
-    } else if constexpr (is_unframed_tag<Value>::value) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
-template <typename T>
-constexpr bool is_raw_string(const T& tags) {
-    if constexpr (requires { tags.rawString; }) {
-        return tags.rawString;
-    } else if constexpr (requires { tags.base; }) {
-        return is_raw_string(tags.base);
-    } else {
-        return false;
     }
 }
 } // namespace tag_query

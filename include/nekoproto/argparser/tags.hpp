@@ -200,46 +200,46 @@ struct ArgCaseInsensitiveChoicesTag {
     }
 };
 
-template <ConstexprString Long = "", ConstexprString Short = "", auto BaseTags = ArgTags{}>
+template <ConstexprString Long = "", ConstexprString Short = "", auto BaseTags = NoTags{}>
 inline constexpr auto arg_name = ArgNameTag<Long, Short, BaseTags>{}; // NOLINT
 
-template <auto BaseTags = ArgTags{}, ConstexprString... Choices>
+template <auto BaseTags = NoTags{}, ConstexprString... Choices>
 inline constexpr auto arg_choices = ArgChoicesTag<BaseTags, Choices...>{}; // NOLINT
 
-template <auto Default, auto BaseTags = ArgTags{}>
+template <auto Default, auto BaseTags = NoTags{}>
 inline constexpr auto arg_default = ArgDefaultTag<Default, BaseTags>{}; // NOLINT
 
-template <ConstexprString Help = "", auto BaseTags = ArgTags{}>
+template <ConstexprString Help = "", auto BaseTags = NoTags{}>
 inline constexpr auto arg_help = ArgHelpTag<Help, BaseTags>{}; // NOLINT
 
-template <ConstexprString ValueName = "", auto BaseTags = ArgTags{}>
+template <ConstexprString ValueName = "", auto BaseTags = NoTags{}>
 inline constexpr auto arg_value_name = ArgValueNameTag<ValueName, BaseTags>{}; // NOLINT
 
-template <ConstexprString EnvName = "", auto BaseTags = ArgTags{}>
+template <ConstexprString EnvName = "", auto BaseTags = NoTags{}>
 inline constexpr auto arg_env = ArgEnvTag<EnvName, BaseTags>{}; // NOLINT
 
-template <char Separator, auto BaseTags = ArgTags{}>
+template <char Separator, auto BaseTags = NoTags{}>
 inline constexpr auto arg_separator = ArgSeparatorTag<Separator, BaseTags>{}; // NOLINT
 
-template <auto BaseTags = ArgTags{}, ConstexprString... Aliases>
+template <auto BaseTags = NoTags{}, ConstexprString... Aliases>
 inline constexpr auto arg_aliases = ArgAliasesTag<BaseTags, Aliases...>{}; // NOLINT
 
-template <auto Implicit, auto BaseTags = ArgTags{}>
+template <auto Implicit, auto BaseTags = NoTags{}>
 inline constexpr auto arg_implicit = ArgImplicitTag<Implicit, BaseTags>{}; // NOLINT
 
-template <ConstexprString Group = "", auto BaseTags = ArgTags{}>
+template <ConstexprString Group = "", auto BaseTags = NoTags{}>
 inline constexpr auto arg_group = ArgGroupTag<Group, BaseTags>{}; // NOLINT
 
-template <auto BaseTags = ArgTags{}, ConstexprString... Names>
+template <auto BaseTags = NoTags{}, ConstexprString... Names>
 inline constexpr auto arg_conflicts = ArgConflictsTag<BaseTags, Names...>{}; // NOLINT
 
-template <auto BaseTags = ArgTags{}, ConstexprString... Names>
+template <auto BaseTags = NoTags{}, ConstexprString... Names>
 inline constexpr auto arg_requires = ArgRequiresTag<BaseTags, Names...>{}; // NOLINT
 
-template <ConstexprString Message = "", auto BaseTags = ArgTags{}>
+template <ConstexprString Message = "", auto BaseTags = NoTags{}>
 inline constexpr auto arg_deprecated = ArgDeprecatedTag<Message, BaseTags>{}; // NOLINT
 
-template <auto BaseTags = ArgTags{}>
+template <auto BaseTags = NoTags{}>
 inline constexpr auto arg_case_insensitive_choices = ArgCaseInsensitiveChoicesTag<BaseTags>{}; // NOLINT
 
 struct ArgCommand {
@@ -297,160 +297,33 @@ inline constexpr bool is_nested_option_v = // NOLINT
 // Tag access -----------------------------------------------------------------
 
 namespace tag_query {
-NEKO_DEFINE_NESTED_TAG(std::string_view, longName, long_name)
-NEKO_DEFINE_NESTED_TAG(std::string_view, shortName, short_name)
-NEKO_DEFINE_NESTED_TAG(std::vector<std::string_view>, choices, choices)
-NEKO_DEFINE_NESTED_TAG(std::string_view, help, help)
-NEKO_DEFINE_NESTED_TAG(std::string_view, valueName, value_name)
-NEKO_DEFINE_NESTED_TAG(std::string_view, envName, env_name)
-NEKO_DEFINE_NESTED_TAG(char, separator, separator)
-NEKO_DEFINE_NESTED_TAG(std::vector<std::string_view>, aliases, aliases)
-NEKO_DEFINE_NESTED_TAG(std::string_view, group, group)
-NEKO_DEFINE_NESTED_TAG(std::vector<std::string_view>, conflicts, conflicts)
-NEKO_DEFINE_NESTED_TAG(std::vector<std::string_view>, requiresNames, requires_names)
-NEKO_DEFINE_NESTED_TAG(std::string_view, deprecatedMessage, deprecated_message)
-NEKO_DEFINE_NESTED_TAG(bool, caseInsensitiveChoices, case_insensitive_choices)
+NEKO_DEFINE_TAG_QUERY(std::string_view, longName, long_name)
+NEKO_DEFINE_TAG_QUERY(std::string_view, shortName, short_name)
+NEKO_DEFINE_TAG_QUERY(std::vector<std::string_view>, choices, choices)
+NEKO_DEFINE_TAG_QUERY(std::string_view, help, help)
+NEKO_DEFINE_TAG_QUERY(std::string_view, valueName, value_name)
+NEKO_DEFINE_TAG_QUERY(std::string_view, envName, env_name)
+NEKO_DEFINE_TAG_QUERY(char, separator, separator)
+NEKO_DEFINE_TAG_QUERY(std::vector<std::string_view>, aliases, aliases)
+NEKO_DEFINE_TAG_QUERY(std::string_view, group, group)
+NEKO_DEFINE_TAG_QUERY(std::vector<std::string_view>, conflicts, conflicts)
+NEKO_DEFINE_TAG_QUERY(std::vector<std::string_view>, requiresNames, requires_names)
+NEKO_DEFINE_TAG_QUERY(std::string_view, deprecatedMessage, deprecated_message)
+NEKO_DEFINE_TAG_QUERY(bool, caseInsensitiveChoices, case_insensitive_choices)
 
-template <typename Tags>
-constexpr bool has_default_value(const Tags& tags) {
-    using Tag = std::remove_cvref_t<Tags>;
-    if constexpr (requires { Tag::defaultValue; }) {
-        static_cast<void>(tags);
-        return true;
-    } else if constexpr (requires { tags.base; }) {
-        return has_default_value(tags.base);
-    } else {
-        return false;
-    }
-}
+NEKO_DEFINE_TAG_VALUE_QUERY(defaultValue, default_value,
+                            "arg_default value was requested from tags without a default")
+NEKO_DEFINE_TAG_VALUE_QUERY(implicitValue, implicit_value,
+                            "arg_implicit value was requested from tags without an implicit value")
 
-template <typename Tags>
-constexpr decltype(auto) default_value(const Tags& tags) {
-    using Tag = std::remove_cvref_t<Tags>;
-    if constexpr (requires { Tag::defaultValue; }) {
-        static_cast<void>(tags);
-        return NEKO_NAMESPACE::detail::make_tag_value_common(Tag::defaultValue);
-    } else if constexpr (requires { tags.base; }) {
-        return default_value(tags.base);
-    } else {
-        static_assert(!std::is_same_v<Tag, Tag>, "arg_default value was requested from tags without a default");
-    }
-}
-
-template <typename Tags>
-constexpr bool has_implicit_value(const Tags& tags) {
-    using Tag = std::remove_cvref_t<Tags>;
-    if constexpr (requires { Tag::implicitValue; }) {
-        static_cast<void>(tags);
-        return true;
-    } else if constexpr (requires { tags.base; }) {
-        return has_implicit_value(tags.base);
-    } else {
-        return false;
-    }
-}
-
-template <typename Tags>
-constexpr decltype(auto) implicit_value(const Tags& tags) {
-    using Tag = std::remove_cvref_t<Tags>;
-    if constexpr (requires { Tag::implicitValue; }) {
-        static_cast<void>(tags);
-        return NEKO_NAMESPACE::detail::make_tag_value_common(Tag::implicitValue);
-    } else if constexpr (requires { tags.base; }) {
-        return implicit_value(tags.base);
-    } else {
-        static_assert(!std::is_same_v<Tag, Tag>,
-                      "arg_implicit value was requested from tags without an implicit value");
-    }
-}
-
-template <typename Tags>
-constexpr bool is_required(const Tags& tags) {
-    if constexpr (requires { tags.required; }) {
-        return tags.required;
-    } else if constexpr (requires { tags.base; }) {
-        return is_required(tags.base);
-    } else {
-        return false;
-    }
-}
-
-template <typename Tags>
-constexpr bool is_positional(const Tags& tags) {
-    if constexpr (requires { tags.positional; }) {
-        return tags.positional;
-    } else if constexpr (requires { tags.base; }) {
-        return is_positional(tags.base);
-    } else {
-        return false;
-    }
-}
-
-template <typename Tags>
-constexpr bool is_flag(const Tags& tags) {
-    if constexpr (requires { tags.flag; }) {
-        return tags.flag;
-    } else if constexpr (requires { tags.base; }) {
-        return is_flag(tags.base);
-    } else {
-        return false;
-    }
-}
-
-template <typename Tags>
-constexpr bool is_repeatable(const Tags& tags) {
-    if constexpr (requires { tags.repeatable; }) {
-        return tags.repeatable;
-    } else if constexpr (requires { tags.base; }) {
-        return is_repeatable(tags.base);
-    } else {
-        return false;
-    }
-}
-
-template <typename Tags>
-constexpr bool is_hidden(const Tags& tags) {
-    if constexpr (requires { tags.hidden; }) {
-        return tags.hidden;
-    } else if constexpr (requires { tags.base; }) {
-        return is_hidden(tags.base);
-    } else {
-        return false;
-    }
-}
-
-template <typename Tags>
-constexpr bool is_command(const Tags& tags) {
-    if constexpr (requires { tags.command; }) {
-        return tags.command;
-    } else if constexpr (requires { tags.base; }) {
-        return is_command(tags.base);
-    } else {
-        return false;
-    }
-}
-
-template <typename Tags>
-constexpr double range_min(const Tags& tags) {
-    if constexpr (requires { tags.rangeMin; }) {
-        return tags.rangeMin;
-    } else if constexpr (requires { tags.base; }) {
-        return range_min(tags.base);
-    } else {
-        return 0.0;
-    }
-}
-
-template <typename Tags>
-constexpr double range_max(const Tags& tags) {
-    if constexpr (requires { tags.rangeMax; }) {
-        return tags.rangeMax;
-    } else if constexpr (requires { tags.base; }) {
-        return range_max(tags.base);
-    } else {
-        return 0.0;
-    }
-}
+NEKO_DEFINE_TAG_QUERY(bool, required, required)
+NEKO_DEFINE_TAG_QUERY(bool, positional, positional)
+NEKO_DEFINE_TAG_QUERY(bool, flag, flag)
+NEKO_DEFINE_TAG_QUERY(bool, repeatable, repeatable)
+NEKO_DEFINE_TAG_QUERY(bool, hidden, hidden)
+NEKO_DEFINE_TAG_QUERY(bool, command, command)
+NEKO_DEFINE_TAG_QUERY(double, rangeMin, range_min)
+NEKO_DEFINE_TAG_QUERY(double, rangeMax, range_max)
 
 template <typename Tags>
 constexpr bool has_range(const Tags& tags) {

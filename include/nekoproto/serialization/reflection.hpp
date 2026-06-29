@@ -59,10 +59,59 @@ constexpr decltype(auto) init_names_array(std::index_sequence<Is...> /*unused*/,
     return std::array{std::string_view(std::get<(Is * Diameter) + Offset>(std::forward<ArgsTuple>(argsTuple)))...};
 }
 
+template <std::size_t Diameter, std::size_t Offset, typename... ValueTs>
+consteval bool all_names_at() {
+    using Tuple = std::tuple<ValueTs...>;
+    return []<std::size_t... Is>(std::index_sequence<Is...>) {
+        return (std::is_convertible_v<std::tuple_element_t<(Is * Diameter) + Offset, Tuple>, std::string_view> &&
+                ...);
+    }(std::make_index_sequence<sizeof...(ValueTs) / Diameter>{});
+}
+
 template <std::size_t Diameter, std::size_t Offset, std::size_t... Is, typename ArgsTuple>
 constexpr decltype(auto) init_values_array(std::index_sequence<Is...> /*unused*/, ArgsTuple&& argsTuple) {
     // Construct the target tuple using the value elements (odd indices)
     return std::array{std::get<(Is * Diameter) + Offset>(std::forward<ArgsTuple>(argsTuple))...};
+}
+
+template <std::size_t Diameter, std::size_t Offset, std::size_t... Is, typename ArgsTuple>
+constexpr decltype(auto) init_field_values_array(std::index_sequence<Is...> /*unused*/, ArgsTuple&& argsTuple) {
+    return std::array{field_accessor(std::get<(Is * Diameter) + Offset>(std::forward<ArgsTuple>(argsTuple)))...};
+}
+
+template <std::size_t... Is>
+constexpr auto init_no_tags_tuple(std::index_sequence<Is...> /*unused*/) {
+    return std::tuple{((void)Is, NoTags{})...};
+}
+
+template <std::size_t N>
+using no_tags_tuple_t = decltype(init_no_tags_tuple(std::make_index_sequence<N>{}));
+
+template <std::size_t N>
+inline constexpr auto no_tags_tuple_v = init_no_tags_tuple(std::make_index_sequence<N>{}); // NOLINT
+
+template <typename T>
+using field_value_decay_t = std::remove_cvref_t<field_accessor_t<T>>;
+
+template <typename T>
+inline constexpr bool is_enum_field_value_v = std::is_enum_v<field_value_decay_t<T>>; // NOLINT
+
+template <std::size_t Diameter, std::size_t Offset, typename... ValueTs>
+consteval bool all_enum_field_values_at() {
+    using Tuple = std::tuple<ValueTs...>;
+    return []<std::size_t... Is>(std::index_sequence<Is...>) {
+        return (is_enum_field_value_v<std::tuple_element_t<(Is * Diameter) + Offset, Tuple>> && ...);
+    }(std::make_index_sequence<sizeof...(ValueTs) / Diameter>{});
+}
+
+template <std::size_t Diameter, std::size_t Offset, typename... ValueTs>
+consteval bool enum_field_values_same_at() {
+    using Tuple = std::tuple<ValueTs...>;
+    using First = field_value_decay_t<std::tuple_element_t<Offset, Tuple>>;
+    return []<std::size_t... Is>(std::index_sequence<Is...>) {
+        return (std::is_same_v<First, field_value_decay_t<std::tuple_element_t<(Is * Diameter) + Offset, Tuple>>> &&
+                ...);
+    }(std::make_index_sequence<sizeof...(ValueTs) / Diameter>{});
 }
 
 template <typename... ValueTs>
@@ -80,12 +129,22 @@ using double_field_tags_tuple =
                                          std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
 
 template <typename... ValueTs>
+using double_enum_tags_tuple =
+    decltype(init_field_tags_tuple<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
+                                         std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+
+template <typename... ValueTs>
 using field_values_tuple =
     decltype(init_field_values_tuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
                                            std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
 
 template <typename... ValueTs>
 using field_tags_tuple =
+    decltype(init_field_tags_tuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
+                                         std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+
+template <typename... ValueTs>
+using enum_tags_tuple =
     decltype(init_field_tags_tuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
                                          std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
 
@@ -132,45 +191,63 @@ template <typename Tuple, typename Context>
 static constexpr auto tuple_tags_unwrap_v = tuple_tags_unwrap<Tuple, Context>::value; // NOLINT
 } // namespace detail
 
-template <typename T, std::size_t N>
+template <typename T, std::size_t N, typename TagsT = detail::no_tags_tuple_t<N>>
 struct Enumerate {
     static_assert(std::is_enum_v<T>, "T must be a enum type");
     std::array<std::string_view, N> names;
     std::array<T, N> values;
+    TagsT tags;
 
     Enumerate()                 = default;
     Enumerate(const Enumerate&) = default;
     Enumerate(Enumerate&&)      = default;
 
     template <typename... ValueTs>
-        requires(sizeof...(ValueTs) % 2 == 0U) && ((std::is_enum_v<ValueTs> + ...) == (sizeof...(ValueTs) / 2))
+        requires(sizeof...(ValueTs) > 0U) && (sizeof...(ValueTs) % 2 == 0U) &&
+                (detail::all_names_at<2, 0, ValueTs...>()) &&
+                (detail::all_enum_field_values_at<2, 1, ValueTs...>()) &&
+                (detail::enum_field_values_same_at<2, 1, ValueTs...>())
     constexpr Enumerate(ValueTs&&... values) noexcept {
         names               = detail::init_names_array<2, 0>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
                                                              std::forward_as_tuple(values...));
-        const auto& avalues = detail::init_values_array<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
-                                                              std::forward_as_tuple(values...));
+        const auto& avalues = detail::init_field_values_array<2, 1>(
+            std::make_index_sequence<sizeof...(ValueTs) / 2>{}, std::forward_as_tuple(values...));
+        const auto& atags = detail::init_field_tags_tuple<2, 1>(
+            std::make_index_sequence<sizeof...(ValueTs) / 2>{}, std::forward_as_tuple(values...));
         [this, &avalues]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
             ((std::get<Is>(this->values) = std::get<Is>(avalues)), ...);
         }(std::make_index_sequence<N>{});
+        [this, &atags]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
+            ((std::get<Is>(this->tags) = std::get<Is>(atags)), ...);
+        }(std::make_index_sequence<N>{});
     }
     template <typename... ValueTs>
-        requires((std::is_enum_v<ValueTs> + ...) == sizeof...(ValueTs))
+        requires(sizeof...(ValueTs) > 0U) && (detail::all_enum_field_values_at<1, 0, ValueTs...>()) &&
+                (detail::enum_field_values_same_at<1, 0, ValueTs...>())
     constexpr Enumerate(ValueTs&&... values) noexcept {
-        auto enumToString = [](const T& value) -> std::string {
-            constexpr auto KEnumArr = neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
-            std::string ret;
-            for (int idx = 0; idx < KEnumArr.size(); ++idx) {
+        auto enumToString = [](const T& value) constexpr -> std::string_view {
+            constexpr auto KEnumArr =
+                detail::neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
+            for (std::size_t idx = 0; idx < KEnumArr.size(); ++idx) {
                 if (KEnumArr[idx].first == value) {
-                    ret = std::string(KEnumArr[idx].second);
+                    return KEnumArr[idx].second;
                 }
             }
-            if (ret.empty()) {
-                ret = std::to_string(std::underlying_type_t<T>(value));
-            }
-            return ret;
+            return {};
         };
-        this->values = std::array{values...};
-        this->names  = std::array{enumToString(values)...};
+        const auto& avalues =
+            detail::init_field_values_array<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
+                                                  std::forward_as_tuple(values...));
+        const auto& atags = detail::init_field_tags_tuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
+                                                                std::forward_as_tuple(values...));
+        [this, &avalues, &enumToString]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
+            ((std::get<Is>(this->values) = std::get<Is>(avalues),
+              std::get<Is>(this->names)  = enumToString(std::get<Is>(avalues))),
+             ...);
+        }(std::make_index_sequence<N>{});
+        [this, &atags]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
+            ((std::get<Is>(this->tags) = std::get<Is>(atags)), ...);
+        }(std::make_index_sequence<N>{});
     }
 };
 
@@ -227,12 +304,20 @@ struct Array {
 };
 
 template <typename... ValueTs>
-    requires(sizeof...(ValueTs) % 2 == 0U) && ((std::is_enum_v<ValueTs> + ...) == (sizeof...(ValueTs) / 2))
-Enumerate(ValueTs&&...) -> Enumerate<std::tuple_element_t<1, std::tuple<ValueTs...>>, sizeof...(ValueTs) / 2>;
+    requires(sizeof...(ValueTs) > 0U) && (sizeof...(ValueTs) % 2 == 0U) &&
+            (detail::all_names_at<2, 0, ValueTs...>()) &&
+            (detail::all_enum_field_values_at<2, 1, ValueTs...>()) &&
+            (detail::enum_field_values_same_at<2, 1, ValueTs...>())
+Enumerate(ValueTs&&...)
+    -> Enumerate<detail::field_value_decay_t<std::tuple_element_t<1, std::tuple<ValueTs...>>>,
+                 sizeof...(ValueTs) / 2, detail::double_enum_tags_tuple<ValueTs...>>;
 
 template <typename... ValueTs>
-    requires((std::is_enum_v<ValueTs> + ...) == sizeof...(ValueTs))
-Enumerate(ValueTs&&...) -> Enumerate<std::tuple_element_t<0, std::tuple<ValueTs...>>, sizeof...(ValueTs)>;
+    requires(sizeof...(ValueTs) > 0U) && (detail::all_enum_field_values_at<1, 0, ValueTs...>()) &&
+            (detail::enum_field_values_same_at<1, 0, ValueTs...>())
+Enumerate(ValueTs&&...)
+    -> Enumerate<detail::field_value_decay_t<std::tuple_element_t<0, std::tuple<ValueTs...>>>, sizeof...(ValueTs),
+                 detail::enum_tags_tuple<ValueTs...>>;
 
 template <typename... ValueTs>
 Object(ValueTs&&...) -> Object<detail::double_field_values_tuple<ValueTs...>, detail::double_field_tags_tuple<ValueTs...>>;
@@ -253,8 +338,8 @@ struct is_ref_array<Array<T, TagsT>, void> : std::true_type {};
 template <typename T, class enable = void>
 struct is_ref_enumerate : std::false_type {}; // NOLINT
 
-template <typename T, std::size_t N>
-struct is_ref_enumerate<Enumerate<T, N>, void> : std::true_type {};
+template <typename T, std::size_t N, typename TagsT>
+struct is_ref_enumerate<Enumerate<T, N, TagsT>, void> : std::true_type {};
 
 template <typename T, typename U, class enable = void>
 struct MemberMetadata {
@@ -852,6 +937,16 @@ public:
 
 template <typename T>
 struct Reflect<T, std::enable_if_t<std::is_enum_v<T>>> {
+private:
+    static constexpr auto _tags() noexcept {
+        if constexpr (detail::is_meta_enumerate<T>) {
+            return Meta<T>::value.tags;
+        } else {
+            return detail::no_tags_tuple_v<size()>;
+        }
+    }
+
+public:
     static constexpr auto names() noexcept {
         if constexpr (detail::is_meta_enumerate<T>) {
             return Meta<T>::value.names;
@@ -906,6 +1001,9 @@ struct Reflect<T, std::enable_if_t<std::is_enum_v<T>>> {
     }
     static constexpr auto className() noexcept { return detail::class_nameof<T>; }
     static constexpr auto size() noexcept { return names().size(); }
+    static constexpr auto field_tags = _tags();                             // NOLINT
+    static constexpr int value_count = static_cast<int>(size());            // NOLINT
+
     static constexpr auto value(std::string_view name) noexcept {
         auto kEnums = values();
         auto kNames = names();
@@ -927,6 +1025,38 @@ struct Reflect<T, std::enable_if_t<std::is_enum_v<T>>> {
         }
         NEKO_LOG_ERROR("reflection", "value not found");
         return std::string_view{}; // FIXME: this is not a good way to handle this
+    }
+
+    template <typename CallAbleT>
+    static constexpr void forEachMeta(CallAbleT&& func) noexcept {
+        constexpr auto enumNames  = names();
+        constexpr auto enumValues = values();
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
+                constexpr auto value = enumValues[I];
+                auto&& tags          = std::get<I>(field_tags);
+                if constexpr (std::is_invocable_v<CallAbleT&, std::integral_constant<T, value>, std::string_view,
+                                                  decltype(tags)>) {
+                    func(std::integral_constant<T, value>{}, enumNames[I], tags);
+                } else if constexpr (std::is_invocable_v<CallAbleT&, T, std::string_view, decltype(tags)>) {
+                    func(value, enumNames[I], tags);
+                } else if constexpr (std::is_invocable_v<CallAbleT&, std::string_view, decltype(tags)>) {
+                    func(enumNames[I], tags);
+                } else if constexpr (std::is_invocable_v<CallAbleT&, std::integral_constant<T, value>,
+                                                         decltype(tags)>) {
+                    func(std::integral_constant<T, value>{}, tags);
+                } else if constexpr (std::is_invocable_v<CallAbleT&, T, decltype(tags)>) {
+                    func(value, tags);
+                } else if constexpr (std::is_invocable_v<CallAbleT&, decltype(tags)>) {
+                    func(tags);
+                } else {
+                    static_assert(!std::is_enum_v<T>,
+                                  "Callback function signature not supported. Supported: (value, name, tags), "
+                                  "(name, tags), (value, tags), (tags)");
+                }
+            };
+            ((invoke(std::integral_constant<std::size_t, Is>{})), ...);
+        }(std::make_index_sequence<size()>{});
     }
 };
 

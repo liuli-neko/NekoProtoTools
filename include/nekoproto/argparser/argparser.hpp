@@ -60,7 +60,7 @@ consteval bool tuple_types_unique() {
 
 template <typename T, std::size_t I>
 consteval bool field_is_command() {
-    return tag_query::is_command(std::get<I>(Reflect<std::remove_cvref_t<T>>::field_tags));
+    return tag_query::command(std::get<I>(Reflect<std::remove_cvref_t<T>>::field_tags));
 }
 
 template <typename T>
@@ -245,7 +245,7 @@ std::string format_command_help(const ArgParserConfig& config) {
         result.append("  -V, --version\n");
     }
     Reflect<std::remove_cvref_t<T>>::forEachMeta([&result](std::string_view name, const auto& tags) {
-        if (!tag_query::is_hidden(tags)) {
+        if (!tag_query::hidden(tags)) {
             result.append("  ");
             std::string_view cname = tag_query::long_name(tags).empty() ? name : tag_query::long_name(tags);
             result.append(cname);
