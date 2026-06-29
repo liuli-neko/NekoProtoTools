@@ -43,7 +43,7 @@
  *
  *
  * @par license
- *  GPL-2.0 license
+ *  MIT License
  *
  * @version 0.1
  * @date 2024-05-23
