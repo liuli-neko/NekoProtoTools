@@ -5,7 +5,13 @@
 #include "nekoproto/global/string_literal.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
+#include <array>
 #include <concepts>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <vector>
 
 NEKO_BEGIN_NAMESPACE
 namespace argparser {
@@ -150,6 +156,50 @@ struct ArgGroupTag {
     }
 };
 
+template <auto BaseTags = NoTags{}, ConstexprString... Names>
+struct ArgConflictsTag {
+    static constexpr std::array conflicts = {Names.view()...}; // NOLINT
+    static constexpr auto base            = BaseTags;          // NOLINT
+
+    template <typename T, auto /*tags*/>
+    constexpr static bool constexpr_check() { // NOLINT
+        return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
+    }
+};
+
+template <auto BaseTags = NoTags{}, ConstexprString... Names>
+struct ArgRequiresTag {
+    static constexpr std::array requiresNames = {Names.view()...}; // NOLINT
+    static constexpr auto base                = BaseTags;          // NOLINT
+
+    template <typename T, auto /*tags*/>
+    constexpr static bool constexpr_check() { // NOLINT
+        return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
+    }
+};
+
+template <ConstexprString Message = "", auto BaseTags = NoTags{}>
+struct ArgDeprecatedTag {
+    static constexpr auto deprecatedMessage = Message.view(); // NOLINT
+    static constexpr auto base              = BaseTags;       // NOLINT
+
+    template <typename T, auto /*tags*/>
+    constexpr static bool constexpr_check() { // NOLINT
+        return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
+    }
+};
+
+template <auto BaseTags = NoTags{}>
+struct ArgCaseInsensitiveChoicesTag {
+    static constexpr bool caseInsensitiveChoices = true;     // NOLINT
+    static constexpr auto base                   = BaseTags; // NOLINT
+
+    template <typename T, auto /*tags*/>
+    constexpr static bool constexpr_check() { // NOLINT
+        return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
+    }
+};
+
 template <ConstexprString Long = "", ConstexprString Short = "", auto BaseTags = ArgTags{}>
 inline constexpr auto arg_name = ArgNameTag<Long, Short, BaseTags>{}; // NOLINT
 
@@ -179,6 +229,18 @@ inline constexpr auto arg_implicit = ArgImplicitTag<Implicit, BaseTags>{}; // NO
 
 template <ConstexprString Group = "", auto BaseTags = ArgTags{}>
 inline constexpr auto arg_group = ArgGroupTag<Group, BaseTags>{}; // NOLINT
+
+template <auto BaseTags = ArgTags{}, ConstexprString... Names>
+inline constexpr auto arg_conflicts = ArgConflictsTag<BaseTags, Names...>{}; // NOLINT
+
+template <auto BaseTags = ArgTags{}, ConstexprString... Names>
+inline constexpr auto arg_requires = ArgRequiresTag<BaseTags, Names...>{}; // NOLINT
+
+template <ConstexprString Message = "", auto BaseTags = ArgTags{}>
+inline constexpr auto arg_deprecated = ArgDeprecatedTag<Message, BaseTags>{}; // NOLINT
+
+template <auto BaseTags = ArgTags{}>
+inline constexpr auto arg_case_insensitive_choices = ArgCaseInsensitiveChoicesTag<BaseTags>{}; // NOLINT
 
 struct ArgCommand {
     bool value;
@@ -244,6 +306,10 @@ NEKO_DEFINE_NESTED_TAG(std::string_view, envName, env_name)
 NEKO_DEFINE_NESTED_TAG(char, separator, separator)
 NEKO_DEFINE_NESTED_TAG(std::vector<std::string_view>, aliases, aliases)
 NEKO_DEFINE_NESTED_TAG(std::string_view, group, group)
+NEKO_DEFINE_NESTED_TAG(std::vector<std::string_view>, conflicts, conflicts)
+NEKO_DEFINE_NESTED_TAG(std::vector<std::string_view>, requiresNames, requires_names)
+NEKO_DEFINE_NESTED_TAG(std::string_view, deprecatedMessage, deprecated_message)
+NEKO_DEFINE_NESTED_TAG(bool, caseInsensitiveChoices, case_insensitive_choices)
 
 template <typename Tags>
 constexpr bool has_default_value(const Tags& tags) {
@@ -293,7 +359,8 @@ constexpr decltype(auto) implicit_value(const Tags& tags) {
     } else if constexpr (requires { tags.base; }) {
         return implicit_value(tags.base);
     } else {
-        static_assert(!std::is_same_v<Tag, Tag>, "arg_implicit value was requested from tags without an implicit value");
+        static_assert(!std::is_same_v<Tag, Tag>,
+                      "arg_implicit value was requested from tags without an implicit value");
     }
 }
 

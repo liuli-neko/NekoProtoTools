@@ -44,9 +44,17 @@ common command-line interfaces pleasant to describe from metadata.
 - [x] `arg_group<Name>`:
   - Help-only section grouping.
   - Ungrouped options stay under `Options:`; named groups are emitted as additional help sections in declaration order.
-- [ ] `arg_conflicts<...>` and `arg_requires<...>`: post-parse cross-field validation.
-- [ ] `arg_deprecated<Message>`: keep old options while warning or hiding them.
-- [ ] `arg_case_insensitive_choices`: opt-in relaxed choice matching.
+- [x] `arg_conflicts<BaseTags, Names...>` and `arg_requires<BaseTags, Names...>`:
+  - Post-parse cross-field validation after CLI, environment, and default values have all been applied.
+  - Names may reference canonical long names, short names, aliases, or the same names with `-`/`--` prefixes.
+  - Missing required peers report `MissingRequired`; conflicting supplied peers report `InvalidValue`.
+- [x] `arg_deprecated<Message, BaseTags>`:
+  - Keeps old options accepted while marking them in help.
+  - `ArgParserConfig::deprecatedOptionHandler` can be used to emit warnings when deprecated CLI input is used.
+  - Compose with `ArgTags{.hidden = true}` when a deprecated option should stay accepted but disappear from help.
+- [x] `arg_case_insensitive_choices<BaseTags>`:
+  - Opt-in relaxed choice matching for string and enum choices.
+  - Enum names can be parsed with relaxed case when choices are present.
 
 ## Semantics To Keep Explicit
 
@@ -55,3 +63,5 @@ common command-line interfaces pleasant to describe from metadata.
 - Negative values after an option are consumed as values; positional negative values may still look like options unless
   the user uses `--`.
 - For `arg_implicit`, values that literally start with `-` should be passed inline, e.g. `--name=-value`.
+- `arg_requires`/`arg_conflicts` use the same "supplied" meaning as `required`, so environment and default tags count as
+  present for cross-field validation.
