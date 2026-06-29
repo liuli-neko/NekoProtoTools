@@ -157,7 +157,7 @@ struct BuildCommand {
                    make_tags<arg_name<"release", "r", arg_help<"release build", ArgTags{.flag = true}>>>(
                        &BuildCommand::release),
                    "mode",
-                   make_tags<arg_name<"mode", "m", arg_help<"build mode", arg_choices<ArgTags{}, "debug", "release">>>>(
+                   make_tags<arg_name<"mode", "m", arg_help<"build mode", arg_choices<"debug", "release">>>>(
                        &BuildCommand::mode));
     };
 };
@@ -276,24 +276,24 @@ struct DefaultOptions {
 
     struct Neko {
         constexpr static auto value = // NOLINT
-            Object("count",
-                   make_tags<arg_name<"count", "c",
-                                      arg_default<5, arg_help<"count value", ArgTags{.rangeMin = 1, .rangeMax = 10}>>>>(
-                       &DefaultOptions::count),
-                   "output",
-                   make_tags<arg_name<"output", "o", arg_default<"build"_cs, arg_help<"output directory">>>>(
-                       &DefaultOptions::output),
-                   "profile",
-                   make_tags<arg_name<"profile", "p", arg_default<"dev"_cs, arg_help<"profile name">>>>(
-                       &DefaultOptions::profile),
-                   "include",
-                   make_tags<arg_name<"include", "I", arg_default<"include"_cs, arg_help<"include path">>>>(
-                       &DefaultOptions::include),
-                   "mode",
-                   make_tags<arg_name<
-                       "mode", "m",
-                       arg_default<"release"_cs, arg_help<"build mode", arg_choices<ArgTags{}, "debug", "release">>>>>(
-                       &DefaultOptions::mode));
+            Object(
+                "count",
+                make_tags<arg_name<"count", "c",
+                                   arg_default<5, arg_help<"count value", ArgTags{.rangeMin = 1, .rangeMax = 10}>>>>(
+                    &DefaultOptions::count),
+                "output",
+                make_tags<arg_name<"output", "o", arg_default<"build"_cs, arg_help<"output directory">>>>(
+                    &DefaultOptions::output),
+                "profile",
+                make_tags<arg_name<"profile", "p", arg_default<"dev"_cs, arg_help<"profile name">>>>(
+                    &DefaultOptions::profile),
+                "include",
+                make_tags<arg_name<"include", "I", arg_default<"include"_cs, arg_help<"include path">>>>(
+                    &DefaultOptions::include),
+                "mode",
+                make_tags<arg_name<"mode", "m",
+                                   arg_default<"release"_cs, arg_help<"build mode", arg_choices<"debug", "release">>>>>(
+                    &DefaultOptions::mode));
     };
 };
 
@@ -489,10 +489,8 @@ struct AliasImplicitGroupOptions {
         constexpr static auto value = // NOLINT
             Object(
                 "color",
-                make_tags<arg_name<
-                    "color", "c",
-                    arg_aliases<arg_group<"Display", arg_implicit<"auto"_cs, arg_help<"color mode">>>, "C", "colour">>>(
-                    &AliasImplicitGroupOptions::color),
+                make_tags<arg_name<"color", "c">, arg_aliases<"C", "colour">, arg_group<"Display">,
+                          arg_implicit<"auto"_cs>, arg_help<"color mode">>(&AliasImplicitGroupOptions::color),
                 "output",
                 make_tags<arg_name<"output", "o", arg_group<"Paths", arg_value_name<"PATH", arg_help<"output file">>>>>(
                     &AliasImplicitGroupOptions::output),
@@ -547,11 +545,10 @@ struct RelationshipOptions {
         constexpr static auto value = // NOLINT
             Object(
                 "login",
-                make_tags<
-                    arg_name<"login", "", arg_requires<arg_help<"enable login", ArgTags{.flag = true}>, "token">>>(
-                    &RelationshipOptions::login),
+                make_tags<arg_name<"login", "">, arg_requires<"token">, arg_help<"enable login">,
+                          ArgTags{.flag = true}>(&RelationshipOptions::login),
                 "token", make_tags<arg_name<"token", "", arg_help<"login token">>>(&RelationshipOptions::token), "json",
-                make_tags<arg_name<"json", "", arg_conflicts<arg_help<"json output", ArgTags{.flag = true}>, "yaml">>>(
+                make_tags<arg_name<"json", "">, arg_conflicts<"yaml">, arg_help<"json output">, ArgTags{.flag = true}>(
                     &RelationshipOptions::json),
                 "yaml",
                 make_tags<arg_name<"yaml", "", arg_help<"yaml output", ArgTags{.flag = true}>>>(
@@ -590,14 +587,12 @@ struct RelaxedChoiceOptions {
 
     struct Neko {
         constexpr static auto value = // NOLINT
-            Object(
-                "mode",
-                make_tags<
-                    arg_name<"mode", "m", arg_case_insensitive_choices<arg_choices<ArgTags{}, "debug", "release">>>>(
-                    &RelaxedChoiceOptions::mode),
-                "color",
-                make_tags<arg_name<"color", "", arg_case_insensitive_choices<arg_choices<ArgTags{}, "auto", "never">>>>(
-                    &RelaxedChoiceOptions::color));
+            Object("mode",
+                   make_tags<arg_name<"mode", "m", arg_case_insensitive_choices<arg_choices<"debug", "release">>>>(
+                       &RelaxedChoiceOptions::mode),
+                   "color",
+                   make_tags<arg_name<"color", "", arg_case_insensitive_choices<arg_choices<"auto", "never">>>>(
+                       &RelaxedChoiceOptions::color));
     };
 };
 

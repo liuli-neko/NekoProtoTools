@@ -28,29 +28,43 @@ struct is_flat_tag : std::false_type {}; // NOLINT
 template <typename T, class = void>
 struct is_unframed_tag : std::false_type {}; // NOLINT
 
-namespace tag_query {
+namespace tag_prop {
+NEKO_DEFINE_TAG_PROP(std::string_view, comment, comment)
+NEKO_DEFINE_TAG_PROP(std::string_view, name, name)
+NEKO_DEFINE_TAG_PROP(bool, rawString, raw_string)
+NEKO_DEFINE_TAG_PROP(bool, skipable, skipable)
 
-NEKO_DEFINE_TAG_QUERY(std::string_view, comment, comment)
-NEKO_DEFINE_TAG_QUERY(std::string_view, name, name)
-NEKO_DEFINE_TAG_QUERY(std::size_t, fixedLength, fixed_length)
-NEKO_DEFINE_TAG_QUERY(bool, rawString, raw_string)
-NEKO_DEFINE_TAG_QUERY(bool, skipable, skipable)
+NEKO_DEFINE_TYPE_TAG_PROP(bool, flat, flat)
+NEKO_DEFINE_TYPE_TAG_PROP(bool, unframed, unframed)
 
-NEKO_DEFINE_TYPE_TAG_QUERY(bool, flat, flat)
-NEKO_DEFINE_TYPE_TAG_QUERY(bool, unframed, unframed)
+template <typename Value>
+struct fixed_length {
+    using type = std::size_t;
 
-template <typename Value, typename T>
-constexpr std::size_t fixed_length(const T& tags) {
-    if constexpr (requires { tags.fixedLength; }) {
-        const auto size = static_cast<std::size_t>(tags.fixedLength);
-        return size == 1 ? sizeof(Value) : size;
-    } else if constexpr (requires { tags.base; }) {
-        return fixed_length<Value>(tags.base);
-    } else {
-        return 0;
+    static constexpr type missing() noexcept { return 0; }
+
+    template <typename Tag>
+    static constexpr bool has(const Tag& tag) {
+        if constexpr (requires { tag.fixedLength; }) {
+            return detail::tag_value_declared(tag.fixedLength);
+        } else {
+            return false;
+        }
     }
-}
-} // namespace tag_query
+
+    template <typename Tag>
+    static constexpr type get(const Tag& tag)
+        requires requires { tag.fixedLength; }
+    {
+        const auto size = static_cast<std::size_t>(tag.fixedLength);
+        if constexpr (std::is_void_v<Value>) {
+            return size;
+        } else {
+            return size == 1 ? sizeof(Value) : size;
+        }
+    }
+};
+} // namespace tag_prop
 
 template <ConstexprString Comment, auto BaseTags = NoTags{}>
 struct CommentTag {
@@ -81,9 +95,9 @@ template <ConstexprString Name, auto BaseTags = NoTags{}>
 inline constexpr auto rename_tag = NameTag<Name, BaseTags>{}; // NOLINT
 
 struct JsonTags {
-    bool flat      = false;
-    bool skipable  = false;
-    bool rawString = false;
+    TagValue<bool> flat{};      // NOLINT
+    TagValue<bool> skipable{};  // NOLINT
+    TagValue<bool> rawString{}; // NOLINT
 
     /**
      * @brief 对 JsonTags 的类型约束进行编译期检查.
@@ -118,7 +132,7 @@ struct JsonTags {
 };
 
 struct BinaryTags {
-    std::size_t fixedLength = 0;
-    bool unframed           = false;
+    TagValue<std::size_t> fixedLength{}; // NOLINT
+    TagValue<bool> unframed{};           // NOLINT
 };
 NEKO_END_NAMESPACE

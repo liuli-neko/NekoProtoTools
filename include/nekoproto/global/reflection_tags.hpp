@@ -4,6 +4,7 @@
 #include "nekoproto/global/reflect.hpp"
 #include "nekoproto/global/string_literal.hpp"
 
+#include <concepts>
 #include <iterator>
 #include <string>
 #include <string_view>
@@ -61,19 +62,67 @@ constexpr bool perform_check() {
 }
 
 template <typename T>
-auto constexpr make_tag_value_common(T& value) {
-    if constexpr (std::is_array_v<T>) {
-        return std::vector<std::decay_t<T>>{std::begin(value), std::end(value)};
-    } else if constexpr (NEKO_NAMESPACE::detail::is_std_array<std::decay_t<T>>::value) {
-        return std::vector<typename std::decay_t<T>::value_type>{std::begin(value), std::end(value)};
-    } else if constexpr (is_constexpr_string<T>::value) {
-        return value.view();
+constexpr bool tag_value_declared(const T& value) {
+    if constexpr (requires { value.declared; }) {
+        return value.declared;
+    } else {
+        return true;
+    }
+}
+
+template <typename T>
+constexpr decltype(auto) tag_value_value(T&& value) {
+    if constexpr (requires { std::forward<T>(value).declared; std::forward<T>(value).value; }) {
+        return (std::forward<T>(value).value);
     } else {
         return std::forward<T>(value);
     }
 }
 
+template <typename T>
+auto constexpr make_tag_value_common(T&& value) {
+    decltype(auto) rawValue = tag_value_value(std::forward<T>(value));
+    using RawValue          = std::remove_reference_t<decltype(rawValue)>;
+    if constexpr (std::is_array_v<RawValue>) {
+        return std::vector<std::decay_t<RawValue>>{std::begin(rawValue), std::end(rawValue)};
+    } else if constexpr (NEKO_NAMESPACE::detail::is_std_array<std::decay_t<RawValue>>::value) {
+        return std::vector<typename std::decay_t<RawValue>::value_type>{std::begin(rawValue), std::end(rawValue)};
+    } else if constexpr (is_constexpr_string<RawValue>::value) {
+        return rawValue.view();
+    } else {
+        return std::forward<decltype(rawValue)>(rawValue);
+    }
+}
+
 } // namespace detail
+
+template <typename T>
+struct TagValue {
+    using value_type = T;
+
+    T value{};            // NOLINT
+    bool declared = false; // NOLINT
+
+    constexpr TagValue() = default;
+    constexpr TagValue(const T& input) : value(input), declared(true) {}
+    constexpr TagValue(T&& input) : value(std::move(input)), declared(true) {}
+
+    constexpr TagValue& operator=(const T& input) {
+        value    = input;
+        declared = true;
+        return *this;
+    }
+
+    constexpr TagValue& operator=(T&& input) {
+        value    = std::move(input);
+        declared = true;
+        return *this;
+    }
+
+    constexpr operator T() const { return value; }
+
+    constexpr bool operator==(const TagValue&) const = default;
+};
 
 template <auto Tags, typename Accessor>
 struct FieldSpec {
@@ -232,134 +281,220 @@ constexpr bool perform_all_checks() {
     return true;
 }
 
+template <typename Prop, typename Tag>
+inline constexpr bool tag_prop_has_available_v = requires(const Tag& tag) {
+    { Prop::has(tag) } -> std::convertible_to<bool>;
+};
+
+template <typename Prop, typename Tag>
+inline constexpr bool tag_prop_get_available_v = tag_prop_has_available_v<Prop, Tag> && requires(const Tag& tag) {
+    Prop::get(tag);
+};
+
+template <typename Prop, typename Tags>
+constexpr bool tag_has(const Tags& tags);
+
+template <typename Prop, typename Tags>
+constexpr typename Prop::type tag_get(const Tags& tags);
+
+template <typename Prop, typename Tags>
+constexpr decltype(auto) tag_get_existing(const Tags& tags);
+
+template <typename Prop, auto Head, auto... Tail>
+constexpr bool tag_list_has_impl() {
+    if constexpr (tag_has<Prop>(Head)) {
+        return true;
+    } else if constexpr (sizeof...(Tail) > 0) {
+        return tag_list_has_impl<Prop, Tail...>();
+    } else {
+        return false;
+    }
+}
+
+template <typename Prop, auto Head, auto... Tail>
+constexpr typename Prop::type tag_list_get_impl() {
+    if constexpr (tag_has<Prop>(Head)) {
+        return tag_get<Prop>(Head);
+    } else if constexpr (sizeof...(Tail) > 0) {
+        return tag_list_get_impl<Prop, Tail...>();
+    } else {
+        return Prop::missing();
+    }
+}
+
+template <typename Prop, auto Head, auto... Tail>
+constexpr decltype(auto) tag_list_get_existing_impl() {
+    if constexpr (tag_has<Prop>(Head)) {
+        return tag_get_existing<Prop>(Head);
+    } else if constexpr (sizeof...(Tail) > 0) {
+        return tag_list_get_existing_impl<Prop, Tail...>();
+    } else {
+        static_assert(NEKO_NAMESPACE::always_false_v<std::remove_cvref_t<decltype(Head)>>,
+                      "requested tag property is missing");
+    }
+}
+
+template <typename Prop, auto... Tags>
+constexpr bool tag_has(const TagList<Tags...>& tags) {
+    static_cast<void>(tags);
+
+    if constexpr (sizeof...(Tags) == 0) {
+        return false;
+    } else {
+        return tag_list_has_impl<Prop, Tags...>();
+    }
+}
+
+template <typename Prop, auto... Tags>
+constexpr typename Prop::type tag_get(const TagList<Tags...>& tags) {
+    static_cast<void>(tags);
+
+    if constexpr (sizeof...(Tags) == 0) {
+        return Prop::missing();
+    } else {
+        return tag_list_get_impl<Prop, Tags...>();
+    }
+}
+
+template <typename Prop, auto... Tags>
+constexpr decltype(auto) tag_get_existing(const TagList<Tags...>& tags) {
+    static_cast<void>(tags);
+
+    if constexpr (sizeof...(Tags) == 0) {
+        static_assert(NEKO_NAMESPACE::always_false_v<std::remove_cvref_t<decltype(tags)>>,
+                      "requested tag property is missing");
+    } else {
+        return tag_list_get_existing_impl<Prop, Tags...>();
+    }
+}
+
+template <typename Prop, typename Tag>
+constexpr bool tag_has(const Tag& tag) {
+    using RawTag = std::remove_cvref_t<Tag>;
+
+    if constexpr (tag_prop_has_available_v<Prop, RawTag>) {
+        if (Prop::has(tag)) {
+            return true;
+        }
+    }
+
+    if constexpr (requires { tag.base; }) {
+        return tag_has<Prop>(tag.base);
+    } else {
+        return false;
+    }
+}
+
+template <typename Prop, typename Tag>
+constexpr typename Prop::type tag_get(const Tag& tag) {
+    using RawTag = std::remove_cvref_t<Tag>;
+
+    if constexpr (tag_prop_get_available_v<Prop, RawTag>) {
+        if (Prop::has(tag)) {
+            return Prop::get(tag);
+        }
+    }
+
+    if constexpr (requires { tag.base; }) {
+        return tag_get<Prop>(tag.base);
+    } else {
+        return Prop::missing();
+    }
+}
+
+template <typename Prop, typename Tag>
+constexpr decltype(auto) tag_get_existing(const Tag& tag) {
+    using RawTag = std::remove_cvref_t<Tag>;
+
+    if constexpr (tag_prop_get_available_v<Prop, RawTag>) {
+        return Prop::get(tag);
+    } else if constexpr (requires { tag.base; }) {
+        return tag_get_existing<Prop>(tag.base);
+    } else {
+        static_assert(NEKO_NAMESPACE::always_false_v<RawTag>, "requested tag property is missing");
+    }
+}
+
 } // namespace detail
+
+namespace tag_query {
+template <typename Prop, typename Tags>
+constexpr bool has(const Tags& tags) {
+    return detail::tag_has<Prop>(tags);
+}
+
+template <typename Prop, typename Tags>
+constexpr decltype(auto) get(const Tags& tags) {
+    if constexpr (requires { typename Prop::type; }) {
+        return detail::tag_get<Prop>(tags);
+    } else {
+        return detail::tag_get_existing<Prop>(tags);
+    }
+}
+} // namespace tag_query
 NEKO_END_NAMESPACE
 
-#define _NEKO_DEFINE_TAG_HAS_QUERY(member, fname)                                                                      \
-    template <typename T>                                                                                              \
-    constexpr bool has_##fname(const T& tags) {                                                                        \
-        static_cast<void>(tags);                                                                                       \
-        if constexpr (requires { tags.member; }) {                                                                     \
-            return true;                                                                                               \
-        } else if constexpr (requires { tags.base; }) {                                                                \
-            return has_##fname(tags.base);                                                                             \
-        } else {                                                                                                       \
-            return false;                                                                                              \
+#define NEKO_DEFINE_TAG_PROP(Type, member, fname)                                                                      \
+    struct fname {                                                                                                     \
+        using type = Type;                                                                                             \
+        static constexpr type missing() noexcept { return {}; }                                                        \
+        template <typename Tag>                                                                                        \
+        static constexpr bool has(const Tag& tag) {                                                                    \
+            if constexpr (requires { tag.member; }) {                                                                  \
+                return NEKO_NAMESPACE::detail::tag_value_declared(tag.member);                                         \
+            } else {                                                                                                   \
+                return false;                                                                                          \
+            }                                                                                                          \
         }                                                                                                              \
-    }                                                                                                                  \
-    template <auto... Tags>                                                                                            \
-    constexpr bool has_##fname(const NEKO_NAMESPACE::TagList<Tags...>& tags) {                                         \
-        static_cast<void>(tags);                                                                                       \
-        return (has_##fname(Tags) || ...);                                                                             \
-    }
+        template <typename Tag>                                                                                        \
+        static constexpr type get(const Tag& tag)                                                                      \
+            requires requires { tag.member; }                                                                          \
+        {                                                                                                              \
+            return NEKO_NAMESPACE::detail::make_tag_value_common(tag.member);                                          \
+        }                                                                                                              \
+    };
 
-#define _NEKO_DEFINE_TAG_LIST_QUERY(Type, fname)                                                                       \
-    template <auto Head, auto... Tail>                                                                                 \
-    constexpr Type _neko_##fname##_from_tag_list() {                                                                   \
-        if constexpr (has_##fname(Head)) {                                                                             \
-            return fname(Head);                                                                                        \
-        } else if constexpr (sizeof...(Tail) > 0) {                                                                    \
-            return _neko_##fname##_from_tag_list<Tail...>();                                                           \
-        } else {                                                                                                       \
-            return {};                                                                                                 \
+#define NEKO_DEFINE_TAG_VALUE_PROP(member, fname)                                                                      \
+    struct fname {                                                                                                     \
+        template <typename Tag>                                                                                        \
+        static constexpr bool has(const Tag& tag) {                                                                    \
+            if constexpr (requires { tag.member; }) {                                                                  \
+                return NEKO_NAMESPACE::detail::tag_value_declared(tag.member);                                         \
+            } else {                                                                                                   \
+                return false;                                                                                          \
+            }                                                                                                          \
         }                                                                                                              \
-    }                                                                                                                  \
-    template <auto... Tags>                                                                                            \
-    constexpr Type fname(const NEKO_NAMESPACE::TagList<Tags...>& tags) {                                               \
-        static_cast<void>(tags);                                                                                       \
-        if constexpr (sizeof...(Tags) > 0) {                                                                           \
-            return _neko_##fname##_from_tag_list<Tags...>();                                                           \
-        } else {                                                                                                       \
-            return {};                                                                                                 \
+        template <typename Tag>                                                                                        \
+        static constexpr decltype(auto) get(const Tag& tag)                                                            \
+            requires requires { tag.member; }                                                                          \
+        {                                                                                                              \
+            return NEKO_NAMESPACE::detail::make_tag_value_common(tag.member);                                          \
         }                                                                                                              \
-    }
+    };
 
-#define _NEKO_DEFINE_TAG_DEDUCED_LIST_QUERY(fname, MissingMessage)                                                     \
-    template <auto Head, auto... Tail>                                                                                 \
-    constexpr decltype(auto) _neko_##fname##_from_tag_list() {                                                         \
-        if constexpr (has_##fname(Head)) {                                                                             \
-            return fname(Head);                                                                                        \
-        } else if constexpr (sizeof...(Tail) > 0) {                                                                    \
-            return _neko_##fname##_from_tag_list<Tail...>();                                                           \
-        } else {                                                                                                       \
-            static_assert(NEKO_NAMESPACE::always_false_v<std::remove_cvref_t<decltype(Head)>>, MissingMessage);        \
+#define NEKO_DEFINE_TYPE_TAG_PROP(Type, member, fname)                                                                 \
+    template <typename Value>                                                                                          \
+    struct fname {                                                                                                     \
+        using type = Type;                                                                                             \
+        static constexpr type missing() noexcept {                                                                     \
+            if constexpr (requires { is_##member##_tag<Value>::value; }) {                                             \
+                return is_##member##_tag<Value>::value;                                                                \
+            } else {                                                                                                   \
+                return {};                                                                                             \
+            }                                                                                                          \
         }                                                                                                              \
-    }                                                                                                                  \
-    template <auto... Tags>                                                                                            \
-    constexpr decltype(auto) fname(const NEKO_NAMESPACE::TagList<Tags...>& tags) {                                     \
-        static_cast<void>(tags);                                                                                       \
-        if constexpr (sizeof...(Tags) > 0) {                                                                           \
-            return _neko_##fname##_from_tag_list<Tags...>();                                                           \
-        } else {                                                                                                       \
-            static_assert(NEKO_NAMESPACE::always_false_v<std::remove_cvref_t<decltype(tags)>>, MissingMessage);        \
+        template <typename Tag>                                                                                        \
+        static constexpr bool has(const Tag& tag) {                                                                    \
+            if constexpr (requires { tag.member; }) {                                                                  \
+                return NEKO_NAMESPACE::detail::tag_value_declared(tag.member);                                         \
+            } else {                                                                                                   \
+                return false;                                                                                          \
+            }                                                                                                          \
         }                                                                                                              \
-    }
-
-#define _NEKO_DEFINE_TYPE_TAG_LIST_QUERY(Type, fname)                                                                  \
-    template <typename Value, auto Head, auto... Tail>                                                                 \
-    constexpr Type _neko_##fname##_from_tag_list() {                                                                   \
-        if constexpr (has_##fname(Head)) {                                                                             \
-            return fname<Value>(Head);                                                                                 \
-        } else if constexpr (sizeof...(Tail) > 0) {                                                                    \
-            return _neko_##fname##_from_tag_list<Value, Tail...>();                                                    \
-        } else {                                                                                                       \
-            return fname<Value>(NEKO_NAMESPACE::NoTags{});                                                             \
+        template <typename Tag>                                                                                        \
+        static constexpr type get(const Tag& tag)                                                                      \
+            requires requires { tag.member; }                                                                          \
+        {                                                                                                              \
+            return static_cast<type>(tag.member);                                                                      \
         }                                                                                                              \
-    }                                                                                                                  \
-    template <typename Value, auto... Tags>                                                                            \
-    constexpr Type fname(const NEKO_NAMESPACE::TagList<Tags...>& tags) {                                               \
-        static_cast<void>(tags);                                                                                       \
-        if constexpr (sizeof...(Tags) > 0) {                                                                           \
-            return _neko_##fname##_from_tag_list<Value, Tags...>();                                                    \
-        } else {                                                                                                       \
-            return fname<Value>(NEKO_NAMESPACE::NoTags{});                                                             \
-        }                                                                                                              \
-    }
-
-#define NEKO_DEFINE_TAG_QUERY(Type, member, fname)                                                                     \
-    template <typename T>                                                                                              \
-    constexpr Type fname(const T& tags) {                                                                              \
-        static_cast<void>(tags);                                                                                       \
-        if constexpr (requires { tags.member; }) {                                                                     \
-            return NEKO_NAMESPACE::detail::make_tag_value_common(tags.member);                                         \
-        } else if constexpr (requires { tags.base; }) {                                                                \
-            return fname(tags.base);                                                                                   \
-        } else {                                                                                                       \
-            return {};                                                                                                 \
-        }                                                                                                              \
-    }                                                                                                                  \
-    _NEKO_DEFINE_TAG_HAS_QUERY(member, fname)                                                                          \
-    _NEKO_DEFINE_TAG_LIST_QUERY(Type, fname)
-
-#define NEKO_DEFINE_TAG_VALUE_QUERY(member, fname, MissingMessage)                                                     \
-    template <typename T>                                                                                              \
-    constexpr decltype(auto) fname(const T& tags) {                                                                    \
-        using Tag = std::remove_cvref_t<T>;                                                                            \
-        static_cast<void>(tags);                                                                                       \
-        if constexpr (requires { tags.member; }) {                                                                     \
-            return NEKO_NAMESPACE::detail::make_tag_value_common(tags.member);                                         \
-        } else if constexpr (requires { tags.base; }) {                                                                \
-            return fname(tags.base);                                                                                   \
-        } else {                                                                                                       \
-            static_assert(NEKO_NAMESPACE::always_false_v<Tag>, MissingMessage);                                        \
-        }                                                                                                              \
-    }                                                                                                                  \
-    _NEKO_DEFINE_TAG_HAS_QUERY(member, fname)                                                                          \
-    _NEKO_DEFINE_TAG_DEDUCED_LIST_QUERY(fname, MissingMessage)
-
-#define NEKO_DEFINE_TYPE_TAG_QUERY(Type, member, fname)                                                                \
-    template <typename Value, typename T>                                                                              \
-    constexpr Type fname(const T& tags) {                                                                              \
-        static_cast<void>(tags);                                                                                       \
-        if constexpr (requires { tags.member; }) {                                                                     \
-            return tags.member;                                                                                        \
-        } else if constexpr (requires { tags.base; }) {                                                                \
-            return fname<Value>(tags.base);                                                                            \
-        } else if constexpr (requires { is_##member##_tag<Value>::value; }) {                                          \
-            return is_##member##_tag<Value>::value;                                                                    \
-        } else {                                                                                                       \
-            return {};                                                                                                 \
-        }                                                                                                              \
-    }                                                                                                                  \
-    _NEKO_DEFINE_TAG_HAS_QUERY(member, fname)                                                                          \
-    _NEKO_DEFINE_TYPE_TAG_LIST_QUERY(Type, fname)
+    };
