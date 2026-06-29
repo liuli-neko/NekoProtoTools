@@ -34,7 +34,7 @@ public:
 
     bool end() const noexcept { return static_cast<bool>(mLastResult); }
     explicit operator bool() const noexcept { return static_cast<bool>(mLastResult); }
-    const sa::Error* error() const noexcept { return mLastResult.errorPtr(); }
+    const sa::Error* error() const noexcept { return sa::error_ptr(mLastResult); }
     std::string str() const { return mWriter.str(); }
 
 private:

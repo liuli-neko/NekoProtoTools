@@ -2,7 +2,7 @@
 
 [![中文](https://img.shields.io/badge/语言-中文-blue.svg)](./README.md)
 [![English](https://img.shields.io/badge/language-English-blue.svg)](./README_en.md)
-![Version](https://img.shields.io/badge/version-0.3.0-green.svg)
+![Version](https://img.shields.io/badge/version-0.3.1-green.svg)
 
 ### CI Status
 
@@ -18,13 +18,14 @@
 
 NekoProtoTools is a pure C++ protocol helper library designed to **simplify the definition, serialization/deserialization, and RPC communication of messages (protocols) in C++**.
 
-Current version: **0.3.0**. This release rewires the serialization stack around one generic Parser layer: RapidJSON, simdjson, Binary, XML, and schema generation now share the same type-dispatch rules, while concrete formats provide thin Reader/Writer backends.
+Current version: **0.3.1**. This release adds a reflection-driven command-line argument parser and consolidates the tag infrastructure into the shared reflection metadata layer. On the serialization side, `sa::Result<T>` aliases `std::expected<T, sa::Error>` when `<expected>` is available, with the built-in compatibility implementation kept for older environments.
 
 Core features of this library:
 
 *   **Simplified Message Definition**: Using templates and macros, you only need to define the fields of your message and declare the members to be processed. Any custom C++ type can then be used as a serializable object or protocol message.
 *   **Unified Parser Serialization Layer**: JSON, Binary, XML, and schema generation share one set of type rules; RapidJSON, simdjson, pugixml, and the binary format are thin backends.
 *   **Field-Level Metadata Tags**: `make_tags<Tag>(field)` describes a field or call site instead of permanently annotating the type, so the same type can use different layouts in different contexts.
+*   **Reflection-Driven ArgParser**: Define CLI options with reflected objects and tags, including nested options, subcommands, defaults, environment variables, aliases, conflicts/requires rules, and help/version output.
 *   **Basic Static Reflection Capability**: Provides a simple static reflection mechanism for compile-time type checks and metadata extraction.
 *   **Generic RPC Frontend With Replaceable Backends**: RPC method declarations, registration, and calls are not tied to a specific wire protocol. Built-in backends currently include JSON-RPC and the compact binary `BinaryRpcBackend`.
 *   **Type Safety**: Utilizes C++ template metaprogramming for compile-time type checking.
@@ -48,6 +49,8 @@ Core features of this library:
     *   [format](https://en.cppreference.com/w/cpp/utility/format/format) (If std::format is available in the compilation environment, you can enable logging directly)
     *   [fmt](https://fmt.dev/) (Use fmt as the logging backend)
     *   [spdlog](https://github.com/gabime/spdlog) (Use spdlog as the logging backend)
+*   **Command-Line Argument Parsing**:
+    *   ArgParser is header-only and has no extra third-party dependency. Include `<nekoproto/argparser/argparser.hpp>` to use it.
 
 ---
 
@@ -274,7 +277,61 @@ Common built-in tags:
 *   `BinaryTags{.unframed = true}`: read/write reflected binary objects without field boundaries; use it at the call site for things such as transport headers, not as type-level metadata.
 *   `rename_tag<"...">` / `comment_tag<"...">`: reflection metadata for field renaming and XML comments.
 
-### 5.3. Protocol Management (`ProtoFactory`, `IProto`)
+### 5.3. Command-Line Argument Parsing (`ArgParser`)
+
+ArgParser reuses the static reflection and tag system to map a plain options struct into a command-line schema. Parsing returns `std::expected<T, std::error_code>`; `--help`, `--version`, missing required options, and invalid values are reported through `ArgParserError`.
+
+```cpp
+#include <nekoproto/argparser/argparser.hpp>
+
+#include <string>
+#include <vector>
+
+using namespace NekoProto;
+using namespace NekoProto::argparser;
+
+struct BuildOptions {
+    bool verbose = false;
+    int jobs = 1;
+    std::string mode = "debug";
+    std::vector<std::string> include;
+
+    struct Neko {
+        constexpr static auto value =
+            Object("verbose",
+                   make_tags<arg_name<"verbose", "v",
+                                      arg_help<"enable verbose logs", ArgTags{.flag = true}>>>(
+                       &BuildOptions::verbose),
+                   "jobs",
+                   make_tags<arg_name<"jobs", "j",
+                                      arg_default<4, arg_help<"parallel jobs",
+                                                              ArgTags{.rangeMin = 1, .rangeMax = 65}>>>>(
+                       &BuildOptions::jobs),
+                   "mode",
+                   make_tags<arg_name<"mode", "m",
+                                      arg_choices<ArgTags{}, "debug", "release">>>(&BuildOptions::mode),
+                   "include",
+                   make_tags<arg_name<"include", "I",
+                                      arg_help<"include path", ArgTags{.repeatable = true}>>>(
+                       &BuildOptions::include));
+    };
+};
+
+int main(int argc, char** argv) {
+    auto result = parser<BuildOptions>(argc, argv);
+    if (!result) {
+        return result.error() == make_error_code(ArgParserError::HelpRequested) ? 0 : 1;
+    }
+
+    const BuildOptions& options = *result;
+    (void)options;
+    return 0;
+}
+```
+
+Common arg tags include `arg_name`, `arg_help`, `arg_default`, `arg_choices`, `arg_env`, `arg_separator`, `arg_aliases`, `arg_implicit`, `arg_group`, `arg_conflicts`, `arg_requires`, `arg_deprecated`, and `arg_case_insensitive_choices`. Base behavior is described with `ArgTags{.positional = true}`, `.flag = true`, `.repeatable = true`, `.required = true`, and related fields; subcommands are modeled with `ArgTags{.command = true}`.
+
+### 5.4. Protocol Management (`ProtoFactory`, `IProto`)
 
 Use the protocol management mechanism when you need to manage different types of protocols, handle polymorphism, or require runtime type information.
 
@@ -293,7 +350,7 @@ Use the protocol management mechanism when you need to manage different types of
     *   Use `emplaceProto()` to create instances, returning `IProto`.
     *   Use `cast<T>()` to safely cast an `IProto` back to a specific protocol type pointer.
 
-### 5.4. Communication (`Communication`)
+### 5.5. Communication (`Communication`)
 
 This library provides a coroutine-based communication abstraction layer built upon [Ilias](https://github.com/BusyStudent/ilias), designed for conveniently transmitting protocol messages over network connections.
 
@@ -453,7 +510,7 @@ int main() {
 }
 ```
 
-### 5.5. Generic RPC Frontend
+### 5.6. Generic RPC Frontend
 
 The RPC module is now split into a generic frontend plus replaceable backends. `RpcMethod`, protocol sets, and the server/client calling API are no longer tied to JSON-RPC. JSON-RPC 2.0 is one built-in backend that handles the request/response envelope, ids, batch calls, notifications, parameter encoding, and error mapping.
 
@@ -613,7 +670,7 @@ client.setEndpoint(std::move(clientStream));
 
 Ilias also provides `ilias::PipePair`, but it is a one-way OS pipe. Bidirectional RPC over pipes needs two pipe pairs or a custom composed read/write stream. Tests prefer `DuplexStream` because it is lighter and does not consume ports. When interoperating with external JSON-RPC peers, provide a JSON-RPC endpoint/backend hook that matches the peer framing, such as LSP `Content-Length`, newline-delimited JSON, WebSocket messages, or datagrams, instead of fixing one stream framing in the RPC frontend.
 
-### 5.6. Custom RPC Backend Extension
+### 5.7. Custom RPC Backend Extension
 
 RPC backends follow the same extension principle as serializers: no base-class inheritance and no changes to `RpcMethod`; backend capabilities are consumed through template use sites. `RpcDispatcher` and `RpcClient` currently need the following minimal backend surface. The concrete request/response wire shape, parameter view, id type, and error mapping are backend-defined.
 
@@ -831,9 +888,16 @@ To add a new data format, implement a backend with responsibilities matching the
 *   [x] Route RapidJSON, simdjson, Binary, XML, and schema generation through the generic Parser layer
 *   [x] Implement XML Reader/Writer backend with pugixml
 *   [x] Support Draft-07 style JSON Schema generation
+*   [x] Alias `sa::Result<T>` to `std::expected<T, sa::Error>` when C++23 `<expected>` is available, while keeping the C++20 compatibility implementation
 *   [ ] Support `simdjson::ondemand` interface (Explore performance and use case differences with `dom`)
 *   [x] Implement simdjson output through the shared JSON text Writer path
 *   [x] Support more C++ STL containers
+
+**ArgParser**
+
+*   [x] Add a static-reflection-based command-line argument parser.
+*   [x] Support long/short options, positionals, flags, repeatable values, nested options, defaults, environment variables, choices, ranges, help/version output.
+*   [x] Support subcommands, aliases, implicit values, groups, conflicts, requires rules, deprecated warnings, and case-insensitive choices.
 
 **Communication**
 
@@ -862,6 +926,14 @@ To add a new data format, implement a backend with responsibilities matching the
 ---
 
 ## 9. Development History (Selected Milestones)
+
+*   **v0.3.1**
+    *   Added `NekoArgParser` / `<nekoproto/argparser/argparser.hpp>`: CLI schemas can now be defined with static reflection and tags, returning `std::expected<..., std::error_code>`.
+    *   ArgParser supports long/short options, positional arguments, flags, repeatable values, nested options, defaults, environment variables, choices/ranges, automatic help/version output, and subcommands.
+    *   Expanded arg tags with `arg_aliases`, `arg_implicit`, `arg_group`, `arg_conflicts`, `arg_requires`, `arg_deprecated`, `arg_case_insensitive_choices`, and related metadata.
+    *   Refactored the tag infrastructure so common reflection tags and tag queries live in `global/reflection_tags.hpp` and are shared by serialization, RPC, and argparser.
+    *   Further separated the build boundary between `NekoProtoBase` and `NekoCommunication`; communication remains an optional module.
+    *   `sa::Result<T>` now aliases `std::expected<T, sa::Error>` when the standard library provides `<expected>`, keeps the C++20 fallback, and adds the short `sa::Err(...)` helper for failed results.
 
 *   **v0.3.0**
     *   Reworked the serialization stack so RapidJSON, simdjson, Binary, XML, and schema generation share `Parser<Reader, Writer, T>`.
@@ -920,3 +992,5 @@ Contributions via Pull Requests or Issues are welcome to improve this library!
 ## 11. License
 
 ![GitHub License](https://img.shields.io/github/license/liuli-neko/NekoProtoTools)
+
+This project is released under the MIT License. See [LICENSE](LICENSE).

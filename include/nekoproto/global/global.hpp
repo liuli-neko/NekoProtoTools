@@ -7,7 +7,7 @@
  * @date 2024-05-25
  *
  * @par license
- *  GPL-2.0 license
+ *  MIT License
  *
  * @copyright Copyright (c) 2024 by llhsdmd
  *

@@ -62,7 +62,7 @@ public:
             return static_cast<bool>(mLastResult);
         }
     }
-    const sa::Error* error() const noexcept { return mLastResult.errorPtr(); }
+    const sa::Error* error() const noexcept { return sa::error_ptr(mLastResult); }
 
     StateType& state() noexcept { return mState; }
     const StateType& state() const noexcept { return mState; }
@@ -106,7 +106,7 @@ public:
     }
 
     explicit operator bool() const noexcept { return static_cast<bool>(mLastResult); }
-    const sa::Error* error() const noexcept { return mLastResult.errorPtr(); }
+    const sa::Error* error() const noexcept { return sa::error_ptr(mLastResult); }
 
     std::size_t offset() const noexcept
         requires requires(const StateType& state) {

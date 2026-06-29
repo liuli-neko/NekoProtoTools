@@ -19,7 +19,7 @@ template <typename R, typename W, typename T, typename Enable = void>
 struct CustomParser {};
 
 inline ParserResult parser_error(sa::ErrorCode code, std::string message) {
-    return sa::error(code, std::move(message));
+    return sa::Err(code, std::move(message));
 }
 
 inline ParserResult parser_context(ParserResult result, std::string context) {
@@ -28,7 +28,7 @@ inline ParserResult parser_context(ParserResult result, std::string context) {
     }
     auto error = result.error();
     error.msg  = std::move(context) + error.msg;
-    return error;
+    return sa::Err(std::move(error));
 }
 
 template <typename R, typename W, typename T, typename Enable = void>
