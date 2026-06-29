@@ -38,18 +38,18 @@ inline bool looks_like_negative_number(std::string_view token) {
     if (index < token.size() && token[index] == '.') {
         ++index;
     }
-    if (index >= token.size() || !std::isdigit(static_cast<unsigned char>(token[index]))) {
+    if (index >= token.size() || (std::isdigit(static_cast<unsigned char>(token[index])) == 0)) {
         return false;
     }
-    while (index < token.size() && std::isdigit(static_cast<unsigned char>(token[index]))) {
+    while (index < token.size() && (std::isdigit(static_cast<unsigned char>(token[index])) != 0)) {
         ++index;
     }
     if (index < token.size() && token[index] == '.') {
         ++index;
-        if (index >= token.size() || !std::isdigit(static_cast<unsigned char>(token[index]))) {
+        if (index >= token.size() || (std::isdigit(static_cast<unsigned char>(token[index])) == 0)) {
             return false;
         }
-        while (index < token.size() && std::isdigit(static_cast<unsigned char>(token[index]))) {
+        while (index < token.size() && (std::isdigit(static_cast<unsigned char>(token[index])) != 0)) {
             ++index;
         }
     }

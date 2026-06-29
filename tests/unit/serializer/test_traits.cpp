@@ -5,6 +5,7 @@
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/json/simd_json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
+#include "nekoproto/serialization/private/traits.hpp"
 // MARK: region traits
 NEKO_USE_NAMESPACE
 struct TestStruct {

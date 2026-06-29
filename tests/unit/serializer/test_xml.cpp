@@ -159,7 +159,7 @@ TEST(PugiXmlBackend, MapsXmlContentFieldToNodeText) {
 TEST(PugiXmlBackend, WritesCommentTagsForObjectsAndArrays) {
     static_assert(parsing::supports_comments<xml::Writer>);
     static_assert(tag_query::comment(comment_tag<"values comment">) == std::string_view{"values comment"});
-    static_assert(tag_query::is_skipable(comment_tag<"skip comment", JsonTags{.skipable = true}>));
+    static_assert(tag_query::skipable(comment_tag<"skip comment", JsonTags{.skipable = true}>));
     static_assert(tag_query::has_name(rename_tag<"value", comment_tag<"inner comment">>));
     static_assert(tag_query::has_comment(rename_tag<"value", comment_tag<"inner comment">>));
 

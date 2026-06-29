@@ -198,6 +198,78 @@ consteval bool test_positional_for_each_meta() {
 
 static_assert(test_positional_for_each_meta());
 
+enum class TaggedStatus {
+    Ok = 1,
+    Warning = 2,
+    Error = 3,
+};
+
+enum class AutoTaggedStatus {
+    Alpha,
+    Beta,
+};
+
+NEKO_BEGIN_NAMESPACE
+template <>
+struct Meta<::TaggedStatus, void> {
+    constexpr static auto value = // NOLINT
+        Enumerate("ok", make_tags<comment_tag<"completed">>(::TaggedStatus::Ok), "warning",
+                  make_tags<comment_tag<"needs attention">, JsonTags{.skipable = true}>(::TaggedStatus::Warning),
+                  "error", ::TaggedStatus::Error);
+};
+
+template <>
+struct Meta<::AutoTaggedStatus, void> {
+    constexpr static auto value = // NOLINT
+        Enumerate(make_tags<comment_tag<"alpha message">>(::AutoTaggedStatus::Alpha), ::AutoTaggedStatus::Beta);
+};
+NEKO_END_NAMESPACE
+
+consteval bool test_enum_tags_for_each_meta() {
+    std::size_t count = 0;
+    bool sawOk = false;
+    bool sawWarning = false;
+    bool sawError = false;
+    Reflect<TaggedStatus>::forEachMeta([&](auto value, std::string_view name, const auto& tags) {
+        ++count;
+        if (value == TaggedStatus::Ok) {
+            sawOk = name == "ok" && tag_query::comment(tags) == "completed";
+        } else if (value == TaggedStatus::Warning) {
+            sawWarning = name == "warning" && tag_query::comment(tags) == "needs attention" &&
+                         tag_query::skipable(tags);
+        } else if (value == TaggedStatus::Error) {
+            sawError = name == "error" && !tag_query::has_comment(tags);
+        }
+    });
+    return count == Reflect<TaggedStatus>::value_count && sawOk && sawWarning && sawError;
+}
+
+static_assert(test_enum_tags_for_each_meta());
+
+TEST(Reflection, EnumerateTags) {
+    constexpr auto names = Reflect<TaggedStatus>::names();
+    constexpr auto values = Reflect<TaggedStatus>::values();
+    constexpr auto tags = Reflect<TaggedStatus>::field_tags;
+
+    static_assert(Reflect<TaggedStatus>::value_count == 3);
+    static_assert(names[0] == "ok");
+    static_assert(values[1] == TaggedStatus::Warning);
+    static_assert(tag_query::comment(std::get<0>(tags)) == "completed");
+    static_assert(tag_query::comment(std::get<1>(tags)) == "needs attention");
+    static_assert(tag_query::skipable(std::get<1>(tags)));
+    static_assert(!tag_query::has_comment(std::get<2>(tags)));
+
+    constexpr auto autoNames = Reflect<AutoTaggedStatus>::names();
+    constexpr auto autoTags = Reflect<AutoTaggedStatus>::field_tags;
+    static_assert(autoNames[0] == "Alpha");
+    static_assert(autoNames[1] == "Beta");
+    static_assert(tag_query::comment(std::get<0>(autoTags)) == "alpha message");
+    static_assert(!tag_query::has_comment(std::get<1>(autoTags)));
+
+    EXPECT_EQ(Reflect<TaggedStatus>::name(TaggedStatus::Warning), "warning");
+    EXPECT_EQ(Reflect<TaggedStatus>::value("ok"), TaggedStatus::Ok);
+}
+
 struct Test4 {
     int member1 = 213;
     int member2 = 125;

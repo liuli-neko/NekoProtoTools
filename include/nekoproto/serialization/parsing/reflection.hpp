@@ -34,7 +34,7 @@ bool parser_should_skip_empty_field(const FieldT& field, const Tags& /*tags*/) {
 
 template <typename FieldT, typename Tags>
 ParserResult parser_read_missing_field(FieldT& field, std::string_view name, const Tags& tags) {
-    if (tag_query::is_skipable(tags)) {
+    if (tag_query::skipable(tags)) {
         return sa::success();
     }
     using ValueType = std::decay_t<FieldT>;
@@ -60,10 +60,10 @@ inline void parser_schema_add_required(parsing::schema::Type::Object& object, st
 template <typename R, typename W, typename FieldT, typename Tags>
 void parser_schema_add_reflect_field(parsing::schema::Type::Object& object, std::string_view name, const Tags& tags) {
     auto fieldSchema = parser_schema<R, W, std::decay_t<FieldT>>();
-    if (tag_query::is_fixed_length(tags)) {
+    if (tag_query::has_fixed_length(tags)) {
         fieldSchema.fixedLength = tag_query::fixed_length<std::decay_t<FieldT>>(tags);
     }
-    if (tag_query::is_flat<std::decay_t<FieldT>>(tags)) {
+    if (tag_query::flat<std::decay_t<FieldT>>(tags)) {
         const auto& unwrapped = parsing::schema::unwrapOptional(fieldSchema);
         if (const auto* nested = std::get_if<parsing::schema::Type::Object>(&unwrapped.value)) {
             object.properties.insert(nested->properties.begin(), nested->properties.end());
@@ -80,7 +80,7 @@ void parser_schema_add_reflect_field(parsing::schema::Type::Object& object, std:
     }
     object.properties.insert_or_assign(fieldName, std::move(fieldSchema));
     if constexpr (!traits::optional_like_type<std::decay_t<FieldT>>::value) {
-        if (!tag_query::is_skipable(tags)) {
+        if (!tag_query::skipable(tags)) {
             parser_schema_add_required(object, std::move(fieldName));
         }
     }
@@ -100,7 +100,7 @@ parsing::schema::Type parser_schema_positional_reflection() {
     parsing::schema::Type::Array array;
     Reflect<T>::forEachMeta([&]<typename Field>(std::type_identity<Field>, const auto& tags) {
         auto fieldSchema = parser_schema<R, W, Field>();
-        if (tag_query::is_fixed_length(tags)) {
+        if (tag_query::has_fixed_length(tags)) {
             fieldSchema.fixedLength = tag_query::fixed_length<std::decay_t<Field>>(tags);
         }
         array.prefixItems.emplace_back(std::move(fieldSchema));
@@ -117,7 +117,7 @@ ParserResult parser_write_reflect_field(W& writer, typename W::OutputObjectType&
     using FieldType = std::decay_t<T>;
     if constexpr (has_values_meta<FieldType> && has_names_meta<FieldType> &&
                   !disable_reflect_parser<R, W, FieldType>::value) {
-        if (tag_query::is_flat<FieldType>(tags)) {
+        if (tag_query::flat<FieldType>(tags)) {
             return parser_write_reflect_fields<R, W>(writer, object, field);
         }
     }
@@ -153,7 +153,7 @@ ParserResult parser_read_reflect_field(typename R::InputValueType in, T& field, 
     using FieldType = std::decay_t<T>;
     if constexpr (has_values_meta<FieldType> && has_names_meta<FieldType> &&
                   !disable_reflect_parser<R, W, FieldType>::value) {
-        if (tag_query::is_flat<FieldType>(tags)) {
+        if (tag_query::flat<FieldType>(tags)) {
             return parser_read_reflect_fields<R, W>(in, field);
         }
     }
@@ -214,7 +214,7 @@ struct Parser<R, W, T,
     static ParserResult write(W& writer, const T& value, const ParentType& parent, const Tags& tags) {
         if constexpr (has_names_meta<T>) {
             if constexpr (parsing::supports_unframed_objects<R, W>) {
-                if (tag_query::is_unframed<std::decay_t<T>>(tags)) {
+                if (tag_query::unframed<std::decay_t<T>>(tags)) {
                     parsing::Parent<W>::beginUnframedObject(writer, parent);
                     ParserResult result;
                     Reflect<T>::forEach(value, [&writer, &result](const auto& field, std::string_view name,
@@ -256,7 +256,7 @@ struct Parser<R, W, T,
     static ParserResult read(typename R::InputValueType in, T& value, const Tags& tags) {
         if constexpr (has_names_meta<T>) {
             if constexpr (parsing::supports_unframed_objects<R, W>) {
-                if (tag_query::is_unframed<std::decay_t<T>>(tags)) {
+                if (tag_query::unframed<std::decay_t<T>>(tags)) {
                     ParserResult result;
                     auto current = in;
                     Reflect<T>::forEach(value,

@@ -487,10 +487,18 @@ TEST(JsonSerializerTest, U8StringRoundTrip) {
 TEST(JsonSerializerTest, ReflectedObjectRoundTripsThroughPublicEntry) {
     const TestP source = make_test_object();
     const auto json    = write_json(source);
-    EXPECT_NE(json.find(R"("h":"TEnum_A")"), std::string::npos);
-    EXPECT_NE(json.find(R"("j":[1,"hello"])"), std::string::npos);
-    EXPECT_NE(json.find(R"("c":{"a":1221,"b":"this is a test for optional"})"), std::string::npos);
-    NEKO_LOG_INFO("test", "json: {}", json);
+    const std::string expectedJson =
+        R"({"a":3,"b":"Struct test","c":true,"d":3.141592654,"e":[1,2,3],"f":{"a":1,"b":2},)"
+        R"("g":[1,2,3,0,0],"h":"TEnum_A",)"
+        R"("i":{"a":1,"b":"hello","c":true,"d":3.141592654,"e":[1,2,3],"f":{"a":1,"b":2},)"
+        R"("g":[1,2,3,0,0],"h":"TEnum_A"},"j":[1,"hello"],"k":[1,2,3,4,5],)"
+        R"("l":{"a":[{"a":1,"b":"dsadfsd"},)"
+        R"({"a":12.9,"b":[1.0,2.0,3.0,4.0,5.0],"c":{"a":1221,"b":"this is a test for optional"}},)"
+        R"({"a":[{"a":12.9,"b":[1.0,2.0,3.0,4.0,5.0]},)"
+        R"({"a":12.9,"b":[1.0,2.0,3.0,4.0,5.0]},)"
+        R"({"a":12.9,"b":[1.0,2.0,3.0,4.0,5.0]}]}]}})";
+    EXPECT_EQ(json, expectedJson);
+
     TestP decoded;
     ASSERT_TRUE(read_json(json, decoded));
     expect_test_object_eq(decoded, source);
@@ -573,10 +581,33 @@ TEST(JsonSerializerTest, JsonSchemaUsesGenericReflectionParser) {
     ASSERT_TRUE(generate_schema<TestP>(value, schema));
 
     const auto json = write_json(schema);
-    EXPECT_NE(json.find(R"("$schema":"http://json-schema.org/draft-07/schema#")"), std::string::npos);
-    EXPECT_NE(json.find(R"("type":"object")"), std::string::npos);
-    EXPECT_NE(json.find(R"("properties":)"), std::string::npos);
-    NEKO_LOG_INFO("test", "{}", json);
+    JsonSchema decodedSchema;
+    ASSERT_TRUE(read_json(json, decodedSchema));
+
+    ASSERT_TRUE(decodedSchema.schema);
+    EXPECT_EQ(*decodedSchema.schema, "http://json-schema.org/draft-07/schema#");
+    ASSERT_TRUE(decodedSchema.type);
+    EXPECT_EQ(*decodedSchema.type, "object");
+    ASSERT_TRUE(decodedSchema.properties);
+    ASSERT_TRUE(decodedSchema.required);
+    EXPECT_EQ(*decodedSchema.required,
+              (std::vector<std::string>{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"}));
+
+    const auto& properties = *decodedSchema.properties;
+    EXPECT_TRUE(properties.contains("a"));
+    EXPECT_TRUE(properties.contains("b"));
+    EXPECT_TRUE(properties.contains("h"));
+    EXPECT_TRUE(properties.contains("i"));
+    EXPECT_TRUE(properties.contains("j"));
+    EXPECT_TRUE(properties.contains("l"));
+    EXPECT_EQ(properties.at("a").type, std::optional<std::string>{"integer"});
+    EXPECT_EQ(properties.at("b").type, std::optional<std::string>{"string"});
+    EXPECT_EQ(properties.at("h").type, std::optional<std::string>{"string"});
+    ASSERT_TRUE(properties.at("h").enumeration);
+    EXPECT_EQ(*properties.at("h").enumeration, (std::vector<std::string>{"TEnum_A", "TEnum_B", "TEnum_C"}));
+    EXPECT_EQ(properties.at("i").type, std::optional<std::string>{"object"});
+    EXPECT_EQ(properties.at("j").type, std::optional<std::string>{"array"});
+    EXPECT_EQ(properties.at("l").type, std::optional<std::string>{"object"});
 }
 
 TEST(JsonSerializerTest, JsonSchemaFollowsGenericParserShapes) {

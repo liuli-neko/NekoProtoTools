@@ -188,8 +188,20 @@ constexpr std::size_t _find_matching_paren(std::string_view s, std::size_t open)
     return std::string_view::npos;
 }
 
-constexpr std::string_view _serializer_arg_name(std::string_view token) noexcept {
+constexpr std::string_view _strip_enclosing_parens(std::string_view token) noexcept {
     token = _trim(token);
+    while (token.size() >= 2 && token.front() == '(') {
+        const auto close = _find_matching_paren(token, 0);
+        if (close != token.size() - 1) {
+            break;
+        }
+        token = _trim(token.substr(1, token.size() - 2));
+    }
+    return token;
+}
+
+constexpr std::string_view _serializer_arg_name(std::string_view token) noexcept {
+    token = _strip_enclosing_parens(token);
 
     // make_tags<...>(code) 的元数据名仍然取 code
     if (_starts_with(token, "make_tags")) {

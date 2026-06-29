@@ -21,7 +21,7 @@ struct TypeLevelFlatTagInner {
     int code = 0;
     std::string label;
 
-    NEKO_SERIALIZER(make_tags<rename_tag<"wire_code">>(code), label)
+    NEKO_SERIALIZER((make_tags<comment_tag<"doc keeps parser depth">, rename_tag<"wire_code">, JsonTags{.flat = true}>(code)), label)
 };
 
 struct TypeLevelFlatTagOwner {
@@ -34,7 +34,7 @@ struct TypeLevelFlatTagOwner {
 
 struct TypeLevelUnframedHeader {
     std::uint16_t version = 0;
-    std::uint16_t type = 0;
+    std::uint16_t type    = 0;
 
     NEKO_SERIALIZER(version, type)
 };
@@ -46,10 +46,8 @@ struct TypeLevelUnframedEnvelope {
     NEKO_SERIALIZER(header, tail)
 };
 
-inline constexpr auto RawStringTag = JsonTags{.rawString = true};
-inline constexpr auto RenamedSkipableTag =
-    comment_tag<"doc keeps parser depth", rename_tag<"wire(alias)", JsonTags{.skipable = true}>>;
-inline constexpr auto SkipableTag = JsonTags{.skipable = true};
+inline constexpr auto RawStringTag     = JsonTags{.rawString = true};
+inline constexpr auto SkipableTag      = JsonTags{.skipable = true};
 inline constexpr auto FlattenedDocsTag = comment_tag<"flattened docs", JsonTags{.flat = true}>;
 
 struct MacroParsedTaggedObject {
@@ -57,14 +55,23 @@ struct MacroParsedTaggedObject {
     int renamed = 0;
     std::optional<int> optional;
     TypeLevelFlatTagInner nested;
-
-    NEKO_SERIALIZER(make_tags<RawStringTag>(raw), make_tags<RenamedSkipableTag>(renamed),
-                    make_tags<SkipableTag>(optional), make_tags<FlattenedDocsTag>(nested))
 };
+
+// clang-format off
+template <>
+struct NEKO_NAMESPACE::Meta<MacroParsedTaggedObject> {
+    static constexpr auto value = Object(
+        "raw", make_tags<RawStringTag>(&MacroParsedTaggedObject::raw),
+        "renamed", make_tags<comment_tag<"doc keeps parser depth">, rename_tag<"wire(alias)">, JsonTags{.skipable = true}>(&MacroParsedTaggedObject::renamed),
+        "optional", make_tags<SkipableTag>(&MacroParsedTaggedObject::optional),
+        "nested", make_tags<FlattenedDocsTag>(&MacroParsedTaggedObject::nested)
+    );
+};
+// clang-format on
 
 struct SchemaTaggedObject {
     int required = 0;
-    int renamed = 0;
+    int renamed  = 0;
     int retained = 0;
     std::optional<int> optional;
     TypeLevelFlatTagInner flat;
@@ -75,9 +82,8 @@ struct SchemaTaggedObject {
             Object("required", &SchemaTaggedObject::required, "renamed",
                    make_tags<rename_tag<"wire_required">>(&SchemaTaggedObject::renamed), "retained",
                    make_tags<JsonTags{.skipable = true}>(&SchemaTaggedObject::retained), "optional",
-                   &SchemaTaggedObject::optional, "flat",
-                   make_tags<JsonTags{.flat = true}>(&SchemaTaggedObject::flat), "fixed",
-                   make_tags<BinaryTags{.fixedLength = true}>(&SchemaTaggedObject::fixed)); // NOLINT
+                   &SchemaTaggedObject::optional, "flat", make_tags<JsonTags{.flat = true}>(&SchemaTaggedObject::flat),
+                   "fixed", make_tags<BinaryTags{.fixedLength = true}>(&SchemaTaggedObject::fixed)); // NOLINT
     };
 };
 
@@ -127,15 +133,15 @@ TEST(SerializationTags, AccessorsResolveDirectAndNestedTagFlags) {
     static_assert(tag_query::comment(Tags) == "outer comment");
     static_assert(tag_query::has_name(Tags));
     static_assert(tag_query::name(Tags) == "wire_name");
-    static_assert(tag_query::is_flat<TypeLevelFlatTagInner>(Tags));
-    static_assert(tag_query::is_skipable(Tags));
+    static_assert(tag_query::flat<TypeLevelFlatTagInner>(Tags));
+    static_assert(tag_query::skipable(Tags));
 }
 
 TEST(SerializationTags, TypeLevelTagsAreVisibleThroughNoTags) {
-    static_assert(tag_query::is_flat<TypeLevelFlatTagInner>(NoTags{}));
-    static_assert(!tag_query::is_flat<int>(NoTags{}));
-    static_assert(tag_query::is_unframed<TypeLevelUnframedHeader>(NoTags{}));
-    static_assert(!tag_query::is_unframed<std::uint16_t>(NoTags{}));
+    static_assert(tag_query::flat<TypeLevelFlatTagInner>(NoTags{}));
+    static_assert(!tag_query::flat<int>(NoTags{}));
+    static_assert(tag_query::unframed<TypeLevelUnframedHeader>(NoTags{}));
+    static_assert(!tag_query::unframed<std::uint16_t>(NoTags{}));
     static_assert(tag_query::fixed_length<std::uint32_t>(BinaryTags{.fixedLength = true}) == sizeof(std::uint32_t));
     static_assert(tag_query::fixed_length<std::uint32_t>(BinaryTags{.fixedLength = 2}) == 2U);
 }
@@ -147,7 +153,7 @@ TEST(SerializationTags, MakeTagsExposeAccessorAndWrappedTag) {
     static_assert(std::is_same_v<detail::resolve_without_context_t<decltype(&TypeLevelFlatTagInner::code)>, int>);
     static_assert(std::is_same_v<resolve_member_type_t<field_accessor_t<decltype(spec)>, TypeLevelFlatTagInner>, int>);
     static_assert(tag_query::name(field_tags_v<decltype(spec)>) == "wire_code");
-    static_assert(tag_query::is_skipable(field_tags_v<decltype(spec)>));
+    static_assert(tag_query::skipable(field_tags_v<decltype(spec)>));
 }
 
 TEST(SerializationTags, SerializerMacroStripsMakeTagsWhenBuildingReflectionNames) {
@@ -158,33 +164,37 @@ TEST(SerializationTags, SerializerMacroStripsMakeTagsWhenBuildingReflectionNames
     static_assert(names[2] == "optional");
     static_assert(names[3] == "nested");
 
-    constexpr auto rawTags = std::get<0>(Reflect<MacroParsedTaggedObject>::field_tags);
-    constexpr auto renamedTags = std::get<1>(Reflect<MacroParsedTaggedObject>::field_tags);
+    constexpr auto rawTags      = std::get<0>(Reflect<MacroParsedTaggedObject>::field_tags);
+    constexpr auto renamedTags  = std::get<1>(Reflect<MacroParsedTaggedObject>::field_tags);
     constexpr auto optionalTags = std::get<2>(Reflect<MacroParsedTaggedObject>::field_tags);
-    constexpr auto nestedTags = std::get<3>(Reflect<MacroParsedTaggedObject>::field_tags);
+    constexpr auto nestedTags   = std::get<3>(Reflect<MacroParsedTaggedObject>::field_tags);
 
-    static_assert(tag_query::is_raw_string(rawTags));
+    static_assert(tag_query::raw_string(rawTags));
     static_assert(tag_query::comment(renamedTags) == "doc keeps parser depth");
     static_assert(tag_query::name(renamedTags) == "wire(alias)");
-    static_assert(tag_query::is_skipable(renamedTags));
-    static_assert(tag_query::is_skipable(optionalTags));
+    static_assert(tag_query::skipable(renamedTags));
+    static_assert(tag_query::skipable(optionalTags));
     static_assert(tag_query::comment(nestedTags) == "flattened docs");
-    static_assert(tag_query::is_flat<TypeLevelFlatTagInner>(nestedTags));
+    static_assert(tag_query::flat<TypeLevelFlatTagInner>(nestedTags));
+
+    constexpr auto innerNames = Reflect<TypeLevelFlatTagInner>::names();
+    static_assert(innerNames.size() == 2);
+    static_assert(innerNames[0] == "code");
+    static_assert(innerNames[1] == "label");
 }
 
 TEST(SerializationTagIntegration, JsonParserAppliesRawRenameSkipableAndFlatTags) {
     const MacroParsedTaggedObject source{
-        .raw = R"({"enabled":true})",
-        .renamed = 11,
+        .raw      = R"({"enabled":true})",
+        .renamed  = 11,
         .optional = std::nullopt,
-        .nested = {.code = 7, .label = "seven"},
+        .nested   = {.code = 7, .label = "seven"},
     };
 
-    EXPECT_EQ(writeJson(source),
-              R"json({"raw":{"enabled":true},"wire(alias)":11,"wire_code":7,"label":"seven"})json");
+    EXPECT_EQ(writeJson(source), R"json({"raw":{"enabled":true},"wire(alias)":11,"wire_code":7,"label":"seven"})json");
 
     MacroParsedTaggedObject decoded;
-    decoded.renamed = 99;
+    decoded.renamed  = 99;
     decoded.optional = 42;
     ASSERT_TRUE(readJson(R"({"raw":{"enabled":false},"wire_code":8,"label":"eight"})", decoded));
     EXPECT_EQ(decoded.raw, R"({"enabled":false})");
@@ -198,8 +208,8 @@ TEST(SerializationTagIntegration, JsonParserAppliesRawRenameSkipableAndFlatTags)
 TEST(SerializationTagIntegration, TypeLevelFlatTagFlattensJsonObjectsAndSchema) {
     const TypeLevelFlatTagOwner source{
         .before = 1,
-        .inner = {.code = 2, .label = "two"},
-        .after = 3,
+        .inner  = {.code = 2, .label = "two"},
+        .after  = 3,
     };
 
     EXPECT_EQ(writeJson(source), R"({"before":1,"wire_code":2,"label":"two","after":3})");
@@ -250,7 +260,7 @@ TEST(SerializationTagIntegration, SchemaUsesFlatSkipableOptionalAndFixedLengthTa
 TEST(SerializationTagIntegration, TypeLevelUnframedTagRoundTripsBinaryLayout) {
     const TypeLevelUnframedEnvelope source{
         .header = {.version = 1, .type = 2},
-        .tail = 3,
+        .tail   = 3,
     };
 
     std::vector<char> buffer;

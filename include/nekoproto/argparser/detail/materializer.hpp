@@ -370,7 +370,7 @@ std::error_code materialize_one_option(const ArgSpec& spec, const RawOptionValue
         return {};
     }
 
-    if (const auto envValue = read_env(spec.envName)) {
+    if (const auto envValue = read_env(spec.envName); envValue) {
         if (auto error = assign_text_to_field(spec, field, *envValue)) {
             return error;
         }
@@ -389,7 +389,7 @@ std::error_code materialize_one_option(const ArgSpec& spec, const RawOptionValue
 
 inline std::error_code validate_required_options(const ArgSchema& schema, std::span<const unsigned char> supplied) {
     for (std::size_t index = 0; index < schema.specs.size(); ++index) {
-        if (schema.specs[index].required && !supplied[index]) {
+        if (schema.specs[index].required && (supplied[index] == 0U)) {
             return make_error_code(ArgParserError::MissingRequired);
         }
     }
@@ -399,7 +399,7 @@ inline std::error_code validate_required_options(const ArgSchema& schema, std::s
 inline std::error_code validate_cross_field_constraints(const ArgSchema& schema,
                                                         std::span<const unsigned char> supplied) {
     for (std::size_t index = 0; index < schema.specs.size(); ++index) {
-        if (!supplied[index]) {
+        if (supplied[index] == 0U) {
             continue;
         }
         const auto& spec = schema.specs[index];
@@ -408,7 +408,7 @@ inline std::error_code validate_cross_field_constraints(const ArgSchema& schema,
             if (!requiredIndex.has_value() || *requiredIndex == index) {
                 return make_error_code(ArgParserError::InvalidDefinition);
             }
-            if (!supplied[*requiredIndex]) {
+            if (supplied[*requiredIndex] == 0U) {
                 return make_error_code(ArgParserError::MissingRequired);
             }
         }
@@ -417,7 +417,7 @@ inline std::error_code validate_cross_field_constraints(const ArgSchema& schema,
             if (!conflictIndex.has_value() || *conflictIndex == index) {
                 return make_error_code(ArgParserError::InvalidDefinition);
             }
-            if (supplied[*conflictIndex]) {
+            if (supplied[*conflictIndex] != 0U) {
                 return make_error_code(ArgParserError::InvalidValue);
             }
         }
