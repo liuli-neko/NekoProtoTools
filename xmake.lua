@@ -254,7 +254,8 @@ if has_config("enable_jsonrpc") then
 
         on_load(function (target) 
             import("lua.auto", {rootdir = os.projectdir()})
-            auto().auto_add_packages(target)
+            auto().target_autoclean(target)
+            auto().auto_add_packages(target, {uses_ilias = true})
         end)
     target_end()
 end
@@ -272,15 +273,35 @@ if has_config("enable_protocol") then
         add_headerfiles("include/(nekoproto/proto/**.hpp)")
         add_includedirs("include")
         add_files("src/proto_base.cpp")
-        if has_config("enable_communication") then
-            add_headerfiles("include/(nekoproto/communication/**.hpp)")
-            add_headerfiles("include/(nekoproto/transport/**.hpp)")
-            add_files("src/communication_base.cpp")
-        end
 
         on_load(function (target) 
             import("lua.auto", {rootdir = os.projectdir()})
+            auto().target_autoclean(target)
             auto().auto_add_packages(target)
+        end)
+    target_end()
+end
+
+if has_config("enable_communication") then
+    target("NekoCommunication")
+        if is_kind("shared") then
+            set_kind("shared")
+            add_defines("NEKO_PROTO_LIBRARY")
+        else
+            set_kind("static")
+            set_configvar("NEKO_PROTO_STATIC", true)
+        end
+
+        add_deps("NekoProtoBase", "NekoSerializer")
+        add_headerfiles("include/(nekoproto/communication/**.hpp)")
+        add_headerfiles("include/(nekoproto/transport/**.hpp)")
+        add_includedirs("include")
+        add_files("src/communication_base.cpp")
+
+        on_load(function (target)
+            import("lua.auto", {rootdir = os.projectdir()})
+            auto().target_autoclean(target)
+            auto().auto_add_packages(target, {uses_ilias = true})
         end)
     target_end()
 end

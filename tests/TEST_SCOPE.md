@@ -26,7 +26,7 @@
   - 模块：RapidJSON 后端和通用 parser 分发。
   - 范围：基础类型、optional、variant、tuple、pair、sequence、map、指针、raw string、flat tag、缺字段策略、错误路径。
 - `tests/unit/serializer/test_tags.cpp`
-  - 模块：`serialization/private/tags.hpp`、`serializer_base.hpp` 的 `make_tags`/`NEKO_SERIALIZER` 元数据解析，以及 tags 进入 parser/schema 后的行为。
+  - 模块：`global/reflection_tags.hpp`、`serializer_base.hpp` 的 `make_tags`/`NEKO_SERIALIZER` 元数据解析，以及 tags 进入 parser/schema 后的行为。
   - 范围：rename/comment/skipable/rawString/flat/unframed/fixedLength、递归 tag 消费、类型级 `is_flat_tag`/`is_unframed_tag`、JSON/Binary/schema 集成。
   - 用例分组：
     - `SerializationTags.*` 只验证 tag 元数据、宏解析、成员类型解析，不做真实 IO。

@@ -156,9 +156,8 @@ std::error_code assign_text_value(std::string_view text, char separator, T& valu
     } else {
         std::size_t begin = 0;
         while (begin <= text.size()) {
-            const auto end = text.find(separator, begin);
-            const auto part =
-                end == std::string_view::npos ? text.substr(begin) : text.substr(begin, end - begin);
+            const auto end  = text.find(separator, begin);
+            const auto part = end == std::string_view::npos ? text.substr(begin) : text.substr(begin, end - begin);
             if (auto error = assign_value(part, value)) {
                 return error;
             }
@@ -343,18 +342,18 @@ struct ArgSpec {
     std::string valueName;
     std::string envName;
     std::string group;
-    bool required   = false;
-    bool positional = false;
-    bool flag       = false;
-    bool repeatable = false;
-    bool hidden     = false;
-    bool seen       = false;
-    bool hasRange   = false;
-    double rangeMin = 0.0;
-    double rangeMax = 0.0;
-    bool hasDefault = false;
+    bool required    = false;
+    bool positional  = false;
+    bool flag        = false;
+    bool repeatable  = false;
+    bool hidden      = false;
+    bool seen        = false;
+    bool hasRange    = false;
+    double rangeMin  = 0.0;
+    double rangeMax  = 0.0;
+    bool hasDefault  = false;
     bool hasImplicit = false;
-    char separator  = '\0';
+    char separator   = '\0';
     std::string defaultValue;
     std::string implicitValue;
     std::vector<std::string_view> choices;
@@ -403,7 +402,7 @@ consteval bool tuple_types_unique() {
 
 template <typename T, std::size_t I>
 consteval bool field_is_command() {
-    return tag_access::is_command(std::get<I>(Reflect<std::remove_cvref_t<T>>::field_tags));
+    return tag_query::is_command(std::get<I>(Reflect<std::remove_cvref_t<T>>::field_tags));
 }
 
 template <typename T>
@@ -517,155 +516,144 @@ void collect_specs(T& object, std::string_view prefix, const ArgParserConfig& co
                    std::vector<std::size_t>& positionalSpecs) {
     static_assert(NEKO_NAMESPACE::detail::has_values_meta<std::remove_cvref_t<T>>,
                   "argparser requires a reflected options type");
-    Reflect<std::remove_cvref_t<T>>::forEach(
-        object, [&](auto& field, std::string_view reflectedName, const auto& tags) {
-            using FieldT                = std::remove_cvref_t<decltype(field)>;
-            const auto explicitLongName = tag_access::recursive_long_name(tags);
-            const auto name             = explicitLongName.empty() ? reflectedName : explicitLongName;
+    Reflect<std::remove_cvref_t<T>>::forEach(object, [&](auto& field, std::string_view reflectedName,
+                                                         const auto& tags) {
+        using FieldT                = std::remove_cvref_t<decltype(field)>;
+        const auto explicitLongName = tag_query::long_name(tags);
+        const auto name             = explicitLongName.empty() ? reflectedName : explicitLongName;
 
-            if constexpr (is_nested_option_v<FieldT>) {
-                const auto nextPrefix = join_arg_name(prefix, name, config.nestedSeparator);
-                collect_specs(field, nextPrefix, config, specs, positionalSpecs);
-            } else {
-                ArgSpec spec;
-                spec.longName   = join_arg_name(prefix, name, config.nestedSeparator);
-                spec.shortName  = std::string(tag_access::recursive_short_name(tags));
-                auto aliases    = tag_access::recursive_aliases(tags);
-                spec.aliases.assign(aliases.begin(), aliases.end());
-                spec.help       = std::string(tag_access::recursive_help(tags));
-                spec.valueName  = std::string(tag_access::recursive_value_name(tags));
-                spec.envName    = std::string(tag_access::recursive_env_name(tags));
-                spec.group      = std::string(tag_access::recursive_group(tags));
-                spec.required   = tag_access::is_required(tags);
-                spec.positional = tag_access::is_positional(tags);
-                spec.flag       = field_is_flag(field, tag_access::is_flag(tags));
-                spec.repeatable = tag_access::is_repeatable(tags) || is_vector_v<FieldT>;
-                spec.hidden     = tag_access::is_hidden(tags);
-                spec.hasRange   = tag_access::has_range(tags);
-                spec.rangeMin   = tag_access::range_min(tags);
-                spec.rangeMax   = tag_access::range_max(tags);
-                spec.hasDefault = tag_access::has_default_value(tags);
-                spec.hasImplicit = tag_access::has_implicit_value(tags);
-                spec.separator  = tag_access::recursive_separator(tags);
-                if constexpr (tag_access::has_default_value(decltype(tags){})) {
-                    spec.defaultValue = default_value_to_string(tag_access::recursive_default_value(tags));
-                }
-                if constexpr (tag_access::has_implicit_value(decltype(tags){})) {
-                    spec.implicitValue = default_value_to_string(tag_access::recursive_implicit_value(tags));
-                }
-                auto choices = tag_access::recursive_choices(tags);
-                spec.choices.assign(choices.begin(), choices.end());
-                spec.assignEnvValue = [&field, tags, separator = spec.separator](std::string_view value) {
-                    auto choices = tag_access::recursive_choices(tags);
-                    if (separator != '\0' && !is_vector_v<std::remove_cvref_t<decltype(field)>>) {
-                        return make_error_code(ArgParserError::InvalidDefinition);
-                    }
-                    if (tag_access::has_range(tags) &&
-                        (!is_range_supported_v<std::remove_cvref_t<decltype(field)>> ||
-                         tag_access::range_min(tags) > tag_access::range_max(tags))) {
-                        return make_error_code(ArgParserError::InvalidDefinition);
-                    }
-                    if (!choices.empty() && !is_choices_supported_v<std::remove_cvref_t<decltype(field)>>) {
-                        return make_error_code(ArgParserError::InvalidDefinition);
-                    }
-                    if (auto error = assign_text_value(value, separator, field)) {
-                        return error;
-                    }
-                    if (auto error = validate_range(field, tag_access::has_range(tags), tag_access::range_min(tags),
-                                                    tag_access::range_max(tags))) {
-                        return error;
-                    }
-                    return validate_choices(field, std::span<const std::string_view>{choices.data(), choices.size()});
-                };
-                if constexpr (tag_access::has_default_value(decltype(tags){})) {
-                    spec.assignDefault = [&field, tags, separator = spec.separator]() {
-                        auto choices = tag_access::recursive_choices(tags);
-                        if (separator != '\0' && !is_vector_v<std::remove_cvref_t<decltype(field)>>) {
-                            return make_error_code(ArgParserError::InvalidDefinition);
-                        }
-                        if (tag_access::has_range(tags) &&
-                            (!is_range_supported_v<std::remove_cvref_t<decltype(field)>> ||
-                             tag_access::range_min(tags) > tag_access::range_max(tags))) {
-                            return make_error_code(ArgParserError::InvalidDefinition);
-                        }
-                        if (!choices.empty() && !is_choices_supported_v<std::remove_cvref_t<decltype(field)>>) {
-                            return make_error_code(ArgParserError::InvalidDefinition);
-                        }
-                        if (auto error =
-                                assign_default_value(tag_access::recursive_default_value(tags), field, separator)) {
-                            return error;
-                        }
-                        if (auto error = validate_range(field, tag_access::has_range(tags), tag_access::range_min(tags),
-                                                        tag_access::range_max(tags))) {
-                            return error;
-                        }
-                        return validate_choices(field,
-                                                std::span<const std::string_view>{choices.data(), choices.size()});
-                    };
-                } else {
-                    spec.assignDefault = []() {
-                        return std::error_code{};
-                    };
-                }
-                if constexpr (tag_access::has_implicit_value(decltype(tags){})) {
-                    spec.assignImplicit = [&field, tags, separator = spec.separator]() {
-                        auto choices = tag_access::recursive_choices(tags);
-                        if (separator != '\0' && !is_vector_v<std::remove_cvref_t<decltype(field)>>) {
-                            return make_error_code(ArgParserError::InvalidDefinition);
-                        }
-                        if (tag_access::has_range(tags) &&
-                            (!is_range_supported_v<std::remove_cvref_t<decltype(field)>> ||
-                             tag_access::range_min(tags) > tag_access::range_max(tags))) {
-                            return make_error_code(ArgParserError::InvalidDefinition);
-                        }
-                        if (!choices.empty() && !is_choices_supported_v<std::remove_cvref_t<decltype(field)>>) {
-                            return make_error_code(ArgParserError::InvalidDefinition);
-                        }
-                        if (auto error =
-                                assign_default_value(tag_access::recursive_implicit_value(tags), field, separator)) {
-                            return error;
-                        }
-                        if (auto error = validate_range(field, tag_access::has_range(tags), tag_access::range_min(tags),
-                                                        tag_access::range_max(tags))) {
-                            return error;
-                        }
-                        return validate_choices(field,
-                                                std::span<const std::string_view>{choices.data(), choices.size()});
-                    };
-                } else {
-                    spec.assignImplicit = []() {
-                        return std::error_code{};
-                    };
-                }
-                spec.assign = [&field, tags](std::string_view text) {
-                    auto choices = tag_access::recursive_choices(tags);
-                    const auto separator = tag_access::recursive_separator(tags);
-                    if (separator != '\0' && !is_vector_v<std::remove_cvref_t<decltype(field)>>) {
-                        return make_error_code(ArgParserError::InvalidDefinition);
-                    }
-                    if (tag_access::has_range(tags) && (!is_range_supported_v<std::remove_cvref_t<decltype(field)>> ||
-                                                        tag_access::range_min(tags) > tag_access::range_max(tags))) {
-                        return make_error_code(ArgParserError::InvalidDefinition);
-                    }
-                    if (!choices.empty() && !is_choices_supported_v<std::remove_cvref_t<decltype(field)>>) {
-                        return make_error_code(ArgParserError::InvalidDefinition);
-                    }
-                    if (auto error = assign_text_value(text, separator, field)) {
-                        return error;
-                    }
-                    if (auto error = validate_range(field, tag_access::has_range(tags), tag_access::range_min(tags),
-                                                    tag_access::range_max(tags))) {
-                        return error;
-                    }
-                    return validate_choices(field, std::span<const std::string_view>{choices.data(), choices.size()});
-                };
-
-                specs.push_back(std::move(spec));
-                if (specs.back().positional) {
-                    positionalSpecs.push_back(specs.size() - 1);
-                }
+        if constexpr (is_nested_option_v<FieldT>) {
+            const auto nextPrefix = join_arg_name(prefix, name, config.nestedSeparator);
+            collect_specs(field, nextPrefix, config, specs, positionalSpecs);
+        } else {
+            ArgSpec spec;
+            spec.longName  = join_arg_name(prefix, name, config.nestedSeparator);
+            spec.shortName = std::string(tag_query::short_name(tags));
+            auto aliases   = tag_query::aliases(tags);
+            spec.aliases.assign(aliases.begin(), aliases.end());
+            spec.help        = std::string(tag_query::help(tags));
+            spec.valueName   = std::string(tag_query::value_name(tags));
+            spec.envName     = std::string(tag_query::env_name(tags));
+            spec.group       = std::string(tag_query::group(tags));
+            spec.required    = tag_query::is_required(tags);
+            spec.positional  = tag_query::is_positional(tags);
+            spec.flag        = field_is_flag(field, tag_query::is_flag(tags));
+            spec.repeatable  = tag_query::is_repeatable(tags) || is_vector_v<FieldT>;
+            spec.hidden      = tag_query::is_hidden(tags);
+            spec.hasRange    = tag_query::has_range(tags);
+            spec.rangeMin    = tag_query::range_min(tags);
+            spec.rangeMax    = tag_query::range_max(tags);
+            spec.hasDefault  = tag_query::has_default_value(tags);
+            spec.hasImplicit = tag_query::has_implicit_value(tags);
+            spec.separator   = tag_query::separator(tags);
+            if constexpr (tag_query::has_default_value(decltype(tags){})) {
+                spec.defaultValue = default_value_to_string(tag_query::default_value(tags));
             }
-        });
+            if constexpr (tag_query::has_implicit_value(decltype(tags){})) {
+                spec.implicitValue = default_value_to_string(tag_query::implicit_value(tags));
+            }
+            auto choices = tag_query::choices(tags);
+            spec.choices.assign(choices.begin(), choices.end());
+            spec.assignEnvValue = [&field, tags, separator = spec.separator](std::string_view value) {
+                auto choices = tag_query::choices(tags);
+                if (separator != '\0' && !is_vector_v<std::remove_cvref_t<decltype(field)>>) {
+                    return make_error_code(ArgParserError::InvalidDefinition);
+                }
+                if (tag_query::has_range(tags) && (!is_range_supported_v<std::remove_cvref_t<decltype(field)>> ||
+                                                   tag_query::range_min(tags) > tag_query::range_max(tags))) {
+                    return make_error_code(ArgParserError::InvalidDefinition);
+                }
+                if (!choices.empty() && !is_choices_supported_v<std::remove_cvref_t<decltype(field)>>) {
+                    return make_error_code(ArgParserError::InvalidDefinition);
+                }
+                if (auto error = assign_text_value(value, separator, field)) {
+                    return error;
+                }
+                if (auto error = validate_range(field, tag_query::has_range(tags), tag_query::range_min(tags),
+                                                tag_query::range_max(tags))) {
+                    return error;
+                }
+                return validate_choices(field, std::span<const std::string_view>{choices.data(), choices.size()});
+            };
+            if constexpr (tag_query::has_default_value(decltype(tags){})) {
+                spec.assignDefault = [&field, tags, separator = spec.separator]() {
+                    auto choices = tag_query::choices(tags);
+                    if (separator != '\0' && !is_vector_v<std::remove_cvref_t<decltype(field)>>) {
+                        return make_error_code(ArgParserError::InvalidDefinition);
+                    }
+                    if (tag_query::has_range(tags) && (!is_range_supported_v<std::remove_cvref_t<decltype(field)>> ||
+                                                       tag_query::range_min(tags) > tag_query::range_max(tags))) {
+                        return make_error_code(ArgParserError::InvalidDefinition);
+                    }
+                    if (!choices.empty() && !is_choices_supported_v<std::remove_cvref_t<decltype(field)>>) {
+                        return make_error_code(ArgParserError::InvalidDefinition);
+                    }
+                    if (auto error = assign_default_value(tag_query::default_value(tags), field, separator)) {
+                        return error;
+                    }
+                    if (auto error = validate_range(field, tag_query::has_range(tags), tag_query::range_min(tags),
+                                                    tag_query::range_max(tags))) {
+                        return error;
+                    }
+                    return validate_choices(field, std::span<const std::string_view>{choices.data(), choices.size()});
+                };
+            } else {
+                spec.assignDefault = []() { return std::error_code{}; };
+            }
+            if constexpr (tag_query::has_implicit_value(decltype(tags){})) {
+                spec.assignImplicit = [&field, tags, separator = spec.separator]() {
+                    auto choices = tag_query::choices(tags);
+                    if (separator != '\0' && !is_vector_v<std::remove_cvref_t<decltype(field)>>) {
+                        return make_error_code(ArgParserError::InvalidDefinition);
+                    }
+                    if (tag_query::has_range(tags) && (!is_range_supported_v<std::remove_cvref_t<decltype(field)>> ||
+                                                       tag_query::range_min(tags) > tag_query::range_max(tags))) {
+                        return make_error_code(ArgParserError::InvalidDefinition);
+                    }
+                    if (!choices.empty() && !is_choices_supported_v<std::remove_cvref_t<decltype(field)>>) {
+                        return make_error_code(ArgParserError::InvalidDefinition);
+                    }
+                    if (auto error = assign_default_value(tag_query::implicit_value(tags), field, separator)) {
+                        return error;
+                    }
+                    if (auto error = validate_range(field, tag_query::has_range(tags), tag_query::range_min(tags),
+                                                    tag_query::range_max(tags))) {
+                        return error;
+                    }
+                    return validate_choices(field, std::span<const std::string_view>{choices.data(), choices.size()});
+                };
+            } else {
+                spec.assignImplicit = []() { return std::error_code{}; };
+            }
+            spec.assign = [&field, tags](std::string_view text) {
+                auto choices         = tag_query::choices(tags);
+                const auto separator = tag_query::separator(tags);
+                if (separator != '\0' && !is_vector_v<std::remove_cvref_t<decltype(field)>>) {
+                    return make_error_code(ArgParserError::InvalidDefinition);
+                }
+                if (tag_query::has_range(tags) && (!is_range_supported_v<std::remove_cvref_t<decltype(field)>> ||
+                                                   tag_query::range_min(tags) > tag_query::range_max(tags))) {
+                    return make_error_code(ArgParserError::InvalidDefinition);
+                }
+                if (!choices.empty() && !is_choices_supported_v<std::remove_cvref_t<decltype(field)>>) {
+                    return make_error_code(ArgParserError::InvalidDefinition);
+                }
+                if (auto error = assign_text_value(text, separator, field)) {
+                    return error;
+                }
+                if (auto error = validate_range(field, tag_query::has_range(tags), tag_query::range_min(tags),
+                                                tag_query::range_max(tags))) {
+                    return error;
+                }
+                return validate_choices(field, std::span<const std::string_view>{choices.data(), choices.size()});
+            };
+
+            specs.push_back(std::move(spec));
+            if (specs.back().positional) {
+                positionalSpecs.push_back(specs.size() - 1);
+            }
+        }
+    });
 }
 
 inline ArgSpec* find_long_spec(std::vector<ArgSpec>& specs, std::string_view name) {
@@ -764,6 +752,7 @@ inline bool looks_like_option_boundary_for_implicit(std::string_view token, cons
 inline std::error_code apply_option_spec(std::vector<ArgSpec>& specs, ArgSpec& spec, int argc, const char* const* argv,
                                          int& idx, std::string_view value, bool valueInline,
                                          const ArgParserConfig& config) {
+    static_cast<void>(specs);
     if (spec.flag || valueInline) {
         return apply_spec(spec, value);
     }
@@ -940,9 +929,8 @@ inline std::string format_help_from_specs(const std::vector<ArgSpec>& specs, con
     if (config.addVersion && !config.version.empty()) {
         result.append("  -V, --version\n");
     }
-    const bool hasGroups = std::any_of(specs.begin(), specs.end(), [](const auto& spec) {
-        return !spec.hidden && !spec.group.empty();
-    });
+    const bool hasGroups =
+        std::any_of(specs.begin(), specs.end(), [](const auto& spec) { return !spec.hidden && !spec.group.empty(); });
     if (!hasGroups) {
         for (const auto& spec : specs) {
             if (spec.hidden) {
@@ -988,7 +976,7 @@ template <typename T, std::size_t I>
 std::string command_name_at() {
     constexpr auto Names = Reflect<std::remove_cvref_t<T>>::names();
     constexpr auto Tags  = std::get<I>(Reflect<std::remove_cvref_t<T>>::field_tags);
-    constexpr auto Name  = tag_access::long_name(Tags);
+    constexpr auto Name  = tag_query::long_name(Tags);
     if constexpr (!Name.empty()) {
         return std::string(Name);
     } else {
@@ -1018,12 +1006,11 @@ std::string format_command_help(const ArgParserConfig& config) {
         result.append("  -V, --version\n");
     }
     Reflect<std::remove_cvref_t<T>>::forEachMeta([&result](std::string_view name, const auto& tags) {
-        if constexpr (!tag_access::is_hidden(decltype(tags){})) {
+        if constexpr (!tag_query::is_hidden(decltype(tags){})) {
             result.append("  ");
-            std::string_view cname =
-                tag_access::recursive_long_name(tags).size() == 0 ? name : tag_access::recursive_long_name(tags);
+            std::string_view cname = tag_query::long_name(tags).size() == 0 ? name : tag_query::long_name(tags);
             result.append(cname);
-            constexpr auto Help = tag_access::recursive_help(decltype(tags){});
+            constexpr auto Help = tag_query::help(decltype(tags){});
             if constexpr (!Help.empty()) {
                 result.append("\n      ");
                 result.append(Help);
@@ -1282,7 +1269,7 @@ bool try_format_command_help(std::string_view command, const ArgParserConfig& co
     ArgParserConfig commandConfig = config;
     commandConfig.programName     = programName;
     commandConfig.usage           = {};
-    constexpr auto CommandHelp    = tag_access::recursive_help(decltype(tags){});
+    constexpr auto CommandHelp    = tag_query::help(decltype(tags){});
     if constexpr (!CommandHelp.empty()) {
         commandConfig.description = CommandHelp;
     }
@@ -1312,8 +1299,7 @@ std::string format_context_help(int argc, const char* const* argv, ArgParserConf
             auto matched             = false;
             Reflect<std::remove_cvref_t<T>>::forEachMeta(
                 [&]<typename U>(std::type_identity<U>, std::string_view name, const auto& tags) {
-                    std::string_view cname =
-                        tag_access::recursive_long_name(tags).size() > 0 ? tag_access::recursive_long_name(tags) : name;
+                    std::string_view cname = tag_query::long_name(tags).size() > 0 ? tag_query::long_name(tags) : name;
                     if (cname == command) {
                         matched = try_format_command_help<U>(command, config, result, tags);
                     }

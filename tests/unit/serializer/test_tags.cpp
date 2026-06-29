@@ -123,29 +123,21 @@ TEST(SerializationTags, AccessorsResolveDirectAndNestedTagFlags) {
     constexpr auto Tags =
         comment_tag<"outer comment", rename_tag<"wire_name", JsonTags{.flat = true, .skipable = true}>>;
 
-    static_assert(tag_access::recursive_comment(Tags) == "outer comment");
-    static_assert(tag_access::recursive_name(Tags) == "wire_name");
-    static_assert(tag_access::is_flat<TypeLevelFlatTagInner>(Tags));
-    static_assert(tag_access::is_skipable(Tags));
-
-    constexpr auto WithoutComment = tag_access::consume_recursive_comment(Tags);
-    static_assert(!tag_access::has_recursive_comment(WithoutComment));
-    static_assert(tag_access::recursive_name(WithoutComment) == "wire_name");
-    static_assert(tag_access::is_skipable(WithoutComment));
-
-    constexpr auto WithoutName = tag_access::consume_recursive_name(Tags);
-    static_assert(tag_access::recursive_comment(WithoutName) == "outer comment");
-    static_assert(!tag_access::has_recursive_name(WithoutName));
-    static_assert(tag_access::is_skipable(WithoutName));
+    static_assert(tag_query::has_comment(Tags));
+    static_assert(tag_query::comment(Tags) == "outer comment");
+    static_assert(tag_query::has_name(Tags));
+    static_assert(tag_query::name(Tags) == "wire_name");
+    static_assert(tag_query::is_flat<TypeLevelFlatTagInner>(Tags));
+    static_assert(tag_query::is_skipable(Tags));
 }
 
 TEST(SerializationTags, TypeLevelTagsAreVisibleThroughNoTags) {
-    static_assert(tag_access::is_flat<TypeLevelFlatTagInner>(NoTags{}));
-    static_assert(!tag_access::is_flat<int>(NoTags{}));
-    static_assert(tag_access::is_unframed<TypeLevelUnframedHeader>(NoTags{}));
-    static_assert(!tag_access::is_unframed<std::uint16_t>(NoTags{}));
-    static_assert(tag_access::fixed_length<std::uint32_t>(BinaryTags{.fixedLength = true}) == sizeof(std::uint32_t));
-    static_assert(tag_access::fixed_length<std::uint32_t>(BinaryTags{.fixedLength = 2}) == 2U);
+    static_assert(tag_query::is_flat<TypeLevelFlatTagInner>(NoTags{}));
+    static_assert(!tag_query::is_flat<int>(NoTags{}));
+    static_assert(tag_query::is_unframed<TypeLevelUnframedHeader>(NoTags{}));
+    static_assert(!tag_query::is_unframed<std::uint16_t>(NoTags{}));
+    static_assert(tag_query::fixed_length<std::uint32_t>(BinaryTags{.fixedLength = true}) == sizeof(std::uint32_t));
+    static_assert(tag_query::fixed_length<std::uint32_t>(BinaryTags{.fixedLength = 2}) == 2U);
 }
 
 TEST(SerializationTags, MakeTagsExposeAccessorAndWrappedTag) {
@@ -154,8 +146,8 @@ TEST(SerializationTags, MakeTagsExposeAccessorAndWrappedTag) {
     static_assert(is_field_spec_v<decltype(spec)>);
     static_assert(std::is_same_v<detail::resolve_without_context_t<decltype(&TypeLevelFlatTagInner::code)>, int>);
     static_assert(std::is_same_v<resolve_member_type_t<field_accessor_t<decltype(spec)>, TypeLevelFlatTagInner>, int>);
-    static_assert(tag_access::recursive_name(field_tags_v<decltype(spec)>) == "wire_code");
-    static_assert(tag_access::is_skipable(field_tags_v<decltype(spec)>));
+    static_assert(tag_query::name(field_tags_v<decltype(spec)>) == "wire_code");
+    static_assert(tag_query::is_skipable(field_tags_v<decltype(spec)>));
 }
 
 TEST(SerializationTags, SerializerMacroStripsMakeTagsWhenBuildingReflectionNames) {
@@ -171,13 +163,13 @@ TEST(SerializationTags, SerializerMacroStripsMakeTagsWhenBuildingReflectionNames
     constexpr auto optionalTags = std::get<2>(Reflect<MacroParsedTaggedObject>::field_tags);
     constexpr auto nestedTags = std::get<3>(Reflect<MacroParsedTaggedObject>::field_tags);
 
-    static_assert(tag_access::is_raw_string(rawTags));
-    static_assert(tag_access::recursive_comment(renamedTags) == "doc keeps parser depth");
-    static_assert(tag_access::recursive_name(renamedTags) == "wire(alias)");
-    static_assert(tag_access::is_skipable(renamedTags));
-    static_assert(tag_access::is_skipable(optionalTags));
-    static_assert(tag_access::recursive_comment(nestedTags) == "flattened docs");
-    static_assert(tag_access::is_flat<TypeLevelFlatTagInner>(nestedTags));
+    static_assert(tag_query::is_raw_string(rawTags));
+    static_assert(tag_query::comment(renamedTags) == "doc keeps parser depth");
+    static_assert(tag_query::name(renamedTags) == "wire(alias)");
+    static_assert(tag_query::is_skipable(renamedTags));
+    static_assert(tag_query::is_skipable(optionalTags));
+    static_assert(tag_query::comment(nestedTags) == "flattened docs");
+    static_assert(tag_query::is_flat<TypeLevelFlatTagInner>(nestedTags));
 }
 
 TEST(SerializationTagIntegration, JsonParserAppliesRawRenameSkipableAndFlatTags) {

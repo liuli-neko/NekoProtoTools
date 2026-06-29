@@ -1,6 +1,7 @@
 #pragma once
 
 #include "nekoproto/global/global.hpp"
+#include "nekoproto/global/reflection_tags.hpp"
 #include "nekoproto/global/string_literal.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
@@ -30,9 +31,6 @@ struct ArgNameTag {
     static constexpr auto shortName = Short.view(); // NOLINT
     static constexpr auto base      = BaseTags;     // NOLINT
 
-    template <auto NewBase>
-    using rebind_base = ArgNameTag<Long, Short, NewBase>;
-
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
         return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
@@ -51,9 +49,6 @@ struct ArgDefaultTag {
     static constexpr auto defaultValue = getValue(); // NOLINT
     static constexpr auto base         = BaseTags;   // NOLINT
 
-    template <auto NewBase>
-    using rebind_base = ArgDefaultTag<Default, NewBase>;
-
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
         return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
@@ -64,9 +59,6 @@ template <auto BaseTags = NoTags{}, ConstexprString... Choices>
 struct ArgChoicesTag {
     static constexpr std::array choices = {Choices.view()...}; // NOLINT
     static constexpr auto base          = BaseTags;            // NOLINT
-
-    template <auto NewBase>
-    using rebind_base = ArgChoicesTag<NewBase, Choices...>;
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
@@ -79,9 +71,6 @@ struct ArgHelpTag {
     static constexpr auto help = Help.view(); // NOLINT
     static constexpr auto base = BaseTags;    // NOLINT
 
-    template <auto NewBase>
-    using rebind_base = ArgHelpTag<Help, NewBase>;
-
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
         return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
@@ -92,9 +81,6 @@ template <ConstexprString ValueName = "", auto BaseTags = NoTags{}>
 struct ArgValueNameTag {
     static constexpr auto valueName = ValueName.view(); // NOLINT
     static constexpr auto base      = BaseTags;         // NOLINT
-
-    template <auto NewBase>
-    using rebind_base = ArgValueNameTag<ValueName, NewBase>;
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
@@ -107,9 +93,6 @@ struct ArgEnvTag {
     static constexpr auto envName = EnvName.view(); // NOLINT
     static constexpr auto base    = BaseTags;       // NOLINT
 
-    template <auto NewBase>
-    using rebind_base = ArgEnvTag<EnvName, NewBase>;
-
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
         return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
@@ -121,9 +104,6 @@ struct ArgSeparatorTag {
     static constexpr auto separator = Separator; // NOLINT
     static constexpr auto base      = BaseTags;  // NOLINT
 
-    template <auto NewBase>
-    using rebind_base = ArgSeparatorTag<Separator, NewBase>;
-
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
         return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
@@ -134,9 +114,6 @@ template <auto BaseTags = NoTags{}, ConstexprString... Aliases>
 struct ArgAliasesTag {
     static constexpr std::array aliases = {Aliases.view()...}; // NOLINT
     static constexpr auto base          = BaseTags;            // NOLINT
-
-    template <auto NewBase>
-    using rebind_base = ArgAliasesTag<NewBase, Aliases...>;
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
@@ -156,9 +133,6 @@ struct ArgImplicitTag {
     static constexpr auto implicitValue = getValue(); // NOLINT
     static constexpr auto base          = BaseTags;   // NOLINT
 
-    template <auto NewBase>
-    using rebind_base = ArgImplicitTag<Implicit, NewBase>;
-
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
         return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
@@ -169,9 +143,6 @@ template <ConstexprString Group = "", auto BaseTags = NoTags{}>
 struct ArgGroupTag {
     static constexpr auto group = Group.view(); // NOLINT
     static constexpr auto base  = BaseTags;     // NOLINT
-
-    template <auto NewBase>
-    using rebind_base = ArgGroupTag<Group, NewBase>;
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
@@ -263,7 +234,7 @@ inline constexpr bool is_nested_option_v = // NOLINT
 
 // Tag access -----------------------------------------------------------------
 
-namespace tag_access {
+namespace tag_query {
 NEKO_DEFINE_NESTED_TAG(std::string_view, longName, long_name)
 NEKO_DEFINE_NESTED_TAG(std::string_view, shortName, short_name)
 NEKO_DEFINE_NESTED_TAG(std::vector<std::string_view>, choices, choices)
@@ -288,13 +259,13 @@ constexpr bool has_default_value(const Tags& tags) {
 }
 
 template <typename Tags>
-constexpr decltype(auto) recursive_default_value(const Tags& tags) {
+constexpr decltype(auto) default_value(const Tags& tags) {
     using Tag = std::remove_cvref_t<Tags>;
     if constexpr (requires { Tag::defaultValue; }) {
         static_cast<void>(tags);
         return NEKO_NAMESPACE::detail::make_tag_value_common(Tag::defaultValue);
     } else if constexpr (requires { tags.base; }) {
-        return recursive_default_value(tags.base);
+        return default_value(tags.base);
     } else {
         static_assert(!std::is_same_v<Tag, Tag>, "arg_default value was requested from tags without a default");
     }
@@ -314,13 +285,13 @@ constexpr bool has_implicit_value(const Tags& tags) {
 }
 
 template <typename Tags>
-constexpr decltype(auto) recursive_implicit_value(const Tags& tags) {
+constexpr decltype(auto) implicit_value(const Tags& tags) {
     using Tag = std::remove_cvref_t<Tags>;
     if constexpr (requires { Tag::implicitValue; }) {
         static_cast<void>(tags);
         return NEKO_NAMESPACE::detail::make_tag_value_common(Tag::implicitValue);
     } else if constexpr (requires { tags.base; }) {
-        return recursive_implicit_value(tags.base);
+        return implicit_value(tags.base);
     } else {
         static_assert(!std::is_same_v<Tag, Tag>, "arg_implicit value was requested from tags without an implicit value");
     }
@@ -418,6 +389,6 @@ template <typename Tags>
 constexpr bool has_range(const Tags& tags) {
     return range_min(tags) != range_max(tags);
 }
-} // namespace tag_access
+} // namespace tag_query
 } // namespace argparser
 NEKO_END_NAMESPACE
