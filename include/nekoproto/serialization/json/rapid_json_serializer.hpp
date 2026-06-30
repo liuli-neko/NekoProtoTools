@@ -15,15 +15,15 @@
 #include "nekoproto/global/log.hpp"
 #include "nekoproto/global/reflect.hpp"
 
+#include <cstring>
+#include <memory>
+#include <ostream>
 #include <rapidjson/document.h>
+#include <rapidjson/error/en.h>
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/ostreamwrapper.h>
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/rapidjson.h>
-#include <rapidjson/error/en.h>
-#include <cstring>
-#include <memory>
-#include <ostream>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -39,10 +39,10 @@
 #endif
 #endif
 
-#include "nekoproto/serialization/private/helpers.hpp"
-#include "nekoproto/serialization/json/rapid_json_writer.hpp"
 #include "nekoproto/serialization/json/rapid_json_reader.hpp"
+#include "nekoproto/serialization/json/rapid_json_writer.hpp"
 #include "nekoproto/serialization/parsing/parsers.hpp"
+#include "nekoproto/serialization/private/helpers.hpp"
 #include "nekoproto/serialization/serializer_adapter.hpp"
 
 NEKO_BEGIN_NAMESPACE
@@ -64,8 +64,8 @@ struct PrettyJsonWriter {};
 
 template <typename T>
 struct json_output_argument { // NOLINT(readability-identifier-naming)
-    using sink_type               = T;
-    static constexpr bool pretty  = false;
+    using sink_type              = T;
+    static constexpr bool pretty = false;
 };
 
 template <typename T>
@@ -100,15 +100,14 @@ struct json_output_sink_traits<OutBufferWrapper, void> {
 
 template <typename BufferT>
 struct json_output_traits { // NOLINT(readability-identifier-naming)
-    using argument           = json_output_argument<std::remove_cvref_t<BufferT>>;
-    using sink_type          = typename argument::sink_type;
-    using sink_traits        = json_output_sink_traits<sink_type>;
-    using output_buffer_type = typename sink_traits::output_buffer_type;
-    using wrapper_type       = typename sink_traits::wrapper_type;
+    using argument               = json_output_argument<std::remove_cvref_t<BufferT>>;
+    using sink_type              = typename argument::sink_type;
+    using sink_traits            = json_output_sink_traits<sink_type>;
+    using output_buffer_type     = typename sink_traits::output_buffer_type;
+    using wrapper_type           = typename sink_traits::wrapper_type;
     static constexpr bool pretty = argument::pretty;
     static_assert(!std::is_void_v<output_buffer_type>, "Unsupported JSON output buffer");
-    using writer_type =
-        std::conditional_t<pretty, rapidjson::PrettyWriter<wrapper_type>, JsonWriter<wrapper_type>>;
+    using writer_type = std::conditional_t<pretty, rapidjson::PrettyWriter<wrapper_type>, JsonWriter<wrapper_type>>;
 };
 
 template <typename T, class enable = void>
@@ -246,7 +245,7 @@ private:
 
 namespace detail {
 template <>
-struct Parser<rapid::Reader, rapid::Writer, RapidJsonValue, void> {
+struct WriteParser<rapid::Writer, RapidJsonValue, void> {
     template <typename ParentType, typename Tags>
     static ParserResult write(rapid::Writer& writer, const RapidJsonValue& value, const ParentType& parent,
                               const Tags& /*tags*/) {
@@ -257,6 +256,10 @@ struct Parser<rapid::Reader, rapid::Writer, RapidJsonValue, void> {
         parsing::Parent<rapid::Writer>::addNull(writer, parent);
         return sa::success();
     }
+};
+
+template <>
+struct ReadParser<rapid::Reader, RapidJsonValue, void> {
     template <typename Tags>
     static ParserResult read(rapid::Reader::InputValueType in, RapidJsonValue& value, const Tags& /*tags*/) {
         if (in == nullptr) {
@@ -283,23 +286,20 @@ struct RapidJsonBackend {
 
         explicit OutputState(typename OutputTraits::output_buffer_type& buffer) noexcept : stream(buffer) {}
 
-        OutputState(typename OutputTraits::output_buffer_type& buffer, WriterType&& writer) noexcept
-            : stream(buffer) {
+        OutputState(typename OutputTraits::output_buffer_type& buffer, WriterType&& writer) noexcept : stream(buffer) {
             static_cast<void>(writer);
         }
 
         OutputState(typename OutputTraits::output_buffer_type& buffer,
                     const JsonOutputFormatOptions& formatOptions) noexcept
-            : stream(buffer),
-              options(formatOptions),
-              hasFormatOptions(true) {}
+            : stream(buffer), options(formatOptions), hasFormatOptions(true) {}
 
         typename OutputTraits::wrapper_type stream;
         rapid::Writer writer;
         JsonOutputFormatOptions options = JsonOutputFormatOptions::Default();
-        bool hasFormatOptions = false;
-        bool hasRoot          = false;
-        bool flushed          = false;
+        bool hasFormatOptions           = false;
+        bool hasRoot                    = false;
+        bool flushed                    = false;
     };
 
     template <typename BufferT>
@@ -308,10 +308,9 @@ struct RapidJsonBackend {
         explicit InputState(const char* buffer, std::size_t size) noexcept {
             document.Parse(buffer, size);
             if (document.HasParseError()) {
-                result =
-                    sa::error(sa::ErrorCode::ParseError,
-                              "RapidJSON parse error at offset " + std::to_string(document.GetErrorOffset()) + ": " +
-                                  rapidjson::GetParseError_En(document.GetParseError()));
+                result = sa::error(sa::ErrorCode::ParseError,
+                                   "RapidJSON parse error at offset " + std::to_string(document.GetErrorOffset()) +
+                                       ": " + rapidjson::GetParseError_En(document.GetParseError()));
             }
         }
 
@@ -327,10 +326,9 @@ struct RapidJsonBackend {
             : stream(std::make_unique<rapidjson::BasicIStreamWrapper<BufferT>>(inputStream)) {
             document.ParseStream(*stream);
             if (document.HasParseError()) {
-                result =
-                    sa::error(sa::ErrorCode::ParseError,
-                              "RapidJSON parse error at offset " + std::to_string(document.GetErrorOffset()) + ": " +
-                                  rapidjson::GetParseError_En(document.GetParseError()));
+                result = sa::error(sa::ErrorCode::ParseError,
+                                   "RapidJSON parse error at offset " + std::to_string(document.GetErrorOffset()) +
+                                       ": " + rapidjson::GetParseError_En(document.GetParseError()));
             }
         }
 
@@ -342,8 +340,7 @@ struct RapidJsonBackend {
     template <typename BufferT, typename T>
     static sa::Result<void> write(OutputState<BufferT>& state, const T& value) {
         state.writer.doc()->SetNull();
-        auto result = detail::parser_write<rapid::Reader, rapid::Writer>(
-            state.writer, value, parsing::Parent<rapid::Writer>::Root{});
+        auto result   = parser_write<rapid::Writer>(state.writer, value, parsing::Parent<rapid::Writer>::Root{});
         state.hasRoot = static_cast<bool>(result);
         state.flushed = false;
         return result;
@@ -383,7 +380,7 @@ struct RapidJsonBackend {
 
     template <typename BufferT, typename T>
     static sa::Result<void> read(InputState<BufferT>& state, T& value) {
-        return detail::parser_read<rapid::Reader, rapid::Writer>(&state.document, value);
+        return parser_read<rapid::Reader>(&state.document, value);
     }
 };
 

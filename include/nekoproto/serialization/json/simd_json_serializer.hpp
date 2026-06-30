@@ -28,12 +28,10 @@ public:
     SimdJsonValue() = default;
 
     explicit SimdJsonValue(const InputValue& value)
-        : mValue(std::make_shared<RawJsonValue>(value.value)),
-          mParser(value.owner) {}
+        : mValue(std::make_shared<RawJsonValue>(value.value)), mParser(value.owner) {}
 
     SimdJsonValue(const RawJsonValue& value, std::shared_ptr<JsonParser> parser)
-        : mValue(std::make_shared<RawJsonValue>(value)),
-          mParser(std::move(parser)) {}
+        : mValue(std::make_shared<RawJsonValue>(value)), mParser(std::move(parser)) {}
 
     bool hasValue() const noexcept { return mValue != nullptr; }
     explicit operator bool() const noexcept { return hasValue(); }
@@ -119,7 +117,7 @@ void appendJson(BufferT& buffer, std::string_view json) {
 namespace detail {
 
 template <>
-struct Parser<simd::Reader, simd::Writer, simd::SimdJsonValue, void> {
+struct WriteParser<simd::Writer, simd::SimdJsonValue, void> {
     template <typename ParentType, typename Tags>
     static ParserResult write(simd::Writer& writer, const simd::SimdJsonValue& value, const ParentType& parent,
                               const Tags& /*tags*/) {
@@ -131,10 +129,12 @@ struct Parser<simd::Reader, simd::Writer, simd::SimdJsonValue, void> {
         parsing::Parent<simd::Writer>::addValue(writer, raw, parent);
         return sa::success();
     }
+};
 
+template <>
+struct ReadParser<simd::Reader, simd::SimdJsonValue, void> {
     template <typename Tags>
-    static ParserResult read(simd::Reader::InputValueType input, simd::SimdJsonValue& value,
-                             const Tags& /*tags*/) {
+    static ParserResult read(simd::Reader::InputValueType input, simd::SimdJsonValue& value, const Tags& /*tags*/) {
         value = simd::SimdJsonValue(input);
         return sa::success();
     }
@@ -167,7 +167,7 @@ struct SimdJsonBackend {
                 return;
             }
             retainedValue = value;
-            root = detail::simd::InputValue{retainedValue.nativeValue(), nullptr};
+            root          = detail::simd::InputValue{retainedValue.nativeValue(), nullptr};
         }
 
         explicit InputState(const char* buffer, std::size_t size) noexcept
@@ -182,8 +182,7 @@ struct SimdJsonBackend {
             auto parsed = parser->parse(buffer, size);
             if (parsed.error() != simdjson::SUCCESS) {
                 result = sa::error(sa::ErrorCode::ParseError,
-                                   "simdjson parse error: " +
-                                       std::string(simdjson::error_message(parsed.error())));
+                                   "simdjson parse error: " + std::string(simdjson::error_message(parsed.error())));
                 return;
             }
             root = detail::simd::InputValue{parsed.value_unsafe(), parser};
@@ -198,8 +197,8 @@ struct SimdJsonBackend {
     template <typename BufferT, typename T>
     static sa::Result<void> write(OutputState<BufferT>& state, const T& value) {
         state.writer.reset();
-        auto result = detail::parser_write<detail::simd::Reader, detail::simd::Writer>(
-            state.writer, value, parsing::Parent<detail::simd::Writer>::Root{});
+        auto result =
+            parser_write<detail::simd::Writer>(state.writer, value, parsing::Parent<detail::simd::Writer>::Root{});
         state.hasRoot = static_cast<bool>(result);
         state.flushed = false;
         return result;
@@ -230,7 +229,7 @@ struct SimdJsonBackend {
 
     template <typename SourceT, typename T>
     static sa::Result<void> read(InputState<SourceT>& state, T& value) {
-        return detail::parser_read<detail::simd::Reader, detail::simd::Writer>(state.root, value);
+        return parser_read<detail::simd::Reader>(state.root, value);
     }
 };
 

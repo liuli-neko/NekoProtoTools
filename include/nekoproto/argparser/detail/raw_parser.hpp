@@ -2,10 +2,10 @@
 
 #include "nekoproto/argparser/detail/schema.hpp"
 #include "nekoproto/argparser/error.hpp"
+#include "nekoproto/global/expected.hpp"
 #include "nekoproto/global/global.hpp"
 
 #include <cctype>
-#include <expected>
 #include <string_view>
 #include <system_error>
 #include <vector>
@@ -22,6 +22,10 @@ struct RawOptionValues {
 struct RawParseResult {
     std::vector<RawOptionValues> options;
 };
+
+inline auto unexpected_error(std::error_code error) -> expected::unexpected<std::error_code> {
+    return expected::unexpected<std::error_code>(error);
+}
 
 inline bool is_option_token(std::string_view arg) { return arg.size() > 1 && arg[0] == '-'; }
 
@@ -119,9 +123,9 @@ inline std::error_code record_raw_option(const ArgSchema& schema, RawParseResult
     return make_error_code(ArgParserError::MissingValue);
 }
 
-inline std::expected<RawParseResult, std::error_code> parse_raw_arguments(const ArgSchema& schema, int argc,
-                                                                          const char* const* argv, int startIndex,
-                                                                          const ArgParserConfig& config) {
+inline expected::expected<RawParseResult, std::error_code> parse_raw_arguments(const ArgSchema& schema, int argc,
+                                                                               const char* const* argv, int startIndex,
+                                                                               const ArgParserConfig& config) {
     RawParseResult result;
     result.options.resize(schema.specs.size());
     std::size_t positionalIndex = 0;
@@ -131,7 +135,7 @@ inline std::expected<RawParseResult, std::error_code> parse_raw_arguments(const 
         std::string_view arg = argv[idx] == nullptr ? std::string_view{} : std::string_view(argv[idx]);
         if (forcePositional) {
             if (auto error = record_raw_positional(schema, result, positionalIndex, arg)) {
-                return std::unexpected(error);
+                return unexpected_error(error);
             }
             continue;
         }
@@ -141,10 +145,10 @@ inline std::expected<RawParseResult, std::error_code> parse_raw_arguments(const 
             continue;
         }
         if (config.addHelp && is_help_token(arg)) {
-            return std::unexpected(make_error_code(ArgParserError::HelpRequested));
+            return unexpected_error(make_error_code(ArgParserError::HelpRequested));
         }
         if (config.addVersion && !config.version.empty() && is_version_token(arg)) {
-            return std::unexpected(make_error_code(ArgParserError::VersionRequested));
+            return unexpected_error(make_error_code(ArgParserError::VersionRequested));
         }
 
         if (arg.starts_with("--")) {
@@ -162,11 +166,11 @@ inline std::expected<RawParseResult, std::error_code> parse_raw_arguments(const 
                 if (config.allowUnknown) {
                     continue;
                 }
-                return std::unexpected(make_error_code(ArgParserError::UnknownOption));
+                return unexpected_error(make_error_code(ArgParserError::UnknownOption));
             }
             if (auto error =
                     record_raw_option(schema, result, *specIndex, argc, argv, idx, value, valueInline, config)) {
-                return std::unexpected(error);
+                return unexpected_error(error);
             }
             continue;
         }
@@ -186,7 +190,7 @@ inline std::expected<RawParseResult, std::error_code> parse_raw_arguments(const 
                 const auto firstSpecIndex   = schema.find_short_index(firstShortName);
                 if (firstSpecIndex.has_value() && !schema.specs[*firstSpecIndex].flag) {
                     if (auto error = record_raw_value(schema, result, *firstSpecIndex, body.substr(1))) {
-                        return std::unexpected(error);
+                        return unexpected_error(error);
                     }
                     continue;
                 }
@@ -198,13 +202,13 @@ inline std::expected<RawParseResult, std::error_code> parse_raw_arguments(const 
                         if (config.allowUnknown) {
                             continue;
                         }
-                        return std::unexpected(make_error_code(ArgParserError::UnknownOption));
+                        return unexpected_error(make_error_code(ArgParserError::UnknownOption));
                     }
                     if (!schema.specs[*specIndex].flag) {
-                        return std::unexpected(make_error_code(ArgParserError::MissingValue));
+                        return unexpected_error(make_error_code(ArgParserError::MissingValue));
                     }
                     if (auto error = record_raw_value(schema, result, *specIndex, {})) {
-                        return std::unexpected(error);
+                        return unexpected_error(error);
                     }
                 }
                 continue;
@@ -223,17 +227,17 @@ inline std::expected<RawParseResult, std::error_code> parse_raw_arguments(const 
                 if (config.allowUnknown) {
                     continue;
                 }
-                return std::unexpected(make_error_code(ArgParserError::UnknownOption));
+                return unexpected_error(make_error_code(ArgParserError::UnknownOption));
             }
             if (auto error =
                     record_raw_option(schema, result, *specIndex, argc, argv, idx, value, valueInline, config)) {
-                return std::unexpected(error);
+                return unexpected_error(error);
             }
             continue;
         }
 
         if (auto error = record_raw_positional(schema, result, positionalIndex, arg)) {
-            return std::unexpected(error);
+            return unexpected_error(error);
         }
     }
 

@@ -82,9 +82,7 @@ struct PugiXmlBackend {
         explicit OutputState(BufferT& outputBuffer) noexcept : buffer(outputBuffer) {}
 
         OutputState(BufferT& outputBuffer, std::string rootName, std::string indent = "    ") noexcept
-            : buffer(outputBuffer),
-              configuredRootName(std::move(rootName)),
-              indentation(std::move(indent)) {}
+            : buffer(outputBuffer), configuredRootName(std::move(rootName)), indentation(std::move(indent)) {}
 
         BufferT& buffer;
         xml::Writer writer;
@@ -109,9 +107,9 @@ struct PugiXmlBackend {
             }
             const auto parseResult = document.load_buffer(buffer, size, pugi::parse_default, pugi::encoding_utf8);
             if (!parseResult) {
-                result = sa::error(sa::ErrorCode::ParseError,
-                                   "pugixml parse error at offset " + std::to_string(parseResult.offset) + ": " +
-                                       parseResult.description());
+                result = sa::error(sa::ErrorCode::ParseError, "pugixml parse error at offset " +
+                                                                  std::to_string(parseResult.offset) + ": " +
+                                                                  parseResult.description());
                 return;
             }
             root = document.document_element();
@@ -127,15 +125,14 @@ struct PugiXmlBackend {
 
     template <typename BufferT, typename T>
     static sa::Result<void> write(OutputState<BufferT>& state, const T& value) {
-        const auto rootName = state.configuredRootName.empty() ? detail::default_xml_root_name<T>() :
-                                                                 state.configuredRootName;
+        const auto rootName =
+            state.configuredRootName.empty() ? detail::default_xml_root_name<T>() : state.configuredRootName;
         if (!detail::is_valid_xml_name(rootName)) {
             state.hasRoot = false;
             return sa::error(sa::ErrorCode::InvalidField, "Invalid XML root name '" + rootName + "'");
         }
         state.writer.reset(rootName);
-        auto result =
-            detail::parser_write<xml::Reader, xml::Writer>(state.writer, value, parsing::Parent<xml::Writer>::Root{});
+        auto result   = parser_write<xml::Writer>(state.writer, value, parsing::Parent<xml::Writer>::Root{});
         state.hasRoot = static_cast<bool>(result);
         state.flushed = false;
         return result;
@@ -166,7 +163,7 @@ struct PugiXmlBackend {
 
     template <typename SourceT, typename T>
     static sa::Result<void> read(InputState<SourceT>& state, T& value) {
-        return detail::parser_read<xml::Reader, xml::Writer>(xml::Reader::InputValueType{state.root, true}, value);
+        return parser_read<xml::Reader>(xml::Reader::InputValueType{state.root, true}, value);
     }
 };
 

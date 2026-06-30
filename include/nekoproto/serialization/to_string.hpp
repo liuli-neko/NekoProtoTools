@@ -27,8 +27,7 @@ public:
     template <typename T>
     bool operator()(const T& value) {
         mWriter.reset();
-        mLastResult = detail::parser_write<print::Reader, print::TextWriter>(
-            mWriter, value, parsing::Parent<print::TextWriter>::Root{});
+        mLastResult = parser_write<print::TextWriter>(mWriter, value, parsing::Parent<print::TextWriter>::Root{});
         return static_cast<bool>(mLastResult);
     }
 
