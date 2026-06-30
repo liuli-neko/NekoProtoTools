@@ -10,6 +10,30 @@
 
 This split prepares the current implementation for a C++26 native reflection backend without changing serializer, argparser, RPC, or schema call sites.
 
+## Progress Checklist
+
+This checklist is the source of truth for this refactor. Update it whenever a step is started or completed.
+
+- [x] Write the provider/model/API layering plan.
+- [x] Keep explicit metadata priority: `T::Neko`, then `Meta<T>`, then automatic discovery.
+- [x] Add the transitional `ReflectProvider<T>` adapter for current metadata sources.
+- [x] Add `ReflectModel<T>` for resolved `value_types`, `field_tags`, and `value_count`.
+- [x] Remove the obsolete `ReflectHelper<T>` facade after all internal usage moved to `ReflectProvider<T>`.
+- [x] Make non-enum `Reflect<T>` consume `ReflectProvider<T>` and `ReflectModel<T>` instead of deriving tags/types itself.
+- [x] Add boundary comments for provider/model/public algorithm.
+- [x] Add compile-time coverage for the `AutoUnwrap` provider path.
+- [x] Add compile-time coverage for the explicit `LocalObject` provider path.
+- [x] Verify `test_reflection`.
+- [x] Verify `test_argparser` as a downstream reflection consumer.
+- [x] Trim incidental formatting-only diff from the first provider/model patch if it obscures review.
+- [x] Split provider selection from legacy `MetaKind` so future native reflection can replace only automatic discovery.
+- [x] Add compile-time coverage for `ReflectProviderKind` on `AutoUnwrap`, `T::Neko`, and `Meta<T>` paths.
+- [x] Add an index-based provider facade: `field_type<I>`, `name<I>()`, `tag<I>()`, and `get<I>(obj)`.
+- [x] Move current tuple-accessor logic behind that index-based facade.
+- [x] Add a gated `NativeReflectionProvider<T>` placeholder that is selected only for the automatic discovery path.
+- [x] Add annotation-to-tag normalization hooks for native reflection metadata.
+- [ ] Add compile-gated tests for native provider selection when compiler support exists. (blocked until a usable static-reflection feature macro/backend is available)
+
 ## Backend Priority
 
 Explicit user metadata has priority over automatic discovery:
@@ -78,6 +102,32 @@ BinaryTags
 TagList<...>
 ```
 
+`TagList` is the normalized carrier for explicit field tags. It is tuple-like for positional inspection:
+
+```cpp
+std::get<I>(tags)
+tags.get<I>()
+std::tuple_size_v<decltype(tags)>
+```
+
+Semantic lookup should go through `tag_query` only:
+
+```cpp
+tag_query::has<tag_prop::name>(tags)
+tag_query::get<tag_prop::name>(tags)
+tag_query::has_tag<JsonTags>(tags)
+tag_query::get_tag<JsonTags>(tags)
+```
+
+When `make_tags` receives nested `TagList` values, it flattens them before storing field metadata. Property lookup and
+type lookup both use last-wins semantics after flattening, so later tags can intentionally override earlier tags without
+requiring merge rules for same-name tags.
+
+The current hook points are:
+
+- `NativeAnnotationTags<Annotations...>` / `native_annotation_tags_v<Annotations...>`: normalize annotation values into the same tag representation as `make_tags`.
+- `NativeReflectionFieldTags<T, I>` / `native_reflection_field_tags_v<T, I>`: field-level override used by a future native backend. The default is `NoTags`.
+
 Downstream code should continue to use `tag_query` and should not know whether tags came from `make_tags` or native annotations.
 
 ## First Refactor Step
@@ -86,7 +136,15 @@ The first step is intentionally conservative:
 
 - add `ReflectProvider<T>` as the current metadata adapter,
 - add `ReflectModel<T>` for `value_types`, `field_tags`, and `value_count`,
-- keep `ReflectHelper<T>` as a compatibility alias/facade,
+- remove the obsolete `ReflectHelper<T>` facade once no call sites need the old `getNames`/`getValues` names,
 - update `Reflect<T>` to consume provider/model instead of directly inspecting `T::Neko` or `Meta<T>`.
 
 After this step, behavior should be identical. Future work can replace the `AutoUnwrap` branch with `NativeReflectionProvider<T>` behind the same provider selection point.
+
+## Verification Log
+
+- 2026-06-30: `xmake build test_reflection` passed.
+- 2026-06-30: `xmake run test_reflection` passed, 8 tests.
+- 2026-06-30: `xmake build test_argparser` passed.
+- 2026-06-30: `xmake run test_argparser` passed, 27 tests.
+- 2026-06-30: Re-ran `xmake build/run test_reflection` and `xmake build/run test_argparser` after removing `ReflectHelper<T>`; all passed.

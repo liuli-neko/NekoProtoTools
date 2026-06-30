@@ -476,6 +476,64 @@ enum class MetaKind {
     MetaValueNames    // !is_ref_by_local_v<T> && is_meta_names<T> && is_meta_ref_value<T>
 };
 
+// High-level backend selection.
+//
+// MetaKind still describes the exact legacy metadata shape needed by
+// MetaPrivateBase. ReflectProviderKind describes which backend family owns the
+// type, so a future native reflection provider can replace only automatic
+// discovery without disturbing explicit T::Neko or Meta<T> metadata.
+enum class ReflectProviderKind {
+    Error,
+    ExplicitMetadata,
+    NativeReflection,
+    LegacyAutoUnwrap
+};
+
+template <typename T, class Enable = void>
+struct NativeReflectionProvider {
+    static constexpr bool available = false; // NOLINT
+};
+
+template <typename T>
+inline constexpr bool native_reflection_provider_available_v = NativeReflectionProvider<T>::available; // NOLINT
+
+// Native reflection annotation bridge.
+//
+// Future C++26 annotations should be translated here into the same tag objects
+// used by make_tags today. The default field hook returns NoTags so enabling the
+// placeholder provider cannot silently change serializer or argparser behavior.
+template <auto... Annotations>
+struct NativeAnnotationTags {
+    static constexpr auto value = normalize_tags_v<Annotations...>; // NOLINT
+};
+
+template <auto... Annotations>
+inline constexpr auto native_annotation_tags_v = NativeAnnotationTags<Annotations...>::value; // NOLINT
+
+template <typename T, std::size_t I, class Enable = void>
+struct NativeReflectionFieldTags {
+    static constexpr auto value = NoTags{}; // NOLINT
+};
+
+template <typename T, std::size_t I>
+inline constexpr auto native_reflection_field_tags_v = NativeReflectionFieldTags<T, I>::value; // NOLINT
+
+template <typename T>
+constexpr ReflectProviderKind get_reflect_provider_kind() noexcept {
+    if constexpr (is_ref_by_local_v<T> || is_ref_by_meta_v<T>) {
+        return ReflectProviderKind::ExplicitMetadata;
+    } else if constexpr (native_reflection_provider_available_v<T>) {
+        return ReflectProviderKind::NativeReflection;
+    } else if constexpr (can_unwrap_v<T>) {
+        return ReflectProviderKind::LegacyAutoUnwrap;
+    } else {
+        return ReflectProviderKind::Error;
+    }
+}
+
+template <typename T>
+constexpr static auto reflect_provider_kind_v = get_reflect_provider_kind<T>(); // NOLINT
+
 // 辅助函数，确定类型使用哪种 tag
 template <typename T>
 constexpr MetaKind get_meta_kind() noexcept {
@@ -611,31 +669,181 @@ concept has_name_function = requires {
     { MetaPrivate<T>::names() };
 };
 
+template <typename Values, bool IsTuple = is_std_tuple_v<Values>>
+struct ReflectAccessorCount {
+    static constexpr std::size_t value = 1;
+};
+
+template <typename Values>
+struct ReflectAccessorCount<Values, true> {
+    static constexpr std::size_t value = std::tuple_size_v<Values>;
+};
+
+template <typename Values>
+inline constexpr auto reflect_accessor_count_v = ReflectAccessorCount<Values>::value; // NOLINT
+
+// Bridges the legacy "tuple of accessors or one accessor" representation into
+// the index-based provider API. Reflect<T> should not need to know this storage
+// detail anymore.
+template <std::size_t I, typename Values, bool IsTuple = is_std_tuple_v<Values>>
+struct ReflectAccessorAt {
+    static_assert(I == 0, "single accessor index out of range");
+    using type = Values;
+
+    template <typename U>
+    static constexpr decltype(auto) get(U&& values) {
+        static_assert(I == 0, "single accessor index out of range");
+        return std::forward<U>(values);
+    }
+};
+
+template <std::size_t I, typename Values>
+struct ReflectAccessorAt<I, Values, true> {
+    using type = std::tuple_element_t<I, Values>;
+
+    template <typename U>
+    static constexpr decltype(auto) get(U&& values) {
+        return std::get<I>(std::forward<U>(values));
+    }
+};
+
+// Transitional metadata adapter.
+//
+// This is the single place that should know how current metadata is spelled:
+// T::Neko, Meta<T>, Object/Array/value forms, macro-generated field_tags, and
+// aggregate AutoUnwrap. Reflect<T> consumes this normalized provider surface so
+// future native reflection can replace only the automatic discovery branch.
 template <typename T>
-struct ReflectHelper {
-    static constexpr auto getNames() {
-        if constexpr (has_name_function<T>) {
+struct ReflectProvider {
+    using context_type = std::decay_t<T>;
+
+    static constexpr ReflectProviderKind provider_kind = reflect_provider_kind_v<T>; // NOLINT
+    static constexpr MetaKind legacy_kind              = meta_kind_v<T>;             // NOLINT
+    static constexpr MetaKind kind                     = legacy_kind;                // NOLINT
+    static constexpr bool has_names                    = has_names_meta<T>;          // NOLINT
+    static constexpr bool has_values = provider_kind != ReflectProviderKind::Error;  // NOLINT
+
+    static constexpr auto names() {
+        if constexpr (provider_kind == ReflectProviderKind::NativeReflection) {
+            return NativeReflectionProvider<T>::names();
+        } else if constexpr (has_name_function<T>) {
             return MetaPrivate<T>::names();
         } else {
             return std::array<std::string_view, 0>{};
         }
     }
+
     template <typename U>
-    static constexpr decltype(auto) getValues(U&& obj) {
-        if constexpr (has_value_function_one<T>) {
+    static constexpr decltype(auto) accessors(U&& obj) {
+        if constexpr (provider_kind == ReflectProviderKind::NativeReflection) {
+            return NativeReflectionProvider<T>::accessors(std::forward<U>(obj));
+        } else if constexpr (has_value_function_one<T>) {
             return MetaPrivate<T>::value(std::forward<U>(obj));
         } else {
-            return getValues();
+            return accessors();
         }
     }
-    static constexpr decltype(auto) getValues() {
-        if constexpr (has_value_function<T>) {
+
+    static constexpr decltype(auto) accessors() {
+        if constexpr (provider_kind == ReflectProviderKind::NativeReflection) {
+            return NativeReflectionProvider<T>::accessors();
+        } else if constexpr (has_value_function<T>) {
             return MetaPrivate<T>::value();
         } else {
             return std::forward_as_tuple();
         }
     }
+
+    using accessors_type = std::decay_t<decltype(accessors(std::declval<context_type&>()))>;
+
+    static constexpr std::size_t value_count = has_values ? reflect_accessor_count_v<accessors_type> : 0; // NOLINT
+
+    template <std::size_t I>
+    using accessor_type = typename ReflectAccessorAt<I, accessors_type>::type;
+
+    template <std::size_t I>
+    using field_type = resolve_member_type_t<field_accessor_t<accessor_type<I>>, context_type>;
+
+    template <std::size_t I>
+    static constexpr auto name() {
+        static_assert(has_names, "provider has no reflected names");
+        constexpr auto field_names = names();
+        static_assert(I < field_names.size(), "provider name index out of range");
+        return field_names[I];
+    }
+
+    template <std::size_t I>
+    static constexpr auto tag() {
+        return std::get<I>(tags());
+    }
+
+    template <std::size_t I, typename U>
+    static constexpr decltype(auto) get(U&& obj) {
+        decltype(auto) values = accessors(std::forward<U>(obj));
+        return value_ref(ReflectAccessorAt<I, std::decay_t<decltype(values)>>::get(values), obj);
+    }
+
+    static constexpr auto tags() {
+        if constexpr (provider_kind == ReflectProviderKind::NativeReflection) {
+            return NativeReflectionProvider<T>::tags();
+        } else if constexpr (has_values) {
+            using values_type = std::decay_t<decltype(accessors(std::declval<context_type&>()))>;
+            if constexpr (is_local_ref_object<T> || is_local_ref_array<T>) {
+                return T::Neko::value.tags;
+            } else if constexpr (is_meta_ref_object<T> || is_meta_ref_array<T>) {
+                return Meta<T>::value.tags;
+            } else if constexpr (requires { T::Neko::field_tags; }) {
+                return T::Neko::field_tags;
+            } else if constexpr (requires { Meta<T>::field_tags; }) {
+                return Meta<T>::field_tags;
+            } else if constexpr (is_std_tuple_v<values_type>) {
+                return tuple_tags_unwrap_v<values_type, context_type>;
+            } else {
+                return std::make_tuple(field_tags_v<values_type>);
+            }
+        } else {
+            return std::make_tuple();
+        }
+    }
 };
+
+// Compile-time field model derived from a provider.
+//
+// The model resolves accessor declarations into concrete field types, runs tag
+// validation after the host type is known, and exposes the public type/tag/count
+// constants used by Reflect<T>. It deliberately does not call user callbacks or
+// perform runtime lookup.
+template <typename T>
+struct ReflectModel {
+private:
+    using Provider    = ReflectProvider<T>;
+    using ContextType = typename Provider::context_type;
+
+    static constexpr auto _types() {
+        if constexpr (Provider::has_values) {
+            using values_type = std::decay_t<decltype(Provider::accessors(std::declval<ContextType&>()))>;
+            if constexpr (is_std_tuple_v<values_type>) {
+                static_assert(perform_all_checks<values_type, ContextType>(), "tags checks failed");
+                return (tuple_unwrap_t<values_type, ContextType>*)nullptr;
+            } else {
+                static_assert(perform_check<resolve_member_type_t<field_accessor_t<values_type>, ContextType>,
+                                            field_tags_v<values_type>>(),
+                              "tags checks failed");
+                return (std::tuple<resolve_member_type_t<field_accessor_t<values_type>, ContextType>>*)nullptr;
+            }
+        } else {
+            return (std::tuple<>*)nullptr;
+        }
+    }
+
+public:
+    using provider    = Provider;
+    using value_types = std::remove_pointer_t<decltype(_types())>;
+
+    static constexpr auto field_tags = Provider::tags();               // NOLINT
+    static constexpr int value_count = std::tuple_size_v<value_types>; // NOLINT
+};
+
 struct RefAny {
     RefAny()              = default;
     RefAny(const RefAny&) = default;
@@ -687,141 +895,66 @@ struct Overloads : public Ts... {
 template <typename T, class enable = void>
 struct Reflect {
 private:
-    static constexpr auto _types() {
-        if constexpr (detail::has_values_meta<T>) {
-            using values_type =
-                std::decay_t<decltype(detail::ReflectHelper<T>::getValues(std::declval<std::decay_t<T>&>()))>;
-            using ContextType = std::decay_t<T>;
-            if constexpr (detail::is_std_tuple_v<values_type>) {
-                static_assert(detail::perform_all_checks<values_type, ContextType>(), "tags checks failed");
-                return (detail::tuple_unwrap_t<values_type, ContextType>*)nullptr;
-            } else {
-                static_assert(detail::perform_check<resolve_member_type_t<field_accessor_t<values_type>, ContextType>,
-                                                    field_tags_v<values_type>>(),
-                              "tags checks failed");
-                return (std::tuple<resolve_member_type_t<field_accessor_t<values_type>, ContextType>>*)nullptr;
-            }
-        } else {
-            return (std::tuple<>*)nullptr;
-        }
-    }
-    static constexpr auto _tags() {
-        if constexpr (detail::has_values_meta<T>) {
-            using values_type =
-                std::decay_t<decltype(detail::ReflectHelper<T>::getValues(std::declval<std::decay_t<T>&>()))>;
-            using ContextType = std::decay_t<T>;
-            if constexpr (detail::is_local_ref_object<T> || detail::is_local_ref_array<T>) {
-                return T::Neko::value.tags;
-            } else if constexpr (detail::is_meta_ref_object<T> || detail::is_meta_ref_array<T>) {
-                return Meta<T>::value.tags;
-            } else if constexpr (requires { T::Neko::field_tags; }) {
-                return T::Neko::field_tags;
-            } else if constexpr (requires { Meta<T>::field_tags; }) {
-                return Meta<T>::field_tags;
-            } else if constexpr (detail::is_std_tuple_v<values_type>) {
-                return detail::tuple_tags_unwrap_v<values_type, ContextType>;
-            } else {
-                return std::make_tuple(field_tags_v<values_type>);
-            }
-        } else {
-            return std::make_tuple();
-        }
-    }
+    using Provider = detail::ReflectProvider<T>;
+    using Model    = detail::ReflectModel<T>;
 
 public:
+    // Public reflection algorithm. It consumes only the provider/model surface:
+    // no direct T::Neko or Meta<T> probing belongs below this line.
     template <typename U, typename CallAbleT>
     static constexpr void forEach(U&& obj, CallAbleT&& func) noexcept {
-        if constexpr (!detail::has_values_meta<T>) {
-            static_assert(detail::has_values_meta<T>, "type has no values meta");
+        if constexpr (!Provider::has_values) {
+            static_assert(Provider::has_values, "type has no values meta");
         }
-        decltype(auto) values = detail::ReflectHelper<T>::getValues(obj);
-        using values_types    = std::decay_t<decltype(values)>;
-        std::array names      = detail::ReflectHelper<T>::getNames();
-        using names_type      = std::decay_t<decltype(names)>;
-        if constexpr (detail::is_std_tuple_v<values_types>) {
-            constexpr auto Size = std::tuple_size_v<values_types>;
-            [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-                auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
-                    auto&& val  = detail::value_ref(std::get<I>(values), obj);
-                    auto&& tags = std::get<I>(field_tags);
-                    // 编译期根据回调函数的签名选择调用方式
-                    if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view, decltype(tags)>) {
-                        static_assert(detail::is_std_array<names_type>::size == Size,
-                                      "type has no names meta or names size mismatch");
-                        func(val, names[I], tags);
-                    } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), decltype(tags)>) {
-                        // func(val, tags)
-                        func(val, tags);
-                    } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view>) {
-                        // func(val, name)
-                        static_assert(detail::is_std_array<names_type>::size == Size,
-                                      "type has no names meta or names size mismatch");
-                        func(val, names[I]);
-                    } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val)>) {
-                        // func(val)
-                        func(val);
-                    } else {
-                        static_assert(!detail::has_values_meta<T>, "Callback function signature not supported. "
-                                                                   "Supported: (val, name, tags), (val, tags), (val, "
-                                                                   "name), (val)");
-                    }
-                };
-                ((invoke(std::integral_constant<std::size_t, Is>{})), ...);
-            }(std::make_index_sequence<Size>{});
-        } else {
-            auto&& val  = detail::value_ref(values, obj);
-            auto&& tags = std::get<0>(field_tags);
-            if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view, decltype(tags)>) {
-                static_assert(detail::is_std_array<names_type>::size == 1,
-                              "type has no names meta or names size mismatch");
-                func(val, names[0], tags);
-            } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), decltype(tags)>) {
-                func(val, tags);
-            } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view>) {
-                static_assert(detail::is_std_array<names_type>::size == 1,
-                              "type has no names meta or names size mismatch");
-                func(val, names[0]);
-            } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val)>) {
-                func(val);
-            } else {
-                static_assert(
-                    !detail::has_values_meta<T>,
-                    "Callback function signature not supported. Supported: (val, name, tags), (val, tags), (val, "
-                    "name), (val)");
-            }
-        }
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
+                auto&& val  = Provider::template get<I>(obj);
+                auto&& tags = std::get<I>(field_tags);
+                // 编译期根据回调函数的签名选择调用方式
+                if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view, decltype(tags)>) {
+                    static_assert(Provider::has_names, "type has no names meta or names size mismatch");
+                    func(val, Provider::template name<I>(), tags);
+                } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), decltype(tags)>) {
+                    // func(val, tags)
+                    func(val, tags);
+                } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view>) {
+                    // func(val, name)
+                    static_assert(Provider::has_names, "type has no names meta or names size mismatch");
+                    func(val, Provider::template name<I>());
+                } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val)>) {
+                    // func(val)
+                    func(val);
+                } else {
+                    static_assert(!Provider::has_values, "Callback function signature not supported. "
+                                                         "Supported: (val, name, tags), (val, tags), (val, "
+                                                         "name), (val)");
+                }
+            };
+            ((invoke(std::integral_constant<std::size_t, Is>{})), ...);
+        }(std::make_index_sequence<Provider::value_count>{});
     }
 
     static constexpr auto size() noexcept {
-        if constexpr (detail::has_names_meta<T>) {
-            return detail::ReflectHelper<T>::getNames().size();
-        } else if constexpr (detail::has_values_meta<T>) {
-            if constexpr (detail::has_value_function_one<T>) {
-                return detail::member_count_v<T>;
-            } else {
-                decltype(auto) values = detail::ReflectHelper<T>::getValues();
-                if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
-                    return std::tuple_size_v<std::decay_t<decltype(values)>>;
-                } else {
-                    return 1;
-                }
-            }
+        if constexpr (Provider::has_names) {
+            return Provider::names().size();
+        } else if constexpr (Provider::has_values) {
+            return Provider::value_count;
         } else {
             return 0;
         }
     }
 
     static constexpr decltype(auto) names() noexcept {
-        if constexpr (detail::has_names_meta<T>) {
-            return detail::ReflectHelper<T>::getNames();
+        if constexpr (Provider::has_names) {
+            return Provider::names();
         } else {
             return std::array<std::string_view, 0>{};
         }
     }
 
     static constexpr auto name(int index) noexcept {
-        if constexpr (detail::has_names_meta<T>) {
-            auto names = detail::ReflectHelper<T>::getNames();
+        if constexpr (Provider::has_names) {
+            auto names = Provider::names();
             if (index < 0 || index >= static_cast<int>(names.size())) {
                 NEKO_LOG_ERROR("reflection", "index out of range");
                 return std::string_view{};
@@ -837,84 +970,58 @@ public:
     template <std::size_t N, typename U>
         requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
     static decltype(auto) value(U&& obj) noexcept {
-        if constexpr (detail::has_values_meta<T>) {
-            decltype(auto) values = detail::ReflectHelper<T>::getValues(std::forward<U>(obj));
-            if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
-                static_assert(std::tuple_size_v<std::decay_t<decltype(values)>> > N, "out of range");
-                return detail::value_ref(std::get<N>(values), obj);
-            } else if constexpr (N == 0) {
-                return detail::value_ref(values, obj);
-            } else {
-                static_assert(N < 0, "out of range");
-            }
+        if constexpr (Provider::has_values) {
+            static_assert(Provider::value_count > N, "out of range");
+            return Provider::template get<N>(std::forward<U>(obj));
         } else {
-            static_assert(detail::has_values_meta<T>, "no values meta");
+            static_assert(Provider::has_values, "no values meta");
         }
     }
 
     template <typename U>
-        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>> &&
-                 std::is_lvalue_reference_v<U&&>
+        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>> && std::is_lvalue_reference_v<U&&>
     static detail::RefAny value(U&& obj, int idx) {
-        if constexpr (detail::has_values_meta<T>) {
+        if constexpr (Provider::has_values) {
             detail::RefAny ret;
-            decltype(auto) values = detail::ReflectHelper<T>::getValues(std::forward<U>(obj));
-            if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
-                [&obj, &ret, &values, idx]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
-                    ((idx == Is ? (ret = detail::RefAny(detail::value_ref(std::get<Is>(values), obj)))
-                                : detail::RefAny{}),
-                     ...);
-                }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
-            } else {
-                if (idx == 0) {
-                    ret = detail::RefAny(detail::value_ref(values, obj));
-                }
-            }
+            [&obj, &ret, idx]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
+                ((idx == Is ? (ret = detail::RefAny(Provider::template get<Is>(obj))) : detail::RefAny{}), ...);
+            }(std::make_index_sequence<Provider::value_count>{});
             return ret;
         } else {
-            static_assert(detail::has_values_meta<T>, "no values meta");
+            static_assert(Provider::has_values, "no values meta");
         }
     }
 
     template <typename U>
-        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>> &&
-                 std::is_lvalue_reference_v<U&&>
+        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>> && std::is_lvalue_reference_v<U&&>
     static detail::RefAny value(U&& obj, std::string_view name) {
-        if constexpr (detail::has_values_meta<T> && detail::has_names_meta<T>) {
+        if constexpr (Provider::has_values && Provider::has_names) {
             detail::RefAny ret;
-            decltype(auto) values = detail::ReflectHelper<T>::getValues(std::forward<U>(obj));
-            decltype(auto) names  = detail::ReflectHelper<T>::getNames();
-            if constexpr (detail::is_std_tuple_v<std::decay_t<decltype(values)>>) {
-                [&obj, &ret, &values, &names, name]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
-                    ((name == names[Is] ? (ret = detail::RefAny(detail::value_ref(std::get<Is>(values), obj)))
-                                        : detail::RefAny{}),
-                     ...);
-                }(std::make_index_sequence<std::tuple_size_v<std::decay_t<decltype(values)>>>{});
-            } else {
-                if (names.size() == 1 && name == names[0]) {
-                    ret = detail::RefAny(detail::value_ref(values, obj));
-                }
-            }
+            [&obj, &ret, name]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
+                ((name == Provider::template name<Is>() ? (ret = detail::RefAny(Provider::template get<Is>(obj)))
+                                                        : detail::RefAny{}),
+                 ...);
+            }(std::make_index_sequence<Provider::value_count>{});
             return ret;
         } else {
-            static_assert(detail::has_values_meta<T> && detail::has_names_meta<T>, "no values or names meta");
+            static_assert(Provider::has_values && Provider::has_names, "no values or names meta");
         }
     }
 
-    using value_types                = std::remove_pointer_t<decltype(_types())>;
-    static constexpr auto field_tags = _tags();                             // NOLINT
-    static constexpr int value_count = std::tuple_size<value_types>::value; // NOLINT
+    using value_types                = typename Model::value_types;
+    static constexpr auto field_tags = Model::field_tags;  // NOLINT
+    static constexpr int value_count = Model::value_count; // NOLINT
 
     template <typename CallAbleT>
     static constexpr void forEachMeta(CallAbleT&& func) noexcept {
-        if constexpr (!detail::has_values_meta<T>) {
-            static_assert(detail::has_values_meta<T>, "type has no values meta");
+        if constexpr (!Provider::has_values) {
+            static_assert(Provider::has_values, "type has no values meta");
         }
         constexpr auto fieldNames = names();
         using names_type          = std::decay_t<decltype(fieldNames)>;
         [&]<std::size_t... Is>(std::index_sequence<Is...>) {
             auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
-                using Field = std::tuple_element_t<I, value_types>;
+                using Field    = std::tuple_element_t<I, value_types>;
                 using FieldTag = std::type_identity<Field>;
                 auto&& tags    = std::get<I>(field_tags);
                 if constexpr (std::is_invocable_v<CallAbleT&, FieldTag, std::string_view, decltype(tags)>) {
@@ -930,7 +1037,7 @@ public:
                 } else if constexpr (std::is_invocable_v<CallAbleT&, decltype(tags)>) {
                     func(tags);
                 } else {
-                    static_assert(!detail::has_values_meta<T>,
+                    static_assert(!Provider::has_values,
                                   "Callback function signature not supported. Supported: (type, name, tags), "
                                   "(name, tags), (type, tags), (tags)");
                 }
@@ -1006,8 +1113,8 @@ public:
     }
     static constexpr auto className() noexcept { return detail::class_nameof<T>; }
     static constexpr auto size() noexcept { return names().size(); }
-    static constexpr auto field_tags = _tags();                             // NOLINT
-    static constexpr int value_count = static_cast<int>(size());            // NOLINT
+    static constexpr auto field_tags = _tags();                  // NOLINT
+    static constexpr int value_count = static_cast<int>(size()); // NOLINT
 
     static constexpr auto value(std::string_view name) noexcept {
         auto kEnums = values();

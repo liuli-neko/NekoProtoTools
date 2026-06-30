@@ -74,7 +74,7 @@ struct ServeCommand {
                     &ServeCommand::includeDirs),
                 "color",
                 make_tags<arg_name<"color">, arg_group<"General">, arg_aliases<"colour">, arg_implicit<"auto"_cs>,
-                          arg_choices<"auto", "always", "never">, arg_case_insensitive_choices<>,
+                          arg_choices<"auto", "always", "never">, arg_case_insensitive_choices,
                           arg_help<"colorize output">>(&ServeCommand::color),
                 "root",
                 make_tags<arg_name<"root">, arg_group<"Paths">, arg_help<"document root">, ArgTags{.positional = true}>(
@@ -121,7 +121,7 @@ struct BuildCommand {
                     &BuildCommand::output),
                 "mode",
                 make_tags<arg_name<"mode", "m">, arg_group<"Build">, arg_default<"debug"_cs>,
-                          arg_choices<"debug", "release">, arg_case_insensitive_choices<>, arg_help<"build mode">>(
+                          arg_choices<"debug", "release">, arg_case_insensitive_choices, arg_help<"build mode">>(
                     &BuildCommand::mode),
                 "define",
                 make_tags<arg_name<"define", "D">, arg_group<"C/C++">, arg_separator<','>, arg_value_name<"DEFINE">,
@@ -197,11 +197,11 @@ struct StandaloneOptions {
                        &StandaloneOptions::includeDirs),
                    "mode",
                    make_tags<arg_name<"mode", "m">, arg_group<"General">, arg_default<"debug"_cs>,
-                             arg_choices<"debug", "release">, arg_case_insensitive_choices<>, arg_help<"build mode">>(
+                             arg_choices<"debug", "release">, arg_case_insensitive_choices, arg_help<"build mode">>(
                        &StandaloneOptions::mode),
                    "color",
                    make_tags<arg_name<"color">, arg_group<"General">, arg_aliases<"colour">, arg_implicit<"auto"_cs>,
-                             arg_choices<"auto", "always", "never">, arg_case_insensitive_choices<>,
+                             arg_choices<"auto", "always", "never">, arg_case_insensitive_choices,
                              arg_help<"colorize output">>(&StandaloneOptions::color),
                    "token",
                    make_tags<arg_name<"token">, arg_group<"Security">, arg_env<"NEKO_ARGPARSER_MANUAL_TOKEN">,

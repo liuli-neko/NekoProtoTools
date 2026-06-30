@@ -8,8 +8,42 @@ on:
 
 jobs:
   build-and-test:
-    name: Build and test
+    name: Build and test (C++${{ matrix.stdcxx }}, ${{ matrix.kind }}, ${{ matrix.mode }})
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - stdcxx: 20
+            kind: shared
+            mode: coverage
+            cc: gcc
+            cxx: g++
+            coverage: true
+            experimental: false
+          - stdcxx: 23
+            kind: shared
+            mode: coverage
+            cc: gcc
+            cxx: g++
+            coverage: true
+            experimental: false
+          - stdcxx: 23
+            kind: static
+            mode: debug
+            cc: gcc
+            cxx: g++
+            coverage: false
+            experimental: false
+          # Keep C++26 non-blocking until compiler and library support settles.
+          - stdcxx: 26
+            kind: shared
+            mode: debug
+            cc: gcc-14
+            cxx: g++-14
+            coverage: false
+            experimental: true
     steps:
     - uses: actions/checkout@v2
     - name: setup xmake
@@ -22,7 +56,7 @@ jobs:
     - name: Install lcov
       run: sudo apt install lcov -y
     - name: Configure
-      run: xmake f -m coverage -k shared --enable_simdjson=y --enable_protocol=y --enable_rapidjson=y --enable_communication=y --enable_jsonrpc=y --enable_fmt=y --enable_pugixml=y --enable_tests=y -vy
+      run: xmake f -m ${{ matrix.mode }} -k ${{ matrix.kind }} --stdcxx=${{ matrix.stdcxx }} --cc=${{ matrix.cc }} --cxx=${{ matrix.cxx }} --enable_simdjson=y --enable_protocol=y --enable_rapidjson=y --enable_communication=y --enable_jsonrpc=y --enable_fmt=y --enable_pugixml=y --enable_tests=y -vy
     - name: Update submodules
       run: git submodule update --init --recursive
     - name: Build
@@ -32,8 +66,10 @@ jobs:
     # - name: Generate coverage
     #   run: xmake run coverage-report
     - name: Upload coverage reports to Codecov
+      if: ${{ matrix.coverage }}
       uses: codecov/codecov-action@v4.0.1
       with:
         fail_ci_if_error: false
+        flags: linux-gcc-cxx${{ matrix.stdcxx }}-${{ matrix.kind }}
         token: ${{ secrets.CODECOV_TOKEN }}
         verbose: true

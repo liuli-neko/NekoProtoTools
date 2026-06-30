@@ -147,19 +147,18 @@ struct ArgTags {
     }
 };
 
-template <ConstexprString Long = "", ConstexprString Short = "", auto BaseTags = NoTags{}>
+template <ConstexprString Long = "", ConstexprString Short = "">
 struct ArgNameTag {
     static constexpr auto longName  = Long.view();  // NOLINT
     static constexpr auto shortName = Short.view(); // NOLINT
-    static constexpr auto base      = BaseTags;     // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
+        return true;
     }
 };
 
-template <auto Default, auto BaseTags = NoTags{}>
+template <auto Default>
 struct ArgDefaultTag {
     constexpr static auto getValue()
         requires is_constexpr_string<decltype(Default)>::value
@@ -169,11 +168,10 @@ struct ArgDefaultTag {
     constexpr static auto getValue() { return Default; }
 
     static constexpr auto defaultValue = getValue(); // NOLINT
-    static constexpr auto base         = BaseTags;   // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
+        return true;
     }
 };
 
@@ -183,51 +181,47 @@ struct ArgChoicesTag {
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return NEKO_NAMESPACE::detail::perform_check<T, NoTags{}>();
+        return true;
     }
 };
 
-template <ConstexprString Help = "", auto BaseTags = NoTags{}>
+template <ConstexprString Help = "">
 struct ArgHelpTag {
     static constexpr auto help = Help.view(); // NOLINT
-    static constexpr auto base = BaseTags;    // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
+        return true;
     }
 };
 
-template <ConstexprString ValueName = "", auto BaseTags = NoTags{}>
+template <ConstexprString ValueName = "">
 struct ArgValueNameTag {
     static constexpr auto valueName = ValueName.view(); // NOLINT
-    static constexpr auto base      = BaseTags;         // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
+        return true;
     }
 };
 
-template <ConstexprString EnvName = "", auto BaseTags = NoTags{}>
+template <ConstexprString EnvName = "">
 struct ArgEnvTag {
     static constexpr auto envName = EnvName.view(); // NOLINT
-    static constexpr auto base    = BaseTags;       // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
+        return true;
     }
 };
 
-template <char Separator, auto BaseTags = NoTags{}>
+template <char Separator>
 struct ArgSeparatorTag {
     static constexpr auto separator = Separator; // NOLINT
-    static constexpr auto base      = BaseTags;  // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
+        return true;
     }
 };
 
@@ -237,11 +231,11 @@ struct ArgAliasesTag {
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return NEKO_NAMESPACE::detail::perform_check<T, NoTags{}>();
+        return true;
     }
 };
 
-template <auto Implicit, auto BaseTags = NoTags{}>
+template <auto Implicit>
 struct ArgImplicitTag {
     constexpr static auto getValue()
         requires is_constexpr_string<decltype(Implicit)>::value
@@ -251,22 +245,20 @@ struct ArgImplicitTag {
     constexpr static auto getValue() { return Implicit; }
 
     static constexpr auto implicitValue = getValue(); // NOLINT
-    static constexpr auto base          = BaseTags;   // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
+        return true;
     }
 };
 
-template <ConstexprString Group = "", auto BaseTags = NoTags{}>
+template <ConstexprString Group = "">
 struct ArgGroupTag {
     static constexpr auto group = Group.view(); // NOLINT
-    static constexpr auto base  = BaseTags;     // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
+        return true;
     }
 };
 
@@ -276,7 +268,7 @@ struct ArgConflictsTag {
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return NEKO_NAMESPACE::detail::perform_check<T, NoTags{}>();
+        return true;
     }
 };
 
@@ -286,61 +278,58 @@ struct ArgRequiresTag {
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return NEKO_NAMESPACE::detail::perform_check<T, NoTags{}>();
+        return true;
     }
 };
 
-template <ConstexprString Message = "", auto BaseTags = NoTags{}>
+template <ConstexprString Message = "">
 struct ArgDeprecatedTag {
     static constexpr auto deprecatedMessage = Message.view(); // NOLINT
-    static constexpr auto base              = BaseTags;       // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
+        return true;
     }
 };
 
-template <auto BaseTags = NoTags{}>
 struct ArgCaseInsensitiveChoicesTag {
-    static constexpr bool caseInsensitiveChoices = true;     // NOLINT
-    static constexpr auto base                   = BaseTags; // NOLINT
+    static constexpr bool caseInsensitiveChoices = true; // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return NEKO_NAMESPACE::detail::perform_check<T, BaseTags>();
+        return true;
     }
 };
 
-template <ConstexprString Long = "", ConstexprString Short = "", auto BaseTags = NoTags{}>
-inline constexpr auto arg_name = ArgNameTag<Long, Short, BaseTags>{}; // NOLINT
+template <ConstexprString Long = "", ConstexprString Short = "">
+inline constexpr auto arg_name = ArgNameTag<Long, Short>{}; // NOLINT
 
 template <ConstexprString... Choices>
 inline constexpr auto arg_choices = ArgChoicesTag<Choices...>{}; // NOLINT
 
-template <auto Default, auto BaseTags = NoTags{}>
-inline constexpr auto arg_default = ArgDefaultTag<Default, BaseTags>{}; // NOLINT
+template <auto Default>
+inline constexpr auto arg_default = ArgDefaultTag<Default>{}; // NOLINT
 
-template <ConstexprString Help = "", auto BaseTags = NoTags{}>
-inline constexpr auto arg_help = ArgHelpTag<Help, BaseTags>{}; // NOLINT
+template <ConstexprString Help = "">
+inline constexpr auto arg_help = ArgHelpTag<Help>{}; // NOLINT
 
-template <ConstexprString ValueName = "", auto BaseTags = NoTags{}>
-inline constexpr auto arg_value_name = ArgValueNameTag<ValueName, BaseTags>{}; // NOLINT
+template <ConstexprString ValueName = "">
+inline constexpr auto arg_value_name = ArgValueNameTag<ValueName>{}; // NOLINT
 
-template <ConstexprString EnvName = "", auto BaseTags = NoTags{}>
-inline constexpr auto arg_env = ArgEnvTag<EnvName, BaseTags>{}; // NOLINT
+template <ConstexprString EnvName = "">
+inline constexpr auto arg_env = ArgEnvTag<EnvName>{}; // NOLINT
 
-template <char Separator, auto BaseTags = NoTags{}>
-inline constexpr auto arg_separator = ArgSeparatorTag<Separator, BaseTags>{}; // NOLINT
+template <char Separator>
+inline constexpr auto arg_separator = ArgSeparatorTag<Separator>{}; // NOLINT
 
 template <ConstexprString... Aliases>
 inline constexpr auto arg_aliases = ArgAliasesTag<Aliases...>{}; // NOLINT
 
-template <auto Implicit, auto BaseTags = NoTags{}>
-inline constexpr auto arg_implicit = ArgImplicitTag<Implicit, BaseTags>{}; // NOLINT
+template <auto Implicit>
+inline constexpr auto arg_implicit = ArgImplicitTag<Implicit>{}; // NOLINT
 
-template <ConstexprString Group = "", auto BaseTags = NoTags{}>
-inline constexpr auto arg_group = ArgGroupTag<Group, BaseTags>{}; // NOLINT
+template <ConstexprString Group = "">
+inline constexpr auto arg_group = ArgGroupTag<Group>{}; // NOLINT
 
 template <ConstexprString... Names>
 inline constexpr auto arg_conflicts = ArgConflictsTag<Names...>{}; // NOLINT
@@ -348,40 +337,38 @@ inline constexpr auto arg_conflicts = ArgConflictsTag<Names...>{}; // NOLINT
 template <ConstexprString... Names>
 inline constexpr auto arg_requires = ArgRequiresTag<Names...>{}; // NOLINT
 
-template <ConstexprString Message = "", auto BaseTags = NoTags{}>
-inline constexpr auto arg_deprecated = ArgDeprecatedTag<Message, BaseTags>{}; // NOLINT
+template <ConstexprString Message = "">
+inline constexpr auto arg_deprecated = ArgDeprecatedTag<Message>{}; // NOLINT
 
-template <auto BaseTags = NoTags{}>
-inline constexpr auto arg_case_insensitive_choices = ArgCaseInsensitiveChoicesTag<BaseTags>{}; // NOLINT
+inline constexpr auto arg_case_insensitive_choices = ArgCaseInsensitiveChoicesTag{}; // NOLINT
 
 // Tag access -----------------------------------------------------------------
 
 namespace tag_prop {
-NEKO_DEFINE_TAG_PROP(std::string_view, longName, long_name)
-NEKO_DEFINE_TAG_PROP(std::string_view, shortName, short_name)
-NEKO_DEFINE_TAG_PROP(std::vector<std::string_view>, choices, choices)
-NEKO_DEFINE_TAG_PROP(std::string_view, help, help)
-NEKO_DEFINE_TAG_PROP(std::string_view, valueName, value_name)
-NEKO_DEFINE_TAG_PROP(std::string_view, envName, env_name)
-NEKO_DEFINE_TAG_PROP(char, separator, separator)
-NEKO_DEFINE_TAG_PROP(std::vector<std::string_view>, aliases, aliases)
-NEKO_DEFINE_TAG_PROP(std::string_view, group, group)
-NEKO_DEFINE_TAG_PROP(std::vector<std::string_view>, conflicts, conflicts)
-NEKO_DEFINE_TAG_PROP(std::vector<std::string_view>, requiresNames, requires_names)
-NEKO_DEFINE_TAG_PROP(std::string_view, deprecatedMessage, deprecated_message)
-NEKO_DEFINE_TAG_PROP(bool, caseInsensitiveChoices, case_insensitive_choices)
+NEKO_DEFINE_TAG_PROP(std::string_view, longName, long_name)                        // NOLINT
+NEKO_DEFINE_TAG_PROP(std::string_view, shortName, short_name)                      // NOLINT
+NEKO_DEFINE_TAG_PROP(std::vector<std::string_view>, choices, choices)              // NOLINT
+NEKO_DEFINE_TAG_PROP(std::string_view, help, help)                                 // NOLINT
+NEKO_DEFINE_TAG_PROP(std::string_view, valueName, value_name)                      // NOLINT
+NEKO_DEFINE_TAG_PROP(std::string_view, envName, env_name)                          // NOLINT
+NEKO_DEFINE_TAG_PROP(char, separator, separator)                                   // NOLINT
+NEKO_DEFINE_TAG_PROP(std::vector<std::string_view>, aliases, aliases)              // NOLINT
+NEKO_DEFINE_TAG_PROP(std::string_view, group, group)                               // NOLINT
+NEKO_DEFINE_TAG_PROP(std::vector<std::string_view>, conflicts, conflicts)          // NOLINT
+NEKO_DEFINE_TAG_PROP(std::vector<std::string_view>, requiresNames, requires_names) // NOLINT
+NEKO_DEFINE_TAG_PROP(std::string_view, deprecatedMessage, deprecated_message)      // NOLINT
+NEKO_DEFINE_TAG_PROP(bool, caseInsensitiveChoices, case_insensitive_choices)       // NOLINT
+NEKO_DEFINE_TAG_PROP(bool, required, required)                                     // NOLINT
+NEKO_DEFINE_TAG_PROP(bool, positional, positional)                                 // NOLINT
+NEKO_DEFINE_TAG_PROP(bool, flag, flag)                                             // NOLINT
+NEKO_DEFINE_TAG_PROP(bool, repeatable, repeatable)                                 // NOLINT
+NEKO_DEFINE_TAG_PROP(bool, hidden, hidden)                                         // NOLINT
+NEKO_DEFINE_TAG_PROP(bool, command, command)                                       // NOLINT
+NEKO_DEFINE_TAG_PROP(double, rangeMin, range_min)                                  // NOLINT
+NEKO_DEFINE_TAG_PROP(double, rangeMax, range_max)                                  // NOLINT
 
-NEKO_DEFINE_TAG_VALUE_PROP(defaultValue, default_value)
-NEKO_DEFINE_TAG_VALUE_PROP(implicitValue, implicit_value)
-
-NEKO_DEFINE_TAG_PROP(bool, required, required)
-NEKO_DEFINE_TAG_PROP(bool, positional, positional)
-NEKO_DEFINE_TAG_PROP(bool, flag, flag)
-NEKO_DEFINE_TAG_PROP(bool, repeatable, repeatable)
-NEKO_DEFINE_TAG_PROP(bool, hidden, hidden)
-NEKO_DEFINE_TAG_PROP(bool, command, command)
-NEKO_DEFINE_TAG_PROP(double, rangeMin, range_min)
-NEKO_DEFINE_TAG_PROP(double, rangeMax, range_max)
+NEKO_DEFINE_TAG_VALUE_PROP(defaultValue, default_value)   // NOLINT
+NEKO_DEFINE_TAG_VALUE_PROP(implicitValue, implicit_value) // NOLINT
 } // namespace tag_prop
 
 } // namespace argparser
