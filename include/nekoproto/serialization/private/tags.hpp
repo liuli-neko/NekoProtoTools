@@ -29,16 +29,16 @@ template <typename T, class = void>
 struct is_unframed_tag : std::false_type {}; // NOLINT
 
 namespace tag_prop {
-NEKO_DEFINE_TAG_PROP(std::string_view, comment, comment)
-NEKO_DEFINE_TAG_PROP(std::string_view, name, name)
-NEKO_DEFINE_TAG_PROP(bool, rawString, raw_string)
-NEKO_DEFINE_TAG_PROP(bool, skipable, skipable)
+NEKO_DEFINE_TAG_PROP(std::string_view, comment, comment) // NOLINT
+NEKO_DEFINE_TAG_PROP(std::string_view, name, name)       // NOLINT
+NEKO_DEFINE_TAG_PROP(bool, rawString, raw_string)        // NOLINT
+NEKO_DEFINE_TAG_PROP(bool, skipable, skipable)           // NOLINT
 
-NEKO_DEFINE_TYPE_TAG_PROP(bool, flat, flat)
-NEKO_DEFINE_TYPE_TAG_PROP(bool, unframed, unframed)
+NEKO_DEFINE_TYPE_TAG_PROP(bool, flat, flat)         // NOLINT
+NEKO_DEFINE_TYPE_TAG_PROP(bool, unframed, unframed) // NOLINT
 
 template <typename Value>
-struct fixed_length {
+struct fixed_length { // NOLINT
     using type = std::size_t;
 
     static constexpr type missing() noexcept { return 0; }
@@ -66,38 +66,36 @@ struct fixed_length {
 };
 } // namespace tag_prop
 
-template <ConstexprString Comment, auto BaseTags = NoTags{}>
+template <ConstexprString Comment>
 struct CommentTag {
     constexpr static auto comment = Comment.view(); // NOLINT
-    constexpr static auto base    = BaseTags;       // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return detail::perform_check<T, BaseTags>();
+        return true;
     }
 };
 
-template <ConstexprString Comment, auto BaseTags = NoTags{}>
-inline constexpr auto comment_tag = CommentTag<Comment, BaseTags>{}; // NOLINT
+template <ConstexprString Comment>
+inline constexpr auto comment_tag = CommentTag<Comment>{}; // NOLINT
 
-template <ConstexprString Name, auto BaseTags = NoTags{}>
+template <ConstexprString Name>
 struct NameTag {
     constexpr static auto name = Name.view(); // NOLINT
-    constexpr static auto base = BaseTags;    // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        return detail::perform_check<T, BaseTags>();
+        return true;
     }
 };
 
-template <ConstexprString Name, auto BaseTags = NoTags{}>
-inline constexpr auto rename_tag = NameTag<Name, BaseTags>{}; // NOLINT
+template <ConstexprString Name>
+inline constexpr auto rename_tag = NameTag<Name>{}; // NOLINT
 
 struct JsonTags {
-    TagValue<bool> flat{};      // NOLINT
-    TagValue<bool> skipable{};  // NOLINT
-    TagValue<bool> rawString{}; // NOLINT
+    TagValue<bool> flat{};
+    TagValue<bool> skipable{};
+    TagValue<bool> rawString{};
 
     /**
      * @brief 对 JsonTags 的类型约束进行编译期检查.
@@ -132,7 +130,7 @@ struct JsonTags {
 };
 
 struct BinaryTags {
-    TagValue<std::size_t> fixedLength{}; // NOLINT
-    TagValue<bool> unframed{};           // NOLINT
+    TagValue<std::size_t> fixedLength{};
+    TagValue<bool> unframed{};
 };
 NEKO_END_NAMESPACE

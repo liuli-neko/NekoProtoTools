@@ -175,7 +175,7 @@ if has_config("enable_communication") or has_config("enable_jsonrpc") then
     add_requires("ilias")
     if not has_config("3rd_custom") then
         -- configurations of required libraries
-        add_requireconfs("**ilias", {version = "0.4.2", configs = { shared = is_kind("shared"), stdcxx = get_config("stdcxx")}})
+        add_requireconfs("**ilias", {version = "0.4.2", configs = { shared = is_kind("shared"), stdcxx = tonumber(get_config("stdcxx"))}})
     end
 end
 

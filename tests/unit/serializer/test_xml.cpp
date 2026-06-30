@@ -158,10 +158,12 @@ TEST(PugiXmlBackend, MapsXmlContentFieldToNodeText) {
 
 TEST(PugiXmlBackend, WritesCommentTagsForObjectsAndArrays) {
     static_assert(parsing::supports_comments<xml::Writer>);
-    static_assert(tag_query::get<tag_prop::comment>(comment_tag<"values comment">) == std::string_view{"values comment"});
-    static_assert(tag_query::get<tag_prop::skipable>(comment_tag<"skip comment", JsonTags{.skipable = true}>));
-    static_assert(tag_query::has<tag_prop::name>(rename_tag<"value", comment_tag<"inner comment">>));
-    static_assert(tag_query::has<tag_prop::comment>(rename_tag<"value", comment_tag<"inner comment">>));
+    static_assert(tag_query::get<tag_prop::comment>(TagList<comment_tag<"values comment">>{}) ==
+                  std::string_view{"values comment"});
+    static_assert(
+        tag_query::get<tag_prop::skipable>(TagList<comment_tag<"skip comment">, JsonTags{.skipable = true}>{}));
+    static_assert(tag_query::has<tag_prop::name>(TagList<rename_tag<"value">, comment_tag<"inner comment">>{}));
+    static_assert(tag_query::has<tag_prop::comment>(TagList<rename_tag<"value">, comment_tag<"inner comment">>{}));
 
     XmlCommentedDocument source;
     source.values = {1, 2};
@@ -223,12 +225,12 @@ TEST(PugiXmlBackend, WritesCommentTagsForObjectsAndArrays) {
 
 struct Source {
     int source = 5;
-    NEKO_SERIALIZER((make_tags<rename_tag<"value", comment_tag<"inner comment">>>(source)));
+    NEKO_SERIALIZER((make_tags<rename_tag<"value">, comment_tag<"inner comment">>(source)));
 };
 
 struct OuterSource { // same as Source, tag order will not effect the output
     int source = 5;
-    NEKO_SERIALIZER((make_tags<comment_tag<"outer comment", rename_tag<"value">>>(source)));
+    NEKO_SERIALIZER((make_tags<comment_tag<"outer comment">, rename_tag<"value">>(source)));
 };
 
 TEST(PugiXmlBackend, WriteModifierTagsCanBeLayered) {

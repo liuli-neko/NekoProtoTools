@@ -50,7 +50,7 @@ struct TypeLevelUnframedEnvelope {
 
 inline constexpr auto RawStringTag     = JsonTags{.rawString = true};
 inline constexpr auto SkipableTag      = JsonTags{.skipable = true};
-inline constexpr auto FlattenedDocsTag = comment_tag<"flattened docs", JsonTags{.flat = true}>;
+inline constexpr auto FlattenedDocsTag = TagList<comment_tag<"flattened docs">, JsonTags{.flat = true}>{};
 
 struct MacroParsedTaggedObject {
     std::string raw;
@@ -129,7 +129,7 @@ bool contains(const std::vector<std::string>& values, std::string_view expected)
 
 TEST(SerializationTags, AccessorsResolveDirectAndNestedTagFlags) {
     constexpr auto Tags =
-        comment_tag<"outer comment", rename_tag<"wire_name", JsonTags{.flat = true, .skipable = true}>>;
+        TagList<comment_tag<"outer comment">, rename_tag<"wire_name">, JsonTags{.flat = true, .skipable = true}>{};
 
     static_assert(tag_query::has<tag_prop::comment>(Tags));
     static_assert(tag_query::get<tag_prop::comment>(Tags) == "outer comment");
@@ -150,7 +150,7 @@ TEST(SerializationTags, TypeLevelTagsAreVisibleThroughNoTags) {
 }
 
 TEST(SerializationTags, MakeTagsExposeAccessorAndWrappedTag) {
-    auto spec = make_tags<rename_tag<"wire_code", JsonTags{.skipable = true}>>(&TypeLevelFlatTagInner::code);
+    auto spec = make_tags<rename_tag<"wire_code">, JsonTags{.skipable = true}>(&TypeLevelFlatTagInner::code);
 
     static_assert(is_field_spec_v<decltype(spec)>);
     static_assert(std::is_same_v<detail::resolve_without_context_t<decltype(&TypeLevelFlatTagInner::code)>, int>);

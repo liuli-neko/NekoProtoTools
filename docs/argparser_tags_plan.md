@@ -5,10 +5,10 @@ common command-line interfaces pleasant to describe from metadata.
 
 ## Current Core Tags
 
-- [x] `arg_name<Long, Short, BaseTags>`: overrides the reflected field name and optional short name.
-- [x] `arg_help<Help, BaseTags>`: help text shown under the option.
-- [x] `arg_default<Default, BaseTags>`: value applied when CLI input is missing.
-- [x] `arg_choices<BaseTags, Choices...>`: allowed values for strings and enums.
+- [x] `arg_name<Long, Short>`: overrides the reflected field name and optional short name.
+- [x] `arg_help<Help>`: help text shown under the option.
+- [x] `arg_default<Default>`: value applied when CLI input is missing.
+- [x] `arg_choices<Choices...>`: allowed values for strings and enums.
 - [x] `ArgTags{.required = true}`: missing value is an error unless another source supplies it.
 - [x] `ArgTags{.positional = true}`: consumes positional argv entries.
 - [x] `ArgTags{.flag = true}`: option can be present without an explicit value.
@@ -19,14 +19,14 @@ common command-line interfaces pleasant to describe from metadata.
 
 ## Next Batch
 
-- [x] `arg_value_name<Name, BaseTags>`:
+- [x] `arg_value_name<Name>`:
   - Help-only placeholder for non-flag option values, e.g. `--output <PATH>`.
   - Default placeholder remains `<value>`.
-- [x] `arg_env<Name, BaseTags>`:
+- [x] `arg_env<Name>`:
   - Reads an environment variable when CLI input is missing.
   - Precedence: CLI > environment > default tag > struct initial value.
   - Environment values use the same parsing, range, and choices validation as CLI values.
-- [x] `arg_separator<Separator, BaseTags>`:
+- [x] `arg_separator<Separator>`:
   - Splits vector option values, e.g. `--include a,b,c`.
   - Repeated options still work and append.
   - Empty segments are parsed normally, so they are valid only when the vector element type accepts them.
@@ -44,20 +44,28 @@ common command-line interfaces pleasant to describe from metadata.
 - [x] `arg_group<Name>`:
   - Help-only section grouping.
   - Ungrouped options stay under `Options:`; named groups are emitted as additional help sections in declaration order.
-- [x] `arg_conflicts<BaseTags, Names...>` and `arg_requires<BaseTags, Names...>`:
+- [x] `arg_conflicts<Names...>` and `arg_requires<Names...>`:
   - Post-parse cross-field validation after CLI, environment, and default values have all been applied.
   - Names may reference canonical long names, short names, aliases, or the same names with `-`/`--` prefixes.
   - Missing required peers report `MissingRequired`; conflicting supplied peers report `InvalidValue`.
-- [x] `arg_deprecated<Message, BaseTags>`:
+- [x] `arg_deprecated<Message>`:
   - Keeps old options accepted while marking them in help.
   - `ArgParserConfig::deprecatedOptionHandler` can be used to emit warnings when deprecated CLI input is used.
   - Compose with `ArgTags{.hidden = true}` when a deprecated option should stay accepted but disappear from help.
-- [x] `arg_case_insensitive_choices<BaseTags>`:
+- [x] `arg_case_insensitive_choices`:
   - Opt-in relaxed choice matching for string and enum choices.
   - Enum names can be parsed with relaxed case when choices are present.
 
 ## Semantics To Keep Explicit
 
+- Argparser tags do not accept nested `BaseTags` template parameters. Compose them as parallel `make_tags<a, b, c>`.
+- If an input to `make_tags` is already a `TagList`, it is flattened into the surrounding tag list automatically.
+- Repeated properties use last-wins lookup after flattening. This supports explicit overrides without merging same-name
+  tags.
+- Positional tag access is tuple-like (`std::get<I>(tags)` / `tags.get<I>()`), but semantic reads should go through
+  `tag_query::get<tag_prop::...>` or `tag_query::get_tag<TagType>`.
+- Multi-value tags should stay variadic inside one tag, e.g. `arg_choices<a, b, c>`, `arg_aliases<a, b>`,
+  `arg_requires<a, b>`.
 - `required + default/env`: a supplied default or environment value satisfies `required`.
 - Range syntax is half-open: `[min, max)`.
 - Negative values after an option are consumed as values; positional negative values may still look like options unless

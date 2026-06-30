@@ -63,10 +63,10 @@ void rpc_visit_field(Field& field, std::string_view fieldName, const Tags& tags,
         fn(field);
     } else if constexpr (RpcReflectable<FieldT>) {
         std::string nextPrefix;
-        if constexpr (rpc_no_prefix_tag_v<Tags>()) {
+        if constexpr (tag_query::get<tag_prop::rpc_no_prefix>(tags)) {
             nextPrefix = std::string(prefix);
-        } else if constexpr (rpc_prefix_tag_value<Tags>().size() > 0) {
-            nextPrefix = rpc_join_name(prefix, rpc_prefix_tag_value<Tags>());
+        } else if constexpr (tag_query::has<tag_prop::rpc_prefix>(tags)) {
+            nextPrefix = rpc_join_name(prefix, tag_query::get<tag_prop::rpc_prefix>(tags));
         } else if (hasFieldName) {
             nextPrefix = rpc_join_name(prefix, fieldName);
         } else {
