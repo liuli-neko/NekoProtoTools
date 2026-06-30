@@ -27,11 +27,11 @@
   - 范围：基础类型、optional、variant、tuple、pair、sequence、map、指针、raw string、flat tag、缺字段策略、错误路径。
 - `tests/unit/serializer/test_tags.cpp`
   - 模块：`global/reflection_tags.hpp`、`serializer_base.hpp` 的 `make_tags`/`NEKO_SERIALIZER` 元数据解析，以及 tags 进入 parser/schema 后的行为。
-  - 范围：rename/comment/skipable/rawString/flat/unframed/fixedLength、递归 tag 消费、类型级 `is_flat_tag`/`is_unframed_tag`、JSON/Binary/schema 集成。
+  - 范围：rename/comment/skippable/raw_string/flat/unframed/fixed_length、递归 tag 消费、类型级 `is_flat_tag`/`is_unframed_tag`、JSON/Binary/schema 集成。
   - 用例分组：
     - `SerializationTags.*` 只验证 tag 元数据、宏解析、成员类型解析，不做真实 IO。
     - `SerializationTagIntegration.*` 验证 tag 经 JSON parser、schema generator、binary serializer 后的外部行为。
-  - 重点边界：`comment_tag` 包住 `rename_tag` 时的递归解析、`NEKO_SERIALIZER(make_tags<...>)` 对字段名的提取、扁平化对象里的 renamed 字段是否出现在 schema、缺失 skipable renamed 字段是否保留默认值、类型级 flat/unframed tag 是否在 `NoTags{}` 下仍生效。
+  - 重点边界：`comment_tag` 包住 `rename_tag` 时的递归解析、`NEKO_SERIALIZER(make_tags<...>)` 对字段名的提取、扁平化对象里的 renamed 字段是否出现在 schema、缺失 skippable renamed 字段是否保留默认值、类型级 flat/unframed tag 是否在 `NoTags{}` 下仍生效。
 - `tests/unit/serializer/test_binary_serializer.cpp`
   - 模块：Binary reader/writer、固定长度、unframed 布局。
   - 范围：结构体、非字符串 map key、pair、嵌套 unframed、固定长度错误、截断输入。

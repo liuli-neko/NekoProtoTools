@@ -33,7 +33,7 @@ inline std::string default_command_usage(std::string_view programName) {
     return usage;
 }
 
-inline std::string format_version_text(const ArgParserConfig& config) {
+inline std::string format_version_text(const argparser::ArgParserConfig& config) {
     std::string result;
     if (!config.programName.empty()) {
         result.append(config.programName);
@@ -63,17 +63,17 @@ inline std::string format_option_label(const ArgSpec& spec) {
 
     std::string result;
     if (spec.positional) {
-        result.append(spec.longName);
+        result.append(spec.long_name);
     } else {
-        if (!spec.shortName.empty()) {
-            append_name(result, "-", spec.shortName);
+        if (!spec.short_name.empty()) {
+            append_name(result, "-", spec.short_name);
         }
         for (const auto alias : spec.aliases) {
             if (alias.size() == 1) {
                 append_name(result, "-", alias);
             }
         }
-        append_name(result, "--", spec.longName);
+        append_name(result, "--", spec.long_name);
         for (const auto alias : spec.aliases) {
             if (alias.size() > 1) {
                 append_name(result, "--", alias);
@@ -82,7 +82,7 @@ inline std::string format_option_label(const ArgSpec& spec) {
     }
     if (!spec.flag && !spec.positional) {
         result.append(" <");
-        result.append(spec.valueName.empty() ? "value" : spec.valueName);
+        result.append(spec.value_name.empty() ? "value" : spec.value_name);
         result.push_back('>');
     }
     return result;
@@ -92,26 +92,26 @@ inline void append_option_details(std::string& result, const ArgSpec& spec) {
     if (spec.required) {
         result.append(" (required)");
     }
-    if (spec.hasRange) {
+    if (spec.has_range) {
         result.append(" (range: [");
-        result.append(format_number(spec.rangeMin));
+        result.append(format_number(spec.range_min));
         result.append(", ");
-        result.append(format_number(spec.rangeMax));
+        result.append(format_number(spec.range_max));
         result.append("))");
     }
-    if (spec.hasDefault) {
+    if (spec.has_default) {
         result.append(" (default: ");
-        result.append(spec.defaultValue);
+        result.append(spec.default_value);
         result.push_back(')');
     }
-    if (spec.hasImplicit) {
+    if (spec.has_implicit) {
         result.append(" (implicit: ");
-        result.append(spec.implicitValue);
+        result.append(spec.implicit_value);
         result.push_back(')');
     }
-    if (!spec.envName.empty()) {
+    if (!spec.env_name.empty()) {
         result.append(" (env: ");
-        result.append(spec.envName);
+        result.append(spec.env_name);
         result.push_back(')');
     }
     if (!spec.choices.empty()) {
@@ -124,14 +124,14 @@ inline void append_option_details(std::string& result, const ArgSpec& spec) {
         }
         result.append("})");
     }
-    if (spec.caseInsensitiveChoices && !spec.choices.empty()) {
+    if (spec.case_insensitive_choices && !spec.choices.empty()) {
         result.append(" (case-insensitive)");
     }
     if (spec.deprecated) {
         result.append(" (deprecated");
-        if (!spec.deprecatedMessage.empty()) {
+        if (!spec.deprecated_message.empty()) {
             result.append(": ");
-            result.append(spec.deprecatedMessage);
+            result.append(spec.deprecated_message);
         }
         result.push_back(')');
     }

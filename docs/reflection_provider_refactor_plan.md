@@ -89,16 +89,16 @@ The index-based shape maps cleanly to C++26 native reflection while current tupl
 
 `Reflect<T>::names()` returns reflected source names. Wire names and command-line option names remain tag semantics:
 
-- serializer field rename uses `tag_prop::name`,
-- argparser long names use `tag_prop::long_name`,
+- serializer field rename uses `tag_property::name`,
+- argparser long names use `tag_property::long_name`,
 - comments, skip behavior, flat/unframed, fixed length, and similar metadata stay in tags.
 
 Future C++26 annotations should be normalized by the native provider into the existing tag vocabulary:
 
 ```cpp
 NoTags
-JsonTags
-BinaryTags
+JsonTag
+BinaryTag
 TagList<...>
 ```
 
@@ -113,10 +113,10 @@ std::tuple_size_v<decltype(tags)>
 Semantic lookup should go through `tag_query` only:
 
 ```cpp
-tag_query::has<tag_prop::name>(tags)
-tag_query::get<tag_prop::name>(tags)
-tag_query::has_tag<JsonTags>(tags)
-tag_query::get_tag<JsonTags>(tags)
+tag_query::has<tag_property::name>(tags)
+tag_query::get<tag_property::name>(tags)
+tag_query::has_tag<JsonTag>(tags)
+tag_query::get_tag<JsonTag>(tags)
 ```
 
 When `make_tags` receives nested `TagList` values, it flattens them before storing field metadata. Property lookup and

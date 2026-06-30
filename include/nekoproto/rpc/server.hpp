@@ -167,7 +167,7 @@ public:
 private:
     template <typename Protocol>
     void _registerProtocol(Protocol& protocol, std::string_view prefix = {}) {
-        detail::forEachRpcMethod(protocol, [this](auto& method) { mDispatcher.registerRpcMethod(method); }, prefix);
+        detail::for_each_rpc_method(protocol, [this](auto& method) { mDispatcher.registerRpcMethod(method); }, prefix);
     }
 
     auto _init() noexcept -> void {

@@ -76,65 +76,65 @@ inline bool looks_like_option_boundary_for_implicit(std::string_view token, cons
     return is_option_token(token) && !looks_like_negative_number(token);
 }
 
-inline std::error_code record_raw_value(const ArgSchema& schema, RawParseResult& result, std::size_t specIndex,
+inline std::error_code record_raw_value(const ArgSchema& schema, RawParseResult& result, std::size_t spec_index,
                                         std::string_view value) {
-    if (specIndex >= schema.specs.size() || specIndex >= result.options.size()) {
+    if (spec_index >= schema.specs.size() || spec_index >= result.options.size()) {
         return make_error_code(ArgParserError::InvalidDefinition);
     }
-    const auto& spec = schema.specs[specIndex];
-    if (!spec.repeatable && spec.positional && result.options[specIndex].seen()) {
+    const auto& spec = schema.specs[spec_index];
+    if (!spec.repeatable && spec.positional && result.options[spec_index].seen()) {
         return make_error_code(ArgParserError::UnexpectedPositional);
     }
-    result.options[specIndex].values.emplace_back(value);
+    result.options[spec_index].values.emplace_back(value);
     return {};
 }
 
 inline std::error_code record_raw_positional(const ArgSchema& schema, RawParseResult& result,
-                                             std::size_t& positionalIndex, std::string_view value) {
-    if (positionalIndex >= schema.positionalSpecs.size()) {
+                                             std::size_t& positional_index, std::string_view value) {
+    if (positional_index >= schema.positional_specs.size()) {
         return make_error_code(ArgParserError::UnexpectedPositional);
     }
-    const auto specIndex = schema.positionalSpecs[positionalIndex];
-    if (auto error = record_raw_value(schema, result, specIndex, value)) {
+    const auto spec_index = schema.positional_specs[positional_index];
+    if (auto error = record_raw_value(schema, result, spec_index, value)) {
         return error;
     }
-    if (!schema.specs[specIndex].repeatable) {
-        ++positionalIndex;
+    if (!schema.specs[spec_index].repeatable) {
+        ++positional_index;
     }
     return {};
 }
 
-inline std::error_code record_raw_option(const ArgSchema& schema, RawParseResult& result, std::size_t specIndex,
+inline std::error_code record_raw_option(const ArgSchema& schema, RawParseResult& result, std::size_t spec_index,
                                          int argc, const char* const* argv, int& idx, std::string_view value,
-                                         bool valueInline, const ArgParserConfig& config) {
-    const auto& spec = schema.specs[specIndex];
-    if (spec.flag || valueInline) {
-        return record_raw_value(schema, result, specIndex, value);
+                                         bool value_inline, const ArgParserConfig& config) {
+    const auto& spec = schema.specs[spec_index];
+    if (spec.flag || value_inline) {
+        return record_raw_value(schema, result, spec_index, value);
     }
     if (idx + 1 < argc && argv[idx + 1] != nullptr) {
         const std::string_view nextValue = argv[idx + 1];
-        if (!spec.hasImplicit || !looks_like_option_boundary_for_implicit(nextValue, config)) {
-            return record_raw_value(schema, result, specIndex, argv[++idx]);
+        if (!spec.has_implicit || !looks_like_option_boundary_for_implicit(nextValue, config)) {
+            return record_raw_value(schema, result, spec_index, argv[++idx]);
         }
     }
-    if (spec.hasImplicit) {
-        return record_raw_value(schema, result, specIndex, spec.implicitValue);
+    if (spec.has_implicit) {
+        return record_raw_value(schema, result, spec_index, spec.implicit_value);
     }
     return make_error_code(ArgParserError::MissingValue);
 }
 
 inline expected::expected<RawParseResult, std::error_code> parse_raw_arguments(const ArgSchema& schema, int argc,
-                                                                               const char* const* argv, int startIndex,
+                                                                               const char* const* argv, int start_index,
                                                                                const ArgParserConfig& config) {
     RawParseResult result;
     result.options.resize(schema.specs.size());
-    std::size_t positionalIndex = 0;
+    std::size_t positional_index = 0;
     bool forcePositional        = false;
 
-    for (int idx = startIndex; idx < argc; ++idx) {
+    for (int idx = start_index; idx < argc; ++idx) {
         std::string_view arg = argv[idx] == nullptr ? std::string_view{} : std::string_view(argv[idx]);
         if (forcePositional) {
-            if (auto error = record_raw_positional(schema, result, positionalIndex, arg)) {
+            if (auto error = record_raw_positional(schema, result, positional_index, arg)) {
                 return unexpected_error(error);
             }
             continue;
@@ -154,22 +154,22 @@ inline expected::expected<RawParseResult, std::error_code> parse_raw_arguments(c
         if (arg.starts_with("--")) {
             auto body        = arg.substr(2);
             auto value       = std::string_view{};
-            bool valueInline = false;
+            bool value_inline = false;
             if (const auto equal = body.find('='); equal != std::string_view::npos) {
                 value       = body.substr(equal + 1);
                 body        = body.substr(0, equal);
-                valueInline = true;
+                value_inline = true;
             }
 
-            const auto specIndex = schema.find_long_index(body);
-            if (!specIndex.has_value()) {
+            const auto spec_index = schema.find_long_index(body);
+            if (!spec_index.has_value()) {
                 if (config.allowUnknown) {
                     continue;
                 }
                 return unexpected_error(make_error_code(ArgParserError::UnknownOption));
             }
             if (auto error =
-                    record_raw_option(schema, result, *specIndex, argc, argv, idx, value, valueInline, config)) {
+                    record_raw_option(schema, result, *spec_index, argc, argv, idx, value, value_inline, config)) {
                 return unexpected_error(error);
             }
             continue;
@@ -178,65 +178,65 @@ inline expected::expected<RawParseResult, std::error_code> parse_raw_arguments(c
         if (arg.starts_with("-") && arg.size() > 1) {
             auto body        = arg.substr(1);
             auto value       = std::string_view{};
-            bool valueInline = false;
+            bool value_inline = false;
             if (const auto equal = body.find('='); equal != std::string_view::npos) {
                 value       = body.substr(equal + 1);
                 body        = body.substr(0, equal);
-                valueInline = true;
+                value_inline = true;
             }
 
-            if (config.allowShortCluster && body.size() > 1 && !valueInline) {
-                const char firstShortName[] = {body[0], '\0'};
-                const auto firstSpecIndex   = schema.find_short_index(firstShortName);
-                if (firstSpecIndex.has_value() && !schema.specs[*firstSpecIndex].flag) {
-                    if (auto error = record_raw_value(schema, result, *firstSpecIndex, body.substr(1))) {
+            if (config.allowShortCluster && body.size() > 1 && !value_inline) {
+                const char first_short_name[] = {body[0], '\0'};
+                const auto first_spec_index   = schema.find_short_index(first_short_name);
+                if (first_spec_index.has_value() && !schema.specs[*first_spec_index].flag) {
+                    if (auto error = record_raw_value(schema, result, *first_spec_index, body.substr(1))) {
                         return unexpected_error(error);
                     }
                     continue;
                 }
 
                 for (char ch : body) {
-                    const char shortName[] = {ch, '\0'};
-                    const auto specIndex   = schema.find_short_index(shortName);
-                    if (!specIndex.has_value()) {
+                    const char short_name[] = {ch, '\0'};
+                    const auto spec_index   = schema.find_short_index(short_name);
+                    if (!spec_index.has_value()) {
                         if (config.allowUnknown) {
                             continue;
                         }
                         return unexpected_error(make_error_code(ArgParserError::UnknownOption));
                     }
-                    if (!schema.specs[*specIndex].flag) {
+                    if (!schema.specs[*spec_index].flag) {
                         return unexpected_error(make_error_code(ArgParserError::MissingValue));
                     }
-                    if (auto error = record_raw_value(schema, result, *specIndex, {})) {
+                    if (auto error = record_raw_value(schema, result, *spec_index, {})) {
                         return unexpected_error(error);
                     }
                 }
                 continue;
             }
 
-            auto specIndex = schema.find_short_index(body);
-            if (!specIndex.has_value() && body.size() > 1 && !valueInline) {
-                const char shortName[] = {body[0], '\0'};
-                specIndex              = schema.find_short_index(shortName);
-                if (specIndex.has_value()) {
+            auto spec_index = schema.find_short_index(body);
+            if (!spec_index.has_value() && body.size() > 1 && !value_inline) {
+                const char short_name[] = {body[0], '\0'};
+                spec_index              = schema.find_short_index(short_name);
+                if (spec_index.has_value()) {
                     value       = body.substr(1);
-                    valueInline = true;
+                    value_inline = true;
                 }
             }
-            if (!specIndex.has_value()) {
+            if (!spec_index.has_value()) {
                 if (config.allowUnknown) {
                     continue;
                 }
                 return unexpected_error(make_error_code(ArgParserError::UnknownOption));
             }
             if (auto error =
-                    record_raw_option(schema, result, *specIndex, argc, argv, idx, value, valueInline, config)) {
+                    record_raw_option(schema, result, *spec_index, argc, argv, idx, value, value_inline, config)) {
                 return unexpected_error(error);
             }
             continue;
         }
 
-        if (auto error = record_raw_positional(schema, result, positionalIndex, arg)) {
+        if (auto error = record_raw_positional(schema, result, positional_index, arg)) {
             return unexpected_error(error);
         }
     }

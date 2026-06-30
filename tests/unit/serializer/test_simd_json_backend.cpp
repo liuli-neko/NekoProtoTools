@@ -29,7 +29,7 @@ struct RawSimdField {
 
     struct Neko {
         static constexpr auto value =
-            Object("payload", make_tags<JsonTags{.rawString = true}>(&RawSimdField::payload)); // NOLINT
+            Object("payload", make_tags<JsonTag{.raw_string = true}>(&RawSimdField::payload)); // NOLINT
     };
 };
 

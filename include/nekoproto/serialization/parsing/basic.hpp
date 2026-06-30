@@ -41,7 +41,7 @@ parsing::schema::Type parser_arithmetic_schema() {
 
 template <typename W, typename ParentType, typename Tags>
 ParserResult parser_write_string(W& writer, std::string_view value, const ParentType& parent, const Tags& tags) {
-    if (tag_query::get<tag_prop::raw_string>(tags)) {
+    if (tag_query::get<tag_property::raw_string>(tags)) {
         if constexpr (requires(std::string_view text, typename W::RawValueType& raw) { W::parseRawValue(text, raw); }) {
             typename W::RawValueType raw;
             if (!W::parseRawValue(value, raw)) {
@@ -57,7 +57,7 @@ ParserResult parser_write_string(W& writer, std::string_view value, const Parent
 
 template <typename R, typename Tags>
 ParserResult parser_read_string(typename R::InputValueType in, std::string& value, const Tags& tags) {
-    if (tag_query::get<tag_prop::raw_string>(tags)) {
+    if (tag_query::get<tag_property::raw_string>(tags)) {
         if constexpr (requires { R::toRawString(in); }) {
             auto raw = R::toRawString(in);
             if (!raw) {
@@ -79,15 +79,15 @@ template <typename W, typename T>
 struct WriteParser<W, T, std::enable_if_t<std::is_arithmetic_v<T>>> {
     template <typename ParentType, typename Tags>
     static ParserResult write(W& writer, const T& value, const ParentType& parent, const Tags& tags) {
-        if (tag_query::has<tag_prop::fixed_length<void>>(tags)) {
+        if (tag_query::has<tag_property::fixed_length<void>>(tags)) {
             if constexpr (parsing::supports_fixed_length_writer<W, T>) {
-                const auto fixedLength = tag_query::get<tag_prop::fixed_length<T>>(tags);
-                if (fixedLength != sizeof(T)) {
+                const auto fixed_length = tag_query::get<tag_property::fixed_length<T>>(tags);
+                if (fixed_length != sizeof(T)) {
                     return parser_error(sa::ErrorCode::InvalidLength,
                                         "Fixed-length arithmetic field requires " + std::to_string(sizeof(T)) +
-                                            " bytes for its C++ type, got " + std::to_string(fixedLength));
+                                            " bytes for its C++ type, got " + std::to_string(fixed_length));
                 }
-                parsing::Parent<W>::addFixedValue(writer, value, fixedLength, parent);
+                parsing::Parent<W>::addFixedValue(writer, value, fixed_length, parent);
                 return sa::success();
             }
         }
@@ -100,15 +100,15 @@ template <typename R, typename T>
 struct ReadParser<R, T, std::enable_if_t<std::is_arithmetic_v<T>>> {
     template <typename Tags>
     static ParserResult read(typename R::InputValueType in, T& value, const Tags& tags) {
-        if (tag_query::has<tag_prop::fixed_length<void>>(tags)) {
+        if (tag_query::has<tag_property::fixed_length<void>>(tags)) {
             if constexpr (parsing::supports_fixed_length_reader<R, T>) {
-                const auto fixedLength = tag_query::get<tag_prop::fixed_length<T>>(tags);
-                if (fixedLength != sizeof(T)) {
+                const auto fixed_length = tag_query::get<tag_property::fixed_length<T>>(tags);
+                if (fixed_length != sizeof(T)) {
                     return parser_error(sa::ErrorCode::InvalidLength,
                                         "Fixed-length arithmetic field requires " + std::to_string(sizeof(T)) +
-                                            " bytes for its C++ type, got " + std::to_string(fixedLength));
+                                            " bytes for its C++ type, got " + std::to_string(fixed_length));
                 }
-                auto result = R::template toFixedBasicType<T>(in, fixedLength);
+                auto result = R::template toFixedBasicType<T>(in, fixed_length);
                 if (!result) {
                     return result.error();
                 }
@@ -258,10 +258,10 @@ struct ReadParser<R, std::basic_string_view<CharT, Traits>, void> {
     template <typename Tags>
     static ParserResult read(typename R::InputValueType in, StringView& value, const Tags& tags) {
         static_assert(ParserIsByteCharV<CharT>, "Serialized string views must use byte-sized characters");
-        if (tag_query::get<tag_prop::raw_string>(tags)) {
+        if (tag_query::get<tag_property::raw_string>(tags)) {
             if constexpr (requires { R::toRawString(in); }) {
                 return parser_error(sa::ErrorCode::InvalidType,
-                                    "rawString cannot be read into string_view without owned storage");
+                                    "raw_string cannot be read into string_view without owned storage");
             }
         }
         if constexpr (requires { R::template toStringView<CharT, Traits>(in); }) {

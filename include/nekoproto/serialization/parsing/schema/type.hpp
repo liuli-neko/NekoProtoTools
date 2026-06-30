@@ -67,7 +67,7 @@ struct Type {
     Type(T schema) : value(std::move(schema)) {}
 
     Value value;
-    std::optional<std::size_t> fixedLength;
+    std::optional<std::size_t> fixed_length;
     bool unframed = false;
 };
 

@@ -92,8 +92,8 @@ template <typename R, typename W, typename T>
 concept parser_serializable = parser_writable<W, T> && parser_readable<R, T>;
 
 template <typename W, auto Tags, typename Accessor>
-struct WriteParser<W, FieldSpec<Tags, Accessor>, void> {
-    using Field = FieldSpec<Tags, Accessor>;
+struct WriteParser<W, TaggedField<Tags, Accessor>, void> {
+    using Field = TaggedField<Tags, Accessor>;
 
     template <typename ParentType, typename ParentTags>
     static ParserResult write(W& writer, const Field& field, const ParentType& parent, const ParentTags& /*tags*/) {
@@ -102,8 +102,8 @@ struct WriteParser<W, FieldSpec<Tags, Accessor>, void> {
 };
 
 template <typename R, auto Tags, typename Accessor>
-struct ReadParser<R, FieldSpec<Tags, Accessor>, void> {
-    using Field = FieldSpec<Tags, Accessor>;
+struct ReadParser<R, TaggedField<Tags, Accessor>, void> {
+    using Field = TaggedField<Tags, Accessor>;
 
     template <typename ParentTags>
     static ParserResult read(typename R::InputValueType in, Field& field, const ParentTags& /*tags*/) {
@@ -112,8 +112,8 @@ struct ReadParser<R, FieldSpec<Tags, Accessor>, void> {
 };
 
 template <auto Tags, typename Accessor>
-struct SchemaParser<FieldSpec<Tags, Accessor>, void> {
-    using Field = FieldSpec<Tags, Accessor>;
+struct SchemaParser<TaggedField<Tags, Accessor>, void> {
+    using Field = TaggedField<Tags, Accessor>;
 
     static parsing::schema::Type toSchema() {
         return parser_schema<std::remove_cvref_t<typename Field::accessor_type>>();

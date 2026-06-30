@@ -34,13 +34,13 @@ reflect-cpp 风格通用 Parser 模型的计划。
 - [x] 删除 `ParserBackend` / `RapidJsonBackend` / `ParserFormatOps` 胶水层。
 - [x] 删除 `ParserRuntimeTags` / `ParseContext`，原始 tag 类型和值直接传入 Parser。
 - [x] 删除 `json/rapid_json_parser.hpp`，通用 parser include 统一到 `parsing/parsers.hpp`。
-- [x] 锁定 tag 边界：`flat/skipable` 属于反射字段，`rawString` 属于字符串 Parser + JSON 能力，`fixedLength` 留给 binary Parser。
+- [x] 锁定 tag 边界：`flat/skippable` 属于反射字段，`raw_string` 属于字符串 Parser + JSON 能力，`fixed_length` 留给 binary Parser。
 - [x] Parser 返回值统一为 `sa::Result<void>`，保留具体错误码、字段名和元素索引上下文。
 - [x] 为缺失 required 字段、tuple 长度、JSON 语法和 raw JSON 错误补充错误码/message 测试。
 - [x] 将 `test_json_serializer.cpp` 整体从旧状态机 API 迁移到 `operator()` roundtrip/JSON 形状断言。
 - [x] simdjson 改为薄 Reader + 共享 JSON TextWriter，public serializer 直接调用通用 Parser。
-- [x] binary 实现 stream-style Reader/Writer，保留旧 wire layout，并让 `fixedLength` tag 选择可选能力。
-- [x] `fixedLength` 通过 `supports_fixed_length<Reader, Writer, T>` 检测完整读写 API 组，
+- [x] binary 实现 stream-style Reader/Writer，保留旧 wire layout，并让 `fixed_length` tag 选择可选能力。
+- [x] `fixed_length` 通过 `supports_fixed_length<Reader, Writer, T>` 检测完整读写 API 组，
   arithmetic Parser 不再内联后端 API 探测。
 - [x] 删除 `FixedLengthField/make_fixed_length_field` 壳；binary 定长字段只从反射 tags 获取宽度。
 - [x] 反射元数据从 value wrapper 迁移为独立字段 metadata；tags 只描述字段/调用边，
@@ -148,7 +148,7 @@ InputSerializer::operator()(value)
 重构后默认应保持以下行为，除非测试和调用方明确改约定：
 
 - arithmetic、bool：写为 basic value；有反射名称的 enum 优先写名称，否则写 underlying integer。
-- `std::string` / `std::string_view` / `const char*`：写为字符串；`rawString` tag 生效时写入原始 JSON 值。
+- `std::string` / `std::string_view` / `const char*`：写为字符串；`raw_string` tag 生效时写入原始 JSON 值。
 - `std::vector<T>`、`std::list<T>`、`std::deque<T>`：写为数组。
 - `std::array<T, N>`：写为数组，读取时 size 必须匹配或返回失败。
 - `std::set<T>` / `std::unordered_set<T>` / multiset：写为数组。
@@ -157,7 +157,7 @@ InputSerializer::operator()(value)
 - `std::map<std::string,V>` / `std::unordered_map<std::string,V>`：写为对象。
 - 非字符串 key 的 map/multimap/unordered_map：写为数组，每个元素是 `{ "key": ..., "value": ... }`。
 - `std::optional<T>`：有值写 inner value，无值写 null；缺失时默认 reset。
-- 字段带 `skipable` 时允许缺失且保留目标对象原值，不要求字段类型必须是 optional。
+- 字段带 `skippable` 时允许缺失且保留目标对象原值，不要求字段类型必须是 optional。
 - `std::shared_ptr<T>` / `std::unique_ptr<T>`：空指针写 null，非空写 `*ptr`。
 - `std::variant<Ts...>`：保持当前 variant 形状；迁移前需要用测试锁定具体 JSON 形状。
 - `std::monostate`：写 null。
@@ -275,11 +275,11 @@ Parser 层负责 C++ 类型规则：
 - sequence parser：vector/list/deque/array/set/multiset/unordered_set。
 - map parser：区分 string-key map 和 non-string-key map。
 - tuple parser：pair 和 tuple。
-- optional parser：空值、缺失字段、`skipable`。
+- optional parser：空值、缺失字段、`skippable`。
 - pointer parser：空指针和对象生命周期。
 - variant parser：variant 形状、monostate、类型选择。
 - reflection parser：反射字段遍历、字段名、缺失字段、flatten。
-- tag parser：`FieldSpec` 将调用点/字段 tags 传给被绑定的 value；反射元数据定义期拆出
+- tag parser：`TaggedField` 将调用点/字段 tags 传给被绑定的 value；反射元数据定义期拆出
   `name/accessor/tags`，不把 tags 存在 value wrapper 里。
 - backend-native value parser：例如 `RapidJsonValue`，只在对应 backend 的 specialization 里实现。
 
@@ -294,11 +294,11 @@ Parser 层不应该：
 
 现有 tag：
 
-- `JsonTags::flat`
-- `JsonTags::skipable`
-- `JsonTags::rawString`
-- `BinaryTags::fixedLength`
-- `BinaryTags::unframed`
+- `JsonTag::flat`
+- `JsonTag::skippable`
+- `JsonTag::raw_string`
+- `BinaryTag::fixed_length`
+- `BinaryTag::unframed`
 
 迁移目标：
 
@@ -315,17 +315,17 @@ Parser 层不应该：
 - 如果一个 struct 作为另一个 struct 的成员被标了 tags，这些 tags 只作用于这个成员槽位；进入该
   struct 自己的字段遍历后，只使用其内部字段各自的 tags，不与外层 tags 合并。
 - Reflection 将原始 `Tags` 对象直接传给 `Parser<Reader, Writer, T>`，不压缩为公共 runtime context。
-- `FieldSpec`、`optional<T>`、`shared_ptr<T>`、`unique_ptr<T>`、`variant<Ts...>` 这类“同一槽位的透明包装”
+- `TaggedField`、`optional<T>`、`shared_ptr<T>`、`unique_ptr<T>`、`variant<Ts...>` 这类“同一槽位的透明包装”
   可以继续把当前 tags 透传给其内部值；`struct/object`、`tuple/pair`、`array/sequence`、`map` 这类“进入子槽位”
   的结构边界不继续向子元素传播外层 tags。
-- `skipable` 由 reflection/object-field parser 消费：命名字段缺失时成功并保留目标对象原值；显式 null 仍交给字段类型 Parser 判断。
-- 未标记 `skipable` 的 optional 字段缺失时 reset；普通字段缺失时失败。
+- `skippable` 由 reflection/object-field parser 消费：命名字段缺失时成功并保留目标对象原值；显式 null 仍交给字段类型 Parser 判断。
+- 未标记 `skippable` 的 optional 字段缺失时 reset；普通字段缺失时失败。
 - 对 positional/定序格式，不存在“命名键缺失”；长度/读取位置满足即视为字段存在，null 是否有效仍由类型决定。
 - `flat` 由 reflection/object parser 消费，将子对象字段展开到父 object；无命名或无法表达 flatten 的后端后续通过 Reader/Writer capability 或后端 Parser 特化处理。
-- `rawString` 由 string parser 消费；RapidJSON 通过 `Writer::RawValueType/parseRawValue` 和 `Reader::toRawString` 提供可选能力，其他后端可忽略该 JSON tag。
-- `fixedLength` 是当前字段/值的宽度修饰，`unframed` 是当前 object 值在当前绑定位置上的布局修饰；
+- `raw_string` 由 string parser 消费；RapidJSON 通过 `Writer::RawValueType/parseRawValue` 和 `Reader::toRawString` 提供可选能力，其他后端可忽略该 JSON tag。
+- `fixed_length` 是当前字段/值的宽度修饰，`unframed` 是当前 object 值在当前绑定位置上的布局修饰；
   仅声明相应 capability 的后端消费。
-- JSON 收到 `fixedLength/unframed` 时保持普通具名 JSON 表达。
+- JSON 收到 `fixed_length/unframed` 时保持普通具名 JSON 表达。
 
 ### Tag API 收敛目标
 
@@ -333,14 +333,14 @@ Parser 层不应该：
 
 - 绑定层：
   - `make_tags<Tags>(accessor)`
-  - `FieldSpec<Tags, Accessor>`
+  - `TaggedField<Tags, Accessor>`
   - `field_accessor(...)`
   - `field_tags_v<T>`
 - 查询层：
   - `tag_query::has_name(tags)` / `tag_query::name(tags)`
   - `tag_query::has_comment(tags)` / `tag_query::comment(tags)`
   - `tag_query::is_flat<T>(tags)`
-  - `tag_query::is_skipable(tags)`
+  - `tag_query::is_skippable(tags)`
   - `tag_query::is_raw_string(tags)`
   - `tag_query::is_fixed_length(tags)` / `tag_query::fixed_length<T>(tags)`
   - `tag_query::is_unframed<T>(tags)`
@@ -372,21 +372,21 @@ Parser 层不应该：
 
 1. 通用 parser 入口
 
-- 不负责 `name`、`flat`、`skipable`、`fixedLength`、`unframed` 的消费。
+- 不负责 `name`、`flat`、`skippable`、`fixed_length`、`unframed` 的消费。
 - 可保留对“附着在当前 parent 上的注释类信息”的统一处理，但实现上不再依赖 `consume_recursive_comment`。
 - 更推荐 comment 和 field-name 一样，在实际拥有 parent/object-field 语义的地方消费。
 
 2. reflection object-field parser
 
 - 消费 `name`：决定 object field key。
-- 消费 `skipable`：决定命名字段缺失时的行为。
+- 消费 `skippable`：决定命名字段缺失时的行为。
 - 消费 `flat`：决定是否把子 object 展开到父 object。
 - 消费 `comment`：决定是否在该字段对应的父节点位置附加注释。
 - 不把以上 tag 继续传给该 struct 的内部字段。
 
 3. reflection positional parser
 
-- 不消费 `name`、`skipable`、`flat`。
+- 不消费 `name`、`skippable`、`flat`。
 - 只按 positional 规则处理长度与索引错误。
 - 字段各自只看自己的 field tags。
 
@@ -397,13 +397,13 @@ Parser 层不应该：
 
 5. basic/string/arithmetic parser
 
-- string parser 消费 `rawString`。
-- arithmetic / binary-capable parser 消费 `fixedLength`。
+- string parser 消费 `raw_string`。
+- arithmetic / binary-capable parser 消费 `fixed_length`。
 - 它们只影响当前 value 的编解码，不影响外层 object/array 结构。
 
 6. transparent wrapper parser
 
-- `FieldSpec`、`optional<T>`、`shared_ptr<T>`、`unique_ptr<T>`、`variant<Ts...>` 继续透传 tags。
+- `TaggedField`、`optional<T>`、`shared_ptr<T>`、`unique_ptr<T>`、`variant<Ts...>` 继续透传 tags。
 - 原因：它们仍然代表“同一个逻辑槽位中的值”，不是新的字段层级。
 
 7. structural container parser
@@ -415,7 +415,7 @@ Parser 层不应该：
 
 - 多次 `rename` 在 serializer 中没有明确语义；采用“最多一个生效值”的查询模型即可。
 - 多次 `comment` 如需兼容旧写法，也只定义“当前查询返回一个 comment”，不要求支持按顺序层层消费。
-- 不同 tag 的消费顺序不应构成公开语义。实现可以按 `if (flat) ...; if (has_name) ...; if (skipable) ...`
+- 不同 tag 的消费顺序不应构成公开语义。实现可以按 `if (flat) ...; if (has_name) ...; if (skippable) ...`
   组织，但外部不应依赖 tag 的链式顺序。
 - 对 serializer 而言，tag 的问题规模不能通过“递归去掉一个 tag 后继续求解”自然缩小；更合适的模型是
   “针对当前 binding 做一组独立 query”。
@@ -445,11 +445,11 @@ Parser 层不应该：
 
 已补测试：
 
-- [x] `make_tags<JsonTags{.skipable = true}>(field)` 缺字段时成功并保留原值。
-- [x] `make_tags<JsonTags{.rawString = true}>(std::string{"{\"a\":1}"})` 写出 JSON object，而不是转义字符串。
-- [x] `make_tags<JsonTags{.flat = true}>(nestedStruct)` 字段展开。
-- [x] `make_tags<BinaryTags{.fixedLength = true}>(field)` 在 JSON 中不改变输出。
-- [x] `BinaryTags{.unframed = true}` 从类型级 metadata 迁移为字段/调用级 metadata；JSON 收到该 tag 时仍输出具名对象。
+- [x] `make_tags<JsonTag{.skippable = true}>(field)` 缺字段时成功并保留原值。
+- [x] `make_tags<JsonTag{.raw_string = true}>(std::string{"{\"a\":1}"})` 写出 JSON object，而不是转义字符串。
+- [x] `make_tags<JsonTag{.flat = true}>(nestedStruct)` 字段展开。
+- [x] `make_tags<BinaryTag{.fixed_length = true}>(field)` 在 JSON 中不改变输出。
+- [x] `BinaryTag{.unframed = true}` 从类型级 metadata 迁移为字段/调用级 metadata；JSON 收到该 tag 时仍输出具名对象。
 
 ## 分阶段迁移计划
 
@@ -504,10 +504,10 @@ Parser 层不应该：
 - [x] 收窄 `NEKO_DEFINE_NESTED_TAG`，只生成 `tag_query::xxx(tags)` 和 `tag_query::has_xxx(tags)`。
 - [x] 删除 serialization tag 查询层的 `tag_access` 命名空间。
 - [x] 删除 serialization tag 查询层的 `recursive_*` / `has_recursive_*` / `consume_*` / `consume_recursive_*`。
-- [x] 删除 `CommentTag` / `NameTag` 的 `rebind_base` 以及 `detail::rebind_tag_base`。
-- [x] `basic.hpp` 使用 `tag_query` 读取 `rawString` / `fixedLength`。
+- [x] 删除 `tag_detail::comment_tag_impl` / `tag_detail::rename_tag_impl` 的 `rebind_base` 以及 `detail::rebind_tag_base`。
+- [x] `basic.hpp` 使用 `tag_query` 读取 `raw_string` / `fixed_length`。
 - [x] `parser.hpp` 移除通用入口里的 comment 递归消费逻辑。
-- [x] `reflection.hpp` 的 named object field 写入使用 `tag_query` 查询 `name/comment/skipable/flat`。
+- [x] `reflection.hpp` 的 named object field 写入使用 `tag_query` 查询 `name/comment/skippable/flat`。
 - [x] `reflection.hpp` 的 named object field 读取不再 rebuild 剩余 tags。
 - [x] `reflection.hpp` 的 positional field comment 写入移动到 positional field 槽位。
 - [x] `test_tags.cpp` 从验证链式拆解改为验证最终 query 语义。
@@ -521,7 +521,7 @@ Parser 层不应该：
 - [x] 删除 argparser tag 中无用的 `rebind_base` 符号。
 - [x] 确认 serialization/argparser 内不再保留 `tag_access` / `recursive_*` / `consume_*` / `rebind_base`。
 - [x] 运行 `xmake build test_argparser`。
-- [x] 新增公共反射 tag 头 `global/reflection_tags.hpp`，承载 `FieldSpec` / `make_tags` / `NoTags` / `field_tags_v`。
+- [x] 新增公共反射 tag 头 `global/reflection_tags.hpp`，承载 `TaggedField` / `make_tags` / `NoTags` / `field_tags_v`。
 - [x] 将 `NEKO_DEFINE_NESTED_TAG` 从 serialization private 头移到 `global/reflection_tags.hpp`，供 serialization / argparser / rpc 共用。
 - [x] `serialization/private/tags.hpp` 收敛为 serialization 具体 tag 与 query 语义，不再定义反射基础设施。
 - [x] `rpc/tags.hpp` 改为依赖公共反射 tag 头，并删除残留 `rebind_base`。
@@ -617,14 +617,14 @@ Parser 层不应该：
 
 - [x] simdjson：Reader 包装 DOM handle 与 parser 生命周期；Writer 复用后端无关 JSON 文本树。
 - [x] binary：使用顺序 cursor/frame Reader 和 stream-style Writer，不伪装成 JSON DOM。
-- [x] binary：`fixedLength` 通过 Reader/Writer 可选能力消费，JSON 后端忽略该修饰。
+- [x] binary：`fixed_length` 通过 Reader/Writer 可选能力消费，JSON 后端忽略该修饰。
 - [x] schema：Parser 生成后端无关类型 schema，再转换为 JSON Schema Draft-07。
 - [x] xml：pugixml Reader/Writer 接入通用 Parser；支持元素、属性读取、`xml_content` 和数组 roundtrip。
 
 重点：
 
-- binary 的 fixed-length 应走 `fixedLength` tag 和 schema/format capability。
-- XML 不应强行复用 JSON rawString。
+- binary 的 fixed-length 应走 `fixed_length` tag 和 schema/format capability。
+- XML 不应强行复用 JSON raw_string。
 - schemaful 格式要区分 object、map、union。
 
 ### Phase 6: 删除旧实现
@@ -743,7 +743,7 @@ Parser 层不应该：
 - 风险：当前 RapidJSON parser 已经能跑，继续堆功能会形成新的 JSON-only 架构。
   处理：只允许 RapidJSON 文件保留 native value 和后端 Reader/Writer；容器/反射规则必须逐步移出。
 
-- 风险：`rawString` 天然偏 JSON，放到通用 tag 后可能误导非 JSON 后端。
+- 风险：`raw_string` 天然偏 JSON，放到通用 tag 后可能误导非 JSON 后端。
   处理：string Parser 只在 Reader/Writer 声明 raw-value 能力时启用；其他后端按普通字符串处理。
 
 - 风险：旧 size helper 模型和 schemaful 格式冲突。
