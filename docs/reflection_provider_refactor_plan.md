@@ -43,7 +43,7 @@ Explicit user metadata has priority over automatic discovery:
 3. Future C++26 native reflection provider.
 4. Current aggregate `AutoUnwrap` fallback.
 
-The future native backend is meant to replace the current `AutoUnwrap` path, not override user-declared metadata. Users who need private fields, custom accessors, ABI-stable field order, or manual tags should keep using `T::Neko` or `Meta<T>`.
+The future native backend is meant to replace the current `AutoUnwrap` path, not override user-declared metadata. Users who need private fields, custom accessors, ABI-stable field order, or manual tags should prefer non-intrusive `Meta<T>` specializations. `T::Neko` remains supported as the macro/local metadata shape.
 
 ## Layering
 
@@ -71,7 +71,7 @@ It also performs tag/type checks after provider metadata is normalized.
 
 ### Provider SPI
 
-Providers adapt concrete metadata sources into a common shape. The transitional provider still exposes tuple-like accessors because the current codebase is built around `Object`, `Array`, `NEKO_SERIALIZER`, and aggregate unwrap. The desired long-term provider shape is index-based:
+Providers adapt concrete metadata sources into a common shape. The transitional provider still exposes tuple-like accessors because the current codebase supports `Object`, `Array`, `Meta<T>`, `T::Neko`, and aggregate unwrap. The desired long-term provider shape is index-based:
 
 ```cpp
 Provider<T>::value_count

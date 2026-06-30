@@ -12,12 +12,13 @@
  * If you don't need cross language protocols, this would be a good choice
  *
  * @section usage_sec Usage
- * Include this header and use NEKO_SERIALIZER to expose message fields,
- * then use NEKO_DECLARE_PROTOCOL to select a serialization backend.
+ * Include this header, expose message fields with non-intrusive `Meta<T>`
+ * metadata, then use NEKO_DECLARE_PROTOCOL to select a serialization backend.
  *
  * @section example_sec Example
  * @code {.c++}
  * #include "proto_base.hpp"
+ * #include "reflection.hpp"
  * #include "json_serializer.hpp"
  * #include "serializer_base.hpp"
  *
@@ -25,9 +26,16 @@
  *     int a;
  *     std::string b;
  *
- *     NEKO_SERIALIZER(a, b)
  *     NEKO_DECLARE_PROTOCOL(ProtoMessage, JsonSerializer)
- * }
+ * };
+ *
+ * namespace NekoProto {
+ * template <>
+ * struct Meta<::ProtoMessage> {
+ *     constexpr static auto value =
+ *         Object("a", &::ProtoMessage::a, "b", &::ProtoMessage::b);
+ * };
+ * } // namespace NekoProto
  *
  * int main() {
  *     ProtoFactory factory(1, 0, 0);

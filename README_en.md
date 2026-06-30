@@ -22,7 +22,7 @@ Current version: **0.3.1**. This release adds a reflection-driven command-line a
 
 Core features of this library:
 
-*   **Simplified Message Definition**: Using templates and macros, you only need to define the fields of your message and declare the members to be processed. Any custom C++ type can then be used as a serializable object or protocol message.
+*   **Simplified Message Definition**: Business types only need to define fields. The recommended manual metadata entry is a non-intrusive `template<> struct Meta<T>`, which makes custom C++ types usable as serializable objects or protocol messages.
 *   **Unified Parser Serialization Layer**: JSON, Binary, XML, and schema generation share one set of type rules; RapidJSON, simdjson, pugixml, and the binary format are thin backends.
 *   **Field-Level Metadata Tags**: `make_tags<Tag>(field)` describes a field or call site instead of permanently annotating the type, so the same type can use different layouts in different contexts.
 *   **Reflection-Driven ArgParser**: Define CLI options with reflected objects and tags, including nested options, subcommands, defaults, environment variables, aliases, conflicts/requires rules, and help/version output.
@@ -90,9 +90,10 @@ target("your_project")
 
 ### 4.1. Basic Serialization/Deserialization
 
-Only include the basic header file and use the `NEKO_SERIALIZER` macro to mark members for serialization.
+Only include the basic headers and provide non-intrusive `Meta<T>` metadata for the type. `NEKO_SERIALIZER` remains available for simple cases, but the README promotes `Meta<T>` so business types and library metadata stay separate.
 
 ```cpp
+#include <nekoproto/serialization/reflection.hpp>
 #include <nekoproto/serialization/serializer_base.hpp>
 #include <nekoproto/serialization/json_serializer.hpp> // Use JSON serializer
 #include <iostream>
@@ -104,10 +105,15 @@ struct MyData {
     int         id;
     std::string name;
     double      score;
-
-    // Declare members to be serialized
-    NEKO_SERIALIZER(id, name, score);
 };
+
+namespace NekoProto {
+template <>
+struct Meta<::MyData> {
+    constexpr static auto value =
+        Object("id", &::MyData::id, "name", &::MyData::name, "score", &::MyData::score);
+};
+} // namespace NekoProto
 
 int main() {
     using namespace NekoProto; // Introduce namespace
@@ -147,10 +153,11 @@ int main() {
 
 ### 4.2. Defining Protocol Messages (with Reflection and Polymorphism)
 
-If you need protocol management, reflection, and polymorphism support, include `proto_base.hpp` and use the `NEKO_DECLARE_PROTOCOL` macro.
+If you need protocol management, reflection, and polymorphism support, include `proto_base.hpp` and use `NEKO_DECLARE_PROTOCOL` for the protocol wrapper entry. Field metadata is still recommended as external `Meta<T>` metadata.
 
 ```cpp
 #include <nekoproto/proto/proto_base.hpp>
+#include <nekoproto/serialization/reflection.hpp>
 #include <nekoproto/serialization/serializer_base.hpp>
 #include <nekoproto/serialization/json_serializer.hpp> // Specify default serializer
 #include <iostream>
@@ -162,9 +169,6 @@ struct UserProfile {
     int         userId;
     std::string username;
 
-    // 1. Declare serialization members
-    NEKO_SERIALIZER(userId, username);
-    // 2. Declare as a protocol and specify the default serializer
     NEKO_DECLARE_PROTOCOL(UserProfile, JsonSerializer);
 };
 
@@ -172,9 +176,22 @@ struct LoginRequest {
     std::string username;
     std::string password_hash;
 
-    NEKO_SERIALIZER(username, password_hash);
     NEKO_DECLARE_PROTOCOL(LoginRequest, JsonSerializer);
 };
+
+namespace NekoProto {
+template <>
+struct Meta<::UserProfile> {
+    constexpr static auto value =
+        Object("userId", &::UserProfile::userId, "username", &::UserProfile::username);
+};
+
+template <>
+struct Meta<::LoginRequest> {
+    constexpr static auto value =
+        Object("username", &::LoginRequest::username, "password_hash", &::LoginRequest::password_hash);
+};
+} // namespace NekoProto
 
 
 int main() {
@@ -244,23 +261,32 @@ Serializers are responsible for converting C++ objects into byte streams (serial
     *   For basic serialization, directly instantiate the required `OutputSerializer` / `InputSerializer`.
     *   For protocol messages (`NEKO_DECLARE_PROTOCOL`), specify the default serializer during declaration.
 *   **Schema Generation**: Include `<nekoproto/serialization/json/schema.hpp>` and call `generate_schema<T>(schema)` to generate a Draft-07 style JSON Schema.
-*   **Serialization Extensions**: Use `detail::CustomParser<R, W, T>` for custom types; new formats implement Reader/Writer backends. See [7. Serialization Extensions](#7-serialization-extensions).
+*   **Serialization Extensions**: Use `CustomParser<T>` for custom types; new formats implement Reader/Writer backends. See [7. Serialization Extensions](#7-serialization-extensions).
 
 ### 5.2. Field Tags And Call-Site Metadata
 
 `make_tags<Tag>(value_or_accessor)` describes how a field should be handled in the current binding. It is not permanent type metadata, so the same type can use different tags in different structs, backends, or top-level calls.
 
 ```cpp
+#include <nekoproto/serialization/reflection.hpp>
 #include <nekoproto/serialization/binary_serializer.hpp>
 #include <cstdint>
 
 struct Header {
     std::uint32_t length = 0;
     std::uint16_t type = 0;
-
-    NEKO_SERIALIZER(make_tags<BinaryTag{.fixed_length = sizeof(std::uint32_t)}>(length),
-                    make_tags<BinaryTag{.fixed_length = sizeof(std::uint16_t)}>(type))
 };
+
+namespace NekoProto {
+template <>
+struct Meta<::Header> {
+    constexpr static auto value =
+        Object("length",
+               make_tags<BinaryTag{.fixed_length = sizeof(std::uint32_t)}>(&::Header::length),
+               "type",
+               make_tags<BinaryTag{.fixed_length = sizeof(std::uint16_t)}>(&::Header::type));
+};
+} // namespace NekoProto
 
 std::vector<char> buffer;
 BinarySerializer::OutputSerializer out(buffer);
@@ -295,27 +321,30 @@ struct BuildOptions {
     int jobs = 1;
     std::string mode = "debug";
     std::vector<std::string> include;
-
-    struct Neko {
-        constexpr static auto value =
-            Object("verbose",
-                   make_tags<arg_name<"verbose", "v",
-                                      arg_help<"enable verbose logs", ArgTags{.flag = true}>>>(
-                       &BuildOptions::verbose),
-                   "jobs",
-                   make_tags<arg_name<"jobs", "j",
-                                      arg_default<4, arg_help<"parallel jobs",
-                                                              ArgTags{.rangeMin = 1, .rangeMax = 65}>>>>(
-                       &BuildOptions::jobs),
-                   "mode",
-                   make_tags<arg_name<"mode", "m",
-                                      arg_choices<ArgTags{}, "debug", "release">>>(&BuildOptions::mode),
-                   "include",
-                   make_tags<arg_name<"include", "I",
-                                      arg_help<"include path", ArgTags{.repeatable = true}>>>(
-                       &BuildOptions::include));
-    };
 };
+
+namespace NekoProto {
+template <>
+struct Meta<::BuildOptions> {
+    constexpr static auto value =
+        Object("verbose",
+               make_tags<argparser::arg_name<"verbose", "v">,
+                         argparser::arg_help<"enable verbose logs">,
+                         argparser::ArgTags{.flag = true}>(&::BuildOptions::verbose),
+               "jobs",
+               make_tags<argparser::arg_name<"jobs", "j">,
+                         argparser::arg_default<4>,
+                         argparser::arg_help<"parallel jobs">,
+                         argparser::ArgTags{.range_min = 1, .range_max = 65}>(&::BuildOptions::jobs),
+               "mode",
+               make_tags<argparser::arg_name<"mode", "m">,
+                         argparser::arg_choices<"debug", "release">>(&::BuildOptions::mode),
+               "include",
+               make_tags<argparser::arg_name<"include", "I">,
+                         argparser::arg_help<"include path">,
+                         argparser::ArgTags{.repeatable = true}>(&::BuildOptions::include));
+};
+} // namespace NekoProto
 
 int main(int argc, char** argv) {
     auto result = parser<BuildOptions>(argc, argv);
@@ -365,6 +394,7 @@ This library provides a coroutine-based communication abstraction layer built up
 ```cpp
 #include <nekoproto/communication/communication_base.hpp>
 #include <nekoproto/proto/proto_base.hpp>
+#include <nekoproto/serialization/reflection.hpp>
 #include <nekoproto/serialization/json_serializer.hpp>
 
 #include <ilias/net.hpp>         // Ilias network library
@@ -386,9 +416,18 @@ public:
     std::string sender;
     std::string content;
 
-    NEKO_SERIALIZER(timestamp, sender, content);
     NEKO_DECLARE_PROTOCOL(ChatMessage, JsonSerializer); // Declare as a protocol
 };
+
+namespace NekoProto {
+template <>
+struct Meta<::ChatMessage> {
+    constexpr static auto value =
+        Object("timestamp", &::ChatMessage::timestamp,
+               "sender", &::ChatMessage::sender,
+               "content", &::ChatMessage::content);
+};
+} // namespace NekoProto
 
 // Simple server coroutine
 ilias::Task<> server_task(PlatformContext& ioContext, ProtoFactory& protoFactory) {
@@ -523,6 +562,7 @@ The RPC module is now split into a generic frontend plus replaceable backends. `
 ```cpp
 #include <nekoproto/rpc/rpc.hpp>
 #include <nekoproto/jsonrpc/backend.hpp>
+#include <nekoproto/serialization/reflection.hpp>
 #include <nekoproto/serialization/serializer_base.hpp>
 
 #include <ilias/platform.hpp>
@@ -536,25 +576,38 @@ NEKO_USE_NAMESPACE
 struct CalculatorApi {
     RpcMethod<int(int, int), "add", "lhs", "rhs"> add;
     RpcMethod<int(std::vector<int>), "sum", "items"> sum;
-
-    NEKO_SERIALIZER(add, sum)
 };
 
 struct CommonApi {
     RpcMethod<std::string(), "version"> version;
-
-    NEKO_SERIALIZER(version)
 };
 
 struct AppApi {
     CalculatorApi calc;
     CommonApi common;
+};
 
+namespace NekoProto {
+template <>
+struct Meta<::CalculatorApi> {
+    constexpr static auto value = Object("add", &::CalculatorApi::add, "sum", &::CalculatorApi::sum);
+};
+
+template <>
+struct Meta<::CommonApi> {
+    constexpr static auto value = Object("version", &::CommonApi::version);
+};
+
+template <>
+struct Meta<::AppApi> {
     // calc is registered as "calc.add" / "calc.sum".
     // common keeps the C++ access path client->common.version(),
     // while the remote method name is just "version".
-    NEKO_SERIALIZER(calc, make_tags<rpc_no_prefix_tag>(common))
+    constexpr static auto value =
+        Object("calc", &::AppApi::calc,
+               "common", make_tags<rpc_no_prefix_tag>(&::AppApi::common));
 };
+} // namespace NekoProto
 
 int main() {
     ilias::PlatformContext context;
@@ -604,23 +657,35 @@ RPC namespaces are derived by expanding reflected fields in protocol sets:
 ```cpp
 struct AdminApi {
     RpcMethod<void(), "reload"> reload;
-    NEKO_SERIALIZER(reload)
 };
 
 struct UserApi {
     RpcMethod<std::string(std::uint64_t), "name", "id"> name;
-    NEKO_SERIALIZER(name)
 };
 
 struct Api {
     AdminApi admin;
     UserApi user;
-
-    NEKO_SERIALIZER(
-        admin,                                      // remote name "admin.reload"
-        make_tags<rpc_prefix_tag<"account">>(user) // remote name "account.name"
-    )
 };
+
+namespace NekoProto {
+template <>
+struct Meta<::AdminApi> {
+    constexpr static auto value = Object("reload", &::AdminApi::reload);
+};
+
+template <>
+struct Meta<::UserApi> {
+    constexpr static auto value = Object("name", &::UserApi::name);
+};
+
+template <>
+struct Meta<::Api> {
+    constexpr static auto value =
+        Object("admin", &::Api::admin,                                      // remote name "admin.reload"
+               "user", make_tags<rpc_prefix_tag<"account">>(&::Api::user)); // remote name "account.name"
+};
+} // namespace NekoProto
 ```
 
 `rpc_prefix_tag<"...">` and `rpc_no_prefix_tag` only affect the full remote method name; they do not change the C++ member access path. Full-name conflicts surface during registration, so prefer explicit prefixes when APIs may collide.
@@ -782,9 +847,17 @@ struct NekoRpcError {
     std::int32_t code = 0;
     std::string message;
     std::vector<std::byte> data;
-
-    NEKO_SERIALIZER(code, message, data)
 };
+
+namespace NekoProto {
+template <>
+struct Meta<::NekoRpcError> {
+    constexpr static auto value =
+        Object("code", &::NekoRpcError::code,
+               "message", &::NekoRpcError::message,
+               "data", &::NekoRpcError::data);
+};
+} // namespace NekoProto
 ```
 
 `NekoRpcBackend` is a serializer-policy backend:
@@ -829,7 +902,7 @@ Design check:
 *   **Generality**: The RPC frontend keeps only method metadata, registration, binding, calls, and complete-message endpoints. JSON-RPC ids, batch handling, request/response envelopes, and wire error mapping live in `JsonRpcBackend`.
 *   **Minimal Interface**: The current backend interface follows the actual use sites in `RpcDispatcher` / `RpcClient`; it does not add listeners, sessions, transport ownership, or inheritance layers. Stream support is attached through the optional static `makeEndpoint` hook.
 *   **Non-Intrusive Extension**: Protocol structs only need `RpcMethod` fields and reflection metadata. Naming policy is attached at the field use site through `make_tags<rpc_prefix_tag>` / `make_tags<rpc_no_prefix_tag>`.
-*   **Consistent With Serialization Extensions**: Serialization extends through `detail::CustomParser<R, W, T>`, while RPC backends extend through static functions and concept-style requirements. Both avoid requiring business types to inherit framework base classes.
+*   **Consistent With Serialization Extensions**: Serialization extends through `CustomParser<T>`, while RPC backends extend through static functions and concept-style requirements. Both avoid requiring business types to inherit framework base classes.
 *   **Future Improvements**: Common `invoke` / tuple expansion helpers could reduce boilerplate for custom backends.
 
 ---
@@ -838,7 +911,7 @@ Design check:
 
 Serialization backends include the common Parser set, so standard containers and basic types no longer require separate `serialization/types/*.hpp` headers. Since 0.3.0, JSON, Binary, XML, and schema generation reuse the same type rules whenever possible; format-specific behavior is handled by backend capabilities or explicit specializations.
 
-The common Parser set currently covers arithmetic types, strings, enums, `std::optional`, pointers, `std::variant`, `std::tuple`/`std::pair`, sequence containers, sets, maps, `std::array`, `std::bitset`, `std::atomic`, `std::byte`, `BinaryData<T>`, and reflected structs exposed via `NEKO_SERIALIZER` or `Meta<T>`.
+The common Parser set currently covers arithmetic types, strings, enums, `std::optional`, pointers, `std::variant`, `std::tuple`/`std::pair`, sequence containers, sets, maps, `std::array`, `std::bitset`, `std::atomic`, `std::byte`, `BinaryData<T>`, and reflected structs exposed through non-intrusive `Meta<T>` metadata. `NEKO_SERIALIZER` remains available as a convenience macro.
 
 more details can be found in the [Supported Types Overview](https://github.com/liuli-neko/NekoProtoTools/wiki/Supported-Types-Overview).
 
@@ -846,7 +919,7 @@ more details can be found in the [Supported Types Overview](https://github.com/l
 
 ## 7. Serialization Extensions
 
-To support a custom C++ type, specialize `detail::CustomParser<R, W, T>`. The implementation can reuse existing parsers and work across JSON, Binary, and XML backends.
+To support a custom C++ type, specialize the public `CustomParser<T>`. The implementation can reuse existing parser entries, so the same extension can work across JSON, Binary, and XML backends.
 
 ```cpp
 #include <nekoproto/serialization/parsing/parsers.hpp>
@@ -855,24 +928,24 @@ struct StrongId {
     std::uint64_t value = 0;
 };
 
-namespace NekoProto::detail {
-template <typename R, typename W>
-struct CustomParser<R, W, StrongId> {
-    template <typename Parent, typename Tags>
+namespace NekoProto {
+template <>
+struct CustomParser<StrongId> {
+    template <typename W, typename Parent, typename Tags>
     static ParserResult write(W& writer, const StrongId& id, const Parent& parent, const Tags& tags) {
-        return parser_write<R, W>(writer, id.value, parent, tags);
+        return parser_write<W>(writer, id.value, parent, tags);
     }
 
-    template <typename Tags>
+    template <typename R, typename Tags>
     static ParserResult read(typename R::InputValueType in, StrongId& id, const Tags& tags) {
-        return parser_read<R, W>(in, id.value, tags);
+        return parser_read<R>(in, id.value, tags);
     }
 
     static parsing::schema::Type toSchema() {
-        return parser_schema<R, W, std::uint64_t>();
+        return parser_schema<std::uint64_t>();
     }
 };
-} // namespace NekoProto::detail
+} // namespace NekoProto
 ```
 
 To add a new data format, implement a backend with responsibilities matching the existing `rapid::Reader/Writer` or `binary::Reader/Writer`, then call `parser_write` and `parser_read` from its serializer entry points.
@@ -913,7 +986,7 @@ To add a new data format, implement a backend with responsibilities matching the
 *   [ ] Add explicit framing adapters for external JSON-RPC interoperability, such as LSP `Content-Length`, newline-delimited JSON, WebSocket messages, and datagrams.
 *   [x] Add `NekoRpcBackend<Serializer>` / `BinaryRpcBackend` with a fixed binary frame header and replaceable payload serializer.
 *   [x] Add the first `NekoRpcBackend` hello negotiation and connection-lifetime full-table method id optimization. See [`docs/rpc_method_id_design.md`](docs/rpc_method_id_design.md).
-*   [ ] Continue `NekoRpcBackend` dynamic method id table updates, delta/signature/compatibility error handling, and compression TLVs.
+*   [x] Complete `NekoRpcBackend` dynamic method id table updates, delta/signature/compatibility error handling, compression TLVs, replaceable compression codec policy, and basic compression statistics.
 *   [x] Add explicit `RpcBackend` / `BackendSerializable` concepts for clearer custom-backend diagnostics.
 *   [ ] Support for JSON-RPC extensions.
 *   [x] Add the default `rpc` introspection member:
@@ -928,6 +1001,8 @@ To add a new data format, implement a backend with responsibilities matching the
 ## 9. Development History (Selected Milestones)
 
 *   **v0.3.1**
+    *   Split serialization parser dispatch into `WriteParser<Writer, T>`, `ReadParser<Reader, T>`, and `SchemaParser<T>`; the user extension point is now the public `CustomParser<T>`.
+    *   Recommended manual reflection metadata now uses non-intrusive `template<> struct Meta<T>`; `NEKO_SERIALIZER` remains as a convenience macro.
     *   Added `NekoArgParser` / `<nekoproto/argparser/argparser.hpp>`: CLI schemas can now be defined with static reflection and tags, returning `std::expected<..., std::error_code>`.
     *   ArgParser supports long/short options, positional arguments, flags, repeatable values, nested options, defaults, environment variables, choices/ranges, automatic help/version output, and subcommands.
     *   Expanded arg tags with `arg_aliases`, `arg_implicit`, `arg_group`, `arg_conflicts`, `arg_requires`, `arg_deprecated`, `arg_case_insensitive_choices`, and related metadata.

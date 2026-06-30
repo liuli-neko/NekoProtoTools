@@ -6,23 +6,33 @@
  * @mainpage NekoProtoTools
  *
  * @section intro_sec Introduction
- * Provides NEKO_SERIALIZER, which exposes class members as reflection metadata
- * consumed by the parser-based serialization backends.
+ * Parser-based serialization backends consume reflection metadata. Prefer the
+ * non-intrusive `template<> struct Meta<T>` form for hand-written metadata; this
+ * header also provides the `NEKO_SERIALIZER` convenience macro.
  *
  * @section usage_sec Usage
- * you only need to use NEKO_SERIALIZER in your class, and specify the members you want to
- * serialize.
+ * Define the data type normally, then provide `Meta<T>` metadata in the
+ * NekoProto namespace.
  *
  * @section example_sec Example
  * @code {.c++}
  *
  * class MyClass {
+ * public:
  *     std::string name;
  *     int age;
  *     std::string address;
- *
- *     NEKO_SERIALIZER(name, age, address)
  * };
+ *
+ * namespace NekoProto {
+ * template <>
+ * struct Meta<::MyClass> {
+ *     constexpr static auto value =
+ *         Object("name", &::MyClass::name,
+ *                "age", &::MyClass::age,
+ *                "address", &::MyClass::address);
+ * };
+ * } // namespace NekoProto
  *
  * int main()
  *     MyClass obj;

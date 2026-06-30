@@ -182,20 +182,33 @@ RpcClient<JsonRpcBackend, AdminApi, UserApi, FileApi> client(ctx);
 ```cpp
 struct A {
     RpcMethod<int(int), "xxx", "value"> xxx;
-    NEKO_SERIALIZER(xxx)
 };
 
 struct B {
     RpcMethod<std::string(std::string), "xxx", "value"> xxx;
-    NEKO_SERIALIZER(xxx)
 };
 
 struct Api {
     A a;
     B b;
-
-    NEKO_SERIALIZER(a, b)
 };
+
+namespace NekoProto {
+template <>
+struct Meta<::A> {
+    constexpr static auto value = Object("xxx", &::A::xxx);
+};
+
+template <>
+struct Meta<::B> {
+    constexpr static auto value = Object("xxx", &::B::xxx);
+};
+
+template <>
+struct Meta<::Api> {
+    constexpr static auto value = Object("a", &::Api::a, "b", &::Api::b);
+};
+} // namespace NekoProto
 
 RpcServer<JsonRpcBackend, Api> server(ctx);
 RpcClient<JsonRpcBackend, Api> client(ctx);
@@ -225,25 +238,22 @@ b.xxx
 
 RPC 复用现有 `make_tags<Tag>(field)` 风格，将注册策略描述为字段 metadata，而不是写死进 protocol 类型。
 
-建议新增：
+当前定义：
 
 ```cpp
-template <ConstexprString Prefix, auto BaseTags = NoTags{}>
+template <ConstexprString Prefix>
 struct RpcPrefixTag {
     constexpr static auto prefix = Prefix;
-    constexpr static auto base = BaseTags;
 };
 
-template <auto BaseTags = NoTags{}>
 struct RpcNoPrefixTag {
-    constexpr static bool noPrefix = true;
-    constexpr static auto base = BaseTags;
+    constexpr static bool no_prefix = true;
 };
 
-template <ConstexprString Prefix, auto BaseTags = NoTags{}>
-inline constexpr auto rpc_prefix_tag = RpcPrefixTag<Prefix, BaseTags>{};
+template <ConstexprString Prefix>
+inline constexpr auto rpc_prefix_tag = RpcPrefixTag<Prefix>{};
 
-inline constexpr auto rpc_no_prefix_tag = RpcNoPrefixTag<>{};
+inline constexpr auto rpc_no_prefix_tag = RpcNoPrefixTag{};
 ```
 
 使用示例：
@@ -254,14 +264,18 @@ struct Api {
     B b;
     Common common;
     Legacy legacy;
-
-    NEKO_SERIALIZER(
-        a,                                      // 默认前缀 "a"
-        make_tags<rpc_prefix_tag<"service.b">>(b),
-        make_tags<rpc_no_prefix_tag>(common),   // 不加前缀，但仍通过 client->common.xxx 调用
-        make_tags<rpc_no_prefix_tag>(legacy)    // 不加前缀，但仍通过 client->legacy.xxx 调用
-    )
 };
+
+namespace NekoProto {
+template <>
+struct Meta<::Api> {
+    constexpr static auto value =
+        Object("a", &::Api::a,                                      // 默认前缀 "a"
+               "b", make_tags<rpc_prefix_tag<"service.b">>(&::Api::b),
+               "common", make_tags<rpc_no_prefix_tag>(&::Api::common), // 不加前缀，但仍通过 client->common.xxx 调用
+               "legacy", make_tags<rpc_no_prefix_tag>(&::Api::legacy)); // 不加前缀，但仍通过 client->legacy.xxx 调用
+};
+} // namespace NekoProto
 ```
 
 建议语义：
@@ -276,13 +290,24 @@ struct Api {
 ```cpp
 struct Common {
     RpcMethod<std::string(), "version"> version;
-    NEKO_SERIALIZER(version)
 };
 
 struct Api {
     Common common;
-    NEKO_SERIALIZER(make_tags<rpc_no_prefix_tag>(common))
 };
+
+namespace NekoProto {
+template <>
+struct Meta<::Common> {
+    constexpr static auto value = Object("version", &::Common::version);
+};
+
+template <>
+struct Meta<::Api> {
+    constexpr static auto value =
+        Object("common", make_tags<rpc_no_prefix_tag>(&::Api::common));
+};
+} // namespace NekoProto
 
 auto v = co_await client->common.version();              // 发送远端方法名 "version"
 auto v2 = co_await client.callRemote<std::string>("version");
@@ -377,8 +402,16 @@ Protocol field path + Rpc tags + RpcMethod method name -> fullName
 struct Api {
     A a;
     B b;
-    NEKO_SERIALIZER(a, make_tags<rpc_prefix_tag<"bee">>(b))
 };
+
+namespace NekoProto {
+template <>
+struct Meta<::Api> {
+    constexpr static auto value =
+        Object("a", &::Api::a,
+               "b", make_tags<rpc_prefix_tag<"bee">>(&::Api::b));
+};
+} // namespace NekoProto
 ```
 
 生成：
@@ -393,8 +426,15 @@ bee.xxx
 ```cpp
 struct Api {
     SystemRpc system;
-    NEKO_SERIALIZER(make_tags<rpc_no_prefix_tag>(system))
 };
+
+namespace NekoProto {
+template <>
+struct Meta<::Api> {
+    constexpr static auto value =
+        Object("system", make_tags<rpc_no_prefix_tag>(&::Api::system));
+};
+} // namespace NekoProto
 ```
 
 生成：

@@ -15,7 +15,7 @@ common command-line interfaces pleasant to describe from metadata.
 - [x] `ArgTags{.repeatable = true}`: option can occur multiple times.
 - [x] `ArgTags{.hidden = true}`: omit from help.
 - [x] `ArgTags{.command = true}`: field participates in command dispatch.
-- [x] `ArgTags{.rangeMin = min, .rangeMax = max}`: numeric range, currently `[min, max)`.
+- [x] `ArgTags{.range_min = min, .range_max = max}`: numeric range, currently `[min, max)`.
 
 ## Next Batch
 
