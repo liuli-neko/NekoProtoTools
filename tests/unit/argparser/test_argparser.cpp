@@ -182,7 +182,7 @@ TEST(ArgParser, CommandSetReturnsVariant) {
 
     auto result = parser<ToolCommands>(static_cast<int>(std::size(argv)), argv);
 
-    using ExpectedType = std::expected<std::variant<BuildCommand, ArgCommand>, std::error_code>;
+    using ExpectedType = expected::expected<std::variant<BuildCommand, ArgCommand>, std::error_code>;
     static_assert(std::is_same_v<decltype(result), ExpectedType>);
 
     ASSERT_TRUE(result.has_value()) << result.error().message();

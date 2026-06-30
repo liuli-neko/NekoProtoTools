@@ -5,7 +5,9 @@
 #include "nekoproto/serialization/reflection.hpp"
 
 #include <optional>
+#include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 NEKO_USE_NAMESPACE
 
@@ -14,6 +16,31 @@ struct Test1 {
     int member2 = 125;
     int member3 = 462;
 };
+
+template <typename T>
+consteval bool can_reflect_ref_any_from_rvalue_index() {
+    return requires { Reflect<T>::value(T{}, 0); };
+}
+
+template <typename T>
+consteval bool can_reflect_ref_any_from_rvalue_name() {
+    return requires { Reflect<T>::value(T{}, std::string_view{"member1"}); };
+}
+
+static_assert(std::is_constructible_v<detail::RefAny, int&>);
+static_assert(std::is_constructible_v<detail::RefAny, const int&>);
+static_assert(!std::is_constructible_v<detail::RefAny, int>);
+static_assert(!std::is_constructible_v<detail::RefAny, int&&>);
+static_assert(requires(Test1& test) {
+    Reflect<Test1>::value(test, 0);
+    Reflect<Test1>::value(test, std::string_view{"member1"});
+});
+static_assert(requires(const Test1& test) {
+    Reflect<Test1>::value(test, 0);
+    Reflect<Test1>::value(test, std::string_view{"member1"});
+});
+static_assert(!can_reflect_ref_any_from_rvalue_index<Test1>());
+static_assert(!can_reflect_ref_any_from_rvalue_name<Test1>());
 
 TEST(Reflection, Test) {
     EXPECT_FALSE(detail::has_values_meta<int*>);

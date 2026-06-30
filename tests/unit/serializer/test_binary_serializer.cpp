@@ -56,28 +56,20 @@ struct InvalidTaggedFixedLength {
 
     struct Neko {
         static constexpr auto value =
-            Object("value",
-                   make_tags<BinaryTags{.fixedLength = 2}>(
-                       &InvalidTaggedFixedLength::value)); // NOLINT
+            Object("value", make_tags<BinaryTags{.fixedLength = 2}>(&InvalidTaggedFixedLength::value)); // NOLINT
     };
 };
 
 struct TaggedUnframedHeader {
     std::uint32_t length = 0;
-    std::int32_t data = 0;
-    std::uint16_t type = 0;
+    std::int32_t data    = 0;
+    std::uint16_t type   = 0;
 
     struct Neko {
-        static constexpr auto value =
-            Object("length",
-                   make_tags<BinaryTags{.fixedLength = sizeof(std::uint32_t)}>(
-                       &TaggedUnframedHeader::length),
-                   "data",
-                   make_tags<BinaryTags{.fixedLength = sizeof(std::int32_t)}>(
-                       &TaggedUnframedHeader::data),
-                   "type",
-                   make_tags<BinaryTags{.fixedLength = sizeof(std::uint16_t)}>(
-                       &TaggedUnframedHeader::type)); // NOLINT
+        static constexpr auto value = Object(
+            "length", make_tags<BinaryTags{.fixedLength = sizeof(std::uint32_t)}>(&TaggedUnframedHeader::length),
+            "data", make_tags<BinaryTags{.fixedLength = sizeof(std::int32_t)}>(&TaggedUnframedHeader::data), "type",
+            make_tags<BinaryTags{.fixedLength = sizeof(std::uint16_t)}>(&TaggedUnframedHeader::type)); // NOLINT
     };
 };
 
@@ -87,10 +79,31 @@ struct TaggedUnframedEnvelope {
 
     struct Neko {
         static constexpr auto value =
-            Object("header", make_tags<BinaryTags{.unframed = true}>(&TaggedUnframedEnvelope::header),
-                   "tail", &TaggedUnframedEnvelope::tail); // NOLINT
+            Object("header", make_tags<BinaryTags{.unframed = true}>(&TaggedUnframedEnvelope::header), "tail",
+                   &TaggedUnframedEnvelope::tail); // NOLINT
     };
 };
+
+struct PublicCustomParserId {
+    std::uint64_t value = 0;
+};
+
+NEKO_BEGIN_NAMESPACE
+template <>
+struct CustomParser<::PublicCustomParserId> {
+    template <typename W, typename Parent, typename Tags>
+    static ParserResult write(W& writer, const ::PublicCustomParserId& id, const Parent& parent, const Tags& tags) {
+        return parser_write<W>(writer, id.value, parent, tags);
+    }
+
+    template <typename R, typename Tags>
+    static ParserResult read(typename R::InputValueType in, ::PublicCustomParserId& id, const Tags& tags) {
+        return parser_read<R>(in, id.value, tags);
+    }
+
+    static parsing::schema::Type toSchema() { return parser_schema<std::uint64_t>(); }
+};
+NEKO_END_NAMESPACE
 
 TEST(BinarySerializer, Serialize) {
     std::vector<char> buf;
@@ -245,18 +258,32 @@ TEST(BinarySerializer, BinaryTagSelectsFixedLengthCapability) {
     EXPECT_EQ(decoded.value, source.value);
 }
 
+TEST(BinarySerializer, PublicCustomParserRoundTripsAndBuildsSchema) {
+    const PublicCustomParserId source{0x0102030405060708ULL};
+    std::vector<char> buffer;
+    BinarySerializer::OutputSerializer output(buffer);
+    ASSERT_TRUE(output(source));
+
+    PublicCustomParserId decoded;
+    BinarySerializer::InputSerializer input(buffer.data(), buffer.size());
+    ASSERT_TRUE(input(decoded));
+    EXPECT_EQ(decoded.value, source.value);
+
+    const auto schema   = parser_schema<PublicCustomParserId>();
+    const auto expected = parser_schema<std::uint64_t>();
+    EXPECT_EQ(schema.value.index(), expected.value.index());
+}
+
 TEST(BinarySerializer, BinaryTagIsPreservedInGenericSchema) {
-    const auto schema =
-        detail::parser_schema<binary::Reader, binary::Writer, TaggedFixedLength>();
+    const auto schema  = parser_schema<TaggedFixedLength>();
     const auto& object = std::get<parsing::schema::Type::Object>(schema.value);
-    const auto& field = object.properties.at("value");
+    const auto& field  = object.properties.at("value");
     ASSERT_TRUE(field.fixedLength);
     EXPECT_EQ(*field.fixedLength, sizeof(std::uint32_t));
 }
 
 TEST(BinarySerializer, UnframedIsNotStoredAsTypeSchemaMetadata) {
-    const auto schema =
-        detail::parser_schema<binary::Reader, binary::Writer, TaggedUnframedHeader>();
+    const auto schema = parser_schema<TaggedUnframedHeader>();
     EXPECT_FALSE(schema.unframed);
 }
 

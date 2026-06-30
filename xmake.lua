@@ -18,6 +18,17 @@ set_configdir("include/nekoproto/global")
 
 includes("lua/hidetargets.lua")
 
+option("has_std_expected")
+    set_showmenu(false)
+    set_languages(stdcxx())
+    add_cxxincludes("version")
+    add_cxxsnippets("has_std_expected", [[
+        #if !defined(__cpp_lib_expected) || __cpp_lib_expected < 202202L
+        #   error no std::expected support
+        #endif
+    ]])
+option_end()
+
 option("enable_simdjson")
     set_default(false)
     set_showmenu(true)
@@ -153,19 +164,19 @@ if has_config("enable_fmt") then
     add_requires("fmt", {configs = { shared = is_kind("shared")}})
 end
 
+if not has_config("has_std_expected") then
+    add_requires("zeus_expected")
+    if not has_config("3rd_custom") then
+        add_requireconfs("**zeus_expected", {version = "v1.3.1"})
+    end
+end
+
 if has_config("enable_communication") or has_config("enable_jsonrpc") then
     add_requires("ilias")
     if not has_config("3rd_custom") then
         -- configurations of required libraries
         add_requireconfs("**ilias", {version = "0.4.2", configs = { shared = is_kind("shared"), stdcxx = get_config("stdcxx")}})
     end
-    -- ilias requires zeus expected in c++20
-    -- if get_config("stdcxx") == 20 then
-    --     add_requires("zeus_expected")
-    --     if not has_config("3rd_custom") then
-    --         add_requireconfs("**zeus_expected", {version = "x.x.x", configs = { shared = is_kind("shared")}})
-    --     end
-    -- end
 end
 
 if has_config("enable_tests") then
@@ -209,7 +220,7 @@ target("NekoSerializer")
     set_configvar("NEKO_NAMESPACE", "$(custom_namespace)")
     on_load(function (target)
         import("lua.auto", {rootdir = os.projectdir()})
-        auto().auto_add_packages(target)
+        auto().auto_add_packages(target, {uses_expected = true})
     end)
 target_end()
 
@@ -230,7 +241,7 @@ target("NekoArgParser")
     set_configvar("NEKO_NAMESPACE", "$(custom_namespace)")
     on_load(function (target)
         import("lua.auto", {rootdir = os.projectdir()})
-        auto().auto_add_packages(target)
+        auto().auto_add_packages(target, {uses_expected = true})
     end)
 target_end()
 

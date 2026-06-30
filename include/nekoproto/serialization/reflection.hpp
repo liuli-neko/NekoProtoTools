@@ -17,6 +17,7 @@
 
 #include <any>
 #include <array>
+#include <functional>
 #include <map>
 #include <string_view>
 #include <tuple>
@@ -640,7 +641,8 @@ struct RefAny {
     RefAny(const RefAny&) = default;
     RefAny(RefAny&&)      = default;
     template <typename T>
-    RefAny(T&& obj) : mAny(std::ref(std::forward<T>(obj))) {}
+        requires(!std::is_same_v<std::remove_cvref_t<T>, RefAny> && std::is_lvalue_reference_v<T&&>)
+    RefAny(T&& obj) : mAny(std::ref(obj)) {}
     template <typename T>
     decltype(auto) as() {
         return std::any_cast<std::reference_wrapper<T>>(mAny).get();
@@ -649,8 +651,9 @@ struct RefAny {
     RefAny& operator=(RefAny&&)      = default;
 
     template <typename T>
+        requires(!std::is_same_v<std::remove_cvref_t<T>, RefAny>)
     RefAny& operator=(T&& obj) {
-        as<T>() = std::forward<T>(obj);
+        as<std::remove_cvref_t<T>>() = std::forward<T>(obj);
         return *this;
     }
 
@@ -850,7 +853,8 @@ public:
     }
 
     template <typename U>
-        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
+        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>> &&
+                 std::is_lvalue_reference_v<U&&>
     static detail::RefAny value(U&& obj, int idx) {
         if constexpr (detail::has_values_meta<T>) {
             detail::RefAny ret;
@@ -873,7 +877,8 @@ public:
     }
 
     template <typename U>
-        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>>
+        requires std::is_same_v<std::remove_cvref_t<U>, std::remove_cvref_t<T>> &&
+                 std::is_lvalue_reference_v<U&&>
     static detail::RefAny value(U&& obj, std::string_view name) {
         if constexpr (detail::has_values_meta<T> && detail::has_names_meta<T>) {
             detail::RefAny ret;

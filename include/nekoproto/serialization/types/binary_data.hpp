@@ -171,20 +171,23 @@ public:
 
 namespace detail {
 
-template <typename R, typename W, typename T>
-struct Parser<R, W, BinaryData<T>, void> {
+template <typename W, typename T>
+struct WriteParser<W, BinaryData<T>, void> {
     template <typename ParentType, typename Tags>
     static ParserResult write(W& writer, const BinaryData<T>& value, const ParentType& parent, const Tags& tags) {
         std::vector<uint8_t> buf;
         Base64Covert::Encode(reinterpret_cast<const uint8_t*>(value.data), value.size, buf);
-        return parser_write<R, W>(writer, std::string_view{reinterpret_cast<const char*>(buf.data()), buf.size()},
-                                  parent, tags);
+        return parser_write<W>(writer, std::string_view{reinterpret_cast<const char*>(buf.data()), buf.size()}, parent,
+                               tags);
     }
+};
 
+template <typename R, typename T>
+struct ReadParser<R, BinaryData<T>, void> {
     template <typename Tags>
     static ParserResult read(typename R::InputValueType in, BinaryData<T>& value, const Tags& tags) {
         std::string sv;
-        auto result = parser_read<R, W>(in, sv, tags);
+        auto result = parser_read<R>(in, sv, tags);
         if (!result) {
             return parser_context(std::move(result), "Failed to parse encoded binary data: ");
         }
@@ -196,7 +199,10 @@ struct Parser<R, W, BinaryData<T>, void> {
         std::memcpy(value.data, buf.data(), buf.size());
         return sa::success();
     }
+};
 
+template <typename T>
+struct SchemaParser<BinaryData<T>, void> {
     static parsing::schema::Type toSchema() { return parsing::schema::Type::String{}; }
 };
 } // namespace detail

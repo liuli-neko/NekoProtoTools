@@ -15,10 +15,10 @@
 #include "nekoproto/argparser/detail/materializer.hpp"
 #include "nekoproto/argparser/error.hpp"
 #include "nekoproto/argparser/tags.hpp"
+#include "nekoproto/global/expected.hpp"
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
-#include <expected>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -191,17 +191,17 @@ bool try_parse_command(std::string_view command, int argc, const char* const* ar
 }
 
 template <typename T>
-std::expected<parser_result_t<T>, std::error_code> parse_command_set(int argc, const char* const* argv,
-                                                                     const ArgParserConfig& config) {
+expected::expected<parser_result_t<T>, std::error_code> parse_command_set(int argc, const char* const* argv,
+                                                                          const ArgParserConfig& config) {
     if (argc <= 1 || argv == nullptr || argv[1] == nullptr) {
-        return std::unexpected(make_error_code(ArgParserError::MissingRequired));
+        return unexpected_error(make_error_code(ArgParserError::MissingRequired));
     }
     std::string_view command = argv[1];
     if (config.addHelp && is_help_token(command)) {
-        return std::unexpected(make_error_code(ArgParserError::HelpRequested));
+        return unexpected_error(make_error_code(ArgParserError::HelpRequested));
     }
     if (config.addVersion && !config.version.empty() && is_version_token(command)) {
-        return std::unexpected(make_error_code(ArgParserError::VersionRequested));
+        return unexpected_error(make_error_code(ArgParserError::VersionRequested));
     }
 
     parser_result_t<T> result;
@@ -215,10 +215,10 @@ std::expected<parser_result_t<T>, std::error_code> parse_command_set(int argc, c
           error);
 
     if (!matched) {
-        return std::unexpected(make_error_code(ArgParserError::UnknownCommand));
+        return unexpected_error(make_error_code(ArgParserError::UnknownCommand));
     }
     if (error) {
-        return std::unexpected(error);
+        return unexpected_error(error);
     }
     return result;
 }
@@ -346,8 +346,8 @@ std::string format_help(ArgParserConfig config = {}) {
 inline std::string format_version(ArgParserConfig config = {}) { return detail::format_version_text(config); }
 
 template <typename T>
-std::expected<detail::parser_result_t<T>, std::error_code> parser(int argc, const char* const* argv,
-                                                                  ArgParserConfig config = {}) {
+expected::expected<detail::parser_result_t<T>, std::error_code> parser(int argc, const char* const* argv,
+                                                                       ArgParserConfig config = {}) {
     static_assert(std::is_default_constructible_v<T>, "argparser requires a default constructible options type");
     detail::static_check_parser_definition<T>();
 
@@ -360,14 +360,15 @@ std::expected<detail::parser_result_t<T>, std::error_code> parser(int argc, cons
     } else {
         T object{};
         if (auto error = detail::parse_options_into(object, argc, argv, 1, config)) {
-            return std::unexpected(error);
+            return detail::unexpected_error(error);
         }
         return object;
     }
 }
 
 template <typename T>
-std::expected<detail::parser_result_t<T>, std::error_code> parser(int argc, char** argv, ArgParserConfig config = {}) {
+expected::expected<detail::parser_result_t<T>, std::error_code> parser(int argc, char** argv,
+                                                                       ArgParserConfig config = {}) {
     return parser<T>(argc, const_cast<const char* const*>(argv), config);
 }
 

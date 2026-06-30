@@ -5,8 +5,8 @@
 #include <variant>
 #include <vector>
 
-#include "nekoproto/rpc/method.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_traits.hpp"
+#include "nekoproto/rpc/method.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/parsing/basic.hpp"
 #include "nekoproto/serialization/parsing/map.hpp"
@@ -20,12 +20,12 @@
 NEKO_BEGIN_NAMESPACE
 namespace detail {
 
-using JsonRpcIdType = std::variant<std::monostate, uint64_t, std::string>;
+using JsonRpcIdType         = std::variant<std::monostate, uint64_t, std::string>;
 using JsonRpcResponseValues = std::vector<JsonSerializer::JsonValue>;
 
 template <typename MethodTraits, ConstexprString... ArgNames>
 struct JsonRpcRequest2 {
-    using JsonTraits = JsonRpcMethodTraits<MethodTraits>;
+    using JsonTraits      = JsonRpcMethodTraits<MethodTraits>;
     using ParamsTupleType = typename JsonTraits::ParamsTupleType;
     static_assert(sizeof...(ArgNames) == 0 || JsonTraits::NumParams == sizeof...(ArgNames),
                   "JsonRpcRequest2: The number of parameters and names do not match.");
@@ -40,16 +40,14 @@ struct JsonRpcRequest2 {
     NEKO_SERIALIZER(jsonrpc, method, params, id)
 };
 
-template <typename R, typename W, typename T, ConstexprString... ArgNames>
-struct disable_reflect_parser<R, W, JsonRpcSerializerHelperObject<T, ArgNames...>>
-    : std::true_type {};
+template <typename T, ConstexprString... ArgNames>
+struct disable_reflect_parser<JsonRpcSerializerHelperObject<T, ArgNames...>> : std::true_type {};
 
-template <typename R, typename W, typename MethodTraits, ConstexprString... ArgNames>
-struct disable_reflect_parser<R, W, JsonRpcRequest2<MethodTraits, ArgNames...>>
-    : std::true_type {};
+template <typename MethodTraits, ConstexprString... ArgNames>
+struct disable_reflect_parser<JsonRpcRequest2<MethodTraits, ArgNames...>> : std::true_type {};
 
-template <typename R, typename W, typename T, ConstexprString... ArgNames>
-struct Parser<R, W, JsonRpcSerializerHelperObject<T, ArgNames...>, void> {
+template <typename W, typename T, ConstexprString... ArgNames>
+struct WriteParser<W, JsonRpcSerializerHelperObject<T, ArgNames...>, void> {
     using Helper = JsonRpcSerializerHelperObject<T, ArgNames...>;
 
     template <std::size_t... Is>
@@ -59,24 +57,11 @@ struct Parser<R, W, JsonRpcSerializerHelperObject<T, ArgNames...>, void> {
         ParserResult result;
         const auto writeField = [&]<std::size_t I>() {
             if (result) {
-                result = parser_write_reflect_field<R, W>(writer, object, std::get<I>(value.mTuple), argNames[I],
-                                                          NoTags{});
+                result =
+                    parser_write_reflect_field<W>(writer, object, std::get<I>(value.mTuple), argNames[I], NoTags{});
             }
         };
         (writeField.template operator()<Is>(), ...);
-        return result;
-    }
-
-    template <std::size_t... Is>
-    static ParserResult readObject(typename R::InputValueType in, Helper& value, std::index_sequence<Is...>) {
-        constexpr std::array<std::string_view, sizeof...(ArgNames)> argNames = {ArgNames.view()...};
-        ParserResult result;
-        const auto readField = [&]<std::size_t I>() {
-            if (result) {
-                result = parser_read_reflect_field<R, W>(in, std::get<I>(value.mTuple), argNames[I], NoTags{});
-            }
-        };
-        (readField.template operator()<Is>(), ...);
         return result;
     }
 
@@ -86,8 +71,26 @@ struct Parser<R, W, JsonRpcSerializerHelperObject<T, ArgNames...>, void> {
             auto object = parsing::Parent<W>::addObject(writer, sizeof...(ArgNames), parent);
             return writeObject(writer, object, value, std::make_index_sequence<sizeof...(ArgNames)>{});
         } else {
-            return parser_write<R, W>(writer, value.mTuple, parent, tags);
+            return parser_write<W>(writer, value.mTuple, parent, tags);
         }
+    }
+};
+
+template <typename R, typename T, ConstexprString... ArgNames>
+struct ReadParser<R, JsonRpcSerializerHelperObject<T, ArgNames...>, void> {
+    using Helper = JsonRpcSerializerHelperObject<T, ArgNames...>;
+
+    template <std::size_t... Is>
+    static ParserResult readObject(typename R::InputValueType in, Helper& value, std::index_sequence<Is...>) {
+        constexpr std::array<std::string_view, sizeof...(ArgNames)> argNames = {ArgNames.view()...};
+        ParserResult result;
+        const auto readField = [&]<std::size_t I>() {
+            if (result) {
+                result = parser_read_reflect_field<R>(in, std::get<I>(value.mTuple), argNames[I], NoTags{});
+            }
+        };
+        (readField.template operator()<Is>(), ...);
+        return result;
     }
 
     template <typename Tags>
@@ -98,38 +101,43 @@ struct Parser<R, W, JsonRpcSerializerHelperObject<T, ArgNames...>, void> {
                 return readObject(in, value, std::make_index_sequence<sizeof...(ArgNames)>{});
             }
         }
-        return parser_read<R, W>(in, value.mTuple, tags);
+        return parser_read<R>(in, value.mTuple, tags);
     }
 };
 
-template <typename R, typename W, typename MethodTraits, ConstexprString... ArgNames>
-struct Parser<R, W, JsonRpcRequest2<MethodTraits, ArgNames...>, void> {
+template <typename W, typename MethodTraits, ConstexprString... ArgNames>
+struct WriteParser<W, JsonRpcRequest2<MethodTraits, ArgNames...>, void> {
     using Request = JsonRpcRequest2<MethodTraits, ArgNames...>;
 
     template <typename ParentType, typename Tags>
     static ParserResult write(W& writer, const Request& value, const ParentType& parent, const Tags& /*tags*/) {
         auto object = parsing::Parent<W>::addObject(writer, 4, parent);
-        auto result = parser_write_reflect_field<R, W>(writer, object, value.jsonrpc, "jsonrpc", NoTags{});
+        auto result = parser_write_reflect_field<W>(writer, object, value.jsonrpc, "jsonrpc", NoTags{});
         if (!result) {
             return result;
         }
-        result = parser_write_reflect_field<R, W>(writer, object, value.method, "method", NoTags{});
+        result = parser_write_reflect_field<W>(writer, object, value.method, "method", NoTags{});
         if (!result) {
             return result;
         }
-        result = parser_write_reflect_field<R, W>(writer, object, value.id, "id", NoTags{});
+        result = parser_write_reflect_field<W>(writer, object, value.id, "id", NoTags{});
         if (!result) {
             return result;
         }
         if constexpr (sizeof...(ArgNames) == 0) {
-            result = parser_write_reflect_field<R, W>(writer, object, value.params, "params", NoTags{});
+            result = parser_write_reflect_field<W>(writer, object, value.params, "params", NoTags{});
         } else if constexpr (Request::JsonTraits::NumParams > 0 && Request::JsonTraits::ParamsSize > 0) {
             JsonRpcSerializerHelperObject<const typename Request::ParamsTupleType, ArgNames...> paramsHelper(
                 value.params);
-            result = parser_write_reflect_field<R, W>(writer, object, paramsHelper, "params", NoTags{});
+            result = parser_write_reflect_field<W>(writer, object, paramsHelper, "params", NoTags{});
         }
         return result;
     }
+};
+
+template <typename R, typename MethodTraits, ConstexprString... ArgNames>
+struct ReadParser<R, JsonRpcRequest2<MethodTraits, ArgNames...>, void> {
+    using Request = JsonRpcRequest2<MethodTraits, ArgNames...>;
 
     template <typename Tags>
     static ParserResult read(typename R::InputValueType in, Request& value, const Tags& /*tags*/) {
@@ -137,23 +145,23 @@ struct Parser<R, W, JsonRpcRequest2<MethodTraits, ArgNames...>, void> {
         if (!object) {
             return object.error();
         }
-        auto result = parser_read_reflect_field<R, W>(in, value.jsonrpc, "jsonrpc", NoTags{});
+        auto result = parser_read_reflect_field<R>(in, value.jsonrpc, "jsonrpc", NoTags{});
         if (!result) {
             return result;
         }
-        result = parser_read_reflect_field<R, W>(in, value.method, "method", NoTags{});
+        result = parser_read_reflect_field<R>(in, value.method, "method", NoTags{});
         if (!result) {
             return result;
         }
-        result = parser_read_reflect_field<R, W>(in, value.id, "id", NoTags{});
+        result = parser_read_reflect_field<R>(in, value.id, "id", NoTags{});
         if (!result) {
             return result;
         }
         if constexpr (sizeof...(ArgNames) == 0) {
-            result = parser_read_reflect_field<R, W>(in, value.params, "params", NoTags{});
+            result = parser_read_reflect_field<R>(in, value.params, "params", NoTags{});
         } else {
             JsonRpcSerializerHelperObject<typename Request::ParamsTupleType, ArgNames...> paramsHelper(value.params);
-            result = parser_read_reflect_field<R, W>(in, paramsHelper, "params", NoTags{});
+            result = parser_read_reflect_field<R>(in, paramsHelper, "params", NoTags{});
         }
         if (!result && Request::JsonTraits::IsNullAble &&
             result.error().ec == sa::make_error_code(sa::ErrorCode::InvalidField)) {

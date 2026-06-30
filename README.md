@@ -239,7 +239,7 @@ int main() {
 
 ### 5.1. 序列化器 (`Serializer`)
 
-序列化器负责将 C++ 对象转换为字节流（序列化）以及将字节流转换回 C++ 对象（反序列化）。从 0.3.0 开始，类型分发规则集中在通用 `Parser<Reader, Writer, T>` 层；具体格式后端只提供 Reader/Writer 和少量可选能力。
+序列化器负责将 C++ 对象转换为字节流（序列化）以及将字节流转换回 C++ 对象（反序列化）。当前类型分发规则集中在 `WriteParser<Writer, T>`、`ReadParser<Reader, T>` 和 `SchemaParser<T>` 三条路径；具体格式后端只提供 Reader/Writer 和少量可选能力。
 
 *   **内置序列化器**：
     *   `JsonSerializer`: 默认 JSON 序列化器别名。开启 RapidJSON 时使用 `RapidJsonSerializer`；未开启 RapidJSON 但开启 simdjson 时使用 `SimdJsonSerializer`。
@@ -249,7 +249,7 @@ int main() {
     *   对于基本序列化，直接实例化所需的 `OutputSerializer` / `InputSerializer`。
     *   对于协议消息 (`NEKO_DECLARE_PROTOCOL`)，在声明时指定默认序列化器。
 *   **schema 生成**：`include <nekoproto/serialization/json/schema.hpp>` 后可通过 `generate_schema<T>(schema)` 生成 Draft-07 风格 JSON Schema。
-*   **扩展序列化**：通过 `detail::CustomParser<R, W, T>` 支持自定义类型；新格式后端实现 Reader/Writer 接口。详见 [7. 自定义序列化扩展](#7-自定义序列化扩展)。
+*   **扩展序列化**：通过 `CustomParser<T>` 支持自定义类型；新格式后端实现 Reader/Writer 接口。详见 [7. 自定义序列化扩展](#7-自定义序列化扩展)。
 
 ### 5.2. 字段 tags 与调用点元数据
 
@@ -811,7 +811,7 @@ server->calc.add = [](int lhs, int rhs) -> ilias::IoTask<int> {
 *   **通用性**：RPC 前端只保留方法元数据、注册、绑定、调用和完整消息端点；JSON-RPC 的 id、batch、request/response 壳已下沉到 `JsonRpcBackend`。
 *   **最小接口**：当前后端接口是按 `RpcDispatcher` / `RpcClient` 的实际使用点形成的最小能力集合，未额外引入 listener、session、transport 或继承层次；stream 支持通过可选 `makeEndpoint` 静态 hook 接入。
 *   **非侵入扩展**：协议 struct 只需要 `RpcMethod` 字段和反射信息；命名策略通过 `make_tags<rpc_prefix_tag>` / `make_tags<rpc_no_prefix_tag>` 附着在字段使用点。
-*   **和序列化扩展一致**：序列化类型用 `detail::CustomParser<R, W, T>` 扩展，RPC 后端用静态函数和 concept 约束扩展；两者都避免要求业务类型继承框架基类。
+*   **和序列化扩展一致**：序列化类型用 `CustomParser<T>` 扩展，RPC 后端用静态函数和 concept 约束扩展；两者都避免要求业务类型继承框架基类。
 *   **后续可改进点**：常见的 `invoke` / tuple 参数展开可以做成默认 helper，进一步缩小后端需要手写的代码。
 
 ---
@@ -826,7 +826,7 @@ server->calc.add = [](int lhs, int rhs) -> ilias::IoTask<int> {
 
 ## 7. 自定义序列化扩展
 
-自定义 C++ 类型应特化 `detail::CustomParser<R, W, T>`。读写逻辑可复用已有 Parser，因此同一扩展可以用于 JSON、Binary 和 XML 后端。
+自定义 C++ 类型应特化 `CustomParser<T>`。读写逻辑可复用已有 parser 入口，因此同一扩展可以用于 JSON、Binary 和 XML 后端。`CustomParser<T>` 优先于内建反射和 STL parser。
 
 ```cpp
 #include <nekoproto/serialization/parsing/parsers.hpp>
@@ -835,27 +835,27 @@ struct StrongId {
     std::uint64_t value = 0;
 };
 
-namespace NekoProto::detail {
-template <typename R, typename W>
-struct CustomParser<R, W, StrongId> {
-    template <typename Parent, typename Tags>
+namespace NekoProto {
+template <>
+struct CustomParser<StrongId> {
+    template <typename W, typename Parent, typename Tags>
     static ParserResult write(W& writer, const StrongId& id, const Parent& parent, const Tags& tags) {
-        return parser_write<R, W>(writer, id.value, parent, tags);
+        return parser_write<W>(writer, id.value, parent, tags);
     }
 
-    template <typename Tags>
+    template <typename R, typename Tags>
     static ParserResult read(typename R::InputValueType in, StrongId& id, const Tags& tags) {
-        return parser_read<R, W>(in, id.value, tags);
+        return parser_read<R>(in, id.value, tags);
     }
 
     static parsing::schema::Type toSchema() {
-        return parser_schema<R, W, std::uint64_t>();
+        return parser_schema<std::uint64_t>();
     }
 };
-} // namespace NekoProto::detail
+} // namespace NekoProto
 ```
 
-如果要增加一种新的数据格式，需实现与现有 `rapid::Reader/Writer`、`binary::Reader/Writer` 相同职责的后端，并由序列化器入口调用 `parser_write` / `parser_read`。
+如果要增加一种新的数据格式，需实现与现有 `rapid::Reader/Writer`、`binary::Reader/Writer` 相同职责的后端，并由序列化器入口调用 `parser_write<Writer>` / `parser_read<Reader>`。
 
 ---
 
@@ -907,6 +907,7 @@ struct CustomParser<R, W, StrongId> {
 
 ## 9. 开发历史 (部分里程碑)
 *   **v0.3.1**
+    *   拆分序列化 parser 分发：写入走 `WriteParser<Writer, T>`，读取走 `ReadParser<Reader, T>`，schema 走 `SchemaParser<T>`；用户扩展点改为公开的 `CustomParser<T>`。
     *   新增 `NekoArgParser`/`<nekoproto/argparser/argparser.hpp>`：基于静态反射和 tags 定义 CLI schema，解析结果使用 `std::expected<..., std::error_code>`。
     *   ArgParser 支持长/短选项、位置参数、flag、repeatable、嵌套选项、默认值、环境变量、choices/range 校验、自动 help/version 和子命令。
     *   扩展 arg tags：`arg_aliases`、`arg_implicit`、`arg_group`、`arg_conflicts`、`arg_requires`、`arg_deprecated`、`arg_case_insensitive_choices` 等。

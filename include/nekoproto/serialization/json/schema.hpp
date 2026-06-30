@@ -315,7 +315,7 @@ inline void parser_schema_to_json(const parsing::schema::Type& source, JsonSchem
 template <typename R, typename W, typename T>
 bool generate_schema_for(JsonSchema& schema) {
     schema.schema = "http://json-schema.org/draft-07/schema#";
-    detail::parser_schema_to_json(detail::parser_schema<R, W, std::decay_t<T>>(), schema);
+    detail::parser_schema_to_json(parser_schema<std::decay_t<T>>(), schema);
     return true;
 }
 

@@ -26,6 +26,7 @@ end
 function autofunc.auto_add_packages(target, options)
     options = options or {}
     local uses_ilias = options.uses_ilias or false
+    local uses_expected = options.uses_expected or false
 
     if has_config("enable_simdjson") then
         target:add("packages", "simdjson", {public = true})
@@ -47,10 +48,13 @@ function autofunc.auto_add_packages(target, options)
     if has_config("enable_fmt") then
         target:add("packages", "fmt", {public = true})
     end
+
+    if uses_expected and not has_config("has_std_expected") then
+        target:add("packages", "zeus_expected", {public = true})
+    end
     
     if uses_ilias then
         target:add("packages", "ilias", {public = true})
-        target:add("packages", "zeus_expected", {public = true})
     end
     
     if has_config("enable_tests") then

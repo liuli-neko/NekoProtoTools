@@ -3,8 +3,8 @@
 #include "nekoproto/serialization/binary/binary_reader.hpp"
 #include "nekoproto/serialization/binary/binary_writer.hpp"
 #include "nekoproto/serialization/parsing/parsers.hpp"
-#include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/serializer_adapter.hpp"
+#include "nekoproto/serialization/serializer_base.hpp"
 
 #include <cstddef>
 #include <vector>
@@ -33,13 +33,12 @@ struct BinaryBackend {
 
     template <typename BufferT, typename T>
     static sa::Result<void> write(OutputState<BufferT>& state, const T& value) {
-        return detail::parser_write<binary::Reader, binary::Writer>(
-            state.writer, value, parsing::Parent<binary::Writer>::Root{});
+        return parser_write<binary::Writer>(state.writer, value, parsing::Parent<binary::Writer>::Root{});
     }
 
     template <typename SourceT, typename T>
     static sa::Result<void> read(InputState<SourceT>& state, T& value) {
-        return detail::parser_read<binary::Reader, binary::Writer>(state.reader.root(), value);
+        return parser_read<binary::Reader>(state.reader.root(), value);
     }
 
     template <typename SourceT>

@@ -21,7 +21,9 @@ struct TypeLevelFlatTagInner {
     int code = 0;
     std::string label;
 
-    NEKO_SERIALIZER((make_tags<comment_tag<"doc keeps parser depth">, rename_tag<"wire_code">, JsonTags{.flat = true}>(code)), label)
+    NEKO_SERIALIZER(
+        (make_tags<comment_tag<"doc keeps parser depth">, rename_tag<"wire_code">, JsonTags{.flat = true}>(code)),
+        label)
 };
 
 struct TypeLevelFlatTagOwner {
@@ -115,7 +117,7 @@ bool readJson(std::string_view json, T& value) {
 
 template <typename T>
 parsing::schema::Type::Object objectSchema() {
-    const auto schema = detail::parser_schema<typename JsonSerializer::Reader, typename JsonSerializer::Writer, T>();
+    const auto schema = parser_schema<T>();
     return std::get<parsing::schema::Type::Object>(schema.value);
 }
 
