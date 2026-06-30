@@ -57,7 +57,7 @@ inline std::optional<std::string> read_env(std::string_view name) {
 
 inline void notify_deprecated_option(const ArgSpec& spec, const ArgParserConfig& config) {
     if (spec.deprecated && config.deprecatedOptionHandler) {
-        config.deprecatedOptionHandler(spec.longName, spec.deprecatedMessage);
+        config.deprecatedOptionHandler(spec.long_name, spec.deprecated_message);
     }
 }
 
@@ -80,7 +80,7 @@ inline std::error_code parse_bool(std::string_view text, bool& value) {
 }
 
 template <typename T>
-std::error_code parse_scalar(std::string_view text, T& value, bool caseInsensitiveEnum = false) {
+std::error_code parse_scalar(std::string_view text, T& value, bool case_insensitive_enum = false) {
     using RawT = std::remove_cvref_t<T>;
     if constexpr (std::is_same_v<RawT, bool>) {
         return parse_bool(text, value);
@@ -94,7 +94,7 @@ std::error_code parse_scalar(std::string_view text, T& value, bool caseInsensiti
         constexpr auto EnumNames  = Reflect<RawT>::names();
         constexpr auto EnumValues = Reflect<RawT>::values();
         for (std::size_t idx = 0; idx < EnumNames.size(); ++idx) {
-            if (EnumNames[idx] == text || (caseInsensitiveEnum && equals_ignore_case(EnumNames[idx], text))) {
+            if (EnumNames[idx] == text || (case_insensitive_enum && equals_ignore_case(EnumNames[idx], text))) {
                 value = EnumValues[idx];
                 return {};
             }
@@ -118,32 +118,32 @@ std::error_code parse_scalar(std::string_view text, T& value, bool caseInsensiti
 }
 
 template <typename T>
-std::error_code assign_value(std::string_view text, T& value, bool caseInsensitiveEnum = false) {
+std::error_code assign_value(std::string_view text, T& value, bool case_insensitive_enum = false) {
     using RawT = std::remove_cvref_t<T>;
     if constexpr (is_arg_optional_v<RawT>) {
         optional_value_t<RawT> inner{};
-        if (auto error = parse_scalar(text, inner, caseInsensitiveEnum)) {
+        if (auto error = parse_scalar(text, inner, case_insensitive_enum)) {
             return error;
         }
         value = std::move(inner);
         return {};
     } else if constexpr (is_vector_v<RawT>) {
         vector_value_t<RawT> inner{};
-        if (auto error = parse_scalar(text, inner, caseInsensitiveEnum)) {
+        if (auto error = parse_scalar(text, inner, case_insensitive_enum)) {
             return error;
         }
         value.push_back(std::move(inner));
         return {};
     } else {
-        return parse_scalar(text, value, caseInsensitiveEnum);
+        return parse_scalar(text, value, case_insensitive_enum);
     }
 }
 
 template <typename T>
-std::error_code assign_text_value(std::string_view text, char separator, T& value, bool caseInsensitiveEnum = false) {
+std::error_code assign_text_value(std::string_view text, char separator, T& value, bool case_insensitive_enum = false) {
     using RawT = std::remove_cvref_t<T>;
     if (separator == '\0') {
-        return assign_value(text, value, caseInsensitiveEnum);
+        return assign_value(text, value, case_insensitive_enum);
     }
     if constexpr (!is_vector_v<RawT>) {
         return make_error_code(ArgParserError::InvalidDefinition);
@@ -152,7 +152,7 @@ std::error_code assign_text_value(std::string_view text, char separator, T& valu
         while (begin <= text.size()) {
             const auto end  = text.find(separator, begin);
             const auto part = end == std::string_view::npos ? text.substr(begin) : text.substr(begin, end - begin);
-            if (auto error = assign_value(part, value, caseInsensitiveEnum)) {
+            if (auto error = assign_value(part, value, case_insensitive_enum)) {
                 return error;
             }
             if (end == std::string_view::npos) {
@@ -165,20 +165,20 @@ std::error_code assign_text_value(std::string_view text, char separator, T& valu
 }
 
 template <typename T>
-std::error_code assign_default_value(const T& defaultValue, auto& value, char separator = '\0',
-                                     bool caseInsensitiveEnum = false) {
+std::error_code assign_default_value(const T& default_value, auto& value, char separator = '\0',
+                                     bool case_insensitive_enum = false) {
     using RawT = std::remove_cvref_t<T>;
     if constexpr (std::is_convertible_v<T, std::string_view>) {
-        return assign_text_value(std::string_view(defaultValue), separator, value, caseInsensitiveEnum);
+        return assign_text_value(std::string_view(default_value), separator, value, case_insensitive_enum);
     } else if constexpr (std::is_same_v<RawT, const char*> || std::is_same_v<RawT, char*>) {
-        return assign_text_value(std::string_view(defaultValue), separator, value, caseInsensitiveEnum);
+        return assign_text_value(std::string_view(default_value), separator, value, case_insensitive_enum);
     } else if constexpr (std::is_array_v<RawT> && std::is_same_v<std::remove_cv_t<std::remove_extent_t<RawT>>, char>) {
-        return assign_text_value(std::string_view(defaultValue), separator, value, caseInsensitiveEnum);
+        return assign_text_value(std::string_view(default_value), separator, value, case_insensitive_enum);
     } else if constexpr (is_vector_v<std::remove_cvref_t<decltype(value)>>) {
-        value.push_back(defaultValue);
+        value.push_back(default_value);
         return {};
     } else {
-        value = defaultValue;
+        value = default_value;
         return {};
     }
 }
@@ -210,22 +210,22 @@ bool scalar_in_range(const T& value, double min, double max) {
 template <typename T>
 std::error_code validate_range(const T& value, const ArgSpec& spec) {
     using RawT = std::remove_cvref_t<T>;
-    if (!spec.hasRange) {
+    if (!spec.has_range) {
         return {};
     }
     if constexpr (!is_range_supported_v<RawT>) {
         return make_error_code(ArgParserError::InvalidDefinition);
     } else if constexpr (is_range_value_v<RawT>) {
-        if (!scalar_in_range(value, spec.rangeMin, spec.rangeMax)) {
+        if (!scalar_in_range(value, spec.range_min, spec.range_max)) {
             return make_error_code(ArgParserError::InvalidValue);
         }
     } else if constexpr (is_arg_optional_v<RawT>) {
-        if (value.has_value() && !scalar_in_range(*value, spec.rangeMin, spec.rangeMax)) {
+        if (value.has_value() && !scalar_in_range(*value, spec.range_min, spec.range_max)) {
             return make_error_code(ArgParserError::InvalidValue);
         }
     } else if constexpr (is_vector_v<RawT>) {
         for (const auto& item : value) {
-            if (!scalar_in_range(item, spec.rangeMin, spec.rangeMax)) {
+            if (!scalar_in_range(item, spec.range_min, spec.range_max)) {
                 return make_error_code(ArgParserError::InvalidValue);
             }
         }
@@ -234,23 +234,23 @@ std::error_code validate_range(const T& value, const ArgSpec& spec) {
 }
 
 inline bool choice_contains(std::span<const std::string_view> choices, std::string_view value,
-                            bool caseInsensitiveChoices) {
+                            bool case_insensitive_choices) {
     return std::any_of(choices.begin(), choices.end(), [&](const auto& choice) {
-        return caseInsensitiveChoices ? equals_ignore_case(choice, value) : choice == value;
+        return case_insensitive_choices ? equals_ignore_case(choice, value) : choice == value;
     });
 }
 
 template <typename T>
-bool choice_value_allowed(const T& value, std::span<const std::string_view> choices, bool caseInsensitiveChoices) {
+bool choice_value_allowed(const T& value, std::span<const std::string_view> choices, bool case_insensitive_choices) {
     using RawT = std::remove_cvref_t<T>;
     if constexpr (is_string_like_v<RawT>) {
-        return choice_contains(choices, value, caseInsensitiveChoices);
+        return choice_contains(choices, value, case_insensitive_choices);
     } else if constexpr (std::is_enum_v<RawT>) {
         constexpr auto EnumNames  = Reflect<RawT>::names();
         constexpr auto EnumValues = Reflect<RawT>::values();
         for (std::size_t idx = 0; idx < EnumNames.size(); ++idx) {
             if (EnumValues[idx] == value) {
-                return choice_contains(choices, EnumNames[idx], caseInsensitiveChoices);
+                return choice_contains(choices, EnumNames[idx], case_insensitive_choices);
             }
         }
         return false;
@@ -269,16 +269,16 @@ std::error_code validate_choices(const T& value, const ArgSpec& spec) {
     if constexpr (!is_choices_supported_v<RawT>) {
         return make_error_code(ArgParserError::InvalidDefinition);
     } else if constexpr (is_choice_value_v<RawT>) {
-        if (!choice_value_allowed(value, choices, spec.caseInsensitiveChoices)) {
+        if (!choice_value_allowed(value, choices, spec.case_insensitive_choices)) {
             return make_error_code(ArgParserError::InvalidValue);
         }
     } else if constexpr (is_arg_optional_v<RawT>) {
-        if (value.has_value() && !choice_value_allowed(*value, choices, spec.caseInsensitiveChoices)) {
+        if (value.has_value() && !choice_value_allowed(*value, choices, spec.case_insensitive_choices)) {
             return make_error_code(ArgParserError::InvalidValue);
         }
     } else if constexpr (is_vector_v<RawT>) {
         for (const auto& item : value) {
-            if (!choice_value_allowed(item, choices, spec.caseInsensitiveChoices)) {
+            if (!choice_value_allowed(item, choices, spec.case_insensitive_choices)) {
                 return make_error_code(ArgParserError::InvalidValue);
             }
         }
@@ -291,7 +291,7 @@ std::error_code validate_field_definition(const ArgSpec& spec) {
     if (spec.separator != '\0' && !is_vector_v<FieldT>) {
         return make_error_code(ArgParserError::InvalidDefinition);
     }
-    if (spec.hasRange && (!is_range_supported_v<FieldT> || spec.rangeMin > spec.rangeMax)) {
+    if (spec.has_range && (!is_range_supported_v<FieldT> || spec.range_min > spec.range_max)) {
         return make_error_code(ArgParserError::InvalidDefinition);
     }
     if (!spec.choices.empty() && !is_choices_supported_v<FieldT>) {
@@ -310,8 +310,8 @@ std::error_code validate_field_value(const FieldT& field, const ArgSpec& spec) {
 
 template <typename FieldT>
 std::error_code assign_text_to_field(const ArgSpec& spec, FieldT& field, std::string_view value) {
-    const auto caseInsensitiveEnum = spec.caseInsensitiveChoices && !spec.choices.empty();
-    if (auto error = assign_text_value(value, spec.separator, field, caseInsensitiveEnum)) {
+    const auto case_insensitive_enum = spec.case_insensitive_choices && !spec.choices.empty();
+    if (auto error = assign_text_value(value, spec.separator, field, case_insensitive_enum)) {
         return error;
     }
     return validate_field_value(field, spec);
@@ -319,10 +319,10 @@ std::error_code assign_text_to_field(const ArgSpec& spec, FieldT& field, std::st
 
 template <typename FieldT, typename Tags>
 std::error_code assign_default_to_field(const ArgSpec& spec, FieldT& field, const Tags& tags) {
-    if constexpr (tag_query::has<tag_prop::default_value>(decltype(tags){})) {
-        const auto caseInsensitiveEnum = spec.caseInsensitiveChoices && !spec.choices.empty();
+    if constexpr (tag_query::has<tag_property::default_value>(decltype(tags){})) {
+        const auto case_insensitive_enum = spec.case_insensitive_choices && !spec.choices.empty();
         if (auto error =
-                assign_default_value(tag_query::get<tag_prop::default_value>(tags), field, spec.separator, caseInsensitiveEnum)) {
+                assign_default_value(tag_query::get<tag_property::default_value>(tags), field, spec.separator, case_insensitive_enum)) {
             return error;
         }
         return validate_field_value(field, spec);
@@ -352,7 +352,7 @@ std::error_code materialize_one_option(const ArgSpec& spec, const RawOptionValue
         return {};
     }
 
-    if (const auto envValue = read_env(spec.envName); envValue) {
+    if (const auto envValue = read_env(spec.env_name); envValue) {
         if (auto error = assign_text_to_field(spec, field, *envValue)) {
             return error;
         }
@@ -360,7 +360,7 @@ std::error_code materialize_one_option(const ArgSpec& spec, const RawOptionValue
         return {};
     }
 
-    if (spec.hasDefault) {
+    if (spec.has_default) {
         if (auto error = assign_default_to_field(spec, field, tags)) {
             return error;
         }
@@ -385,7 +385,7 @@ inline std::error_code validate_cross_field_constraints(const ArgSchema& schema,
             continue;
         }
         const auto& spec = schema.specs[index];
-        for (const auto requiredName : spec.requiresNames) {
+        for (const auto requiredName : spec.requires_names) {
             const auto requiredIndex = schema.find_reference_index(requiredName);
             if (!requiredIndex.has_value() || *requiredIndex == index) {
                 return make_error_code(ArgParserError::InvalidDefinition);
@@ -409,7 +409,7 @@ inline std::error_code validate_cross_field_constraints(const ArgSchema& schema,
 
 template <typename T>
 std::error_code materialize_fields(T& object, const ArgSchema& schema, const RawParseResult& raw,
-                                   const ArgParserConfig& config, std::size_t& specIndex, PresenceList& supplied) {
+                                   const ArgParserConfig& config, std::size_t& spec_index, PresenceList& supplied) {
     std::error_code result;
     Reflect<std::remove_cvref_t<T>>::forEach(
         object, [&](auto& field, std::string_view reflectedName, const auto& tags) {
@@ -420,22 +420,22 @@ std::error_code materialize_fields(T& object, const ArgSchema& schema, const Raw
             using FieldT = std::remove_cvref_t<decltype(field)>;
 
             if constexpr (is_nested_option_v<FieldT>) {
-                if (auto error = materialize_fields(field, schema, raw, config, specIndex, supplied); error) {
+                if (auto error = materialize_fields(field, schema, raw, config, spec_index, supplied); error) {
                     result = error;
                 }
             } else {
-                if (specIndex >= schema.specs.size() || specIndex >= raw.options.size()) {
+                if (spec_index >= schema.specs.size() || spec_index >= raw.options.size()) {
                     result = make_error_code(ArgParserError::InvalidDefinition);
                     return;
                 }
                 bool optionSupplied = false;
-                if (auto error = materialize_one_option(schema.specs[specIndex], raw.options[specIndex], field, tags,
+                if (auto error = materialize_one_option(schema.specs[spec_index], raw.options[spec_index], field, tags,
                                                         config, optionSupplied)) {
                     result = error;
                     return;
                 }
-                supplied[specIndex] = optionSupplied ? 1U : 0U;
-                ++specIndex;
+                supplied[spec_index] = optionSupplied ? 1U : 0U;
+                ++spec_index;
             }
         });
     return result;
@@ -449,11 +449,11 @@ std::error_code materialize_options_into(T& object, const ArgSchema& schema, con
     }
 
     PresenceList supplied(schema.specs.size(), 0);
-    std::size_t specIndex = 0;
-    if (auto error = materialize_fields(object, schema, raw, config, specIndex, supplied)) {
+    std::size_t spec_index = 0;
+    if (auto error = materialize_fields(object, schema, raw, config, spec_index, supplied)) {
         return error;
     }
-    if (specIndex != schema.specs.size()) {
+    if (spec_index != schema.specs.size()) {
         return make_error_code(ArgParserError::InvalidDefinition);
     }
     if (auto error =

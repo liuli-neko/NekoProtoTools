@@ -238,7 +238,7 @@ Serializers are responsible for converting C++ objects into byte streams (serial
 
 *   **Built-in Serializers**:
     *   `JsonSerializer`: Default JSON serializer alias. It uses `RapidJsonSerializer` when RapidJSON is enabled; otherwise it uses `SimdJsonSerializer` when simdjson is enabled.
-    *   `BinarySerializer`: Provides a compact binary serialization format and supports binary layout tags such as `fixedLength` and `unframed`.
+    *   `BinarySerializer`: Provides a compact binary serialization format and supports binary layout tags such as `fixed_length` and `unframed`.
     *   `XmlSerializer`: Uses pugixml for XML serialization and deserialization.
 *   **Choosing a Serializer**:
     *   For basic serialization, directly instantiate the required `OutputSerializer` / `InputSerializer`.
@@ -258,23 +258,23 @@ struct Header {
     std::uint32_t length = 0;
     std::uint16_t type = 0;
 
-    NEKO_SERIALIZER(make_tags<BinaryTags{.fixedLength = sizeof(std::uint32_t)}>(length),
-                    make_tags<BinaryTags{.fixedLength = sizeof(std::uint16_t)}>(type))
+    NEKO_SERIALIZER(make_tags<BinaryTag{.fixed_length = sizeof(std::uint32_t)}>(length),
+                    make_tags<BinaryTag{.fixed_length = sizeof(std::uint16_t)}>(type))
 };
 
 std::vector<char> buffer;
 BinarySerializer::OutputSerializer out(buffer);
-out(make_tags<BinaryTags{.unframed = true}>(Header{12, 3}));
+out(make_tags<BinaryTag{.unframed = true}>(Header{12, 3}));
 out.end();
 ```
 
 Common built-in tags:
 
-*   `JsonTags{.flat = true}`: flatten reflected object fields into the parent object.
-*   `JsonTags{.skipable = true}`: allow missing fields when reading.
-*   `JsonTags{.rawString = true}`: treat a JSON string as a raw JSON fragment.
-*   `BinaryTags{.fixedLength = N}`: read/write binary scalar values with a fixed width.
-*   `BinaryTags{.unframed = true}`: read/write reflected binary objects without field boundaries; use it at the call site for things such as transport headers, not as type-level metadata.
+*   `JsonTag{.flat = true}`: flatten reflected object fields into the parent object.
+*   `JsonTag{.skippable = true}`: allow missing fields when reading.
+*   `JsonTag{.raw_string = true}`: treat a JSON string as a raw JSON fragment.
+*   `BinaryTag{.fixed_length = N}`: read/write binary scalar values with a fixed width.
+*   `BinaryTag{.unframed = true}`: read/write reflected binary objects without field boundaries; use it at the call site for things such as transport headers, not as type-level metadata.
 *   `rename_tag<"...">` / `comment_tag<"...">`: reflection metadata for field renaming and XML comments.
 
 ### 5.3. Command-Line Argument Parsing (`ArgParser`)
@@ -939,7 +939,7 @@ To add a new data format, implement a backend with responsibilities matching the
     *   Reworked the serialization stack so RapidJSON, simdjson, Binary, XML, and schema generation share `Parser<Reader, Writer, T>`.
     *   Reduced concrete format backends to thin Reader/Writer layers; the old public state-machine API is no longer the extension model for new backends.
     *   Moved reflection tags from value wrappers to independent field/call-site metadata and removed the old `TaggedValue` style.
-    *   `BinaryTags::fixedLength` and `BinaryTags::unframed` are interpreted by the layer that consumes them; `unframed` is no longer type-level schema metadata.
+    *   `BinaryTag::fixed_length` and `BinaryTag::unframed` are interpreted by the layer that consumes them; `unframed` is no longer type-level schema metadata.
     *   Switched XML support to pugixml, including object fields, repeated sibling elements for arrays, node text, and comments.
     *   Stopped registering the communication `MessageHeader` as a `ProtoFactory` protocol; it is now serialized explicitly by the communication layer with call-site tags.
     *   Split the RPC frontend from the JSON-RPC backend: `RpcServer<Backend, ProtocolSets...>` / `RpcClient<Backend, ProtocolSets...>` are now the generic entry points, while `JsonRpcServer` / `JsonRpcClient` remain JSON-RPC backend aliases.
@@ -950,7 +950,7 @@ To add a new data format, implement a backend with responsibilities matching the
     *   complete JSON-RPC 2.0 protocol support.
         *   support named parameter passing.
         *   support built-in methods: `rpc.get_method_list`, `rpc.get_bind_method_list`, `rpc.get_method_info`, `rpc.get_method_info_list`.
-    *   add the is_skipable trait. mark a type can skipable like optional
+    *   add the is_skippable trait. mark a type can skippable like optional
     *   optimize jsonrpc template expansion, enable /bigobj option to compile
 
 *   **v0.2.3**

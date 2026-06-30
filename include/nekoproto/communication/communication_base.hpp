@@ -88,9 +88,9 @@ public:
     int32_t data    = 0; // 4 : the proto type of this message in Complete message or the slice index in Slice message
     uint16_t messageType = 0; // 2 : the type of this message
 
-    NEKO_SERIALIZER(make_tags<BinaryTags{.fixedLength = sizeof(uint32_t)}>(length),
-                    make_tags<BinaryTags{.fixedLength = sizeof(int32_t)}>(data),
-                    make_tags<BinaryTags{.fixedLength = sizeof(uint16_t)}>(messageType))
+    NEKO_SERIALIZER(make_tags<BinaryTag{.fixed_length = sizeof(uint32_t)}>(length),
+                    make_tags<BinaryTag{.fixed_length = sizeof(int32_t)}>(data),
+                    make_tags<BinaryTag{.fixed_length = sizeof(uint16_t)}>(messageType))
 };
 
 struct ProtocolTable {
@@ -232,7 +232,7 @@ inline auto ProtoClientBase::_serializeMessageData(const IProto& message, bool r
 inline auto ProtoClientBase::_serializeHeader(const MessageHeader& header) const -> std::vector<char> {
     std::vector<char> headerData;
     BinarySerializer::OutputSerializer serializer(headerData);
-    if (!serializer(make_tags<BinaryTags{.unframed = true}>(header)) || !serializer.end()) {
+    if (!serializer(make_tags<BinaryTag{.unframed = true}>(header)) || !serializer.end()) {
         headerData.clear();
     }
     return headerData;
@@ -497,7 +497,7 @@ inline auto ProtoStreamClient<T>::recv(StreamFlag flag) -> IoTask<IProto> {
         }
         BinarySerializer::InputSerializer serializer(reinterpret_cast<char*>(messageHeader.data()),
                                                      messageHeader.size());
-        auto taggedHeader = make_tags<BinaryTags{.unframed = true}>(mHeader);
+        auto taggedHeader = make_tags<BinaryTag{.unframed = true}>(mHeader);
         if (!serializer(taggedHeader)) {
             co_return Err(Error(ErrorCode::InvalidMessageHeader));
         }
@@ -821,7 +821,7 @@ inline auto ProtoDatagramClient<T>::recv(StreamFlag flag) -> IoTask<std::pair<IP
 
         MessageHeader header;
         BinarySerializer::InputSerializer serializer(reinterpret_cast<char*>(mBuffer.data()), MessageHeader::size());
-        auto taggedHeader = make_tags<BinaryTags{.unframed = true}>(header);
+        auto taggedHeader = make_tags<BinaryTag{.unframed = true}>(header);
         if (!serializer(taggedHeader)) {
             NEKO_LOG_ERROR("Communication", "Recv message header error: deserialize error");
             co_return Err(Error(ErrorCode::InvalidMessageHeader));

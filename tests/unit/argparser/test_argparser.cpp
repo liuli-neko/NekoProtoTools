@@ -62,7 +62,7 @@ struct CliOptions {
                    make_tags<arg_name<"verbose", "v">, arg_help<"enable verbose logs">, ArgTags{.flag = true}>(
                        &CliOptions::verbose),
                    "count",
-                   make_tags<arg_name<"count", "c">, arg_help<"count value">, ArgTags{.rangeMin = 0, .rangeMax = 100}>(
+                   make_tags<arg_name<"count", "c">, arg_help<"count value">, ArgTags{.range_min = 0, .range_max = 100}>(
                        &CliOptions::count),
                    "output",
                    make_tags<arg_name<"output", "o">, arg_help<"output file">, ArgTags{.required = true}>(
@@ -152,7 +152,7 @@ struct BuildCommand {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("jobs",
-                   make_tags<arg_name<"jobs", "j">, arg_help<"parallel jobs">, ArgTags{.rangeMin = 1, .rangeMax = 65}>(
+                   make_tags<arg_name<"jobs", "j">, arg_help<"parallel jobs">, ArgTags{.range_min = 1, .range_max = 65}>(
                        &BuildCommand::jobs),
                    "release",
                    make_tags<arg_name<"release", "r">, arg_help<"release build">, ArgTags{.flag = true}>(
@@ -279,7 +279,7 @@ struct DefaultOptions {
         constexpr static auto value = // NOLINT
             Object(
                 "count", make_tags<arg_name<"count", "c">, arg_default<5>, arg_help<"count value">,
-                                   ArgTags{.rangeMin = 1, .rangeMax = 10}>(&DefaultOptions::count),
+                                   ArgTags{.range_min = 1, .range_max = 10}>(&DefaultOptions::count),
                 "output",
                 make_tags<arg_name<"output", "o">, arg_default<"build"_cs>, arg_help<"output directory">>(
                     &DefaultOptions::output),
@@ -354,7 +354,7 @@ struct ParallelTagOptions {
         constexpr static auto value = // NOLINT
             Object("count",
                    make_tags<arg_name<"count", "c">, arg_help<"count value">,
-                             ArgTags{.required = true, .rangeMin = 2, .rangeMax = 5}>(&ParallelTagOptions::count),
+                             ArgTags{.required = true, .range_min = 2, .range_max = 5}>(&ParallelTagOptions::count),
                    "output",
                    make_tags<arg_name<"output", "o">, arg_help<"output directory">, arg_default<"dist"_cs>>(
                        &ParallelTagOptions::output),
@@ -395,15 +395,15 @@ TEST(ArgParser, TagListsFlattenAndLaterTagsOverrideEarlierOnes) {
     constexpr auto tags = field_tags_v<decltype(spec)>;
 
     static_assert(std::tuple_size_v<decltype(tags)> == 5);
-    static_assert(std::get<0>(tags).longName == "old");
-    static_assert(tags.template get<2>().longName == "new");
+    static_assert(std::get<0>(tags).long_name == "old");
+    static_assert(tags.template get<2>().long_name == "new");
     static_assert(std::get<4>(tags).flag);
-    static_assert(tag_query::get<argparser::tag_prop::long_name>(tags) == "new");
-    static_assert(tag_query::get<argparser::tag_prop::short_name>(tags) == "n");
-    static_assert(tag_query::get<argparser::tag_prop::help>(tags) == "new help");
-    static_assert(tag_query::get<argparser::tag_prop::flag>(tags));
+    static_assert(tag_query::get<argparser::tag_property::long_name>(tags) == "new");
+    static_assert(tag_query::get<argparser::tag_property::short_name>(tags) == "n");
+    static_assert(tag_query::get<argparser::tag_property::help>(tags) == "new help");
+    static_assert(tag_query::get<argparser::tag_property::flag>(tags));
     static_assert(tag_query::has_tag<ArgNameTag<"new", "n">>(tags));
-    static_assert(tag_query::get_tag<ArgNameTag<"new", "n">>(tags).longName == "new");
+    static_assert(tag_query::get_tag<ArgNameTag<"new", "n">>(tags).long_name == "new");
 }
 
 struct AdvancedTagOptions {
@@ -417,7 +417,7 @@ struct AdvancedTagOptions {
             Object(
                 "port",
                 make_tags<arg_name<"port", "p">, arg_value_name<"PORT">, arg_env<"NEKO_ARGPARSER_TEST_PORT">,
-                          arg_default<8080>, arg_help<"listen port">, ArgTags{.rangeMin = 1, .rangeMax = 65536}>(
+                          arg_default<8080>, arg_help<"listen port">, ArgTags{.range_min = 1, .range_max = 65536}>(
                     &AdvancedTagOptions::port),
                 "token",
                 make_tags<arg_name<"token">, arg_env<"NEKO_ARGPARSER_TEST_TOKEN">, arg_value_name<"TOKEN">,
@@ -429,7 +429,7 @@ struct AdvancedTagOptions {
                     &AdvancedTagOptions::include),
                 "levels",
                 make_tags<arg_name<"level">, arg_separator<';'>, arg_value_name<"LEVELS">,
-                          arg_help<"numeric levels">, ArgTags{.rangeMin = 0, .rangeMax = 10}>(
+                          arg_help<"numeric levels">, ArgTags{.range_min = 0, .range_max = 10}>(
                     &AdvancedTagOptions::levels));
     };
 };

@@ -34,7 +34,7 @@ bool parser_should_skip_empty_field(const FieldT& field, const Tags& /*tags*/) {
 
 template <typename FieldT, typename Tags>
 ParserResult parser_read_missing_field(FieldT& field, std::string_view name, const Tags& tags) {
-    if (tag_query::get<tag_prop::skipable>(tags)) {
+    if (tag_query::get<tag_property::skippable>(tags)) {
         return sa::success();
     }
     using ValueType = std::decay_t<FieldT>;
@@ -60,10 +60,10 @@ inline void parser_schema_add_required(parsing::schema::Type::Object& object, st
 template <typename FieldT, typename Tags>
 void parser_schema_add_reflect_field(parsing::schema::Type::Object& object, std::string_view name, const Tags& tags) {
     auto fieldSchema = parser_schema<std::decay_t<FieldT>>();
-    if (tag_query::has<tag_prop::fixed_length<void>>(tags)) {
-        fieldSchema.fixedLength = tag_query::get<tag_prop::fixed_length<std::decay_t<FieldT>>>(tags);
+    if (tag_query::has<tag_property::fixed_length<void>>(tags)) {
+        fieldSchema.fixed_length = tag_query::get<tag_property::fixed_length<std::decay_t<FieldT>>>(tags);
     }
-    if (tag_query::get<tag_prop::flat<std::decay_t<FieldT>>>(tags)) {
+    if (tag_query::get<tag_property::flat<std::decay_t<FieldT>>>(tags)) {
         const auto& unwrapped = parsing::schema::unwrapOptional(fieldSchema);
         if (const auto* nested = std::get_if<parsing::schema::Type::Object>(&unwrapped.value)) {
             object.properties.insert(nested->properties.begin(), nested->properties.end());
@@ -75,12 +75,12 @@ void parser_schema_add_reflect_field(parsing::schema::Type::Object& object, std:
     }
 
     auto fieldName = std::string(name);
-    if constexpr (tag_query::has<tag_prop::name>(Tags{})) {
-        fieldName = std::string(tag_query::get<tag_prop::name>(tags));
+    if constexpr (tag_query::has<tag_property::name>(Tags{})) {
+        fieldName = std::string(tag_query::get<tag_property::name>(tags));
     }
     object.properties.insert_or_assign(fieldName, std::move(fieldSchema));
     if constexpr (!traits::optional_like_type<std::decay_t<FieldT>>::value) {
-        if (!tag_query::get<tag_prop::skipable>(tags)) {
+        if (!tag_query::get<tag_property::skippable>(tags)) {
             parser_schema_add_required(object, std::move(fieldName));
         }
     }
@@ -100,8 +100,8 @@ parsing::schema::Type parser_schema_positional_reflection() {
     parsing::schema::Type::Array array;
     Reflect<T>::forEachMeta([&]<typename Field>(std::type_identity<Field>, const auto& tags) {
         auto fieldSchema = parser_schema<Field>();
-        if (tag_query::has<tag_prop::fixed_length<void>>(tags)) {
-            fieldSchema.fixedLength = tag_query::get<tag_prop::fixed_length<std::decay_t<Field>>>(tags);
+        if (tag_query::has<tag_property::fixed_length<void>>(tags)) {
+            fieldSchema.fixed_length = tag_query::get<tag_property::fixed_length<std::decay_t<Field>>>(tags);
         }
         array.prefixItems.emplace_back(std::move(fieldSchema));
     });
@@ -117,7 +117,7 @@ ParserResult parser_write_reflect_field(W& writer, typename W::OutputObjectType&
     using FieldType = std::decay_t<T>;
     if constexpr (has_values_meta<FieldType> && has_names_meta<FieldType> &&
                   !disable_reflect_parser<FieldType>::value) {
-        if (tag_query::get<tag_prop::flat<FieldType>>(tags)) {
+        if (tag_query::get<tag_property::flat<FieldType>>(tags)) {
             return parser_write_reflect_fields<W>(writer, object, field);
         }
     }
@@ -133,15 +133,15 @@ ParserResult parser_write_reflect_field(W& writer, typename W::OutputObjectType&
     }
 #endif
     std::string_view fieldName = name;
-    if constexpr (tag_query::has<tag_prop::name>(Tags{})) {
-        fieldName = tag_query::get<tag_prop::name>(tags);
+    if constexpr (tag_query::has<tag_property::name>(Tags{})) {
+        fieldName = tag_query::get<tag_property::name>(tags);
     }
     const auto parent = typename parsing::Parent<W>::Object{fieldName, &object};
     auto result       = parser_context(parser_write<W>(writer, field, parent, tags),
                                        "Failed to write field '" + std::string(fieldName) + "': ");
     if (result) {
-        if constexpr (tag_query::has<tag_prop::comment>(Tags{})) {
-            parsing::Parent<W>::addComment(writer, tag_query::get<tag_prop::comment>(tags), parent);
+        if constexpr (tag_query::has<tag_property::comment>(Tags{})) {
+            parsing::Parent<W>::addComment(writer, tag_query::get<tag_property::comment>(tags), parent);
         }
     }
     return result;
@@ -153,7 +153,7 @@ ParserResult parser_read_reflect_field(typename R::InputValueType in, T& field, 
     using FieldType = std::decay_t<T>;
     if constexpr (has_values_meta<FieldType> && has_names_meta<FieldType> &&
                   !disable_reflect_parser<FieldType>::value) {
-        if (tag_query::get<tag_prop::flat<FieldType>>(tags)) {
+        if (tag_query::get<tag_property::flat<FieldType>>(tags)) {
             return parser_read_reflect_fields<R>(in, field);
         }
     }
@@ -162,8 +162,8 @@ ParserResult parser_read_reflect_field(typename R::InputValueType in, T& field, 
         return object.error();
     }
     std::string_view fieldName = name;
-    if constexpr (tag_query::has<tag_prop::name>(Tags{})) {
-        fieldName = tag_query::get<tag_prop::name>(tags);
+    if constexpr (tag_query::has<tag_property::name>(Tags{})) {
+        fieldName = tag_query::get<tag_property::name>(tags);
     }
     auto fieldValue = R::objectField(object.value(), fieldName);
     if (!fieldValue) {
@@ -208,13 +208,13 @@ ParserResult parser_read_reflect_fields(typename R::InputValueType in, T& value)
 
 template <typename W, typename T>
 struct WriteParser<W, T,
-                   std::enable_if_t<has_values_meta<T> && (!is_field_spec_v<T>) && (!std::is_enum_v<T>) &&
+                   std::enable_if_t<has_values_meta<T> && (!is_tagged_field_v<T>) && (!std::is_enum_v<T>) &&
                                     (!disable_reflect_parser<T>::value)>> {
     template <typename ParentType, typename Tags>
     static ParserResult write(W& writer, const T& value, const ParentType& parent, const Tags& tags) {
         if constexpr (has_names_meta<T>) {
             if constexpr (parsing::supports_unframed_object_writer<W>) {
-                if (tag_query::get<tag_prop::unframed<std::decay_t<T>>>(tags)) {
+                if (tag_query::get<tag_property::unframed<std::decay_t<T>>>(tags)) {
                     parsing::Parent<W>::beginUnframedObject(writer, parent);
                     ParserResult result;
                     Reflect<T>::forEach(
@@ -240,8 +240,8 @@ struct WriteParser<W, T,
                     result            = parser_context(parser_write<W>(writer, field, parent, tags),
                                                        "Failed to write reflected element " + std::to_string(index) + ": ");
                     if (result) {
-                        if constexpr (tag_query::has<tag_prop::comment>(std::remove_cvref_t<decltype(tags)>{})) {
-                            parsing::Parent<W>::addComment(writer, tag_query::get<tag_prop::comment>(tags), parent);
+                        if constexpr (tag_query::has<tag_property::comment>(std::remove_cvref_t<decltype(tags)>{})) {
+                            parsing::Parent<W>::addComment(writer, tag_query::get<tag_property::comment>(tags), parent);
                         }
                     }
                 }
@@ -254,13 +254,13 @@ struct WriteParser<W, T,
 
 template <typename R, typename T>
 struct ReadParser<R, T,
-                  std::enable_if_t<has_values_meta<T> && (!is_field_spec_v<T>) && (!std::is_enum_v<T>) &&
+                  std::enable_if_t<has_values_meta<T> && (!is_tagged_field_v<T>) && (!std::is_enum_v<T>) &&
                                    (!disable_reflect_parser<T>::value)>> {
     template <typename Tags>
     static ParserResult read(typename R::InputValueType in, T& value, const Tags& tags) {
         if constexpr (has_names_meta<T>) {
             if constexpr (parsing::supports_unframed_object_reader<R>) {
-                if (tag_query::get<tag_prop::unframed<std::decay_t<T>>>(tags)) {
+                if (tag_query::get<tag_property::unframed<std::decay_t<T>>>(tags)) {
                     ParserResult result;
                     auto current = in;
                     Reflect<T>::forEach(
@@ -302,7 +302,7 @@ struct ReadParser<R, T,
 };
 
 template <typename T>
-struct SchemaParser<T, std::enable_if_t<has_values_meta<T> && (!is_field_spec_v<T>) && (!std::is_enum_v<T>) &&
+struct SchemaParser<T, std::enable_if_t<has_values_meta<T> && (!is_tagged_field_v<T>) && (!std::is_enum_v<T>) &&
                                         (!disable_reflect_parser<T>::value)>> {
     static parsing::schema::Type toSchema() {
         parsing::schema::Type schema;

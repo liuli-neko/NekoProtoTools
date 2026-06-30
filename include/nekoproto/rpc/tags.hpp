@@ -18,7 +18,7 @@ struct RpcPrefixTag {
 };
 
 struct RpcNoPrefixTag {
-    constexpr static bool noPrefix = true;
+    constexpr static bool no_prefix = true;
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() {
         return true;
@@ -29,9 +29,9 @@ template <ConstexprString Prefix>
 inline constexpr auto rpc_prefix_tag = RpcPrefixTag<Prefix>{}; // NOLINT
 inline constexpr auto rpc_no_prefix_tag = RpcNoPrefixTag{}; // NOLINT
 
-namespace tag_prop {
-NEKO_DEFINE_TAG_PROP(std::string_view, prefix, rpc_prefix); // NOLINT
-NEKO_DEFINE_TAG_PROP(bool, noPrefix, rpc_no_prefix);        // NOLINT
-} // namespace tag_prop
+namespace tag_property {
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, prefix, rpc_prefix); // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, no_prefix, rpc_no_prefix);       // NOLINT
+} // namespace tag_property
 
 NEKO_END_NAMESPACE

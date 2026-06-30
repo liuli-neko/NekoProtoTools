@@ -44,7 +44,7 @@ struct RawJsonField {
 
     struct Neko {
         constexpr static auto value =
-            Object("payload", make_tags<JsonTags{.rawString = true}>(&RawJsonField::payload)); // NOLINT
+            Object("payload", make_tags<JsonTag{.raw_string = true}>(&RawJsonField::payload)); // NOLINT
     };
 };
 
@@ -58,7 +58,7 @@ struct FlatJsonObject {
     int id = 0;
     FlatJsonValue nested;
 
-    NEKO_SERIALIZER(id, make_tags<JsonTags{.flat = true}>(nested))
+    NEKO_SERIALIZER(id, make_tags<JsonTag{.flat = true}>(nested))
 };
 
 struct MissingFieldPolicy {
@@ -69,7 +69,7 @@ struct MissingFieldPolicy {
     struct Neko {
         constexpr static auto value =
             Object("required", &MissingFieldPolicy::required, "retained",
-                   make_tags<JsonTags{.skipable = true}>(&MissingFieldPolicy::retained), "optional",
+                   make_tags<JsonTag{.skippable = true}>(&MissingFieldPolicy::retained), "optional",
                    &MissingFieldPolicy::optional); // NOLINT
     };
 };
@@ -79,7 +79,7 @@ struct FixedLengthJsonField {
 
     struct Neko {
         constexpr static auto value =
-            Object("value", make_tags<BinaryTags{.fixedLength = 2}>(&FixedLengthJsonField::value)); // NOLINT
+            Object("value", make_tags<BinaryTag{.fixed_length = 2}>(&FixedLengthJsonField::value)); // NOLINT
     };
 };
 
@@ -324,7 +324,7 @@ TEST(RapidJsonBackendParser, FlatTagIsHandledByReflectObjectParser) {
     EXPECT_EQ(decoded.nested.code, 9);
 }
 
-TEST(RapidJsonBackendParser, MissingFieldPolicyPreservesExplicitlySkipableValue) {
+TEST(RapidJsonBackendParser, MissingFieldPolicyPreservesExplicitlySkippableValue) {
     const std::string json = R"({"required":5})";
     MissingFieldPolicy decoded{.required = 1, .retained = 22, .optional = 33};
     JsonSerializer::InputSerializer in(json.data(), json.size());
@@ -369,11 +369,11 @@ TEST(RapidJsonBackendParser, BinaryFixedLengthTagIsIgnoredByJsonParser) {
 
 TEST(RapidJsonBackendParser, BinaryLayoutTagIsIgnoredByJsonParser) {
     const UnframedBinaryLayout source{.value = 42};
-    const auto buffer = write_json(make_tags<BinaryTags{.unframed = true}>(source));
+    const auto buffer = write_json(make_tags<BinaryTag{.unframed = true}>(source));
     EXPECT_EQ(as_string(buffer), R"({"value":42})");
 
     UnframedBinaryLayout decoded;
-    auto taggedDecoded = make_tags<BinaryTags{.unframed = true}>(decoded);
+    auto taggedDecoded = make_tags<BinaryTag{.unframed = true}>(decoded);
     read_json(buffer, taggedDecoded);
     EXPECT_EQ(decoded.value, 42);
 }

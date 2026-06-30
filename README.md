@@ -243,7 +243,7 @@ int main() {
 
 *   **内置序列化器**：
     *   `JsonSerializer`: 默认 JSON 序列化器别名。开启 RapidJSON 时使用 `RapidJsonSerializer`；未开启 RapidJSON 但开启 simdjson 时使用 `SimdJsonSerializer`。
-    *   `BinarySerializer`: 提供紧凑的二进制序列化格式，并支持 `fixedLength`、`unframed` 等二进制布局 tag。
+    *   `BinarySerializer`: 提供紧凑的二进制序列化格式，并支持 `fixed_length`、`unframed` 等二进制布局 tag。
     *   `XmlSerializer`: 使用 pugixml 提供 XML 序列化和反序列化支持。
 *   **选择序列化器**：
     *   对于基本序列化，直接实例化所需的 `OutputSerializer` / `InputSerializer`。
@@ -263,23 +263,23 @@ struct Header {
     std::uint32_t length = 0;
     std::uint16_t type = 0;
 
-    NEKO_SERIALIZER(make_tags<BinaryTags{.fixedLength = sizeof(std::uint32_t)}>(length),
-                    make_tags<BinaryTags{.fixedLength = sizeof(std::uint16_t)}>(type))
+    NEKO_SERIALIZER(make_tags<BinaryTag{.fixed_length = sizeof(std::uint32_t)}>(length),
+                    make_tags<BinaryTag{.fixed_length = sizeof(std::uint16_t)}>(type))
 };
 
 std::vector<char> buffer;
 BinarySerializer::OutputSerializer out(buffer);
-out(make_tags<BinaryTags{.unframed = true}>(Header{12, 3}));
+out(make_tags<BinaryTag{.unframed = true}>(Header{12, 3}));
 out.end();
 ```
 
 常用内置 tag：
 
-*   `JsonTags{.flat = true}`：反射对象字段展开到父对象。
-*   `JsonTags{.skipable = true}`：读取缺失字段时允许跳过。
-*   `JsonTags{.rawString = true}`：JSON 字符串按原始 JSON 片段处理。
-*   `BinaryTags{.fixedLength = N}`：二进制基础类型按固定宽度读写。
-*   `BinaryTags{.unframed = true}`：二进制反射对象按无字段边界布局读写；适合通信帧头这类调用点，不应作为类型级属性。
+*   `JsonTag{.flat = true}`：反射对象字段展开到父对象。
+*   `JsonTag{.skippable = true}`：读取缺失字段时允许跳过。
+*   `JsonTag{.raw_string = true}`：JSON 字符串按原始 JSON 片段处理。
+*   `BinaryTag{.fixed_length = N}`：二进制基础类型按固定宽度读写。
+*   `BinaryTag{.unframed = true}`：二进制反射对象按无字段边界布局读写；适合通信帧头这类调用点，不应作为类型级属性。
 *   `rename_tag<"...">` / `comment_tag<"...">`：用于字段重命名和 XML 注释等反射元数据。
 
 ### 5.3. 命令行参数解析 (`ArgParser`)
@@ -919,7 +919,7 @@ struct CustomParser<StrongId> {
     *   序列化后端重构：RapidJSON、simdjson、Binary、XML 和 schema 生成统一接入 `Parser<Reader, Writer, T>`。
     *   后端收敛为薄 Reader/Writer；旧 public 状态机 API 不再作为新后端扩展入口。
     *   反射 tags 从 value wrapper 迁移为独立字段/调用点元数据，删除旧 `TaggedValue` 用法。
-    *   `BinaryTags::fixedLength`、`BinaryTags::unframed` 由实际消费层解释；`unframed` 不再是类型级 schema metadata。
+    *   `BinaryTag::fixed_length`、`BinaryTag::unframed` 由实际消费层解释；`unframed` 不再是类型级 schema metadata。
     *   XML 切换为 pugixml 后端，支持对象字段、数组同名兄弟元素、节点文本和注释。
     *   通信层帧头 `MessageHeader` 不再注册进 `ProtoFactory`，由通信层显式以调用点 tag 读写。
     *   RPC 前端与 JSON-RPC 后端分离：`RpcServer<Backend, ProtocolSets...>` / `RpcClient<Backend, ProtocolSets...>` 成为通用入口，`JsonRpcServer` / `JsonRpcClient` 保留为 JSON-RPC 后端别名。
@@ -944,7 +944,7 @@ struct CustomParser<StrongId> {
     *   完善 JSON-RPC 2.0 协议支持。
         *   支持命名参数传递。
         *   支持内置方法：`rpc.get_method_list`, `rpc.get_bind_method_list`, `rpc.get_method_info`, `rpc.get_method_info_list`。
-    *   给类型增加跳过标记is_skipable。标识一个非optional的可跳过类型。
+    *   给类型增加跳过标记is_skippable。标识一个非optional的可跳过类型。
     *   优化jsonrpc模板膨胀，开启/bigobj选项编译
 
 *   **v0.2.3**

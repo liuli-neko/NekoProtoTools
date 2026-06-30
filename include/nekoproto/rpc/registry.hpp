@@ -34,7 +34,7 @@ void rpc_visit_field(Field& field, std::string_view fieldName, const Tags& tags,
                      std::string_view prefix, Fn&& fn);
 
 template <typename T, typename Fn>
-void forEachRpcMethod(T& protocol, Fn&& fn, std::string_view prefix = {}) {
+void for_each_rpc_method(T& protocol, Fn&& fn, std::string_view prefix = {}) {
     if constexpr (RpcMethodObject<T>) {
         const auto fullName = rpc_join_name(prefix, protocol.declaredName());
         protocol.setRemoteName(fullName);
@@ -63,16 +63,16 @@ void rpc_visit_field(Field& field, std::string_view fieldName, const Tags& tags,
         fn(field);
     } else if constexpr (RpcReflectable<FieldT>) {
         std::string nextPrefix;
-        if constexpr (tag_query::has<tag_prop::rpc_no_prefix>(Tags{})) {
+        if constexpr (tag_query::has<tag_property::rpc_no_prefix>(Tags{})) {
             nextPrefix = std::string(prefix);
-        } else if constexpr (tag_query::has<tag_prop::rpc_prefix>(Tags{})) {
-            nextPrefix = rpc_join_name(prefix, tag_query::get<tag_prop::rpc_prefix>(tags));
+        } else if constexpr (tag_query::has<tag_property::rpc_prefix>(Tags{})) {
+            nextPrefix = rpc_join_name(prefix, tag_query::get<tag_property::rpc_prefix>(tags));
         } else if (hasFieldName) {
             nextPrefix = rpc_join_name(prefix, fieldName);
         } else {
             nextPrefix = std::string(prefix);
         }
-        forEachRpcMethod(field, fn, nextPrefix);
+        for_each_rpc_method(field, fn, nextPrefix);
     }
 }
 

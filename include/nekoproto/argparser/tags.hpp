@@ -15,10 +15,6 @@
 
 NEKO_BEGIN_NAMESPACE
 namespace argparser {
-struct ArgCommand {
-    bool value;
-};
-
 namespace detail {
 
 // Type traits ----------------------------------------------------------------
@@ -102,45 +98,49 @@ inline constexpr bool is_nested_option_v = // NOLINT
     NEKO_NAMESPACE::detail::has_values_meta<std::remove_cvref_t<T>>;
 } // namespace detail
 
+struct ArgCommand {
+    bool value;
+};
+
 struct ArgTags {
-    TagValue<bool> required{};   // NOLINT
-    TagValue<bool> positional{}; // NOLINT
-    TagValue<bool> flag{};       // NOLINT
-    TagValue<bool> repeatable{}; // NOLINT
-    TagValue<bool> hidden{};     // NOLINT
-    TagValue<bool> command{};    // NOLINT
-    TagValue<double> rangeMin{}; // NOLINT
-    TagValue<double> rangeMax{}; // NOLINT
+    tag_detail::tag_value<bool> required{};    // NOLINT
+    tag_detail::tag_value<bool> positional{};  // NOLINT
+    tag_detail::tag_value<bool> flag{};        // NOLINT
+    tag_detail::tag_value<bool> repeatable{};  // NOLINT
+    tag_detail::tag_value<bool> hidden{};      // NOLINT
+    tag_detail::tag_value<bool> command{};     // NOLINT
+    tag_detail::tag_value<double> range_min{}; // NOLINT
+    tag_detail::tag_value<double> range_max{}; // NOLINT
 
-    template <typename T, auto tags>
+    template <typename T, auto Tags>
     constexpr static bool constexpr_check() { // NOLINT
-        using RawT = std::remove_cvref_t<T>;
+        using raw_t = std::remove_cvref_t<T>;
 
-        constexpr bool IsCommand   = tags.command.declared && static_cast<bool>(tags.command);
-        constexpr bool IsFlag      = tags.flag.declared && static_cast<bool>(tags.flag);
-        constexpr bool IsPosition  = tags.positional.declared && static_cast<bool>(tags.positional);
-        constexpr bool HasRange    = tags.rangeMin.declared || tags.rangeMax.declared;
-        constexpr bool HasRequired = tags.required.declared && static_cast<bool>(tags.required);
-        constexpr bool HasRepeat   = tags.repeatable.declared && static_cast<bool>(tags.repeatable);
+        constexpr bool is_command   = Tags.command.declared && static_cast<bool>(Tags.command);
+        constexpr bool is_flag      = Tags.flag.declared && static_cast<bool>(Tags.flag);
+        constexpr bool is_position  = Tags.positional.declared && static_cast<bool>(Tags.positional);
+        constexpr bool has_range    = Tags.range_min.declared || Tags.range_max.declared;
+        constexpr bool has_required = Tags.required.declared && static_cast<bool>(Tags.required);
+        constexpr bool has_repeat   = Tags.repeatable.declared && static_cast<bool>(Tags.repeatable);
 
-        if constexpr (HasRange) {
-            static_assert(detail::is_range_supported_v<RawT>,
+        if constexpr (has_range) {
+            static_assert(detail::is_range_supported_v<raw_t>,
                           "argparser range tags require an arithmetic field, optional arithmetic field, or vector of "
                           "arithmetic values");
-            static_assert(static_cast<double>(tags.rangeMin) <= static_cast<double>(tags.rangeMax),
-                          "argparser rangeMin must be less than or equal to rangeMax");
+            static_assert(static_cast<double>(Tags.range_min) <= static_cast<double>(Tags.range_max),
+                          "argparser range_min must be less than or equal to range_max");
         }
-        if constexpr (IsFlag) {
-            static_assert(detail::is_bool_supported_v<RawT>,
+        if constexpr (is_flag) {
+            static_assert(detail::is_bool_supported_v<raw_t>,
                           "argparser flag tags require a bool field, optional bool field, or vector<bool> field");
         }
-        if constexpr (IsFlag && IsPosition) {
-            static_assert(!IsFlag, "argparser positional fields cannot also be flags");
+        if constexpr (is_flag && is_position) {
+            static_assert(!is_flag, "argparser positional fields cannot also be flags");
         }
-        if constexpr (IsCommand) {
-            static_assert(std::is_same_v<RawT, ArgCommand> || NEKO_NAMESPACE::detail::has_values_meta<RawT>,
+        if constexpr (is_command) {
+            static_assert(std::is_same_v<raw_t, ArgCommand> || NEKO_NAMESPACE::detail::has_values_meta<raw_t>,
                           "argparser command tags require a reflected command struct or ArgCommand placeholder");
-            static_assert(!IsFlag && !IsPosition && !HasRange && !HasRequired && !HasRepeat,
+            static_assert(!is_flag && !is_position && !has_range && !has_required && !has_repeat,
                           "argparser command tags cannot also be flag, positional, range, required, or repeatable");
         }
         return true;
@@ -149,8 +149,8 @@ struct ArgTags {
 
 template <ConstexprString Long = "", ConstexprString Short = "">
 struct ArgNameTag {
-    static constexpr auto longName  = Long.view();  // NOLINT
-    static constexpr auto shortName = Short.view(); // NOLINT
+    static constexpr auto long_name  = Long.view();  // NOLINT
+    static constexpr auto short_name = Short.view(); // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
@@ -160,14 +160,14 @@ struct ArgNameTag {
 
 template <auto Default>
 struct ArgDefaultTag {
-    constexpr static auto getValue()
+    constexpr static auto get_value()
         requires is_constexpr_string<decltype(Default)>::value
     {
         return Default.view();
     }
-    constexpr static auto getValue() { return Default; }
+    constexpr static auto get_value() { return Default; }
 
-    static constexpr auto defaultValue = getValue(); // NOLINT
+    static constexpr auto default_value = get_value(); // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
@@ -197,7 +197,7 @@ struct ArgHelpTag {
 
 template <ConstexprString ValueName = "">
 struct ArgValueNameTag {
-    static constexpr auto valueName = ValueName.view(); // NOLINT
+    static constexpr auto value_name = ValueName.view(); // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
@@ -207,7 +207,7 @@ struct ArgValueNameTag {
 
 template <ConstexprString EnvName = "">
 struct ArgEnvTag {
-    static constexpr auto envName = EnvName.view(); // NOLINT
+    static constexpr auto env_name = EnvName.view(); // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
@@ -237,14 +237,14 @@ struct ArgAliasesTag {
 
 template <auto Implicit>
 struct ArgImplicitTag {
-    constexpr static auto getValue()
+    constexpr static auto get_value()
         requires is_constexpr_string<decltype(Implicit)>::value
     {
         return Implicit.view();
     }
-    constexpr static auto getValue() { return Implicit; }
+    constexpr static auto get_value() { return Implicit; }
 
-    static constexpr auto implicitValue = getValue(); // NOLINT
+    static constexpr auto implicit_value = get_value(); // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
@@ -274,7 +274,7 @@ struct ArgConflictsTag {
 
 template <ConstexprString... Names>
 struct ArgRequiresTag {
-    static constexpr std::array requiresNames = {Names.view()...}; // NOLINT
+    static constexpr std::array requires_names = {Names.view()...}; // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
@@ -284,7 +284,7 @@ struct ArgRequiresTag {
 
 template <ConstexprString Message = "">
 struct ArgDeprecatedTag {
-    static constexpr auto deprecatedMessage = Message.view(); // NOLINT
+    static constexpr auto deprecated_message = Message.view(); // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
@@ -293,7 +293,7 @@ struct ArgDeprecatedTag {
 };
 
 struct ArgCaseInsensitiveChoicesTag {
-    static constexpr bool caseInsensitiveChoices = true; // NOLINT
+    static constexpr bool case_insensitive_choices = true; // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
@@ -344,32 +344,32 @@ inline constexpr auto arg_case_insensitive_choices = ArgCaseInsensitiveChoicesTa
 
 // Tag access -----------------------------------------------------------------
 
-namespace tag_prop {
-NEKO_DEFINE_TAG_PROP(std::string_view, longName, long_name)                        // NOLINT
-NEKO_DEFINE_TAG_PROP(std::string_view, shortName, short_name)                      // NOLINT
-NEKO_DEFINE_TAG_PROP(std::vector<std::string_view>, choices, choices)              // NOLINT
-NEKO_DEFINE_TAG_PROP(std::string_view, help, help)                                 // NOLINT
-NEKO_DEFINE_TAG_PROP(std::string_view, valueName, value_name)                      // NOLINT
-NEKO_DEFINE_TAG_PROP(std::string_view, envName, env_name)                          // NOLINT
-NEKO_DEFINE_TAG_PROP(char, separator, separator)                                   // NOLINT
-NEKO_DEFINE_TAG_PROP(std::vector<std::string_view>, aliases, aliases)              // NOLINT
-NEKO_DEFINE_TAG_PROP(std::string_view, group, group)                               // NOLINT
-NEKO_DEFINE_TAG_PROP(std::vector<std::string_view>, conflicts, conflicts)          // NOLINT
-NEKO_DEFINE_TAG_PROP(std::vector<std::string_view>, requiresNames, requires_names) // NOLINT
-NEKO_DEFINE_TAG_PROP(std::string_view, deprecatedMessage, deprecated_message)      // NOLINT
-NEKO_DEFINE_TAG_PROP(bool, caseInsensitiveChoices, case_insensitive_choices)       // NOLINT
-NEKO_DEFINE_TAG_PROP(bool, required, required)                                     // NOLINT
-NEKO_DEFINE_TAG_PROP(bool, positional, positional)                                 // NOLINT
-NEKO_DEFINE_TAG_PROP(bool, flag, flag)                                             // NOLINT
-NEKO_DEFINE_TAG_PROP(bool, repeatable, repeatable)                                 // NOLINT
-NEKO_DEFINE_TAG_PROP(bool, hidden, hidden)                                         // NOLINT
-NEKO_DEFINE_TAG_PROP(bool, command, command)                                       // NOLINT
-NEKO_DEFINE_TAG_PROP(double, rangeMin, range_min)                                  // NOLINT
-NEKO_DEFINE_TAG_PROP(double, rangeMax, range_max)                                  // NOLINT
+namespace tag_property {
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, long_name, long_name)                        // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, short_name, short_name)                      // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::vector<std::string_view>, choices, choices)               // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, help, help)                                  // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, value_name, value_name)                      // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, env_name, env_name)                          // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(char, separator, separator)                                    // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::vector<std::string_view>, aliases, aliases)               // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, group, group)                                // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::vector<std::string_view>, conflicts, conflicts)           // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::vector<std::string_view>, requires_names, requires_names) // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, deprecated_message, deprecated_message)      // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, case_insensitive_choices, case_insensitive_choices)      // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, required, required)                                      // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, positional, positional)                                  // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, flag, flag)                                              // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, repeatable, repeatable)                                  // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, hidden, hidden)                                          // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, command, command)                                        // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(double, range_min, range_min)                                  // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(double, range_max, range_max)                                  // NOLINT
 
-NEKO_DEFINE_TAG_VALUE_PROP(defaultValue, default_value)   // NOLINT
-NEKO_DEFINE_TAG_VALUE_PROP(implicitValue, implicit_value) // NOLINT
-} // namespace tag_prop
+NEKO_DETAIL_DEFINE_TAG_VALUE_PROPERTY(default_value, default_value)   // NOLINT
+NEKO_DETAIL_DEFINE_TAG_VALUE_PROPERTY(implicit_value, implicit_value) // NOLINT
+} // namespace tag_property
 
 } // namespace argparser
 NEKO_END_NAMESPACE

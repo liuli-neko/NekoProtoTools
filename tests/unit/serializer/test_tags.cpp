@@ -22,7 +22,7 @@ struct TypeLevelFlatTagInner {
     std::string label;
 
     NEKO_SERIALIZER(
-        (make_tags<comment_tag<"doc keeps parser depth">, rename_tag<"wire_code">, JsonTags{.flat = true}>(code)),
+        (make_tags<comment_tag<"doc keeps parser depth">, rename_tag<"wire_code">, JsonTag{.flat = true}>(code)),
         label)
 };
 
@@ -48,9 +48,9 @@ struct TypeLevelUnframedEnvelope {
     NEKO_SERIALIZER(header, tail)
 };
 
-inline constexpr auto RawStringTag     = JsonTags{.rawString = true};
-inline constexpr auto SkipableTag      = JsonTags{.skipable = true};
-inline constexpr auto FlattenedDocsTag = TagList<comment_tag<"flattened docs">, JsonTags{.flat = true}>{};
+inline constexpr auto RawStringTag     = JsonTag{.raw_string = true};
+inline constexpr auto SkippableTag      = JsonTag{.skippable = true};
+inline constexpr auto FlattenedDocsTag = TagList<comment_tag<"flattened docs">, JsonTag{.flat = true}>{};
 
 struct MacroParsedTaggedObject {
     std::string raw;
@@ -64,8 +64,8 @@ template <>
 struct NEKO_NAMESPACE::Meta<MacroParsedTaggedObject> {
     static constexpr auto value = Object(
         "raw", make_tags<RawStringTag>(&MacroParsedTaggedObject::raw),
-        "renamed", make_tags<comment_tag<"doc keeps parser depth">, rename_tag<"wire(alias)">, JsonTags{.skipable = true}>(&MacroParsedTaggedObject::renamed),
-        "optional", make_tags<SkipableTag>(&MacroParsedTaggedObject::optional),
+        "renamed", make_tags<comment_tag<"doc keeps parser depth">, rename_tag<"wire(alias)">, JsonTag{.skippable = true}>(&MacroParsedTaggedObject::renamed),
+        "optional", make_tags<SkippableTag>(&MacroParsedTaggedObject::optional),
         "nested", make_tags<FlattenedDocsTag>(&MacroParsedTaggedObject::nested)
     );
 };
@@ -83,9 +83,9 @@ struct SchemaTaggedObject {
         static constexpr auto value =
             Object("required", &SchemaTaggedObject::required, "renamed",
                    make_tags<rename_tag<"wire_required">>(&SchemaTaggedObject::renamed), "retained",
-                   make_tags<JsonTags{.skipable = true}>(&SchemaTaggedObject::retained), "optional",
-                   &SchemaTaggedObject::optional, "flat", make_tags<JsonTags{.flat = true}>(&SchemaTaggedObject::flat),
-                   "fixed", make_tags<BinaryTags{.fixedLength = true}>(&SchemaTaggedObject::fixed)); // NOLINT
+                   make_tags<JsonTag{.skippable = true}>(&SchemaTaggedObject::retained), "optional",
+                   &SchemaTaggedObject::optional, "flat", make_tags<JsonTag{.flat = true}>(&SchemaTaggedObject::flat),
+                   "fixed", make_tags<BinaryTag{.fixed_length = true}>(&SchemaTaggedObject::fixed)); // NOLINT
     };
 };
 
@@ -129,34 +129,34 @@ bool contains(const std::vector<std::string>& values, std::string_view expected)
 
 TEST(SerializationTags, AccessorsResolveDirectAndNestedTagFlags) {
     constexpr auto Tags =
-        TagList<comment_tag<"outer comment">, rename_tag<"wire_name">, JsonTags{.flat = true, .skipable = true}>{};
+        TagList<comment_tag<"outer comment">, rename_tag<"wire_name">, JsonTag{.flat = true, .skippable = true}>{};
 
-    static_assert(tag_query::has<tag_prop::comment>(Tags));
-    static_assert(tag_query::get<tag_prop::comment>(Tags) == "outer comment");
-    static_assert(tag_query::has<tag_prop::name>(Tags));
-    static_assert(tag_query::get<tag_prop::name>(Tags) == "wire_name");
-    static_assert(tag_query::get<tag_prop::flat<TypeLevelFlatTagInner>>(Tags));
-    static_assert(tag_query::get<tag_prop::skipable>(Tags));
+    static_assert(tag_query::has<tag_property::comment>(Tags));
+    static_assert(tag_query::get<tag_property::comment>(Tags) == "outer comment");
+    static_assert(tag_query::has<tag_property::name>(Tags));
+    static_assert(tag_query::get<tag_property::name>(Tags) == "wire_name");
+    static_assert(tag_query::get<tag_property::flat<TypeLevelFlatTagInner>>(Tags));
+    static_assert(tag_query::get<tag_property::skippable>(Tags));
 }
 
 TEST(SerializationTags, TypeLevelTagsAreVisibleThroughNoTags) {
-    static_assert(tag_query::get<tag_prop::flat<TypeLevelFlatTagInner>>(NoTags{}));
-    static_assert(!tag_query::get<tag_prop::flat<int>>(NoTags{}));
-    static_assert(tag_query::get<tag_prop::unframed<TypeLevelUnframedHeader>>(NoTags{}));
-    static_assert(!tag_query::get<tag_prop::unframed<std::uint16_t>>(NoTags{}));
-    static_assert(tag_query::get<tag_prop::fixed_length<std::uint32_t>>(BinaryTags{.fixedLength = true}) ==
+    static_assert(tag_query::get<tag_property::flat<TypeLevelFlatTagInner>>(NoTags{}));
+    static_assert(!tag_query::get<tag_property::flat<int>>(NoTags{}));
+    static_assert(tag_query::get<tag_property::unframed<TypeLevelUnframedHeader>>(NoTags{}));
+    static_assert(!tag_query::get<tag_property::unframed<std::uint16_t>>(NoTags{}));
+    static_assert(tag_query::get<tag_property::fixed_length<std::uint32_t>>(BinaryTag{.fixed_length = true}) ==
                   sizeof(std::uint32_t));
-    static_assert(tag_query::get<tag_prop::fixed_length<std::uint32_t>>(BinaryTags{.fixedLength = 2}) == 2U);
+    static_assert(tag_query::get<tag_property::fixed_length<std::uint32_t>>(BinaryTag{.fixed_length = 2}) == 2U);
 }
 
 TEST(SerializationTags, MakeTagsExposeAccessorAndWrappedTag) {
-    auto spec = make_tags<rename_tag<"wire_code">, JsonTags{.skipable = true}>(&TypeLevelFlatTagInner::code);
+    auto spec = make_tags<rename_tag<"wire_code">, JsonTag{.skippable = true}>(&TypeLevelFlatTagInner::code);
 
-    static_assert(is_field_spec_v<decltype(spec)>);
+    static_assert(is_tagged_field_v<decltype(spec)>);
     static_assert(std::is_same_v<detail::resolve_without_context_t<decltype(&TypeLevelFlatTagInner::code)>, int>);
     static_assert(std::is_same_v<resolve_member_type_t<field_accessor_t<decltype(spec)>, TypeLevelFlatTagInner>, int>);
-    static_assert(tag_query::get<tag_prop::name>(field_tags_v<decltype(spec)>) == "wire_code");
-    static_assert(tag_query::get<tag_prop::skipable>(field_tags_v<decltype(spec)>));
+    static_assert(tag_query::get<tag_property::name>(field_tags_v<decltype(spec)>) == "wire_code");
+    static_assert(tag_query::get<tag_property::skippable>(field_tags_v<decltype(spec)>));
 }
 
 TEST(SerializationTags, SerializerMacroStripsMakeTagsWhenBuildingReflectionNames) {
@@ -172,13 +172,13 @@ TEST(SerializationTags, SerializerMacroStripsMakeTagsWhenBuildingReflectionNames
     constexpr auto optionalTags = std::get<2>(Reflect<MacroParsedTaggedObject>::field_tags);
     constexpr auto nestedTags   = std::get<3>(Reflect<MacroParsedTaggedObject>::field_tags);
 
-    static_assert(tag_query::get<tag_prop::raw_string>(rawTags));
-    static_assert(tag_query::get<tag_prop::comment>(renamedTags) == "doc keeps parser depth");
-    static_assert(tag_query::get<tag_prop::name>(renamedTags) == "wire(alias)");
-    static_assert(tag_query::get<tag_prop::skipable>(renamedTags));
-    static_assert(tag_query::get<tag_prop::skipable>(optionalTags));
-    static_assert(tag_query::get<tag_prop::comment>(nestedTags) == "flattened docs");
-    static_assert(tag_query::get<tag_prop::flat<TypeLevelFlatTagInner>>(nestedTags));
+    static_assert(tag_query::get<tag_property::raw_string>(rawTags));
+    static_assert(tag_query::get<tag_property::comment>(renamedTags) == "doc keeps parser depth");
+    static_assert(tag_query::get<tag_property::name>(renamedTags) == "wire(alias)");
+    static_assert(tag_query::get<tag_property::skippable>(renamedTags));
+    static_assert(tag_query::get<tag_property::skippable>(optionalTags));
+    static_assert(tag_query::get<tag_property::comment>(nestedTags) == "flattened docs");
+    static_assert(tag_query::get<tag_property::flat<TypeLevelFlatTagInner>>(nestedTags));
 
     constexpr auto innerNames = Reflect<TypeLevelFlatTagInner>::names();
     static_assert(innerNames.size() == 2);
@@ -186,7 +186,7 @@ TEST(SerializationTags, SerializerMacroStripsMakeTagsWhenBuildingReflectionNames
     static_assert(innerNames[1] == "label");
 }
 
-TEST(SerializationTagIntegration, JsonParserAppliesRawRenameSkipableAndFlatTags) {
+TEST(SerializationTagIntegration, JsonParserAppliesRawRenameSkippableAndFlatTags) {
     const MacroParsedTaggedObject source{
         .raw      = R"({"enabled":true})",
         .renamed  = 11,
@@ -234,7 +234,7 @@ TEST(SerializationTagIntegration, TypeLevelFlatTagFlattensJsonObjectsAndSchema) 
     EXPECT_TRUE(contains(object.required, "label"));
 }
 
-TEST(SerializationTagIntegration, SchemaUsesFlatSkipableOptionalAndFixedLengthTags) {
+TEST(SerializationTagIntegration, SchemaUsesFlatSkippableOptionalAndFixedLengthTags) {
     const auto object = objectSchema<SchemaTaggedObject>();
 
     EXPECT_TRUE(object.properties.contains("required"));
@@ -256,8 +256,8 @@ TEST(SerializationTagIntegration, SchemaUsesFlatSkipableOptionalAndFixedLengthTa
     EXPECT_FALSE(contains(object.required, "optional"));
 
     const auto& fixed = object.properties.at("fixed");
-    ASSERT_TRUE(fixed.fixedLength.has_value());
-    EXPECT_EQ(fixed.fixedLength.value(), sizeof(std::uint32_t));
+    ASSERT_TRUE(fixed.fixed_length.has_value());
+    EXPECT_EQ(fixed.fixed_length.value(), sizeof(std::uint32_t));
 }
 
 TEST(SerializationTagIntegration, TypeLevelUnframedTagRoundTripsBinaryLayout) {

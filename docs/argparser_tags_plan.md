@@ -63,7 +63,7 @@ common command-line interfaces pleasant to describe from metadata.
 - Repeated properties use last-wins lookup after flattening. This supports explicit overrides without merging same-name
   tags.
 - Positional tag access is tuple-like (`std::get<I>(tags)` / `tags.get<I>()`), but semantic reads should go through
-  `tag_query::get<tag_prop::...>` or `tag_query::get_tag<TagType>`.
+  `tag_query::get<tag_property::...>` or `tag_query::get_tag<TagType>`.
 - Multi-value tags should stay variadic inside one tag, e.g. `arg_choices<a, b, c>`, `arg_aliases<a, b>`,
   `arg_requires<a, b>`.
 - `required + default/env`: a supplied default or environment value satisfies `required`.

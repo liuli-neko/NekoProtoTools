@@ -148,9 +148,9 @@ struct SchemaPolicy {
     struct Neko {
         constexpr static auto value =
             Object("required", &SchemaPolicy::required, "retained",
-                   make_tags<JsonTags{.skipable = true}>(&SchemaPolicy::retained), "optional",
+                   make_tags<JsonTag{.skippable = true}>(&SchemaPolicy::retained), "optional",
                    &SchemaPolicy::optional, "flat",
-                   make_tags<JsonTags{.flat = true}>(&SchemaPolicy::flat), "choice",
+                   make_tags<JsonTag{.flat = true}>(&SchemaPolicy::flat), "choice",
                    &SchemaPolicy::choice, "named", &SchemaPolicy::named, "indexed",
                    &SchemaPolicy::indexed, "tuple", &SchemaPolicy::tuple, "fixed",
                    &SchemaPolicy::fixed); // NOLINT

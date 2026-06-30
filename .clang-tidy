@@ -1,55 +1,189 @@
 ---
-Checks:                       'readability-*,-readability-redundant-member-init,-readability-redundant-access-specifiers,-readability-magic-numbers'
-WarningsAsErrors:             ''
-HeaderFileExtensions:         ['', 'h','hh','hpp','hxx']
-ImplementationFileExtensions: ['c','cc','cpp','cxx']
-HeaderFilterRegex:            ''
-FormatStyle:                  none
-InheritParentConfig:          true
-User:                         admin
-CheckOptions:
-  readability-identifier-length.MinimumParameterNameLength: '2'
-  readability-identifier-length.MinimumVariableNameLength:  '2'
-  # 命名规范
-  ##  类、结构体
-  ### 名: CamelCase
-  readability-identifier-naming.ClassCase:  CamelCase
-  readability-identifier-naming.StructCase: CamelCase
-  ### 成员变量名: camelBack（公有）、_camelBack（保护、私有）
-  readability-identifier-naming.PublicMemberCase:       camelBack
-  readability-identifier-naming.ProtectedMemberCase:    CamelCase
-  readability-identifier-naming.ProtectedMemberPrefix:  m
-  readability-identifier-naming.PrivateMemberCase:      CamelCase
-  readability-identifier-naming.PrivateMemberPrefix:    m
-  ### 成员函数名: camelBack（公有）、_camelBack（保护、私有）
-  readability-identifier-naming.PublicMethodCase:       camelBack
-  readability-identifier-naming.ProtectedMethodCase:    camelBack
-  readability-identifier-naming.ProtectedMethodPrefix:  _
-  readability-identifier-naming.PrivateMethodCase:      camelBack
-  readability-identifier-naming.PrivateMethodPrefix:    _
-  ##  枚举
-  ### 名: CamelCase
-  readability-identifier-naming.EnumCase: CamelCase
-  ### 枚举值: eCamelCase
-  readability-identifier-naming.EnumConstantCase:   CamelCase
-  readability-identifier-naming.EnumConstantPrefix: ''
-  ##  函数
-  readability-identifier-naming.FunctionCase: lower_case
-  ##  参数
-  readability-identifier-naming.ParameterCase:  camelBack
-  ##  变量
-  ### 默认: camelBack
-  readability-identifier-naming.VariableCase: camelBack
-  ### 局部变量: camelBack
-  readability-identifier-naming.LocalVariableCase: camelBack
-  ### 全局变量: gCamelCase
-  readability-identifier-naming.GlobalVariableCase:   CamelCase
-  readability-identifier-naming.GlobalVariablePrefix: g
-  ### 静态变量: kCamelCase
-  readability-identifier-naming.StaticVariableCase:   CamelCase
-  readability-identifier-naming.StaticVariablePrefix: k
-  ### 编译期变量: CamelCase
-  readability-identifier-naming.ConstexprVariableCase:    CamelCase
-  readability-identifier-naming.ConstexprVariablePrefix:  ''
+Checks: >
+  readability-*,
+  -readability-redundant-member-init,
+  -readability-redundant-access-specifiers,
+  -readability-magic-numbers
 
-SystemHeaders:   false
+WarningsAsErrors: ''
+
+HeaderFileExtensions:
+  - ''
+  - h
+  - hh
+  - hpp
+  - hxx
+
+ImplementationFileExtensions:
+  - c
+  - cc
+  - cpp
+  - cxx
+
+HeaderFilterRegex: ''
+FormatStyle: none
+InheritParentConfig: true
+SystemHeaders: false
+
+CheckOptions:
+  # --------------------------------------------------------------------------
+  # Identifier length
+  # --------------------------------------------------------------------------
+  - key: readability-identifier-length.MinimumParameterNameLength
+    value: '2'
+  - key: readability-identifier-length.MinimumVariableNameLength
+    value: '2'
+  - key: readability-identifier-length.IgnoredVariableNames
+    value: '^[ijxyz]$'
+  - key: readability-identifier-length.IgnoredParameterNames
+    value: '^[ijxyz]$'
+
+  # --------------------------------------------------------------------------
+  # Namespaces
+  # --------------------------------------------------------------------------
+  - key: readability-identifier-naming.NamespaceCase
+    value: lower_case
+
+  # --------------------------------------------------------------------------
+  # Public concept types
+  # --------------------------------------------------------------------------
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+  - key: readability-identifier-naming.StructCase
+    value: CamelCase
+  - key: readability-identifier-naming.UnionCase
+    value: CamelCase
+
+  # Allow STL-style trait/metafunction structs and type-level tag-property keys.
+  #
+  # Examples allowed:
+  #   is_tag_list
+  #   is_tagged_field
+  #   normalize_tags
+  #   resolve_member_type
+  #   tag_list_element
+  #   tag_property::comment
+  #   tag_property::raw_string
+  #   tag_property::fixed_length
+  #
+  # clang-tidy matches the identifier itself, so tag_property keys need an
+  # explicit allowlist.
+  - key: readability-identifier-naming.ClassIgnoredRegexp
+    value: '^(is_|has_|can_).*$|^.*_(trait|traits|impl|base|helper|adapter|policy|element|property)$|^(comment|name|skippable|raw_string|flat|unframed|fixed_length)$'
+  - key: readability-identifier-naming.StructIgnoredRegexp
+    value: '^(is_|has_|can_).*$|^.*_(trait|traits|impl|base|helper|adapter|policy|element|property)$|^(comment|name|skippable|raw_string|flat|unframed|fixed_length)$'
+
+  # --------------------------------------------------------------------------
+  # Enums
+  # --------------------------------------------------------------------------
+  - key: readability-identifier-naming.EnumCase
+    value: CamelCase
+  - key: readability-identifier-naming.EnumConstantCase
+    value: CamelCase
+
+  # --------------------------------------------------------------------------
+  # Functions and methods
+  # --------------------------------------------------------------------------
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.ConstexprFunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.PublicMethodCase
+    value: lower_case
+  - key: readability-identifier-naming.ProtectedMethodCase
+    value: lower_case
+  - key: readability-identifier-naming.PrivateMethodCase
+    value: lower_case
+  - key: readability-identifier-naming.ConstexprMethodCase
+    value: lower_case
+
+  # --------------------------------------------------------------------------
+  # Variables
+  # --------------------------------------------------------------------------
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.LocalVariableCase
+    value: lower_case
+  - key: readability-identifier-naming.ParameterCase
+    value: lower_case
+
+  # Global mutable variables should be rare. If they exist, make them obvious.
+  - key: readability-identifier-naming.GlobalVariableCase
+    value: lower_case
+  - key: readability-identifier-naming.GlobalVariablePrefix
+    value: g_
+
+  # Static local / static data variables.
+  - key: readability-identifier-naming.StaticVariableCase
+    value: lower_case
+  - key: readability-identifier-naming.StaticVariablePrefix
+    value: s_
+
+  # constexpr variables and variable templates use STL-like lower_case.
+  #
+  # Examples:
+  #   comment_tag
+  #   rename_tag
+  #   is_tag_list_v
+  #   field_tags_v
+  - key: readability-identifier-naming.ConstexprVariableCase
+    value: lower_case
+  - key: readability-identifier-naming.ConstantCase
+    value: lower_case
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: lower_case
+
+  # --------------------------------------------------------------------------
+  # Members
+  # --------------------------------------------------------------------------
+  # Public aggregate members are part of the DSL:
+  #
+  #   JsonTag{.raw_string = true}
+  #   BinaryTag{.fixed_length = 4}
+  #
+  - key: readability-identifier-naming.PublicMemberCase
+    value: lower_case
+
+  # Private/protected members get trailing underscore.
+  - key: readability-identifier-naming.PrivateMemberCase
+    value: lower_case
+  - key: readability-identifier-naming.PrivateMemberSuffix
+    value: _
+  - key: readability-identifier-naming.ProtectedMemberCase
+    value: lower_case
+  - key: readability-identifier-naming.ProtectedMemberSuffix
+    value: _
+
+  # --------------------------------------------------------------------------
+  # Type aliases
+  # --------------------------------------------------------------------------
+  - key: readability-identifier-naming.TypeAliasCase
+    value: lower_case
+  - key: readability-identifier-naming.TypedefCase
+    value: lower_case
+
+  # --------------------------------------------------------------------------
+  # Concepts
+  # --------------------------------------------------------------------------
+  - key: readability-identifier-naming.ConceptCase
+    value: lower_case
+
+  # --------------------------------------------------------------------------
+  # Template parameters
+  # --------------------------------------------------------------------------
+  - key: readability-identifier-naming.TemplateParameterCase
+    value: CamelCase
+  - key: readability-identifier-naming.TypeTemplateParameterCase
+    value: CamelCase
+  - key: readability-identifier-naming.ValueTemplateParameterCase
+    value: CamelCase
+  - key: readability-identifier-naming.TemplateTemplateParameterCase
+    value: CamelCase
+
+  # --------------------------------------------------------------------------
+  # Macros
+  # --------------------------------------------------------------------------
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.MacroDefinitionIgnoredRegexp
+    value: '^NEKO_.*$'

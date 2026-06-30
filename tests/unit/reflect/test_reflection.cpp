@@ -43,7 +43,7 @@ static_assert(!can_reflect_ref_any_from_rvalue_index<Test1>());
 static_assert(!can_reflect_ref_any_from_rvalue_name<Test1>());
 static_assert(!detail::native_reflection_provider_available_v<Test1>);
 static_assert(std::is_same_v<std::decay_t<decltype(detail::native_reflection_field_tags_v<Test1, 0>)>, NoTags>);
-static_assert(tag_query::get<tag_prop::skipable>(detail::native_annotation_tags_v<JsonTags{.skipable = true}>));
+static_assert(tag_query::get<tag_property::skippable>(detail::native_annotation_tags_v<JsonTag{.skippable = true}>));
 static_assert(detail::ReflectProvider<Test1>::provider_kind == detail::ReflectProviderKind::LegacyAutoUnwrap);
 static_assert(detail::ReflectProvider<Test1>::kind == detail::MetaKind::AutoUnwrap);
 static_assert(detail::ReflectProvider<Test1>::has_names);
@@ -69,9 +69,9 @@ TEST(Reflection, Test) {
     static_assert(!detail::is_local_ref_value<Test1>, "Test1 must not be local_ref_value");
     static_assert(std::is_same_v<Reflect<Test1>::value_types, std::tuple<int, int, int>>, "Test1 must have 3 members");
     Test1 test{.member1 = 23, .member2 = 12, .member3 = 45};
-    static_assert(std::is_invocable_v<void(const JsonTags&), NoTags>, "NoTags can convert to JsonTags");
+    static_assert(std::is_invocable_v<void(const JsonTag&), NoTags>, "NoTags can convert to JsonTag");
     Reflect<Test1>::forEach(
-        test, [](auto& field, [[maybe_unused]] const JsonTags& tags) { // default tags can convert to any tags
+        test, [](auto& field, [[maybe_unused]] const JsonTag& tags) { // default tags can convert to any tags
             NEKO_LOG_INFO("test", "field: {}", field);
             field += 10;
         });
@@ -97,8 +97,9 @@ struct Test2 {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("member1", make_tags<CustomTags{.tag1 = false, .tag2 = true, .tag3 = false}>(&Test2::member1),
-                   "member2", make_tags<JsonTags{.flat = true, .skipable = false, .rawString = false}>(&Test2::member2),
-                   "member3", make_tags<BinaryTags{.fixedLength = sizeof(member3)}>([](auto&& self) -> auto& {
+                   "member2",
+                   make_tags<JsonTag{.flat = true, .skippable = false, .raw_string = false}>(&Test2::member2),
+                   "member3", make_tags<BinaryTag{.fixed_length = sizeof(member3)}>([](auto&& self) -> auto& {
                        return self.member3;
                    }),
                    "member4", &Test2::member4);
@@ -134,17 +135,19 @@ TEST(Reflection, RefObjectValue) {
     });
     static_assert(std::is_same_v<Reflect<Test2>::value_types, std::tuple<int, int, int, int>>,
                   "Test2 must have 4 members");
-    static_assert(!is_field_spec_v<std::tuple_element_t<
+    static_assert(!is_tagged_field_v<std::tuple_element_t<
                       0, std::decay_t<decltype(detail::ReflectProvider<Test2>::accessors(std::declval<Test2&>()))>>>,
                   "field accessors are stored without tag wrappers");
     static_assert(is_tag_list_v<std::decay_t<decltype(std::get<0>(Reflect<Test2>::field_tags))>>,
                   "field tags are stored separately");
     Reflect<Test2>::forEach(test, [](auto& field, std::string_view name, const auto& tags) {
         NEKO_LOG_INFO("test", "{}: {}", name, field);
-        if constexpr (tag_query::has<tag_prop::fixed_length<void>>(tags)) {
-            NEKO_LOG_INFO("test", "binary tags: fixedLength={}", tag_query::get<tag_prop::fixed_length<int>>(tags));
-        } else if constexpr (tag_query::has<tag_prop::flat<int>>(tags) || tag_query::has<tag_prop::skipable>(tags) ||
-                             tag_query::has<tag_prop::raw_string>(tags)) {
+        if constexpr (tag_query::has<tag_property::fixed_length<void>>(decltype(tags){})) {
+            NEKO_LOG_INFO("test", "binary tags: fixed_length={}",
+                          tag_query::get<tag_property::fixed_length<int>>(tags));
+        } else if constexpr (tag_query::has<tag_property::flat<int>>(decltype(tags){}) ||
+                             tag_query::has<tag_property::skippable>(decltype(tags){}) ||
+                             tag_query::has<tag_property::raw_string>(decltype(tags){})) {
             NEKO_LOG_INFO("test", "json-like tags");
         } else if constexpr (!is_tag_list_v<std::decay_t<decltype(tags)>>) {
             NEKO_LOG_INFO("test", "not tags");
@@ -169,19 +172,20 @@ consteval bool test_named_for_each_meta() {
     bool hasCustomTag = false;
     bool hasJsonTag   = false;
     bool hasBinaryTag = false;
-    Reflect<Test2>::forEachMeta([&]<typename Field>(std::type_identity<Field>, std::string_view name,
-                                                    const auto& tags) {
-        names[count++] = name;
-        if constexpr (std::is_same_v<std::decay_t<decltype(tags)>,
-                                     TagList<CustomTags{.tag1 = false, .tag2 = true, .tag3 = false}>>) {
-            hasCustomTag = true;
-        } else if constexpr (tag_query::has<tag_prop::flat<int>>(tags) || tag_query::has<tag_prop::skipable>(tags) ||
-                             tag_query::has<tag_prop::raw_string>(tags)) {
-            hasJsonTag = true;
-        } else if constexpr (tag_query::has<tag_prop::fixed_length<void>>(tags)) {
-            hasBinaryTag = true;
-        }
-    });
+    Reflect<Test2>::forEachMeta(
+        [&]<typename Field>(std::type_identity<Field>, std::string_view name, const auto& tags) {
+            names[count++] = name;
+            if constexpr (std::is_same_v<std::decay_t<decltype(tags)>,
+                                         TagList<CustomTags{.tag1 = false, .tag2 = true, .tag3 = false}>>) {
+                hasCustomTag = true;
+            } else if constexpr (tag_query::has<tag_property::flat<int>>(decltype(tags){}) ||
+                                 tag_query::has<tag_property::skippable>(decltype(tags){}) ||
+                                 tag_query::has<tag_property::raw_string>(decltype(tags){})) {
+                hasJsonTag = true;
+            } else if constexpr (tag_query::has<tag_property::fixed_length<void>>(decltype(tags){})) {
+                hasBinaryTag = true;
+            }
+        });
     return count == Reflect<Test2>::value_count && names[0] == "member1" && names[1] == "member2" &&
            names[2] == "member3" && names[3] == "member4" && hasCustomTag && hasJsonTag && hasBinaryTag;
 }
@@ -196,9 +200,9 @@ struct Test3 {
 
     struct Neko {
         constexpr static auto value = // NOLINT
-            Array(make_tags<BinaryTags{.fixedLength = sizeof(prr.member1)}>(
+            Array(make_tags<BinaryTag{.fixed_length = sizeof(prr.member1)}>(
                       [](auto&& self) -> auto& { return self.prr.member1; }),
-                  make_tags<JsonTags{.skipable = false, .rawString = true}>(&Test3::member2));
+                  make_tags<JsonTag{.skippable = false, .raw_string = true}>(&Test3::member2));
     };
 };
 
@@ -213,10 +217,11 @@ TEST(Reflection, RefObjectArray) {
     Test3 test{.prr = {.member1 = 234}, .member2 = "3453"};
     Reflect<Test3>::forEach(test, []<typename T>(T& field, const auto& tags) {
         NEKO_LOG_INFO("test", "field: {}", field);
-        if constexpr (tag_query::has<tag_prop::fixed_length<void>>(tags)) {
-            NEKO_LOG_INFO("test", "binary tags: fixedLength={}", tag_query::get<tag_prop::fixed_length<T>>(tags));
-        } else if constexpr (tag_query::has<tag_prop::flat<T>>(tags) || tag_query::has<tag_prop::skipable>(tags) ||
-                             tag_query::has<tag_prop::raw_string>(tags)) {
+        if constexpr (tag_query::has<tag_property::fixed_length<void>>(decltype(tags){})) {
+            NEKO_LOG_INFO("test", "binary tags: fixed_length={}", tag_query::get<tag_property::fixed_length<T>>(tags));
+        } else if constexpr (tag_query::has<tag_property::flat<T>>(decltype(tags){}) ||
+                             tag_query::has<tag_property::skippable>(decltype(tags){}) ||
+                             tag_query::has<tag_property::raw_string>(decltype(tags){})) {
             NEKO_LOG_INFO("test", "json-like tags");
         }
         if constexpr (std::is_arithmetic_v<T>) {
@@ -242,10 +247,11 @@ consteval bool test_positional_for_each_meta() {
         } else if constexpr (std::is_same_v<Field, std::string>) {
             hasString = true;
         }
-        if constexpr (tag_query::has<tag_prop::fixed_length<void>>(tags)) {
+        if constexpr (tag_query::has<tag_property::fixed_length<void>>(decltype(tags){})) {
             hasBinaryTag = true;
-        } else if constexpr (tag_query::has<tag_prop::flat<Field>>(tags) || tag_query::has<tag_prop::skipable>(tags) ||
-                             tag_query::has<tag_prop::raw_string>(tags)) {
+        } else if constexpr (tag_query::has<tag_property::flat<Field>>(decltype(tags){}) ||
+                             tag_query::has<tag_property::skippable>(decltype(tags){}) ||
+                             tag_query::has<tag_property::raw_string>(decltype(tags){})) {
             hasJsonTag = true;
         }
     });
@@ -265,9 +271,9 @@ enum class AutoTaggedStatus {
     Beta,
 };
 
-struct ExplicitSkipableOverrideTag {
-    static constexpr auto skipable = TagValue<bool>{false};
-    static constexpr auto base     = JsonTags{.skipable = true};
+struct ExplicitSkippableOverrideTag {
+    static constexpr bool skippable = false;
+    static constexpr auto base      = JsonTag{.skippable = true};
 };
 
 NEKO_BEGIN_NAMESPACE
@@ -275,7 +281,7 @@ template <>
 struct Meta<::TaggedStatus, void> {
     constexpr static auto value = // NOLINT
         Enumerate("ok", make_tags<comment_tag<"completed">>(::TaggedStatus::Ok), "warning",
-                  make_tags<comment_tag<"needs attention">, JsonTags{.skipable = true}>(::TaggedStatus::Warning),
+                  make_tags<comment_tag<"needs attention">, JsonTag{.skippable = true}>(::TaggedStatus::Warning),
                   "error", ::TaggedStatus::Error);
 };
 
@@ -294,12 +300,12 @@ consteval bool test_enum_tags_for_each_meta() {
     Reflect<TaggedStatus>::forEachMeta([&](auto value, std::string_view name, const auto& tags) {
         ++count;
         if (value == TaggedStatus::Ok) {
-            sawOk = name == "ok" && tag_query::get<tag_prop::comment>(tags) == "completed";
+            sawOk = name == "ok" && tag_query::get<tag_property::comment>(tags) == "completed";
         } else if (value == TaggedStatus::Warning) {
-            sawWarning = name == "warning" && tag_query::get<tag_prop::comment>(tags) == "needs attention" &&
-                         tag_query::get<tag_prop::skipable>(tags);
+            sawWarning = name == "warning" && tag_query::get<tag_property::comment>(tags) == "needs attention" &&
+                         tag_query::get<tag_property::skippable>(tags);
         } else if (value == TaggedStatus::Error) {
-            sawError = name == "error" && !tag_query::has<tag_prop::comment>(tags);
+            sawError = name == "error" && !tag_query::has<tag_property::comment>(tags);
         }
     });
     return count == Reflect<TaggedStatus>::value_count && sawOk && sawWarning && sawError;
@@ -315,20 +321,20 @@ TEST(Reflection, EnumerateTags) {
     static_assert(Reflect<TaggedStatus>::value_count == 3);
     static_assert(names[0] == "ok");
     static_assert(values[1] == TaggedStatus::Warning);
-    static_assert(tag_query::get<tag_prop::comment>(std::get<0>(tags)) == "completed");
-    static_assert(tag_query::get<tag_prop::comment>(std::get<1>(tags)) == "needs attention");
-    static_assert(tag_query::get<tag_prop::skipable>(std::get<1>(tags)));
-    static_assert(!tag_query::has<tag_prop::comment>(std::get<2>(tags)));
-    static_assert(!tag_query::has<tag_prop::skipable>(JsonTags{}));
-    static_assert(tag_query::has<tag_prop::skipable>(JsonTags{.skipable = false}));
-    static_assert(!tag_query::get<tag_prop::skipable>(ExplicitSkipableOverrideTag{}));
+    static_assert(tag_query::get<tag_property::comment>(std::get<0>(tags)) == "completed");
+    static_assert(tag_query::get<tag_property::comment>(std::get<1>(tags)) == "needs attention");
+    static_assert(tag_query::get<tag_property::skippable>(std::get<1>(tags)));
+    static_assert(!tag_query::has<tag_property::comment>(std::get<2>(tags)));
+    static_assert(!tag_query::has<tag_property::skippable>(JsonTag{}));
+    static_assert(tag_query::has<tag_property::skippable>(JsonTag{.skippable = false}));
+    static_assert(!tag_query::get<tag_property::skippable>(ExplicitSkippableOverrideTag{}));
 
     constexpr auto autoNames = Reflect<AutoTaggedStatus>::names();
     constexpr auto autoTags  = Reflect<AutoTaggedStatus>::field_tags;
     static_assert(autoNames[0] == "Alpha");
     static_assert(autoNames[1] == "Beta");
-    static_assert(tag_query::get<tag_prop::comment>(std::get<0>(autoTags)) == "alpha message");
-    static_assert(!tag_query::has<tag_prop::comment>(std::get<1>(autoTags)));
+    static_assert(tag_query::get<tag_property::comment>(std::get<0>(autoTags)) == "alpha message");
+    static_assert(!tag_query::has<tag_property::comment>(std::get<1>(autoTags)));
 
     EXPECT_EQ(Reflect<TaggedStatus>::name(TaggedStatus::Warning), "warning");
     EXPECT_EQ(Reflect<TaggedStatus>::value("ok"), TaggedStatus::Ok);
@@ -339,7 +345,7 @@ struct Test4 {
     int member2 = 125;
 
     struct Neko {
-        constexpr static auto value = make_tags<JsonTags{.flat = true}>(&Test4::member1); // NOLINT
+        constexpr static auto value = make_tags<JsonTag{.flat = true}>(&Test4::member1); // NOLINT
     };
 };
 
@@ -393,7 +399,7 @@ struct Meta<Test6, void> {
     constexpr static auto value = // NOLINT
         Object(
             "the_member1", [](auto&& self) -> auto& { return self.member1; }, "the_member2",
-            make_tags<JsonTags{.flat = true}>(&Test6::member2));
+            make_tags<JsonTag{.flat = true}>(&Test6::member2));
 };
 NEKO_END_NAMESPACE
 
@@ -409,8 +415,8 @@ TEST(Reflection, Local) {
     Test6 test{.member1 = 23, .member2 = 12};
     static_assert(std::is_same_v<Reflect<Test6>::value_types, std::tuple<int, int>>, "Test6 must have 2 members");
     Reflect<Test6>::forEach(test, [](auto& field, std::string_view name, const auto& tags) {
-        if constexpr (tag_query::has_tag<JsonTags>(tags)) {
-            NEKO_LOG_INFO("test", "{}: {}, tags={}", name, field, tag_query::get_tag<JsonTags>(tags).flat);
+        if constexpr (tag_query::has_tag<JsonTag>(decltype(tags){})) {
+            NEKO_LOG_INFO("test", "{}: {}, tags={}", name, field, tag_query::get_tag<JsonTag>(tags).flat);
         } else {
             NEKO_LOG_INFO("test", "{}: {}, no tags", name, field);
         }

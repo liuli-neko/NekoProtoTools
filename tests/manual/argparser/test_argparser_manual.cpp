@@ -47,7 +47,7 @@ struct ServeNetworkOptions {
                              arg_help<"listen host">, ArgTags{.required = true}>(&ServeNetworkOptions::host),
                    "port",
                    make_tags<arg_name<"port">, arg_value_name<"PORT">, arg_default<8080>, arg_help<"listen port">,
-                             ArgTags{.rangeMin = 1, .rangeMax = 65536}>(&ServeNetworkOptions::port));
+                             ArgTags{.range_min = 1, .range_max = 65536}>(&ServeNetworkOptions::port));
     };
 };
 
@@ -102,7 +102,7 @@ struct BuildCommand {
             Object(
                 "jobs",
                 make_tags<arg_name<"jobs", "j">, arg_group<"Build">, arg_value_name<"N">, arg_default<4>,
-                          arg_help<"parallel jobs">, ArgTags{.rangeMin = 1, .rangeMax = 65}>(&BuildCommand::jobs),
+                          arg_help<"parallel jobs">, ArgTags{.range_min = 1, .range_max = 65}>(&BuildCommand::jobs),
                 "release",
                 make_tags<arg_name<"release", "r">, arg_group<"Build">, arg_help<"release build">,
                           ArgTags{.flag = true}>(&BuildCommand::release),
@@ -186,7 +186,7 @@ struct StandaloneOptions {
                              ArgTags{.flag = true}>(&StandaloneOptions::verbose),
                    "count",
                    make_tags<arg_name<"count", "c">, arg_value_name<"N">, arg_default<1>, arg_help<"repeat count">,
-                             ArgTags{.rangeMin = 1, .rangeMax = 10}>(&StandaloneOptions::count),
+                             ArgTags{.range_min = 1, .range_max = 10}>(&StandaloneOptions::count),
                    "output",
                    make_tags<arg_name<"output", "o">, arg_group<"Paths">, arg_env<"NEKO_ARGPARSER_MANUAL_OUTPUT">,
                              arg_value_name<"FILE">, arg_help<"optional output file">, ArgTags{.required = true}>(

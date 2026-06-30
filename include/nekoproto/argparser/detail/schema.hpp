@@ -16,44 +16,43 @@
 
 NEKO_BEGIN_NAMESPACE
 namespace argparser::detail {
-
 struct ArgSpec {
-    std::string longName;
-    std::string shortName;
+    std::string long_name;
+    std::string short_name;
     std::vector<std::string_view> aliases;
     std::string help;
-    std::string valueName;
-    std::string envName;
+    std::string value_name;
+    std::string env_name;
     std::string group;
-    std::string deprecatedMessage;
+    std::string deprecated_message;
     bool required               = false;
     bool positional             = false;
     bool flag                   = false;
     bool repeatable             = false;
     bool hidden                 = false;
-    bool hasRange               = false;
-    bool hasDefault             = false;
-    bool hasImplicit            = false;
-    bool caseInsensitiveChoices = false;
+    bool has_range               = false;
+    bool has_default             = false;
+    bool has_implicit            = false;
+    bool case_insensitive_choices = false;
     bool deprecated             = false;
-    double rangeMin             = 0.0;
-    double rangeMax             = 0.0;
+    double range_min             = 0.0;
+    double range_max             = 0.0;
     char separator              = '\0';
-    std::string defaultValue;
-    std::string implicitValue;
+    std::string default_value;
+    std::string implicit_value;
     std::vector<std::string_view> choices;
     std::vector<std::string_view> conflicts;
-    std::vector<std::string_view> requiresNames;
+    std::vector<std::string_view> requires_names;
 };
 
 struct ArgSchema {
     std::vector<ArgSpec> specs;
-    std::vector<std::size_t> positionalSpecs;
+    std::vector<std::size_t> positional_specs;
 
     [[nodiscard]] std::optional<std::size_t> find_long_index(std::string_view name) const {
         for (std::size_t index = 0; index < specs.size(); ++index) {
             const auto& spec = specs[index];
-            if (!spec.positional && spec.longName == name) {
+            if (!spec.positional && spec.long_name == name) {
                 return index;
             }
             for (const auto alias : spec.aliases) {
@@ -68,7 +67,7 @@ struct ArgSchema {
     [[nodiscard]] std::optional<std::size_t> find_short_index(std::string_view name) const {
         for (std::size_t index = 0; index < specs.size(); ++index) {
             const auto& spec = specs[index];
-            if (!spec.positional && !spec.shortName.empty() && spec.shortName == name) {
+            if (!spec.positional && !spec.short_name.empty() && spec.short_name == name) {
                 return index;
             }
             for (const auto alias : spec.aliases) {
@@ -105,10 +104,10 @@ private:
     }
 
     static bool spec_matches_reference(const ArgSpec& spec, std::string_view normalized) {
-        if (spec.longName == normalized) {
+        if (spec.long_name == normalized) {
             return true;
         }
-        if (!spec.shortName.empty() && spec.shortName == normalized) {
+        if (!spec.short_name.empty() && spec.short_name == normalized) {
             return true;
         }
         return std::any_of(spec.aliases.begin(), spec.aliases.end(),
@@ -158,48 +157,48 @@ std::string default_value_to_string(const T& value) {
 
 template <typename FieldT, typename Tags>
 ArgSpec make_arg_spec(std::string_view prefix, std::string_view reflectedName, const Tags& tags,
-                      const ArgParserConfig& config) {
-    const auto explicitLongName = tag_query::get<tag_prop::long_name>(tags);
+                      const argparser::ArgParserConfig& config) {
+    const auto explicitLongName = tag_query::get<tag_property::long_name>(tags);
     const auto name             = explicitLongName.empty() ? reflectedName : explicitLongName;
 
     ArgSpec spec;
-    spec.longName  = join_arg_name(prefix, name, config.nestedSeparator);
-    spec.shortName = std::string(tag_query::get<tag_prop::short_name>(tags));
-    auto aliases   = tag_query::get<tag_prop::aliases>(tags);
+    spec.long_name  = join_arg_name(prefix, name, config.nestedSeparator);
+    spec.short_name = std::string(tag_query::get<tag_property::short_name>(tags));
+    auto aliases   = tag_query::get<tag_property::aliases>(tags);
     spec.aliases.assign(aliases.begin(), aliases.end());
-    spec.help                   = std::string(tag_query::get<tag_prop::help>(tags));
-    spec.valueName              = std::string(tag_query::get<tag_prop::value_name>(tags));
-    spec.envName                = std::string(tag_query::get<tag_prop::env_name>(tags));
-    spec.group                  = std::string(tag_query::get<tag_prop::group>(tags));
-    spec.deprecatedMessage      = std::string(tag_query::get<tag_prop::deprecated_message>(tags));
-    spec.required               = tag_query::get<tag_prop::required>(tags);
-    spec.positional             = tag_query::get<tag_prop::positional>(tags);
-    spec.flag                   = field_type_is_flag<FieldT>(tag_query::get<tag_prop::flag>(tags));
-    spec.repeatable             = tag_query::get<tag_prop::repeatable>(tags) || is_vector_v<FieldT>;
-    spec.hidden                 = tag_query::get<tag_prop::hidden>(tags);
-    spec.hasRange =
-        tag_query::has<tag_prop::range_min>(tags) || tag_query::has<tag_prop::range_max>(tags);
-    spec.hasDefault             = tag_query::has<tag_prop::default_value>(tags);
-    spec.hasImplicit            = tag_query::has<tag_prop::implicit_value>(tags);
-    spec.caseInsensitiveChoices = tag_query::get<tag_prop::case_insensitive_choices>(tags);
-    spec.deprecated             = tag_query::has<tag_prop::deprecated_message>(tags);
-    spec.rangeMin               = tag_query::get<tag_prop::range_min>(tags);
-    spec.rangeMax               = tag_query::get<tag_prop::range_max>(tags);
-    spec.separator              = tag_query::get<tag_prop::separator>(tags);
+    spec.help                   = std::string(tag_query::get<tag_property::help>(tags));
+    spec.value_name              = std::string(tag_query::get<tag_property::value_name>(tags));
+    spec.env_name                = std::string(tag_query::get<tag_property::env_name>(tags));
+    spec.group                  = std::string(tag_query::get<tag_property::group>(tags));
+    spec.deprecated_message      = std::string(tag_query::get<tag_property::deprecated_message>(tags));
+    spec.required               = tag_query::get<tag_property::required>(tags);
+    spec.positional             = tag_query::get<tag_property::positional>(tags);
+    spec.flag                   = field_type_is_flag<FieldT>(tag_query::get<tag_property::flag>(tags));
+    spec.repeatable             = tag_query::get<tag_property::repeatable>(tags) || is_vector_v<FieldT>;
+    spec.hidden                 = tag_query::get<tag_property::hidden>(tags);
+    spec.has_range =
+        tag_query::has<tag_property::range_min>(tags) || tag_query::has<tag_property::range_max>(tags);
+    spec.has_default             = tag_query::has<tag_property::default_value>(tags);
+    spec.has_implicit            = tag_query::has<tag_property::implicit_value>(tags);
+    spec.case_insensitive_choices = tag_query::get<tag_property::case_insensitive_choices>(tags);
+    spec.deprecated             = tag_query::has<tag_property::deprecated_message>(tags);
+    spec.range_min               = tag_query::get<tag_property::range_min>(tags);
+    spec.range_max               = tag_query::get<tag_property::range_max>(tags);
+    spec.separator              = tag_query::get<tag_property::separator>(tags);
 
-    if constexpr (tag_query::has<tag_prop::default_value>(decltype(tags){})) {
-        spec.defaultValue = default_value_to_string(tag_query::get<tag_prop::default_value>(tags));
+    if constexpr (tag_query::has<tag_property::default_value>(decltype(tags){})) {
+        spec.default_value = default_value_to_string(tag_query::get<tag_property::default_value>(tags));
     }
-    if constexpr (tag_query::has<tag_prop::implicit_value>(decltype(tags){})) {
-        spec.implicitValue = default_value_to_string(tag_query::get<tag_prop::implicit_value>(tags));
+    if constexpr (tag_query::has<tag_property::implicit_value>(decltype(tags){})) {
+        spec.implicit_value = default_value_to_string(tag_query::get<tag_property::implicit_value>(tags));
     }
 
-    auto choices = tag_query::get<tag_prop::choices>(tags);
+    auto choices = tag_query::get<tag_property::choices>(tags);
     spec.choices.assign(choices.begin(), choices.end());
-    auto conflicts = tag_query::get<tag_prop::conflicts>(tags);
+    auto conflicts = tag_query::get<tag_property::conflicts>(tags);
     spec.conflicts.assign(conflicts.begin(), conflicts.end());
-    auto requiresNames = tag_query::get<tag_prop::requires_names>(tags);
-    spec.requiresNames.assign(requiresNames.begin(), requiresNames.end());
+    auto requires_names = tag_query::get<tag_property::requires_names>(tags);
+    spec.requires_names.assign(requires_names.begin(), requires_names.end());
     return spec;
 }
 
@@ -210,7 +209,7 @@ void collect_schema_into(std::string_view prefix, const ArgParserConfig& config,
 
     Reflect<std::remove_cvref_t<T>>::forEachMeta(
         [&]<typename FieldT>(std::type_identity<FieldT>, std::string_view reflectedName, const auto& tags) {
-            const auto explicitLongName = tag_query::get<tag_prop::long_name>(tags);
+            const auto explicitLongName = tag_query::get<tag_property::long_name>(tags);
             const auto name             = explicitLongName.empty() ? reflectedName : explicitLongName;
 
             if constexpr (is_nested_option_v<FieldT>) {
@@ -218,7 +217,7 @@ void collect_schema_into(std::string_view prefix, const ArgParserConfig& config,
             } else {
                 schema.specs.push_back(make_arg_spec<FieldT>(prefix, reflectedName, tags, config));
                 if (schema.specs.back().positional) {
-                    schema.positionalSpecs.push_back(schema.specs.size() - 1);
+                    schema.positional_specs.push_back(schema.specs.size() - 1);
                 }
             }
         });

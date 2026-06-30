@@ -47,7 +47,7 @@ struct TaggedFixedLength {
 
     struct Neko {
         static constexpr auto value =
-            Object("value", make_tags<BinaryTags{.fixedLength = true}>(&TaggedFixedLength::value)); // NOLINT
+            Object("value", make_tags<BinaryTag{.fixed_length = true}>(&TaggedFixedLength::value)); // NOLINT
     };
 };
 
@@ -56,7 +56,7 @@ struct InvalidTaggedFixedLength {
 
     struct Neko {
         static constexpr auto value =
-            Object("value", make_tags<BinaryTags{.fixedLength = 2}>(&InvalidTaggedFixedLength::value)); // NOLINT
+            Object("value", make_tags<BinaryTag{.fixed_length = 2}>(&InvalidTaggedFixedLength::value)); // NOLINT
     };
 };
 
@@ -67,9 +67,9 @@ struct TaggedUnframedHeader {
 
     struct Neko {
         static constexpr auto value = Object(
-            "length", make_tags<BinaryTags{.fixedLength = sizeof(std::uint32_t)}>(&TaggedUnframedHeader::length),
-            "data", make_tags<BinaryTags{.fixedLength = sizeof(std::int32_t)}>(&TaggedUnframedHeader::data), "type",
-            make_tags<BinaryTags{.fixedLength = sizeof(std::uint16_t)}>(&TaggedUnframedHeader::type)); // NOLINT
+            "length", make_tags<BinaryTag{.fixed_length = sizeof(std::uint32_t)}>(&TaggedUnframedHeader::length),
+            "data", make_tags<BinaryTag{.fixed_length = sizeof(std::int32_t)}>(&TaggedUnframedHeader::data), "type",
+            make_tags<BinaryTag{.fixed_length = sizeof(std::uint16_t)}>(&TaggedUnframedHeader::type)); // NOLINT
     };
 };
 
@@ -79,7 +79,7 @@ struct TaggedUnframedEnvelope {
 
     struct Neko {
         static constexpr auto value =
-            Object("header", make_tags<BinaryTags{.unframed = true}>(&TaggedUnframedEnvelope::header), "tail",
+            Object("header", make_tags<BinaryTag{.unframed = true}>(&TaggedUnframedEnvelope::header), "tail",
                    &TaggedUnframedEnvelope::tail); // NOLINT
     };
 };
@@ -210,7 +210,7 @@ TEST(BinarySerializer, TaggedFieldsPreserveUnframedWireLayout) {
     };
 
     BinarySerializer::OutputSerializer output(buffer);
-    EXPECT_TRUE(output(make_tags<BinaryTags{.unframed = true}>(source)));
+    EXPECT_TRUE(output(make_tags<BinaryTag{.unframed = true}>(source)));
     ASSERT_EQ(buffer.size(), 10U);
     EXPECT_EQ(static_cast<unsigned char>(buffer[0]), 0x01U);
     EXPECT_EQ(static_cast<unsigned char>(buffer[1]), 0x02U);
@@ -221,7 +221,7 @@ TEST(BinarySerializer, TaggedFieldsPreserveUnframedWireLayout) {
 
     TaggedUnframedHeader decoded;
     BinarySerializer::InputSerializer input(buffer.data(), buffer.size());
-    auto taggedDecoded = make_tags<BinaryTags{.unframed = true}>(decoded);
+    auto taggedDecoded = make_tags<BinaryTag{.unframed = true}>(decoded);
     EXPECT_TRUE(input(taggedDecoded));
     EXPECT_EQ(decoded.length, source.length);
     EXPECT_EQ(decoded.data, source.data);
@@ -278,8 +278,8 @@ TEST(BinarySerializer, BinaryTagIsPreservedInGenericSchema) {
     const auto schema  = parser_schema<TaggedFixedLength>();
     const auto& object = std::get<parsing::schema::Type::Object>(schema.value);
     const auto& field  = object.properties.at("value");
-    ASSERT_TRUE(field.fixedLength);
-    EXPECT_EQ(*field.fixedLength, sizeof(std::uint32_t));
+    ASSERT_TRUE(field.fixed_length);
+    EXPECT_EQ(*field.fixed_length, sizeof(std::uint32_t));
 }
 
 TEST(BinarySerializer, UnframedIsNotStoredAsTypeSchemaMetadata) {
@@ -300,7 +300,7 @@ TEST(BinarySerializer, TruncatedInputReportsParseError) {
     const char data[] = {0x01};
     TaggedUnframedHeader value;
     BinarySerializer::InputSerializer input(data, sizeof(data));
-    auto taggedValue = make_tags<BinaryTags{.unframed = true}>(value);
+    auto taggedValue = make_tags<BinaryTag{.unframed = true}>(value);
 
     EXPECT_FALSE(input(taggedValue));
     ASSERT_NE(input.error(), nullptr);

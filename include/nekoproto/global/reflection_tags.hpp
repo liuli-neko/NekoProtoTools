@@ -64,6 +64,10 @@ constexpr bool perform_check() {
     }
 }
 
+} // namespace detail
+
+namespace tag_detail {
+
 template <typename T>
 constexpr bool tag_value_declared(const T& value) {
     if constexpr (requires { value.declared; }) {
@@ -100,26 +104,24 @@ auto constexpr make_tag_value_common(T&& value) {
     }
 }
 
-} // namespace detail
-
 template <typename T>
-struct TagValue {
+struct tag_value {
     using value_type = T;
 
     T value{};
     bool declared = false;
 
-    constexpr TagValue() = default;
-    constexpr TagValue(const T& input) : value(input), declared(true) {}
-    constexpr TagValue(T&& input) : value(std::move(input)), declared(true) {}
+    constexpr tag_value() = default;
+    constexpr tag_value(const T& input) : value(input), declared(true) {}
+    constexpr tag_value(T&& input) : value(std::move(input)), declared(true) {}
 
-    constexpr TagValue& operator=(const T& input) {
+    constexpr tag_value& operator=(const T& input) {
         value    = input;
         declared = true;
         return *this;
     }
 
-    constexpr TagValue& operator=(T&& input) {
+    constexpr tag_value& operator=(T&& input) {
         value    = std::move(input);
         declared = true;
         return *this;
@@ -127,11 +129,13 @@ struct TagValue {
 
     constexpr operator T() const { return value; }
 
-    constexpr bool operator==(const TagValue&) const = default;
+    constexpr bool operator==(const tag_value&) const = default;
 };
 
+} // namespace tag_detail
+
 template <auto Tags, typename Accessor>
-struct FieldSpec {
+struct TaggedField {
     using accessor_type        = Accessor;
     using raw_type             = Accessor;
     using tag_type             = decltype(Tags);
@@ -310,48 +314,48 @@ inline constexpr auto make_tags(Accessor&& accessor) { // NOLINT
         static_assert(detail::perform_check<ResolvedType, NormalizedTags>(),
                       "Tag check failed for a member of type, please check the tag definition");
     }
-    return FieldSpec<NormalizedTags, Accessor>{std::forward<Accessor>(accessor)};
+    return TaggedField<NormalizedTags, Accessor>{std::forward<Accessor>(accessor)};
 }
 
 template <typename T>
-struct is_field_spec : std::false_type {}; // NOLINT
+struct is_tagged_field : std::false_type {}; // NOLINT
 
 template <auto Tags, typename Accessor>
-struct is_field_spec<FieldSpec<Tags, Accessor>> : std::true_type {};
+struct is_tagged_field<TaggedField<Tags, Accessor>> : std::true_type {};
 
 template <auto Tags, typename Accessor>
-struct is_field_spec<FieldSpec<Tags, Accessor>&> : std::true_type {};
+struct is_tagged_field<TaggedField<Tags, Accessor>&> : std::true_type {};
 
 template <auto Tags, typename Accessor>
-struct is_field_spec<const FieldSpec<Tags, Accessor>> : std::true_type {};
+struct is_tagged_field<const TaggedField<Tags, Accessor>> : std::true_type {};
 
 template <auto Tags, typename Accessor>
-struct is_field_spec<const FieldSpec<Tags, Accessor>&> : std::true_type {};
+struct is_tagged_field<const TaggedField<Tags, Accessor>&> : std::true_type {};
 
 template <typename T>
-inline constexpr bool is_field_spec_v = is_field_spec<std::decay_t<T>>::value; // NOLINT
+inline constexpr bool is_tagged_field_v = is_tagged_field<std::decay_t<T>>::value; // NOLINT
 
 template <typename T, class enable = void>
-struct unwrap_tags { // NOLINT
+struct unwrap_tagged_field { // NOLINT
     using type                 = T;
     constexpr static auto tags = NoTags{}; // NOLINT
 };
 
 template <typename T>
-struct unwrap_tags<T, std::enable_if_t<is_field_spec_v<T>>> {
+struct unwrap_tagged_field<T, std::enable_if_t<is_tagged_field_v<T>>> {
     using type                 = typename std::decay_t<T>::accessor_type;
     constexpr static auto tags = std::decay_t<T>::tags; // NOLINT
 };
 
 template <typename T>
-using unwrap_tags_t = typename unwrap_tags<T>::type;
+using unwrap_tagged_field_t = typename unwrap_tagged_field<T>::type;
 
 template <typename T>
-inline constexpr auto unwrap_tags_v = unwrap_tags<T>::tags; // NOLINT
+inline constexpr auto unwrap_tagged_field_tags_v = unwrap_tagged_field<T>::tags; // NOLINT
 
 template <typename T>
 constexpr decltype(auto) field_accessor(T&& value) noexcept {
-    if constexpr (is_field_spec_v<std::remove_cvref_t<T>>) {
+    if constexpr (is_tagged_field_v<std::remove_cvref_t<T>>) {
         return (std::forward<T>(value).accessor);
     } else {
         return std::forward<T>(value);
@@ -359,10 +363,10 @@ constexpr decltype(auto) field_accessor(T&& value) noexcept {
 }
 
 template <typename T>
-using field_accessor_t = unwrap_tags_t<T>;
+using field_accessor_t = unwrap_tagged_field_t<T>;
 
 template <typename T>
-inline constexpr auto field_tags_v = unwrap_tags_v<T>; // NOLINT
+inline constexpr auto field_tags_v = unwrap_tagged_field_tags_v<T>; // NOLINT
 
 template <typename Accessor, typename HostType>
 struct resolve_member_type { // NOLINT
@@ -398,13 +402,13 @@ constexpr bool perform_all_checks() {
 }
 
 template <typename Prop, typename Tag>
-inline constexpr bool tag_prop_has_available_v = requires(const Tag& tag) {
+inline constexpr bool tag_property_has_available_v = requires(const Tag& tag) {
     { Prop::has(tag) } -> std::convertible_to<bool>;
 };
 
 template <typename Prop, typename Tag>
-inline constexpr bool tag_prop_get_available_v =
-    tag_prop_has_available_v<Prop, Tag> && requires(const Tag& tag) { Prop::get(tag); };
+inline constexpr bool tag_property_get_available_v =
+    tag_property_has_available_v<Prop, Tag> && requires(const Tag& tag) { Prop::get(tag); };
 
 template <typename Prop, typename Tags>
 constexpr bool tag_has(const Tags& tags);
@@ -563,7 +567,7 @@ template <typename Prop, typename Tag>
 constexpr bool tag_has(const Tag& tag) {
     using RawTag = std::remove_cvref_t<Tag>;
 
-    if constexpr (tag_prop_has_available_v<Prop, RawTag>) {
+    if constexpr (tag_property_has_available_v<Prop, RawTag>) {
         if (Prop::has(tag)) {
             return true;
         }
@@ -580,7 +584,7 @@ template <typename Prop, typename Tag>
 constexpr typename Prop::type tag_get(const Tag& tag) {
     using RawTag = std::remove_cvref_t<Tag>;
 
-    if constexpr (tag_prop_get_available_v<Prop, RawTag>) {
+    if constexpr (tag_property_get_available_v<Prop, RawTag>) {
         if (Prop::has(tag)) {
             return Prop::get(tag);
         }
@@ -597,7 +601,7 @@ template <typename Prop, typename Tag>
 constexpr decltype(auto) tag_get_existing(const Tag& tag) {
     using RawTag = std::remove_cvref_t<Tag>;
 
-    if constexpr (tag_prop_get_available_v<Prop, RawTag>) {
+    if constexpr (tag_property_get_available_v<Prop, RawTag>) {
         return Prop::get(tag);
     } else if constexpr (requires { tag.base; }) {
         return tag_get_existing<Prop>(tag.base);
@@ -667,11 +671,11 @@ constexpr auto get(NEKO_NAMESPACE::TagList<Tags...>&& tags) noexcept
 #include <fmt/format.h>
 namespace fmt {
 template <typename T>
-struct formatter<NEKO_NAMESPACE::TagValue<T>> {
+struct formatter<NEKO_NAMESPACE::tag_detail::tag_value<T>> {
     constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin()) { return ctx.begin(); }
 
     template <typename FormatContext>
-    auto format(const NEKO_NAMESPACE::TagValue<T>& value, FormatContext& ctx) const -> decltype(ctx.out()) {
+    auto format(const NEKO_NAMESPACE::tag_detail::tag_value<T>& value, FormatContext& ctx) const -> decltype(ctx.out()) {
         if (!value.declared) {
             return fmt::format_to(ctx.out(), "<undeclared>");
         }
@@ -683,11 +687,11 @@ struct formatter<NEKO_NAMESPACE::TagValue<T>> {
 #include <format>
 namespace std {
 template <typename T>
-struct formatter<NEKO_NAMESPACE::TagValue<T>> {
+struct formatter<NEKO_NAMESPACE::tag_detail::tag_value<T>> {
     constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin()) { return ctx.begin(); }
 
     template <typename FormatContext>
-    auto format(const NEKO_NAMESPACE::TagValue<T>& value, FormatContext& ctx) const -> decltype(ctx.out()) {
+    auto format(const NEKO_NAMESPACE::tag_detail::tag_value<T>& value, FormatContext& ctx) const -> decltype(ctx.out()) {
         if (!value.declared) {
             return std::format_to(ctx.out(), "<undeclared>");
         }
@@ -696,14 +700,14 @@ struct formatter<NEKO_NAMESPACE::TagValue<T>> {
 };
 } // namespace std
 #endif
-#define NEKO_DEFINE_TAG_PROP(Type, member, fname)                                                                      \
+#define NEKO_DETAIL_DEFINE_TAG_PROPERTY(Type, member, fname)                                                           \
     struct fname {                                                                                                     \
         using type = Type;                                                                                             \
         static constexpr type missing() noexcept { return {}; }                                                        \
         template <typename Tag>                                                                                        \
         static constexpr bool has(const Tag& tag) {                                                                    \
             if constexpr (requires { tag.member; }) {                                                                  \
-                return NEKO_NAMESPACE::detail::tag_value_declared(tag.member);                                         \
+                return NEKO_NAMESPACE::tag_detail::tag_value_declared(tag.member);                                     \
             } else {                                                                                                   \
                 return false;                                                                                          \
             }                                                                                                          \
@@ -712,16 +716,16 @@ struct formatter<NEKO_NAMESPACE::TagValue<T>> {
         static constexpr type get(const Tag& tag)                                                                      \
             requires requires { tag.member; }                                                                          \
         {                                                                                                              \
-            return NEKO_NAMESPACE::detail::make_tag_value_common(tag.member);                                          \
+            return NEKO_NAMESPACE::tag_detail::make_tag_value_common(tag.member);                                      \
         }                                                                                                              \
     };
 
-#define NEKO_DEFINE_TAG_VALUE_PROP(member, fname)                                                                      \
+#define NEKO_DETAIL_DEFINE_TAG_VALUE_PROPERTY(member, fname)                                                           \
     struct fname {                                                                                                     \
         template <typename Tag>                                                                                        \
         static constexpr bool has(const Tag& tag) {                                                                    \
             if constexpr (requires { tag.member; }) {                                                                  \
-                return NEKO_NAMESPACE::detail::tag_value_declared(tag.member);                                         \
+                return NEKO_NAMESPACE::tag_detail::tag_value_declared(tag.member);                                     \
             } else {                                                                                                   \
                 return false;                                                                                          \
             }                                                                                                          \
@@ -730,11 +734,11 @@ struct formatter<NEKO_NAMESPACE::TagValue<T>> {
         static constexpr decltype(auto) get(const Tag& tag)                                                            \
             requires requires { tag.member; }                                                                          \
         {                                                                                                              \
-            return NEKO_NAMESPACE::detail::make_tag_value_common(tag.member);                                          \
+            return NEKO_NAMESPACE::tag_detail::make_tag_value_common(tag.member);                                      \
         }                                                                                                              \
     };
 
-#define NEKO_DEFINE_TYPE_TAG_PROP(Type, member, fname)                                                                 \
+#define NEKO_DETAIL_DEFINE_TYPE_TAG_PROPERTY(Type, member, fname)                                                      \
     template <typename Value>                                                                                          \
     struct fname {                                                                                                     \
         using type = Type;                                                                                             \
@@ -748,7 +752,7 @@ struct formatter<NEKO_NAMESPACE::TagValue<T>> {
         template <typename Tag>                                                                                        \
         static constexpr bool has(const Tag& tag) {                                                                    \
             if constexpr (requires { tag.member; }) {                                                                  \
-                return NEKO_NAMESPACE::detail::tag_value_declared(tag.member);                                         \
+                return NEKO_NAMESPACE::tag_detail::tag_value_declared(tag.member);                                     \
             } else {                                                                                                   \
                 return false;                                                                                          \
             }                                                                                                          \
