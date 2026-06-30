@@ -51,7 +51,7 @@ reflect-cpp 风格通用 Parser 模型的计划。
   后端不声明能力常量。
 - [x] 删除 `parser_write/read_reflect_fields_unframed` 和 `MessageHeader` 的 binary `CustomParser`；
   无框架布局不再形成第二套反射遍历路径。
-- [x] 提供显式 `CustomParser<Reader, Writer, T>` 逃生口，只用于真正的类型/后端特殊规则。
+- [x] 提供显式 `CustomParser<T>` 逃生口，只用于真正的类型/后端特殊规则。
 - [x] schema 类型遍历进入通用 Parser；`json/schema.hpp` 只负责转换为 Draft-07。
 - [x] 实现真实 `IsSchemafulWriter` capability concept，不把 schema 生成和 schemaful Writer 混为一层。
 - [x] 补 simdjson、binary、schema 结构与跨 RapidJSON/simdjson 后端测试。
@@ -707,7 +707,7 @@ Parser 层不应该：
 
 - `test_json_backend`：28/28，覆盖通用 Parser 的 basic、容器、反射、tag 和错误传播路径。
 - `test_simd_json_backend`：8/8，覆盖 simdjson Reader、共享 TextWriter、raw JSON 与 native value 生命周期。
-- `test_binary_serializer`：11/11，覆盖旧 wire layout、fixed-length/type-layout tag、嵌套具名字段、schema 元数据、
+- `test_binary_serializer`：12/12，覆盖旧 wire layout、fixed-length/type-layout tag、嵌套具名字段、schema 元数据、
   宽度不匹配错误和截断输入错误。
 - `test_json_serializer`：RapidJSON 与 simdjson 配置均为 15/15，覆盖主要类型族、复杂对象、
   iostream 和通用 Parser 生成的 JSON Schema。
