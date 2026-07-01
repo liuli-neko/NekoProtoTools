@@ -12,7 +12,11 @@ namespace detail {
 
 struct RpcMethodMetadata {
     std::string name;
+    std::string signature;
     std::string description;
+    std::string rpcVersion;
+    std::vector<std::string> argNames;
+    bool isNotification = false;
     bool isBind = false;
 };
 

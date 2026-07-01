@@ -631,7 +631,7 @@ auto NekoRpcMethodIdExtension::parseMethodTable(std::span<const std::byte> exten
     return true;
 }
 
-auto NekoRpcMethodIdTable::signatureHash(std::string_view name, std::string_view description) -> std::uint64_t {
+auto NekoRpcMethodIdTable::signatureHash(std::string_view name, std::string_view signature) -> std::uint64_t {
     constexpr std::uint64_t kOffset = 14695981039346656037ULL;
     constexpr std::uint64_t kPrime  = 1099511628211ULL;
     std::uint64_t hash              = kOffset;
@@ -644,7 +644,7 @@ auto NekoRpcMethodIdTable::signatureHash(std::string_view name, std::string_view
     update(name);
     hash ^= 0U;
     hash *= kPrime;
-    update(description);
+    update(signature);
     return hash == 0U ? 1U : hash;
 }
 

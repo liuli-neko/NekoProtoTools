@@ -218,7 +218,7 @@ public:
 
 class NEKO_PROTO_API NekoRpcMethodIdTable {
 public:
-    static auto signatureHash(std::string_view name, std::string_view description = {}) -> std::uint64_t;
+    static auto signatureHash(std::string_view name, std::string_view signature = {}) -> std::uint64_t;
     static auto entriesFromNames(const std::vector<std::string>& names) -> std::vector<NekoRpcMethodEntry>;
 
     auto reset() -> void;

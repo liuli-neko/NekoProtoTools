@@ -5,7 +5,7 @@
 #include <type_traits>
 
 #include "nekoproto/rpc/method.hpp"
-#include "nekoproto/rpc/tags.hpp"
+#include "nekoproto/rpc/properties.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
 NEKO_BEGIN_NAMESPACE
@@ -33,12 +33,33 @@ template <typename Field, typename Fn, typename Tags>
 void rpc_visit_field(Field& field, std::string_view fieldName, const Tags& tags, bool hasFieldName,
                      std::string_view prefix, Fn&& fn);
 
+template <typename Method, typename Fn>
+void rpc_visit_method(Method& method, std::string_view fieldName, bool hasFieldName,
+                      const RpcPropertyPatch& fieldProperties, std::string_view prefix, Fn&& fn) {
+    method.applyRpcProperties(fieldProperties);
+    // Name priority: reflected field tag > method-declared name/spec tag > reflected field name.
+    if (method.declaredName().empty() && hasFieldName) {
+        method.setDeclaredName(fieldName);
+    }
+
+    std::string methodPrefix;
+    if (method.rpcNoPrefix()) {
+        methodPrefix = {};
+    } else if (!method.rpcPrefix().empty()) {
+        methodPrefix = rpc_join_name(prefix, method.rpcPrefix());
+    } else {
+        methodPrefix = std::string(prefix);
+    }
+
+    const auto fullName = rpc_join_name(methodPrefix, method.declaredName());
+    method.setRemoteName(fullName);
+    fn(method);
+}
+
 template <typename T, typename Fn>
 void for_each_rpc_method(T& protocol, Fn&& fn, std::string_view prefix = {}) {
     if constexpr (RpcMethodObject<T>) {
-        const auto fullName = rpc_join_name(prefix, protocol.declaredName());
-        protocol.setRemoteName(fullName);
-        fn(protocol);
+        rpc_visit_method(protocol, std::string_view{}, false, RpcPropertyPatch{}, prefix, fn);
     } else if constexpr (RpcReflectable<T>) {
         auto withName = [&]<typename Field, typename Tags>(Field& field, std::string_view fieldName,
                                                            const Tags& tags) {
@@ -57,16 +78,15 @@ template <typename Field, typename Fn, typename Tags>
 void rpc_visit_field(Field& field, std::string_view fieldName, const Tags& tags, bool hasFieldName,
                      std::string_view prefix, Fn&& fn) {
     using FieldT = std::remove_cvref_t<Field>;
+    const auto fieldProperties = collect_rpc_properties(tags);
     if constexpr (RpcMethodObject<FieldT>) {
-        const auto fullName = rpc_join_name(prefix, field.declaredName());
-        field.setRemoteName(fullName);
-        fn(field);
+        rpc_visit_method(field, fieldName, hasFieldName, fieldProperties, prefix, fn);
     } else if constexpr (RpcReflectable<FieldT>) {
         std::string nextPrefix;
-        if constexpr (tag_query::has<tag_property::rpc_no_prefix>(Tags{})) {
+        if (fieldProperties.noPrefix.value_or(false)) {
             nextPrefix = std::string(prefix);
-        } else if constexpr (tag_query::has<tag_property::rpc_prefix>(Tags{})) {
-            nextPrefix = rpc_join_name(prefix, tag_query::get<tag_property::rpc_prefix>(tags));
+        } else if (fieldProperties.prefix) {
+            nextPrefix = rpc_join_name(prefix, *fieldProperties.prefix);
         } else if (hasFieldName) {
             nextPrefix = rpc_join_name(prefix, fieldName);
         } else {

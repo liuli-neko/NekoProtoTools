@@ -62,13 +62,13 @@ inline constexpr bool is_bool_value_v = std::is_same_v<std::remove_cvref_t<T>, b
 
 template <typename T>
 inline constexpr bool is_bool_supported_v = []() consteval { // NOLINT
-    using RawT = std::remove_cvref_t<T>;
-    if constexpr (is_bool_value_v<RawT>) {
+    using raw_t = std::remove_cvref_t<T>;
+    if constexpr (is_bool_value_v<raw_t>) {
         return true;
-    } else if constexpr (is_arg_optional_v<RawT>) {
-        return is_bool_value_v<optional_value_t<RawT>>;
-    } else if constexpr (is_vector_v<RawT>) {
-        return is_bool_value_v<vector_value_t<RawT>>;
+    } else if constexpr (is_arg_optional_v<raw_t>) {
+        return is_bool_value_v<optional_value_t<raw_t>>;
+    } else if constexpr (is_vector_v<raw_t>) {
+        return is_bool_value_v<vector_value_t<raw_t>>;
     } else {
         return false;
     }
@@ -80,13 +80,13 @@ inline constexpr bool is_range_value_v = // NOLINT
 
 template <typename T>
 inline constexpr bool is_range_supported_v = []() consteval { // NOLINT
-    using RawT = std::remove_cvref_t<T>;
-    if constexpr (is_range_value_v<RawT>) {
+    using raw_t = std::remove_cvref_t<T>;
+    if constexpr (is_range_value_v<raw_t>) {
         return true;
-    } else if constexpr (is_arg_optional_v<RawT>) {
-        return is_range_value_v<optional_value_t<RawT>>;
-    } else if constexpr (is_vector_v<RawT>) {
-        return is_range_value_v<vector_value_t<RawT>>;
+    } else if constexpr (is_arg_optional_v<raw_t>) {
+        return is_range_value_v<optional_value_t<raw_t>>;
+    } else if constexpr (is_vector_v<raw_t>) {
+        return is_range_value_v<vector_value_t<raw_t>>;
     } else {
         return false;
     }
@@ -146,20 +146,47 @@ struct ArgTags {
         return true;
     }
 };
+namespace detail {
+inline constexpr bool is_character(char ch) { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'); }
+inline constexpr bool is_visible(char ch) { return (ch >= ' ' && ch <= '~'); }
 
-template <ConstexprString Long = "", ConstexprString Short = "">
-struct ArgNameTag {
-    static constexpr auto long_name  = Long.view();  // NOLINT
-    static constexpr auto short_name = Short.view(); // NOLINT
+template <ConstexprString Long = "">
+struct arg_long_name_impl {
+    static constexpr auto long_name = Long.view();
+    template <typename T, auto Tags>
+    constexpr static bool constexpr_check() {
+        static_assert(Tags.long_name.size() > 1 && Tags.long_name.size() <= 64 &&
+                          std::all_of(Tags.long_name.begin(), Tags.long_name.end(), is_visible),
+                      "argparser long names must be visible ASCII characters and 1-64 characters long");
+        return true;
+    }
+};
 
-    template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() { // NOLINT
+template <char Short = '\0'>
+struct arg_short_name_impl {
+    static constexpr auto short_name = Short;
+    template <typename T, auto Tags>
+    constexpr static bool constexpr_check() {
+        static_assert(is_character(Tags.short_name), "argparser short names must be a single visible ASCII character");
+        return true;
+    }
+};
+
+template <ConstexprString Long = "", char Short = '\0'>
+struct arg_name_impl {
+    static constexpr auto long_name  = Long.view();
+    static constexpr auto short_name = Short;
+
+    template <typename T, auto Tags>
+    constexpr static bool constexpr_check() {
+        arg_long_name_impl<Long>::template constexpr_check<T, Tags>();
+        arg_short_name_impl<Short>::template constexpr_check<T, Tags>();
         return true;
     }
 };
 
 template <auto Default>
-struct ArgDefaultTag {
+struct arg_default_impl {
     constexpr static auto get_value()
         requires is_constexpr_string<decltype(Default)>::value
     {
@@ -167,76 +194,76 @@ struct ArgDefaultTag {
     }
     constexpr static auto get_value() { return Default; }
 
-    static constexpr auto default_value = get_value(); // NOLINT
+    static constexpr auto default_value = get_value();
 
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() { // NOLINT
+    constexpr static bool constexpr_check() {
         return true;
     }
 };
 
 template <ConstexprString... Choices>
-struct ArgChoicesTag {
-    static constexpr std::array choices = {Choices.view()...}; // NOLINT
+struct arg_choices_impl {
+    static constexpr std::array choices = {Choices.view()...};
 
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() { // NOLINT
+    constexpr static bool constexpr_check() {
         return true;
     }
 };
 
 template <ConstexprString Help = "">
-struct ArgHelpTag {
-    static constexpr auto help = Help.view(); // NOLINT
+struct arg_help_impl {
+    static constexpr auto help = Help.view();
 
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() { // NOLINT
+    constexpr static bool constexpr_check() {
         return true;
     }
 };
 
 template <ConstexprString ValueName = "">
-struct ArgValueNameTag {
-    static constexpr auto value_name = ValueName.view(); // NOLINT
+struct arg_value_name_impl {
+    static constexpr auto value_name = ValueName.view();
 
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() { // NOLINT
+    constexpr static bool constexpr_check() {
         return true;
     }
 };
 
 template <ConstexprString EnvName = "">
-struct ArgEnvTag {
-    static constexpr auto env_name = EnvName.view(); // NOLINT
+struct arg_env_impl {
+    static constexpr auto env_name = EnvName.view();
 
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() { // NOLINT
+    constexpr static bool constexpr_check() {
         return true;
     }
 };
 
 template <char Separator>
-struct ArgSeparatorTag {
-    static constexpr auto separator = Separator; // NOLINT
+struct arg_separator_impl {
+    static constexpr auto separator = Separator;
 
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() { // NOLINT
+    constexpr static bool constexpr_check() {
         return true;
     }
 };
 
 template <ConstexprString... Aliases>
-struct ArgAliasesTag {
-    static constexpr std::array aliases = {Aliases.view()...}; // NOLINT
+struct arg_aliases_impl {
+    static constexpr std::array aliases = {Aliases.view()...};
 
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() { // NOLINT
+    constexpr static bool constexpr_check() {
         return true;
     }
 };
 
 template <auto Implicit>
-struct ArgImplicitTag {
+struct arg_implicit_impl {
     constexpr static auto get_value()
         requires is_constexpr_string<decltype(Implicit)>::value
     {
@@ -244,109 +271,116 @@ struct ArgImplicitTag {
     }
     constexpr static auto get_value() { return Implicit; }
 
-    static constexpr auto implicit_value = get_value(); // NOLINT
+    static constexpr auto implicit_value = get_value();
 
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() { // NOLINT
+    constexpr static bool constexpr_check() {
         return true;
     }
 };
 
 template <ConstexprString Group = "">
-struct ArgGroupTag {
-    static constexpr auto group = Group.view(); // NOLINT
+struct arg_group_impl {
+    static constexpr auto group = Group.view();
 
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() { // NOLINT
+    constexpr static bool constexpr_check() {
         return true;
     }
 };
 
 template <ConstexprString... Names>
-struct ArgConflictsTag {
-    static constexpr std::array conflicts = {Names.view()...}; // NOLINT
+struct arg_confflicts_impl {
+    static constexpr std::array conflicts = {Names.view()...};
 
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() { // NOLINT
+    constexpr static bool constexpr_check() {
         return true;
     }
 };
 
 template <ConstexprString... Names>
-struct ArgRequiresTag {
-    static constexpr std::array requires_names = {Names.view()...}; // NOLINT
+struct arg_requires_impl {
+    static constexpr std::array requires_names = {Names.view()...};
 
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() { // NOLINT
+    constexpr static bool constexpr_check() {
         return true;
     }
 };
 
 template <ConstexprString Message = "">
-struct ArgDeprecatedTag {
-    static constexpr auto deprecated_message = Message.view(); // NOLINT
+struct arg_deprecated_impl {
+    static constexpr auto deprecated_message = Message.view();
 
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() { // NOLINT
+    constexpr static bool constexpr_check() {
         return true;
     }
 };
 
-struct ArgCaseInsensitiveChoicesTag {
-    static constexpr bool case_insensitive_choices = true; // NOLINT
+struct arg_case_insensitive_choices_impl {
+    static constexpr bool case_insensitive_choices = true;
 
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() { // NOLINT
+    constexpr static bool constexpr_check() {
         return true;
     }
 };
+} // namespace detail
 
-template <ConstexprString Long = "", ConstexprString Short = "">
-inline constexpr auto arg_name = ArgNameTag<Long, Short>{}; // NOLINT
+template <ConstexprString Long = "">
+inline constexpr auto arg_long_name = detail::arg_long_name_impl<Long>{};
+
+template <char Short = '\0'>
+inline constexpr auto arg_short_name = detail::arg_short_name_impl<Short>{};
+
+template <ConstexprString Long = "", char Short = '\0'>
+inline constexpr auto arg_name = detail::arg_name_impl<Long, Short>{};
 
 template <ConstexprString... Choices>
-inline constexpr auto arg_choices = ArgChoicesTag<Choices...>{}; // NOLINT
+inline constexpr auto arg_choices = detail::arg_choices_impl<Choices...>{};
 
 template <auto Default>
-inline constexpr auto arg_default = ArgDefaultTag<Default>{}; // NOLINT
+inline constexpr auto arg_default = detail::arg_default_impl<Default>{};
 
 template <ConstexprString Help = "">
-inline constexpr auto arg_help = ArgHelpTag<Help>{}; // NOLINT
+inline constexpr auto arg_help = detail::arg_help_impl<Help>{};
 
 template <ConstexprString ValueName = "">
-inline constexpr auto arg_value_name = ArgValueNameTag<ValueName>{}; // NOLINT
+inline constexpr auto arg_value_name = detail::arg_value_name_impl<ValueName>{};
 
 template <ConstexprString EnvName = "">
-inline constexpr auto arg_env = ArgEnvTag<EnvName>{}; // NOLINT
+inline constexpr auto arg_env = detail::arg_env_impl<EnvName>{};
 
 template <char Separator>
-inline constexpr auto arg_separator = ArgSeparatorTag<Separator>{}; // NOLINT
+inline constexpr auto arg_separator = detail::arg_separator_impl<Separator>{};
 
 template <ConstexprString... Aliases>
-inline constexpr auto arg_aliases = ArgAliasesTag<Aliases...>{}; // NOLINT
+inline constexpr auto arg_aliases = detail::arg_aliases_impl<Aliases...>{};
 
 template <auto Implicit>
-inline constexpr auto arg_implicit = ArgImplicitTag<Implicit>{}; // NOLINT
+inline constexpr auto arg_implicit = detail::arg_implicit_impl<Implicit>{};
 
 template <ConstexprString Group = "">
-inline constexpr auto arg_group = ArgGroupTag<Group>{}; // NOLINT
+inline constexpr auto arg_group = detail::arg_group_impl<Group>{};
 
 template <ConstexprString... Names>
-inline constexpr auto arg_conflicts = ArgConflictsTag<Names...>{}; // NOLINT
+inline constexpr auto arg_conflicts = detail::arg_confflicts_impl<Names...>{};
 
 template <ConstexprString... Names>
-inline constexpr auto arg_requires = ArgRequiresTag<Names...>{}; // NOLINT
+inline constexpr auto arg_requires = detail::arg_requires_impl<Names...>{};
 
 template <ConstexprString Message = "">
-inline constexpr auto arg_deprecated = ArgDeprecatedTag<Message>{}; // NOLINT
+inline constexpr auto arg_deprecated = detail::arg_deprecated_impl<Message>{};
 
-inline constexpr auto arg_case_insensitive_choices = ArgCaseInsensitiveChoicesTag{}; // NOLINT
+inline constexpr auto arg_case_insensitive_choices = detail::arg_case_insensitive_choices_impl{};
 
 // Tag access -----------------------------------------------------------------
 
 namespace tag_property {
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, long_name, long_name)                        // NOLINT
-NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, short_name, short_name)                      // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(char, short_name, short_name)                                  // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::vector<std::string_view>, choices, choices)               // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, help, help)                                  // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, value_name, value_name)                      // NOLINT

@@ -52,8 +52,8 @@ public:
 };
 
 inline const std::error_category& argparser_error_category() {
-    static ArgParserErrorCategory kCategory;
-    return kCategory;
+    static ArgParserErrorCategory s_category;
+    return s_category;
 }
 } // namespace detail
 } // namespace argparser
