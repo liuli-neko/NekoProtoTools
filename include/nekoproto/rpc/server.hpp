@@ -126,6 +126,10 @@ public:
         }
     }
 
+    // Runtime-name binding API:
+    //   server.bindMethod<"lhs", "rhs">("calc.add", func);
+    // Use this when the protocol surface is not expressed as a reflected
+    // RpcMethod field, or when a method is added after construction.
     template <ConstexprString... ArgNames, typename RetT, typename... Args>
     auto bindMethod(std::string_view name, traits::FunctionT<RetT(Args...)> func) noexcept -> void {
         static_assert(sizeof...(ArgNames) == 0 || sizeof...(ArgNames) == sizeof...(Args),
@@ -134,6 +138,10 @@ public:
         _refreshEndpointMethodTables();
     }
 
+    // Function-pointer binding API:
+    //   server.bindMethod<&free_function, "lhs", "rhs">();
+    // The method name follows RpcMethodF<Ptr>::MethodName, so it matches the
+    // static RpcMethodF declaration form used inside protocol structs.
     template <auto Ptr, ConstexprString... ArgNames>
         requires detail::RpcMethodFuncT<Ptr>
     auto bindMethod() noexcept -> void {
@@ -143,6 +151,8 @@ public:
         _refreshEndpointMethodTables();
     }
 
+    // Coroutine overload for runtime-name binding. It shares the same metadata
+    // shape as the synchronous overload; only the stored callable differs.
     template <ConstexprString... ArgNames, typename RetT, typename... Args>
     auto bindMethod(std::string_view name, traits::FunctionT<ilias::IoTask<RetT>(Args...)> func) noexcept -> void {
         mDispatcher.bindRpcMethod(name, std::move(func), traits::ArgNamesHelper<ArgNames...>{});
@@ -175,14 +185,14 @@ private:
         _registerProtocol(mRpc, "rpc");
         mRpc.getMethodInfo = [this](std::string methodName) -> ilias::IoTask<std::string> {
             if (auto ret = mDispatcher.methodDatas(methodName); !ret.name.empty()) {
-                co_return std::string(ret.description);
+                co_return std::string(ret.signature);
             }
             co_return std::string("Method not found!");
         };
         mRpc.getMethodInfoList = [this]() -> ilias::IoTask<std::vector<std::string>> {
             std::vector<std::string> methodDesList;
             for (auto& item : methodDatas()) {
-                methodDesList.emplace_back(item.description);
+                methodDesList.emplace_back(item.signature);
             }
             co_return methodDesList;
         };
@@ -208,9 +218,13 @@ private:
         std::vector<detail::RpcMethodMetadata> methods;
         for (const auto& item : methodDatas()) {
             methods.push_back({
-                .name        = std::string(item.name),
-                .description = std::string(item.description),
-                .isBind      = item.isBind,
+                .name              = std::string(item.name),
+                .signature         = std::string(item.signature),
+                .description       = std::string(item.description),
+                .rpcVersion        = std::string(item.rpcVersion),
+                .argNames          = item.argNames,
+                .isNotification    = item.isNotification,
+                .isBind            = item.isBind,
             });
         }
         return methods;

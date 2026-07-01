@@ -34,7 +34,7 @@ void set_test_env(const char* name, const char* value) {
     }
 #endif
 }
-
+// clang-format off
 struct DatabaseOptions {
     std::string host = "localhost";
     int port         = 0;
@@ -42,9 +42,11 @@ struct DatabaseOptions {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("host",
-                   make_tags<arg_name<"host">, arg_help<"database host">, ArgTags{.required = true}>(
-                       &DatabaseOptions::host),
-                   "port", make_tags<arg_name<"port">, arg_help<"database port">>(&DatabaseOptions::port));
+                   make_tags<arg_help<"database host">, 
+                   ArgTags{.required = true}>(&DatabaseOptions::host),
+
+                   "port", 
+                   make_tags<arg_help<"database port">>(&DatabaseOptions::port));
     };
 };
 
@@ -59,23 +61,33 @@ struct CliOptions {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("verbose",
-                   make_tags<arg_name<"verbose", "v">, arg_help<"enable verbose logs">, ArgTags{.flag = true}>(
-                       &CliOptions::verbose),
+                   make_tags<arg_short_name<'v'>, 
+                            arg_help<"enable verbose logs">, 
+                            ArgTags{.flag = true}>(&CliOptions::verbose),
+
                    "count",
-                   make_tags<arg_name<"count", "c">, arg_help<"count value">, ArgTags{.range_min = 0, .range_max = 100}>(
-                       &CliOptions::count),
+                   make_tags<arg_short_name<'c'>, 
+                            arg_help<"count value">, 
+                            ArgTags{.range_min = 0, .range_max = 100}>(&CliOptions::count),
+
                    "output",
-                   make_tags<arg_name<"output", "o">, arg_help<"output file">, ArgTags{.required = true}>(
-                       &CliOptions::output),
+                   make_tags<arg_short_name<'o'>, 
+                            arg_help<"output file">, 
+                            ArgTags{.required = true}>(&CliOptions::output),
+
                    "include",
-                   make_tags<arg_name<"include", "I">, arg_help<"include path">, ArgTags{.repeatable = true}>(
-                       &CliOptions::include),
-                   "database", &CliOptions::database, "input",
-                   make_tags<arg_name<"input">, arg_help<"input file">, ArgTags{.positional = true}>(
-                       &CliOptions::input));
+                   make_tags<arg_short_name<'I'>, 
+                            arg_help<"include path">, 
+                            ArgTags{.repeatable = true}>(&CliOptions::include),
+
+                   "database", &CliOptions::database, 
+                   
+                   "input",
+                   make_tags<arg_help<"input file">, 
+                   ArgTags{.positional = true}>(&CliOptions::input));
     };
 };
-
+// clang-format off
 TEST(ArgParser, ParseStructWithTagsAndNestedOptions) {
     const char* argv[] = {"demo",     "--output",        "out.txt", "--verbose", "--count=42", "--database.host",
                           "db.local", "--database.port", "5432",    "-I",        "inc/a",      "--include=inc/b",
@@ -143,7 +155,7 @@ TEST(ArgParser, HelpRequestedAndFormatHelp) {
     EXPECT_NE(help.find("--database.host"), std::string::npos);
     EXPECT_NE(help.find("--output <value> (required)"), std::string::npos);
 }
-
+// clang-format off
 struct BuildCommand {
     int jobs       = 1;
     bool release   = false;
@@ -152,14 +164,19 @@ struct BuildCommand {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("jobs",
-                   make_tags<arg_name<"jobs", "j">, arg_help<"parallel jobs">, ArgTags{.range_min = 1, .range_max = 65}>(
-                       &BuildCommand::jobs),
+                   make_tags<arg_short_name<'j'>, 
+                            arg_help<"parallel jobs">, 
+                            ArgTags{.range_min = 1, .range_max = 65}>(&BuildCommand::jobs),
+
                    "release",
-                   make_tags<arg_name<"release", "r">, arg_help<"release build">, ArgTags{.flag = true}>(
-                       &BuildCommand::release),
+                   make_tags<arg_short_name<'r'>, 
+                            arg_help<"release build">, 
+                            ArgTags{.flag = true}>(&BuildCommand::release),
+
                    "mode",
-                   make_tags<arg_name<"mode", "m">, arg_help<"build mode">, arg_choices<"debug", "release">>(
-                       &BuildCommand::mode));
+                   make_tags<arg_short_name<'m'>, 
+                            arg_help<"build mode">, 
+                            arg_choices<"debug", "release">>(&BuildCommand::mode));
     };
 };
 
@@ -170,14 +187,15 @@ struct ToolCommands {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("build",
-                   make_tags<arg_name<"build">, arg_help<"build project">, ArgTags{.command = true}>(
-                       &ToolCommands::build),
+                   make_tags<arg_help<"build project">, 
+                   ArgTags{.command = true}>(&ToolCommands::build),
+
                    "clean",
-                   make_tags<arg_name<"clean">, arg_help<"clean project">, ArgTags{.command = true}>(
-                       &ToolCommands::clean));
+                   make_tags<arg_help<"clean project">, 
+                            ArgTags{.command = true}>(&ToolCommands::clean));
     };
 };
-
+// clang-format on
 TEST(ArgParser, CommandSetReturnsVariant) {
     const char* argv[] = {"tool", "build", "--jobs", "8", "--release", "--mode", "release"};
 
@@ -267,7 +285,7 @@ TEST(ArgParser, PlaceholderCommandContextHelp) {
     EXPECT_NE(help.find("Usage: tool clean"), std::string::npos);
     EXPECT_NE(help.find("clean project"), std::string::npos);
 }
-
+// clang-format off
 struct DefaultOptions {
     int count = 0;
     std::string output;
@@ -278,24 +296,34 @@ struct DefaultOptions {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object(
-                "count", make_tags<arg_name<"count", "c">, arg_default<5>, arg_help<"count value">,
-                                   ArgTags{.range_min = 1, .range_max = 10}>(&DefaultOptions::count),
+                "count", make_tags<arg_short_name<'c'>, 
+                                arg_default<5>, 
+                                arg_help<"count value">,
+                                ArgTags{.range_min = 1, .range_max = 10}>(&DefaultOptions::count),
+
                 "output",
-                make_tags<arg_name<"output", "o">, arg_default<"build"_cs>, arg_help<"output directory">>(
-                    &DefaultOptions::output),
+                make_tags<arg_short_name<'o'>, 
+                        arg_default<"build"_cs>, 
+                        arg_help<"output directory">>(&DefaultOptions::output),
+
                 "profile",
-                make_tags<arg_name<"profile", "p">, arg_default<"dev"_cs>, arg_help<"profile name">>(
-                    &DefaultOptions::profile),
+                make_tags<arg_short_name<'p'>, 
+                        arg_default<"dev"_cs>, 
+                        arg_help<"profile name">>(&DefaultOptions::profile),
+
                 "include",
-                make_tags<arg_name<"include", "I">, arg_default<"include"_cs>, arg_help<"include path">>(
-                    &DefaultOptions::include),
+                make_tags<arg_short_name<'I'>, 
+                        arg_default<"include"_cs>, 
+                        arg_help<"include path">>(&DefaultOptions::include),
+
                 "mode",
-                make_tags<arg_name<"mode", "m">, arg_default<"release"_cs>, arg_help<"build mode">,
-                          arg_choices<"debug", "release">>(
-                    &DefaultOptions::mode));
+                make_tags<arg_short_name<'m'>, 
+                        arg_default<"release"_cs>, 
+                        arg_help<"build mode">,
+                        arg_choices<"debug", "release">>(&DefaultOptions::mode));
     };
 };
-
+// clang-format on
 TEST(ArgParser, DefaultValuesAreAppliedWhenOptionIsMissing) {
     const char* argv[] = {"demo"};
 
@@ -345,6 +373,7 @@ TEST(ArgParser, HelpShowsDefaultValues) {
     EXPECT_NE(help.find("--mode <value> (default: release) (choices: {debug, release})"), std::string::npos);
 }
 
+// clang-format off
 struct ParallelTagOptions {
     int count = 0;
     std::string output;
@@ -353,17 +382,22 @@ struct ParallelTagOptions {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("count",
-                   make_tags<arg_name<"count", "c">, arg_help<"count value">,
-                             ArgTags{.required = true, .range_min = 2, .range_max = 5}>(&ParallelTagOptions::count),
+                   make_tags<arg_short_name<'c'>,
+                            arg_help<"count value">,
+                            ArgTags{.required = true, .range_min = 2, .range_max = 5}>(&ParallelTagOptions::count),
+
                    "output",
-                   make_tags<arg_name<"output", "o">, arg_help<"output directory">, arg_default<"dist"_cs>>(
-                       &ParallelTagOptions::output),
+                   make_tags<arg_short_name<'o'>, 
+                            arg_help<"output directory">, 
+                            arg_default<"dist"_cs>>(&ParallelTagOptions::output),
+
                    "verbose",
-                   make_tags<arg_name<"verbose", "v">, arg_help<"enable verbose output">, ArgTags{.flag = true}>(
-                       &ParallelTagOptions::verbose));
+                   make_tags<arg_short_name<'v'>, 
+                            arg_help<"enable verbose output">, 
+                            ArgTags{.flag = true}>(&ParallelTagOptions::verbose));
     };
 };
-
+// clang-format on
 TEST(ArgParser, ParallelTagsComposeArgMetadata) {
     const char* argv[] = {"demo", "--count", "3", "-v"};
 
@@ -388,22 +422,21 @@ struct TagListComposeOptions {
 };
 
 TEST(ArgParser, TagListsFlattenAndLaterTagsOverrideEarlierOnes) {
-    constexpr auto BaseTagPack = TagList<arg_name<"old", "o">, arg_help<"old help">>{};
-    constexpr auto NestedTags =
-        TagList<BaseTagPack, TagList<arg_name<"new", "n">, arg_help<"new help">>{}>{};
-    constexpr auto spec = make_tags<NestedTags, ArgTags{.flag = true}>(&TagListComposeOptions::enabled);
-    constexpr auto tags = field_tags_v<decltype(spec)>;
+    constexpr auto base_tag_pack = TagList<arg_name<"old", 'o'>, arg_help<"old help">>{};
+    constexpr auto nested_tags   = TagList<base_tag_pack, TagList<arg_name<"new", 'n'>, arg_help<"new help">>{}>{};
+    constexpr auto spec          = make_tags<nested_tags, ArgTags{.flag = true}>(&TagListComposeOptions::enabled);
+    constexpr auto tags          = field_tags_v<decltype(spec)>;
 
     static_assert(std::tuple_size_v<decltype(tags)> == 5);
     static_assert(std::get<0>(tags).long_name == "old");
     static_assert(tags.template get<2>().long_name == "new");
     static_assert(std::get<4>(tags).flag);
     static_assert(tag_query::get<argparser::tag_property::long_name>(tags) == "new");
-    static_assert(tag_query::get<argparser::tag_property::short_name>(tags) == "n");
+    static_assert(tag_query::get<argparser::tag_property::short_name>(tags) == 'n');
     static_assert(tag_query::get<argparser::tag_property::help>(tags) == "new help");
     static_assert(tag_query::get<argparser::tag_property::flag>(tags));
-    static_assert(tag_query::has_tag<ArgNameTag<"new", "n">>(tags));
-    static_assert(tag_query::get_tag<ArgNameTag<"new", "n">>(tags).long_name == "new");
+    static_assert(tag_query::has_tag<argparser::detail::arg_name_impl<"new", 'n'>>(tags));
+    static_assert(tag_query::get_tag<argparser::detail::arg_name_impl<"new", 'n'>>(tags).long_name == "new");
 }
 
 struct AdvancedTagOptions {
@@ -414,23 +447,20 @@ struct AdvancedTagOptions {
 
     struct Neko {
         constexpr static auto value = // NOLINT
-            Object(
-                "port",
-                make_tags<arg_name<"port", "p">, arg_value_name<"PORT">, arg_env<"NEKO_ARGPARSER_TEST_PORT">,
-                          arg_default<8080>, arg_help<"listen port">, ArgTags{.range_min = 1, .range_max = 65536}>(
-                    &AdvancedTagOptions::port),
-                "token",
-                make_tags<arg_name<"token">, arg_env<"NEKO_ARGPARSER_TEST_TOKEN">, arg_value_name<"TOKEN">,
-                          arg_help<"api token">>(
-                    &AdvancedTagOptions::token),
-                "include",
-                make_tags<arg_name<"include", "I">, arg_separator<','>, arg_value_name<"PATHS">,
-                          arg_help<"include paths">>(
-                    &AdvancedTagOptions::include),
-                "levels",
-                make_tags<arg_name<"level">, arg_separator<';'>, arg_value_name<"LEVELS">,
-                          arg_help<"numeric levels">, ArgTags{.range_min = 0, .range_max = 10}>(
-                    &AdvancedTagOptions::levels));
+            Object("port",
+                   make_tags<arg_name<"port", 'p'>, arg_value_name<"PORT">, arg_env<"NEKO_ARGPARSER_TEST_PORT">,
+                             arg_default<8080>, arg_help<"listen port">, ArgTags{.range_min = 1, .range_max = 65536}>(
+                       &AdvancedTagOptions::port),
+                   "token",
+                   make_tags<arg_env<"NEKO_ARGPARSER_TEST_TOKEN">, arg_value_name<"TOKEN">, arg_help<"api token">>(
+                       &AdvancedTagOptions::token),
+                   "include",
+                   make_tags<arg_name<"include", 'I'>, arg_separator<','>, arg_value_name<"PATHS">,
+                             arg_help<"include paths">>(&AdvancedTagOptions::include),
+                   "levels",
+                   make_tags<arg_long_name<"level">, arg_separator<';'>, arg_value_name<"LEVELS">,
+                             arg_help<"numeric levels">, ArgTags{.range_min = 0, .range_max = 10}>(
+                       &AdvancedTagOptions::levels));
     };
 };
 
@@ -503,18 +533,17 @@ struct AliasImplicitGroupOptions {
 
     struct Neko {
         constexpr static auto value = // NOLINT
-            Object(
-                "color",
-                make_tags<arg_name<"color", "c">, arg_aliases<"C", "colour">, arg_group<"Display">,
-                          arg_implicit<"auto"_cs>, arg_help<"color mode">>(&AliasImplicitGroupOptions::color),
-                "output",
-                make_tags<arg_name<"output", "o">, arg_group<"Paths">, arg_value_name<"PATH">,
-                          arg_help<"output file">>(
-                    &AliasImplicitGroupOptions::output),
-                "verbose",
-                make_tags<arg_name<"verbose", "v">, arg_group<"General">, arg_help<"enable verbose output">,
-                          ArgTags{.flag = true}>(
-                    &AliasImplicitGroupOptions::verbose));
+            Object("color",
+                   make_tags<arg_short_name<'c'>, arg_aliases<"C", "colour">, arg_group<"Display">,
+                             arg_implicit<"auto"_cs>, arg_help<"color mode">>(&AliasImplicitGroupOptions::color),
+
+                   "output",
+                   make_tags<arg_short_name<'o'>, arg_group<"Paths">, arg_value_name<"PATH">, arg_help<"output file">>(
+                       &AliasImplicitGroupOptions::output),
+
+                   "verbose",
+                   make_tags<arg_short_name<'v'>, arg_group<"General">, arg_help<"enable verbose output">,
+                             ArgTags{.flag = true}>(&AliasImplicitGroupOptions::verbose));
     };
 };
 
@@ -560,16 +589,17 @@ struct RelationshipOptions {
 
     struct Neko {
         constexpr static auto value = // NOLINT
-            Object(
-                "login",
-                make_tags<arg_name<"login", "">, arg_requires<"token">, arg_help<"enable login">,
-                          ArgTags{.flag = true}>(&RelationshipOptions::login),
-                "token", make_tags<arg_name<"token">, arg_help<"login token">>(&RelationshipOptions::token), "json",
-                make_tags<arg_name<"json", "">, arg_conflicts<"yaml">, arg_help<"json output">, ArgTags{.flag = true}>(
-                    &RelationshipOptions::json),
-                "yaml",
-                make_tags<arg_name<"yaml">, arg_help<"yaml output">, ArgTags{.flag = true}>(
-                    &RelationshipOptions::yaml));
+            Object("login",
+                   make_tags<arg_requires<"token">, arg_help<"enable login">, ArgTags{.flag = true}>(
+                       &RelationshipOptions::login),
+
+                   "token", make_tags<arg_help<"login token">>(&RelationshipOptions::token),
+
+                   "json",
+                   make_tags<arg_conflicts<"yaml">, arg_help<"json output">, ArgTags{.flag = true}>(
+                       &RelationshipOptions::json),
+
+                   "yaml", make_tags<arg_help<"yaml output">, ArgTags{.flag = true}>(&RelationshipOptions::yaml));
     };
 };
 
@@ -605,11 +635,11 @@ struct RelaxedChoiceOptions {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("mode",
-                   make_tags<arg_name<"mode", "m">, arg_case_insensitive_choices, arg_choices<"debug", "release">>(
+                   make_tags<arg_short_name<'m'>, arg_case_insensitive_choices, arg_choices<"debug", "release">>(
                        &RelaxedChoiceOptions::mode),
+
                    "color",
-                   make_tags<arg_name<"color">, arg_case_insensitive_choices, arg_choices<"auto", "never">>(
-                       &RelaxedChoiceOptions::color));
+                   make_tags<arg_case_insensitive_choices, arg_choices<"auto", "never">>(&RelaxedChoiceOptions::color));
     };
 };
 
@@ -638,14 +668,10 @@ struct DeprecatedOptions {
 
     struct Neko {
         constexpr static auto value = // NOLINT
-            Object(
-                "legacy",
-                make_tags<arg_name<"legacy">, arg_deprecated<"use --modern instead">, arg_help<"legacy mode">,
-                          ArgTags{.flag = true}>(
-                    &DeprecatedOptions::legacy),
-                "modern",
-                make_tags<arg_name<"modern">, arg_help<"modern mode">, ArgTags{.flag = true}>(
-                    &DeprecatedOptions::modern));
+            Object("legacy",
+                   make_tags<arg_deprecated<"use --modern instead">, arg_help<"legacy mode">, ArgTags{.flag = true}>(
+                       &DeprecatedOptions::legacy),
+                   "modern", make_tags<arg_help<"modern mode">, ArgTags{.flag = true}>(&DeprecatedOptions::modern));
     };
 };
 
@@ -653,8 +679,8 @@ TEST(ArgParser, DeprecatedOptionIsAcceptedAndReported) {
     const char* argv[] = {"demo", "--legacy"};
     std::vector<std::string> warnings;
     ArgParserConfig config;
-    config.deprecatedOptionHandler = [&](std::string_view optionName, std::string_view message) {
-        warnings.push_back(std::string(optionName) + ":" + std::string(message));
+    config.deprecatedOptionHandler = [&](std::string_view option_name, std::string_view message) {
+        warnings.push_back(std::string(option_name) + ":" + std::string(message));
     };
 
     auto result = parser<DeprecatedOptions>(static_cast<int>(std::size(argv)), argv, config);

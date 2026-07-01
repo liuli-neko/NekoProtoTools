@@ -241,19 +241,21 @@ RPC 复用现有 `make_tags<Tag>(field)` 风格，将注册策略描述为字段
 当前定义：
 
 ```cpp
+namespace tag_detail {
 template <ConstexprString Prefix>
-struct RpcPrefixTag {
+struct rpc_prefix_impl {
     constexpr static auto prefix = Prefix;
 };
 
-struct RpcNoPrefixTag {
+struct rpc_no_prefix_impl {
     constexpr static bool no_prefix = true;
 };
+} // namespace tag_detail
 
 template <ConstexprString Prefix>
-inline constexpr auto rpc_prefix_tag = RpcPrefixTag<Prefix>{};
+inline constexpr auto rpc_prefix = tag_detail::rpc_prefix_impl<Prefix>{};
 
-inline constexpr auto rpc_no_prefix_tag = RpcNoPrefixTag{};
+inline constexpr auto rpc_no_prefix = tag_detail::rpc_no_prefix_impl{};
 ```
 
 使用示例：
@@ -271,9 +273,9 @@ template <>
 struct Meta<::Api> {
     constexpr static auto value =
         Object("a", &::Api::a,                                      // 默认前缀 "a"
-               "b", make_tags<rpc_prefix_tag<"service.b">>(&::Api::b),
-               "common", make_tags<rpc_no_prefix_tag>(&::Api::common), // 不加前缀，但仍通过 client->common.xxx 调用
-               "legacy", make_tags<rpc_no_prefix_tag>(&::Api::legacy)); // 不加前缀，但仍通过 client->legacy.xxx 调用
+               "b", make_tags<rpc_prefix<"service.b">>(&::Api::b),
+               "common", make_tags<rpc_no_prefix>(&::Api::common), // 不加前缀，但仍通过 client->common.xxx 调用
+               "legacy", make_tags<rpc_no_prefix>(&::Api::legacy)); // 不加前缀，但仍通过 client->legacy.xxx 调用
 };
 } // namespace NekoProto
 ```
@@ -281,8 +283,8 @@ struct Meta<::Api> {
 建议语义：
 
 - 无 tag：如果 protocol 是集合字段，默认使用字段名作为前缀。
-- `rpc_prefix_tag<"x">`：使用自定义前缀 `x`。
-- `rpc_no_prefix_tag`：不拼接前缀，远端方法名保持 method name。
+- `rpc_prefix<"x">`：使用自定义前缀 `x`。
+- `rpc_no_prefix`：不拼接前缀，远端方法名保持 method name。
 - 不设计 `rpc_global_tag` 作为稳定 API。field tag 只能改变注册出的远端方法名，不应承诺把嵌套字段提升成 C++ root 成员。
 
 例如：
@@ -305,7 +307,7 @@ struct Meta<::Common> {
 template <>
 struct Meta<::Api> {
     constexpr static auto value =
-        Object("common", make_tags<rpc_no_prefix_tag>(&::Api::common));
+        Object("common", make_tags<rpc_no_prefix>(&::Api::common));
 };
 } // namespace NekoProto
 
@@ -316,7 +318,7 @@ auto v2 = co_await client.callRemote<std::string>("version");
 冲突规则：
 
 - 完整方法名相同视为冲突。
-- `rpc_no_prefix_tag` 更容易冲突，应在注册期报错。
+- `rpc_no_prefix` 更容易冲突，应在注册期报错。
 - 初期可以运行时报错并拒绝后注册项；稳定后可尽量将静态协议集合的冲突提前到编译期。
 
 ## Backend concept 草案
@@ -384,6 +386,7 @@ struct DecodedRequest {
 struct RegisteredMethod {
     std::string fullName;
     std::string displayName;
+    std::string signature;
     std::string description;
     bool isBind;
     MethodInvoker invoker;
@@ -409,7 +412,7 @@ template <>
 struct Meta<::Api> {
     constexpr static auto value =
         Object("a", &::Api::a,
-               "b", make_tags<rpc_prefix_tag<"bee">>(&::Api::b));
+               "b", make_tags<rpc_prefix<"bee">>(&::Api::b));
 };
 } // namespace NekoProto
 ```
@@ -432,7 +435,7 @@ namespace NekoProto {
 template <>
 struct Meta<::Api> {
     constexpr static auto value =
-        Object("system", make_tags<rpc_no_prefix_tag>(&::Api::system));
+        Object("system", make_tags<rpc_no_prefix>(&::Api::system));
 };
 } // namespace NekoProto
 ```
@@ -450,6 +453,134 @@ rpc.get_method_info
 - 集合字段仍保留自然 C++ 访问路径：`client->a.xxx()`。
 - tags 只影响远端完整方法名，不改变 C++ 成员访问路径。
 - 如果同一个方法既需要嵌套访问又需要 root 直接访问，应在 root protocol 中显式声明 alias，或通过 `callRemote("xxx")` 动态调用，避免默认行为含糊。
+
+## RpcMethod 注册 API 现状
+
+当前注册入口可以按“方法名从哪里来”分成四类：
+
+- `RpcMethod<Signature, MethodName, ArgNames...>`：协议 struct 里的静态字段声明，`MethodName` 和参数名都在类型上；经过 `Reflect<T>` 展开后由 `RpcDispatcher::registerRpcMethod()` 注册。
+- `RpcMethodF<Ptr, ArgNames...>`：协议 struct 里的函数指针声明，方法名由 `detail::func_nameof<Ptr>` 推导；`RpcServer::bindMethod<Ptr>()` 也复用同一套命名规则。
+- `RpcMethodFN<Ptr, Owner, ArgNames...>`：函数指针声明，并把 `class_nameof<Owner>` 拼进方法名，适合把成员函数按类型命名空间暴露。
+- `RpcMethodDynamic<Signature, ArgNames...>`：运行时方法名声明，由 `RpcServer::bindMethod(name, func)`、`RpcClient::callRemote(name, ...)` 和 `notifyRemote(name, ...)` 临时构造。
+
+它们最终都会落到同一组基础元数据：
+
+- `name()` / `declaredName()`：当前远端完整名和原始声明名。
+- `RawReturnType` / `RawParamsType` / `ArgNamesHelper`：返回值、参数类型和参数名。
+- `signature`：自动拼出来的字符串签名，例如 `int add(int lhs, int rhs)`。
+- `description`：`rpc_desc` 或反射 metadata 提供的用户说明。
+- `isBind()`：server 侧是否已经绑定实现。
+
+当前短板是：后端 method-id 表、内建 introspection 和调试展示仍主要依赖 `signature` 字符串，无法稳定提取参数 schema、注释、分组、版本、废弃状态等结构化属性。
+
+## RPC 结构化元数据计划
+
+目标是让 RPC 前端把“用户声明的事实”保留下来，后端再通过统一收集层把 tag、反射元数据和类型信息合并成结构化 `RpcMethodInfo`。这样内建 introspection、method-id 签名、文档生成、客户端自动补全和 backend 专属扩展都使用同一份元数据。
+
+新增声明式 API 时不要复用 `RpcMethod` 这个名字。`RpcMethod<Signature, "name", "arg"...>` 保持简洁风格；结构化属性走独立的 `RpcMethodSpec`：
+
+```cpp
+struct Api {
+    RpcMethodSpec<
+        int(int, int),
+        rpc_name<"add">,
+        rpc_desc<"Add two integers">,
+        rpc_args<"lhs", "rhs">,
+        rpc_version<"1.0.0">
+    > add;
+
+    NEKO_SERIALIZER(
+        (make_tags<
+            rpc_name<"math.add">,
+            rpc_desc<"Override from reflection metadata">,
+            rpc_args<"left", "right">
+        >(add)))
+};
+```
+
+合并规则：
+
+- `RpcMethodSpec` 里的 `rpc_name/rpc_desc/rpc_args/rpc_version/rpc_notification` 提供声明默认值。
+- 结构体反射 metadata 里的同名 tags 优先级更高，可以覆盖声明默认值。
+- 名字优先级固定为：field tag 的 `rpc_name` > `RpcMethodSpec` 的 `rpc_name` / `RpcMethod<..., "name">` 声明名 > `Reflect<T>` 展开的字段名。
+- `rpc_name` 只描述方法名段，可以包含业务允许的任意合法 RPC 名字；`rpc_prefix` / `rpc_no_prefix` 仍然按前缀规则独立参与最终远端名拼接。
+- 前缀优先级固定为：field tag 的 `rpc_prefix/rpc_no_prefix` > `RpcMethodSpec` 的 `rpc_prefix/rpc_no_prefix` > 反射路径默认前缀。
+- `rpc_args` 写在 `RpcMethodSpec` 里时参与编译期参数名和 JSON named params；写在 field tags 里时先覆盖收集到的元数据和展示字符串，不改变已经实例化的后端模板类型。
+- 旧的 `RpcMethod`、`RpcMethodF`、`RpcMethodFN`、`bindMethod` 公共 API 不删除、不改签名。
+
+建议元数据模型：
+
+```cpp
+struct RpcParamInfo {
+    std::string name;
+    std::string typeName;
+    std::string summary;
+    bool optional = false;
+    // 后续可挂 schema、默认值、范围、枚举值、serializer tags 摘要等。
+};
+
+struct RpcMethodInfo {
+    std::string name;
+    std::string declaredName;
+    std::string returnTypeName;
+    std::string summary;
+    std::string group;
+    bool deprecated = false;
+    bool notification = false;
+    bool isBind = false;
+    std::vector<RpcParamInfo> params;
+};
+```
+
+收集层建议放在 `include/nekoproto/rpc/metadata.hpp`，职责如下：
+
+- 从 `RpcMethodDynamic/RpcMethod/RpcMethodF/RpcMethodFN` 提取方法名、返回类型、参数类型、参数名和 notification 状态。
+- 从协议字段 tags 提取 RPC 专属元数据，例如 summary/group/deprecated/version/param tags。
+- 从参数和返回类型的 `Reflect<T>` 元数据提取字段名、`comment_tag`、`rename_tag`、`JsonTag{.skippable}`、`BinaryTag{.fixed_length}`、枚举值等可用于补全和 schema 的信息。
+- 继续生成 `signature` 字符串，供当前 `rpc.get_method_info` 和 method-id 表使用。
+- 生成 backend 可消费的精简签名数据；`NekoRpcMethodIdTable::signatureHash()` 后续应优先使用结构化签名，字符串 `signature` 只作为临时 fallback。
+
+Dispatcher/Server 侧迁移路径：
+
+- `RpcMethodWrapperBase` 新增 `metadata()` 或 `methodInfo()`，返回稳定存储的 `RpcMethodInfo`/view。
+- `RpcDispatcher::MethodData` 从 `name/signature/description/isBind` 继续扩展为结构化信息。
+- `RpcServer::_methodMetadata()` 不再手写 `name/description/isBind`，改为调用收集层。
+- Endpoint refresh 从 `std::vector<RpcMethodMetadata>` 迁移到结构化 `std::vector<RpcMethodInfo>`，不保留无实际用途的兼容别名。
+
+内建 introspection 迁移路径：
+
+- 保持 `rpc.get_method_list`、`rpc.get_method_info_list`、`rpc.get_method_info` 的字符串行为。
+- 新增 `rpc.get_method_metadata_list` / `rpc.get_method_metadata`，返回结构化信息。
+- JSON-RPC backend 可以直接把结构化信息序列化为 JSON；二进制 backend 使用同一份 serializer 元数据。
+
+推荐实施顺序：
+
+1. 新增 RPC metadata tags 和 `metadata.hpp`，只做编译期/运行期收集，不改变注册行为。
+2. 给现有四类注册 API 补测试：静态字段、函数指针字段、带 owner 的函数指针字段、动态 bind/call 都能生成一致 `RpcMethodInfo`。
+3. Dispatcher 内部改存结构化元数据，但保持 `methodDatas()` 返回旧 view，避免一次性波及后端。
+4. 后端 endpoint refresh 改收结构化 metadata，并让 method-id signature hash 使用结构化签名。
+5. 增加结构化 introspection 内建方法，再逐步让文档/补全工具消费新接口。
+
+## RPC 属性收集重构 Checklist
+
+重构目标从“多放一层 metadata”调整为“减少模板展开面、统一属性来源、删除无用过渡符号”。主要公共 API 保持稳定，但内部临时 API 不保留兼容层。
+
+- [x] 新增统一字段属性 patch/collector：`rpc_visit_field` 不再分别从 method 和 reflectable 分支读取 tags，而是先把 field tags 收集成同一份 RPC 属性输入。
+- [x] field tags 优先级固定高于 method 自身元数据：注册遍历时把 tags 作为外部覆盖输入传给 method；method 自身只暴露默认属性和应用 patch 的入口。
+- [x] 删除旧的平行 tag 应用路径：移除旧的 tags 直写 method 流程，不保留内部转发壳。
+- [ ] 将名字和前缀解析收敛到单一 resolver：名字优先级仍为 field tag > method 声明 > reflect field name；前缀优先级仍为 field tag > method spec > traversal prefix。
+- [ ] 将 `rpc_args` 的 tag 提取从 `std::vector<std::string_view>` 迁到 view/span 形态，避免每次 tag 查询产生不必要临时容器。
+- [ ] 将 method metadata storage 从按 `MethodTraits, ArgNames...` 模板实例化的大对象收敛为非模板存储；模板层只保留类型签名和调用包装。
+- [ ] 将 `RpcMethodSpec` 的多轮 pack 扫描合并到单个 `RpcMethodSpecTraits<Specs...>`，减少重复 `requires`/fold 实例化。
+- [ ] 将 dispatcher/server/backend 的 method metadata 获取改为统一收集层，避免每个后端重新拼字段。
+- [ ] 每完成一步都扫描旧符号，不保留未使用别名、旧名字、转发壳或“兼容但无人用”的内部 API。
+- [ ] 每完成一步至少跑 `test_jsonrpc`；涉及 binary backend metadata 或 method-id 时同步跑 `test_neko_rpc_backend`。
+
+短期风险控制：
+
+- 先统一 field tag 属性来源，不改变 wire 行为。
+- 再移动 merge/resolve 逻辑，确保每一步都有现有测试覆盖。
+- 结构体自身 metadata 暂不强行并入 RPC metadata；遍历时以 field tags 作为外部输入，必要时后续再给 struct-level metadata 增加显式 collector。
 
 ## 通用 server/client 草案
 
@@ -527,7 +658,7 @@ JSON-RPC backend 需要保持当前行为：
 
 - [x] 新增 `include/nekoproto/rpc/traits.hpp`，迁移通用 function traits、`RpcMethodTraits` 原始元数据。
 - [x] 新增 `include/nekoproto/rpc/method.hpp`，迁移 `RpcMethodDynamic`、`RpcMethod`、`RpcMethodF`，移除 `RequestType/ResponseType`。
-- [x] 新增 `include/nekoproto/rpc/tags.hpp`，定义 `rpc_prefix_tag`、`rpc_no_prefix_tag`。
+- [x] 新增 `include/nekoproto/rpc/tags.hpp`，定义 `rpc_prefix`、`rpc_no_prefix`。
 - [x] 新增 `include/nekoproto/rpc/registry.hpp`，实现协议集合展开和前缀解析。
 - [x] 新增 `include/nekoproto/rpc/endpoint.hpp`，定义 `RpcEndpoint` 概念。
 - [x] 新增 `include/nekoproto/rpc/dispatcher.hpp`，把 request dispatch 从 `JsonRpcServerImp` 中抽出来。
@@ -538,7 +669,7 @@ JSON-RPC backend 需要保持当前行为：
 - [x] 将 `JsonRpcServer<Protocol>` / `JsonRpcClient<Protocol>` 改为别名到新 API。
 - [x] 迁移 `tests/unit/jsonrpc/test_jsonrpc.cpp`，保留旧 API 测试，同时新增嵌套 API 测试。
 - [ ] 新增多协议前缀测试：`client->a.xxx()` 和 `client->b.xxx()` 调用同名方法但命中不同实现。
-- [x] 新增 `rpc_no_prefix_tag` 测试：嵌套 C++ 访问路径不变，但通过无前缀 remote name 调用。
+- [x] 新增 `rpc_no_prefix` 测试：嵌套 C++ 访问路径不变，但通过无前缀 remote name 调用。
 - [ ] 新增 endpoint 测试：使用内存 endpoint 或 pipe-like endpoint，不依赖 TCP/UDP。
 
 ## 兼容策略

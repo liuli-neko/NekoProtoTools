@@ -28,9 +28,13 @@ public:
 
     virtual auto call(const typename Backend::DecodedRequest& request, typename Backend::ResponseValues& responses)
         noexcept -> ilias::Task<void> = 0;
-    virtual auto name() noexcept -> std::string_view        = 0;
-    virtual auto description() noexcept -> std::string_view = 0;
-    virtual auto isBind() noexcept -> bool                  = 0;
+    virtual auto name() noexcept -> std::string_view         = 0;
+    virtual auto signature() noexcept -> std::string_view    = 0;
+    virtual auto description() noexcept -> std::string_view  = 0;
+    virtual auto rpcVersion() noexcept -> std::string_view   = 0;
+    virtual auto argNames() noexcept -> std::vector<std::string> = 0;
+    virtual auto isNotification() noexcept -> bool           = 0;
+    virtual auto isBind() noexcept -> bool                   = 0;
 };
 
 template <typename T>
@@ -60,7 +64,11 @@ public:
     auto call(const typename Backend::DecodedRequest& request, typename Backend::ResponseValues& responses) noexcept
         -> ilias::Task<void> override;
     auto name() noexcept -> std::string_view override { return mMethodData->name(); }
-    auto description() noexcept -> std::string_view override { return mMethodData->description; }
+    auto signature() noexcept -> std::string_view override { return mMethodData->signature; }
+    auto description() noexcept -> std::string_view override { return mMethodData->description(); }
+    auto rpcVersion() noexcept -> std::string_view override { return mMethodData->rpcVersion(); }
+    auto argNames() noexcept -> std::vector<std::string> override { return mMethodData->metadataArgNames(); }
+    auto isNotification() noexcept -> bool override { return mMethodData->isNotification(); }
     auto isBind() noexcept -> bool override { return (bool)(*mMethodData); }
 
 private:
@@ -76,7 +84,11 @@ public:
 
     struct MethodData {
         std::string_view name;
+        std::string_view signature;
         std::string_view description;
+        std::string_view rpcVersion;
+        std::vector<std::string> argNames;
+        bool isNotification = false;
         bool isBind = false;
     };
 
@@ -111,17 +123,26 @@ public:
     auto methodDatas() noexcept -> std::vector<MethodData> {
         std::vector<MethodData> metas;
         for (auto& [name, handler] : mHandlers) {
-            metas.push_back(
-                {.name = handler->name(), .description = handler->description(), .isBind = handler->isBind()});
+            metas.push_back({.name             = handler->name(),
+                             .signature        = handler->signature(),
+                             .description      = handler->description(),
+                             .rpcVersion       = handler->rpcVersion(),
+                             .argNames         = handler->argNames(),
+                             .isNotification   = handler->isNotification(),
+                             .isBind           = handler->isBind()});
         }
         return metas;
     }
 
     auto methodDatas(std::string_view name) noexcept -> MethodData {
         if (auto item = mHandlers.find(std::string(name)); item != mHandlers.end()) {
-            return {.name = item->second->name(),
-                    .description = item->second->description(),
-                    .isBind = item->second->isBind()};
+            return {.name           = item->second->name(),
+                    .signature      = item->second->signature(),
+                    .description    = item->second->description(),
+                    .rpcVersion     = item->second->rpcVersion(),
+                    .argNames       = item->second->argNames(),
+                    .isNotification = item->second->isNotification(),
+                    .isBind         = item->second->isBind()};
         }
         return {};
     }

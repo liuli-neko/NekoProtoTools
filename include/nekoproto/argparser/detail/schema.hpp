@@ -25,19 +25,19 @@ struct ArgSpec {
     std::string env_name;
     std::string group;
     std::string deprecated_message;
-    bool required               = false;
-    bool positional             = false;
-    bool flag                   = false;
-    bool repeatable             = false;
-    bool hidden                 = false;
-    bool has_range               = false;
-    bool has_default             = false;
-    bool has_implicit            = false;
+    bool required                 = false;
+    bool positional               = false;
+    bool flag                     = false;
+    bool repeatable               = false;
+    bool hidden                   = false;
+    bool has_range                = false;
+    bool has_default              = false;
+    bool has_implicit             = false;
     bool case_insensitive_choices = false;
-    bool deprecated             = false;
-    double range_min             = 0.0;
-    double range_max             = 0.0;
-    char separator              = '\0';
+    bool deprecated               = false;
+    double range_min              = 0.0;
+    double range_max              = 0.0;
+    char separator                = '\0';
     std::string default_value;
     std::string implicit_value;
     std::vector<std::string_view> choices;
@@ -126,26 +126,26 @@ inline std::string join_arg_name(std::string_view prefix, std::string_view name,
 }
 
 template <typename T>
-constexpr bool field_type_is_flag(bool taggedFlag) {
-    return taggedFlag || std::is_same_v<std::remove_cvref_t<T>, bool>;
+constexpr bool field_type_is_flag(bool tagged_flag) {
+    return tagged_flag || std::is_same_v<std::remove_cvref_t<T>, bool>;
 }
 
 template <typename T>
 std::string default_value_to_string(const T& value) {
-    using RawT = std::remove_cvref_t<T>;
+    using raw_t = std::remove_cvref_t<T>;
     if constexpr (std::is_convertible_v<T, std::string_view>) {
         return std::string(std::string_view(value));
-    } else if constexpr (std::is_same_v<RawT, bool>) {
+    } else if constexpr (std::is_same_v<raw_t, bool>) {
         return value ? "true" : "false";
-    } else if constexpr (std::is_enum_v<RawT>) {
-        constexpr auto EnumNames  = Reflect<RawT>::names();
-        constexpr auto EnumValues = Reflect<RawT>::values();
-        for (std::size_t idx = 0; idx < EnumNames.size(); ++idx) {
-            if (EnumValues[idx] == value) {
-                return std::string(EnumNames[idx]);
+    } else if constexpr (std::is_enum_v<raw_t>) {
+        constexpr auto enum_names  = Reflect<raw_t>::names();
+        constexpr auto enum_values = Reflect<raw_t>::values();
+        for (std::size_t idx = 0; idx < enum_names.size(); ++idx) {
+            if (enum_values[idx] == value) {
+                return std::string(enum_names[idx]);
             }
         }
-        return std::to_string(static_cast<std::underlying_type_t<RawT>>(value));
+        return std::to_string(static_cast<std::underlying_type_t<raw_t>>(value));
     } else if constexpr (requires(std::ostringstream& stream, const T& item) { stream << item; }) {
         std::ostringstream stream;
         stream << value;
@@ -156,35 +156,63 @@ std::string default_value_to_string(const T& value) {
 }
 
 template <typename FieldT, typename Tags>
-ArgSpec make_arg_spec(std::string_view prefix, std::string_view reflectedName, const Tags& tags,
+ArgSpec make_arg_spec(std::string_view prefix, std::string_view reflected_name, const Tags& tags,
                       const argparser::ArgParserConfig& config) {
-    const auto explicitLongName = tag_query::get<tag_property::long_name>(tags);
-    const auto name             = explicitLongName.empty() ? reflectedName : explicitLongName;
+    const auto explicit_long_name = tag_query::get<tag_property::long_name>(tags);
+    const auto name               = explicit_long_name.empty() ? reflected_name : explicit_long_name;
 
     ArgSpec spec;
-    spec.long_name  = join_arg_name(prefix, name, config.nestedSeparator);
-    spec.short_name = std::string(tag_query::get<tag_property::short_name>(tags));
-    auto aliases   = tag_query::get<tag_property::aliases>(tags);
-    spec.aliases.assign(aliases.begin(), aliases.end());
-    spec.help                   = std::string(tag_query::get<tag_property::help>(tags));
-    spec.value_name              = std::string(tag_query::get<tag_property::value_name>(tags));
-    spec.env_name                = std::string(tag_query::get<tag_property::env_name>(tags));
-    spec.group                  = std::string(tag_query::get<tag_property::group>(tags));
-    spec.deprecated_message      = std::string(tag_query::get<tag_property::deprecated_message>(tags));
-    spec.required               = tag_query::get<tag_property::required>(tags);
-    spec.positional             = tag_query::get<tag_property::positional>(tags);
-    spec.flag                   = field_type_is_flag<FieldT>(tag_query::get<tag_property::flag>(tags));
-    spec.repeatable             = tag_query::get<tag_property::repeatable>(tags) || is_vector_v<FieldT>;
-    spec.hidden                 = tag_query::get<tag_property::hidden>(tags);
-    spec.has_range =
-        tag_query::has<tag_property::range_min>(tags) || tag_query::has<tag_property::range_max>(tags);
-    spec.has_default             = tag_query::has<tag_property::default_value>(tags);
-    spec.has_implicit            = tag_query::has<tag_property::implicit_value>(tags);
-    spec.case_insensitive_choices = tag_query::get<tag_property::case_insensitive_choices>(tags);
-    spec.deprecated             = tag_query::has<tag_property::deprecated_message>(tags);
-    spec.range_min               = tag_query::get<tag_property::range_min>(tags);
-    spec.range_max               = tag_query::get<tag_property::range_max>(tags);
-    spec.separator              = tag_query::get<tag_property::separator>(tags);
+    spec.long_name = join_arg_name(prefix, name, config.nestedSeparator);
+    if constexpr (tag_query::has<tag_property::short_name>(Tags{})) {
+        spec.short_name = "";
+        spec.short_name.push_back(tag_query::get<tag_property::short_name>(tags));
+    }
+    if constexpr (tag_query::has<tag_property::aliases>(Tags{})) {
+        auto aliases = tag_query::get<tag_property::aliases>(tags);
+        spec.aliases.assign(aliases.begin(), aliases.end());
+    }
+    if constexpr (tag_query::has<tag_property::help>(Tags{})) {
+        spec.help = std::string(tag_query::get<tag_property::help>(tags));
+    }
+    if constexpr (tag_query::has<tag_property::value_name>(Tags{})) {
+        spec.value_name = std::string(tag_query::get<tag_property::value_name>(tags));
+    }
+    if constexpr (tag_query::has<tag_property::env_name>(Tags{})) {
+        spec.env_name = std::string(tag_query::get<tag_property::env_name>(tags));
+    }
+    if constexpr (tag_query::has<tag_property::group>(Tags{})) {
+        spec.group = std::string(tag_query::get<tag_property::group>(tags));
+    }
+    if constexpr (tag_query::has<tag_property::deprecated_message>(Tags{})) {
+        spec.deprecated_message = std::string(tag_query::get<tag_property::deprecated_message>(tags));
+    }
+    if constexpr (tag_query::has<tag_property::required>(Tags{})) {
+        spec.required = tag_query::get<tag_property::required>(tags);
+    }
+    if constexpr (tag_query::has<tag_property::positional>(Tags{})) {
+        spec.positional = tag_query::get<tag_property::positional>(tags);
+    }
+    spec.flag         = field_type_is_flag<FieldT>(tag_query::get<tag_property::flag>(tags));
+    spec.repeatable   = tag_query::get<tag_property::repeatable>(tags) || is_vector_v<FieldT>;
+    spec.hidden       = tag_query::get<tag_property::hidden>(tags);
+    spec.has_range    = tag_query::has<tag_property::range_min>(tags) || tag_query::has<tag_property::range_max>(tags);
+    spec.has_default  = tag_query::has<tag_property::default_value>(tags);
+    spec.has_implicit = tag_query::has<tag_property::implicit_value>(tags);
+    if constexpr (tag_query::has<tag_property::case_insensitive_choices>(Tags{})) {
+        spec.case_insensitive_choices = tag_query::get<tag_property::case_insensitive_choices>(tags);
+    }
+    if constexpr (tag_query::has<tag_property::deprecated_message>(Tags{})) {
+        spec.deprecated = tag_query::has<tag_property::deprecated_message>(tags);
+    }
+    if constexpr (tag_query::has<tag_property::range_min>(Tags{})) {
+        spec.range_min = tag_query::get<tag_property::range_min>(tags);
+    }
+    if constexpr (tag_query::has<tag_property::range_max>(Tags{})) {
+        spec.range_max = tag_query::get<tag_property::range_max>(tags);
+    }
+    if constexpr (tag_query::has<tag_property::separator>(Tags{})) {
+        spec.separator = tag_query::get<tag_property::separator>(tags);
+    }
 
     if constexpr (tag_query::has<tag_property::default_value>(decltype(tags){})) {
         spec.default_value = default_value_to_string(tag_query::get<tag_property::default_value>(tags));
@@ -193,12 +221,18 @@ ArgSpec make_arg_spec(std::string_view prefix, std::string_view reflectedName, c
         spec.implicit_value = default_value_to_string(tag_query::get<tag_property::implicit_value>(tags));
     }
 
-    auto choices = tag_query::get<tag_property::choices>(tags);
-    spec.choices.assign(choices.begin(), choices.end());
-    auto conflicts = tag_query::get<tag_property::conflicts>(tags);
-    spec.conflicts.assign(conflicts.begin(), conflicts.end());
-    auto requires_names = tag_query::get<tag_property::requires_names>(tags);
-    spec.requires_names.assign(requires_names.begin(), requires_names.end());
+    if constexpr (tag_query::has<tag_property::choices>(Tags{})) {
+        auto choices = tag_query::get<tag_property::choices>(tags);
+        spec.choices.assign(choices.begin(), choices.end());
+    }
+    if constexpr (tag_query::has<tag_property::conflicts>(Tags{})) {
+        auto conflicts = tag_query::get<tag_property::conflicts>(tags);
+        spec.conflicts.assign(conflicts.begin(), conflicts.end());
+    }
+    if constexpr (tag_query::has<tag_property::requires_names>(Tags{})) {
+        auto requires_names = tag_query::get<tag_property::requires_names>(tags);
+        spec.requires_names.assign(requires_names.begin(), requires_names.end());
+    }
     return spec;
 }
 
@@ -208,14 +242,14 @@ void collect_schema_into(std::string_view prefix, const ArgParserConfig& config,
                   "argparser requires a reflected options type");
 
     Reflect<std::remove_cvref_t<T>>::forEachMeta(
-        [&]<typename FieldT>(std::type_identity<FieldT>, std::string_view reflectedName, const auto& tags) {
-            const auto explicitLongName = tag_query::get<tag_property::long_name>(tags);
-            const auto name             = explicitLongName.empty() ? reflectedName : explicitLongName;
+        [&]<typename FieldT>(std::type_identity<FieldT>, std::string_view reflected_name, const auto& tags) {
+            const auto explicit_long_name = tag_query::get<tag_property::long_name>(tags);
+            const auto name               = explicit_long_name.empty() ? reflected_name : explicit_long_name;
 
             if constexpr (is_nested_option_v<FieldT>) {
                 collect_schema_into<FieldT>(join_arg_name(prefix, name, config.nestedSeparator), config, schema);
             } else {
-                schema.specs.push_back(make_arg_spec<FieldT>(prefix, reflectedName, tags, config));
+                schema.specs.push_back(make_arg_spec<FieldT>(prefix, reflected_name, tags, config));
                 if (schema.specs.back().positional) {
                     schema.positional_specs.push_back(schema.specs.size() - 1);
                 }

@@ -10,7 +10,7 @@
   - 说明：这是纯序列化单测，不启动 client/server，不依赖 socket。
 - `tests/unit/jsonrpc/test_jsonrpc.cpp`
   - 模块：JSON-RPC client/server/backend 的端到端流程。
-  - 范围：方法绑定、动态调用、内置 rpc 方法、通知、批量调用、嵌套 API 名称、`rpc_no_prefix_tag`。
+  - 范围：方法绑定、动态调用、内置 rpc 方法、通知、批量调用、嵌套 API 名称、`rpc_no_prefix`。
   - 说明：端点使用 `ilias::DuplexStream`，属于纯内存流，避免本地 UDP bind 权限影响单测结果。
 
 ## RPC

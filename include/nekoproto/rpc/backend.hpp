@@ -291,15 +291,15 @@ private:
         std::vector<detail::NekoRpcMethodEntry> entries;
         std::uint64_t id = 0;
         for (const auto& method : methods) {
-            std::string_view description;
-            if constexpr (requires { method.description; }) {
-                description = method.description;
+            std::string_view signature;
+            if constexpr (requires { method.signature; }) {
+                signature = method.signature;
             }
             std::string name{method.name};
             entries.push_back({
                 .id            = id++,
                 .name          = name,
-                .signatureHash = detail::NekoRpcMethodIdTable::signatureHash(name, description),
+                .signatureHash = detail::NekoRpcMethodIdTable::signatureHash(name, signature),
                 .state         = detail::NekoRpcMethodState::Active,
             });
         }
