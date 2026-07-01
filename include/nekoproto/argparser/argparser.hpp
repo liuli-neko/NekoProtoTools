@@ -175,7 +175,9 @@ bool try_parse_command(std::string_view command, int argc, const char* const* ar
                 error = make_error_code(ArgParserError::VersionRequested);
                 return true;
             }
-            error = make_error_code(ArgParserError::UnexpectedPositional);
+            error = make_argparser_error(ArgParserError::UnexpectedPositional,
+                                         "command " + quote_arg_value(command) + " does not accept " +
+                                             quote_arg_value(arg));
             return true;
         }
         result.template emplace<I>();
@@ -194,7 +196,7 @@ template <typename T>
 expected::expected<parser_result_t<T>, std::error_code> parse_command_set(int argc, const char* const* argv,
                                                                           const ArgParserConfig& config) {
     if (argc <= 1 || argv == nullptr || argv[1] == nullptr) {
-        return unexpected_error(make_error_code(ArgParserError::MissingRequired));
+        return unexpected_error(make_argparser_error(ArgParserError::MissingRequired, "command name is required"));
     }
     std::string_view command = argv[1];
     if (config.addHelp && is_help_token(command)) {
@@ -216,7 +218,7 @@ expected::expected<parser_result_t<T>, std::error_code> parse_command_set(int ar
           error);
 
     if (!matched) {
-        return unexpected_error(make_error_code(ArgParserError::UnknownCommand));
+        return unexpected_error(make_argparser_error(ArgParserError::UnknownCommand, quote_arg_value(command)));
     }
     if (error) {
         return unexpected_error(error);
@@ -355,6 +357,7 @@ expected::expected<detail::parser_result_t<T>, std::error_code> parser(int argc,
                                                                        ArgParserConfig config = {}) {
     static_assert(std::is_default_constructible_v<T>, "argparser requires a default constructible options type");
     detail::static_check_parser_definition<T>();
+    detail::clear_argparser_error_detail();
 
     if (config.programName.empty() && argc > 0 && argv != nullptr && argv[0] != nullptr) {
         config.programName = argv[0];

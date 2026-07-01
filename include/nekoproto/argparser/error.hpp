@@ -2,7 +2,10 @@
 
 #include "nekoproto/global/global.hpp"
 
+#include <string>
+#include <string_view>
 #include <system_error>
+#include <utility>
 
 NEKO_BEGIN_NAMESPACE
 namespace argparser {
@@ -21,39 +24,75 @@ enum class ArgParserError {
 };
 
 namespace detail {
+struct ArgParserErrorDetail {
+    ArgParserError error = ArgParserError::Success;
+    std::string message;
+};
+
+inline ArgParserErrorDetail& current_argparser_error_detail() {
+    static thread_local ArgParserErrorDetail detail;
+    return detail;
+}
+
+inline void clear_argparser_error_detail() { current_argparser_error_detail() = {}; }
+
+inline std::string argparser_error_message(ArgParserError error) {
+    switch (error) {
+    case ArgParserError::Success:
+        return "success";
+    case ArgParserError::UnknownOption:
+        return "unknown option";
+    case ArgParserError::MissingValue:
+        return "missing option value";
+    case ArgParserError::InvalidValue:
+        return "invalid option value";
+    case ArgParserError::MissingRequired:
+        return "missing required option";
+    case ArgParserError::UnexpectedPositional:
+        return "unexpected positional argument";
+    case ArgParserError::InvalidDefinition:
+        return "invalid argument definition";
+    case ArgParserError::HelpRequested:
+        return "help requested";
+    case ArgParserError::UnknownCommand:
+        return "unknown command";
+    case ArgParserError::VersionRequested:
+        return "version requested";
+    }
+    return "unknown argparser error";
+}
+
 class ArgParserErrorCategory final : public std::error_category {
 public:
     [[nodiscard]] const char* name() const noexcept override { return "nekoproto.argparser"; }
     [[nodiscard]] std::string message(int condition) const override {
-        switch (static_cast<ArgParserError>(condition)) {
-        case ArgParserError::Success:
-            return "success";
-        case ArgParserError::UnknownOption:
-            return "unknown option";
-        case ArgParserError::MissingValue:
-            return "missing option value";
-        case ArgParserError::InvalidValue:
-            return "invalid option value";
-        case ArgParserError::MissingRequired:
-            return "missing required option";
-        case ArgParserError::UnexpectedPositional:
-            return "unexpected positional argument";
-        case ArgParserError::InvalidDefinition:
-            return "invalid argument definition";
-        case ArgParserError::HelpRequested:
-            return "help requested";
-        case ArgParserError::UnknownCommand:
-            return "unknown command";
-        case ArgParserError::VersionRequested:
-            return "version requested";
+        const auto error = static_cast<ArgParserError>(condition);
+        auto message     = argparser_error_message(error);
+        const auto& detail = current_argparser_error_detail();
+        if (detail.error == error && !detail.message.empty()) {
+            message.append(": ");
+            message.append(detail.message);
         }
-        return "unknown argparser error";
+        return message;
     }
 };
 
 inline const std::error_category& argparser_error_category() {
     static ArgParserErrorCategory s_category;
     return s_category;
+}
+
+inline std::error_code make_argparser_error(ArgParserError error, std::string detail) {
+    current_argparser_error_detail() = {.error = error, .message = std::move(detail)};
+    return {static_cast<int>(error), argparser_error_category()};
+}
+
+inline std::error_code make_argparser_error(ArgParserError error, std::string_view detail) {
+    return make_argparser_error(error, std::string(detail));
+}
+
+inline std::error_code make_argparser_error(ArgParserError error, const char* detail) {
+    return make_argparser_error(error, std::string(detail == nullptr ? "" : detail));
 }
 } // namespace detail
 } // namespace argparser

@@ -9,6 +9,7 @@
 #include <cctype>
 #include <charconv>
 #include <cstdlib>
+#include <sstream>
 #include <optional>
 #include <span>
 #include <string>
@@ -59,6 +60,44 @@ inline void notify_deprecated_option(const ArgSpec& spec, const ArgParserConfig&
     if (spec.deprecated && config.deprecatedOptionHandler) {
         config.deprecatedOptionHandler(spec.long_name, spec.deprecated_message);
     }
+}
+
+inline std::string describe_value_source(std::string_view source, std::string_view value) {
+    std::string result(source.empty() ? "value" : source);
+    result.push_back(' ');
+    result.append(quote_arg_value(value));
+    return result;
+}
+
+inline std::string format_validation_expectation(const ArgSpec& spec) {
+    std::string result;
+    if (spec.has_range) {
+        std::ostringstream stream;
+        stream << "expected range [" << spec.range_min << ", " << spec.range_max << ")";
+        result = stream.str();
+    }
+    if (!spec.choices.empty()) {
+        if (!result.empty()) {
+            result.append("; ");
+        }
+        result.append("expected one of {");
+        for (std::size_t idx = 0; idx < spec.choices.size(); ++idx) {
+            if (idx != 0) {
+                result.append(", ");
+            }
+            result.append(spec.choices[idx]);
+        }
+        result.push_back('}');
+    }
+    return result;
+}
+
+inline std::error_code contextual_argparser_error(std::error_code error, const ArgSpec& spec, std::string detail) {
+    if (!error || error.category() != argparser_error_category()) {
+        return error;
+    }
+    return make_argparser_error(static_cast<ArgParserError>(error.value()),
+                                format_error_option_label(spec) + ": " + std::move(detail));
 }
 
 inline std::error_code parse_bool(std::string_view text, bool& value) {
@@ -309,12 +348,22 @@ std::error_code validate_field_value(const FieldT& field, const ArgSpec& spec) {
 }
 
 template <typename FieldT>
-std::error_code assign_text_to_field(const ArgSpec& spec, FieldT& field, std::string_view value) {
+std::error_code assign_text_to_field(const ArgSpec& spec, FieldT& field, std::string_view value,
+                                     std::string_view source = {}) {
     const auto case_insensitive_enum = spec.case_insensitive_choices && !spec.choices.empty();
     if (auto error = assign_text_value(value, spec.separator, field, case_insensitive_enum)) {
-        return error;
+        return contextual_argparser_error(error, spec, "failed to parse " + describe_value_source(source, value));
     }
-    return validate_field_value(field, spec);
+    if (auto error = validate_field_value(field, spec)) {
+        auto detail = describe_value_source(source, value);
+        detail.append(" failed validation");
+        if (auto expectation = format_validation_expectation(spec); !expectation.empty()) {
+            detail.append("; ");
+            detail.append(expectation);
+        }
+        return contextual_argparser_error(error, spec, std::move(detail));
+    }
+    return {};
 }
 
 template <typename FieldT, typename Tags>
@@ -323,9 +372,18 @@ std::error_code assign_default_to_field(const ArgSpec& spec, FieldT& field, cons
         const auto case_insensitive_enum = spec.case_insensitive_choices && !spec.choices.empty();
         if (auto error =
                 assign_default_value(tag_query::get<tag_property::default_value>(tags), field, spec.separator, case_insensitive_enum)) {
-            return error;
+            return contextual_argparser_error(error, spec,
+                                              "failed to apply default " + quote_arg_value(spec.default_value));
         }
-        return validate_field_value(field, spec);
+        if (auto error = validate_field_value(field, spec)) {
+            auto detail = "default " + quote_arg_value(spec.default_value) + " failed validation";
+            if (auto expectation = format_validation_expectation(spec); !expectation.empty()) {
+                detail.append("; ");
+                detail.append(expectation);
+            }
+            return contextual_argparser_error(error, spec, std::move(detail));
+        }
+        return {};
     } else {
         static_cast<void>(spec);
         static_cast<void>(field);
@@ -338,12 +396,12 @@ template <typename FieldT, typename Tags>
 std::error_code materialize_one_option(const ArgSpec& spec, const RawOptionValues& raw, FieldT& field, const Tags& tags,
                                        const ArgParserConfig& config, bool& supplied) {
     if (auto error = validate_field_definition<std::remove_cvref_t<FieldT>>(spec)) {
-        return error;
+        return contextual_argparser_error(error, spec, "invalid option definition");
     }
 
     if (raw.seen()) {
         for (const auto& value : raw.values) {
-            if (auto error = assign_text_to_field(spec, field, value)) {
+            if (auto error = assign_text_to_field(spec, field, value, "value")) {
                 return error;
             }
             notify_deprecated_option(spec, config);
@@ -353,7 +411,8 @@ std::error_code materialize_one_option(const ArgSpec& spec, const RawOptionValue
     }
 
     if (const auto envValue = read_env(spec.env_name); envValue) {
-        if (auto error = assign_text_to_field(spec, field, *envValue)) {
+        const auto source = spec.env_name.empty() ? std::string_view{"env value"} : std::string_view{spec.env_name};
+        if (auto error = assign_text_to_field(spec, field, *envValue, source)) {
             return error;
         }
         supplied = true;
@@ -372,7 +431,8 @@ std::error_code materialize_one_option(const ArgSpec& spec, const RawOptionValue
 inline std::error_code validate_required_options(const ArgSchema& schema, std::span<const unsigned char> supplied) {
     for (std::size_t index = 0; index < schema.specs.size(); ++index) {
         if (schema.specs[index].required && (supplied[index] == 0U)) {
-            return make_error_code(ArgParserError::MissingRequired);
+            return make_argparser_error(ArgParserError::MissingRequired,
+                                        format_error_option_label(schema.specs[index]) + " is required");
         }
     }
     return {};
@@ -388,19 +448,27 @@ inline std::error_code validate_cross_field_constraints(const ArgSchema& schema,
         for (const auto requiredName : spec.requires_names) {
             const auto requiredIndex = schema.find_reference_index(requiredName);
             if (!requiredIndex.has_value() || *requiredIndex == index) {
-                return make_error_code(ArgParserError::InvalidDefinition);
+                return make_argparser_error(ArgParserError::InvalidDefinition,
+                                            format_error_option_label(spec) + " references unknown requirement " +
+                                                quote_arg_value(requiredName));
             }
             if (supplied[*requiredIndex] == 0U) {
-                return make_error_code(ArgParserError::MissingRequired);
+                return make_argparser_error(ArgParserError::MissingRequired,
+                                            format_error_option_label(spec) + " requires " +
+                                                format_error_option_label(schema.specs[*requiredIndex]));
             }
         }
         for (const auto conflictName : spec.conflicts) {
             const auto conflictIndex = schema.find_reference_index(conflictName);
             if (!conflictIndex.has_value() || *conflictIndex == index) {
-                return make_error_code(ArgParserError::InvalidDefinition);
+                return make_argparser_error(ArgParserError::InvalidDefinition,
+                                            format_error_option_label(spec) + " references unknown conflict " +
+                                                quote_arg_value(conflictName));
             }
             if (supplied[*conflictIndex] != 0U) {
-                return make_error_code(ArgParserError::InvalidValue);
+                return make_argparser_error(ArgParserError::InvalidValue,
+                                            format_error_option_label(spec) + " conflicts with " +
+                                                format_error_option_label(schema.specs[*conflictIndex]));
             }
         }
     }
@@ -425,7 +493,9 @@ std::error_code materialize_fields(T& object, const ArgSchema& schema, const Raw
                 }
             } else {
                 if (spec_index >= schema.specs.size() || spec_index >= raw.options.size()) {
-                    result = make_error_code(ArgParserError::InvalidDefinition);
+                    result = make_argparser_error(ArgParserError::InvalidDefinition,
+                                                  "schema index is out of range while materializing field " +
+                                                      quote_arg_value(reflectedName));
                     return;
                 }
                 bool optionSupplied = false;
@@ -445,7 +515,7 @@ template <typename T>
 std::error_code materialize_options_into(T& object, const ArgSchema& schema, const RawParseResult& raw,
                                          const ArgParserConfig& config) {
     if (schema.specs.size() != raw.options.size()) {
-        return make_error_code(ArgParserError::InvalidDefinition);
+        return make_argparser_error(ArgParserError::InvalidDefinition, "schema and raw option counts differ");
     }
 
     PresenceList supplied(schema.specs.size(), 0);
@@ -454,7 +524,7 @@ std::error_code materialize_options_into(T& object, const ArgSchema& schema, con
         return error;
     }
     if (spec_index != schema.specs.size()) {
-        return make_error_code(ArgParserError::InvalidDefinition);
+        return make_argparser_error(ArgParserError::InvalidDefinition, "not all schema fields were materialized");
     }
     if (auto error =
             validate_required_options(schema, std::span<const unsigned char>{supplied.data(), supplied.size()})) {

@@ -125,6 +125,32 @@ inline std::string join_arg_name(std::string_view prefix, std::string_view name,
     return result;
 }
 
+inline std::string quote_arg_value(std::string_view value) {
+    std::string result = "'";
+    result.append(value);
+    result.push_back('\'');
+    return result;
+}
+
+inline std::string format_error_option_label(const ArgSpec& spec) {
+    std::string result;
+    if (spec.positional) {
+        result = "positional '";
+        result.append(spec.long_name);
+        result.push_back('\'');
+        return result;
+    }
+
+    result = "--";
+    result.append(spec.long_name);
+    if (!spec.short_name.empty()) {
+        result.append(" (-");
+        result.append(spec.short_name);
+        result.push_back(')');
+    }
+    return result;
+}
+
 template <typename T>
 constexpr bool field_type_is_flag(bool tagged_flag) {
     return tagged_flag || std::is_same_v<std::remove_cvref_t<T>, bool>;

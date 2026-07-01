@@ -79,11 +79,14 @@ inline bool looks_like_option_boundary_for_implicit(std::string_view token, cons
 inline std::error_code record_raw_value(const ArgSchema& schema, RawParseResult& result, std::size_t spec_index,
                                         std::string_view value) {
     if (spec_index >= schema.specs.size() || spec_index >= result.options.size()) {
-        return make_error_code(ArgParserError::InvalidDefinition);
+        return make_argparser_error(ArgParserError::InvalidDefinition, "schema index is out of range while reading " +
+                                                                                quote_arg_value(value));
     }
     const auto& spec = schema.specs[spec_index];
     if (!spec.repeatable && spec.positional && result.options[spec_index].seen()) {
-        return make_error_code(ArgParserError::UnexpectedPositional);
+        return make_argparser_error(ArgParserError::UnexpectedPositional,
+                                    format_error_option_label(spec) + " received more than one value; extra value " +
+                                        quote_arg_value(value));
     }
     result.options[spec_index].values.emplace_back(value);
     return {};
@@ -92,7 +95,8 @@ inline std::error_code record_raw_value(const ArgSchema& schema, RawParseResult&
 inline std::error_code record_raw_positional(const ArgSchema& schema, RawParseResult& result,
                                              std::size_t& positional_index, std::string_view value) {
     if (positional_index >= schema.positional_specs.size()) {
-        return make_error_code(ArgParserError::UnexpectedPositional);
+        return make_argparser_error(ArgParserError::UnexpectedPositional,
+                                    "no positional field accepts " + quote_arg_value(value));
     }
     const auto spec_index = schema.positional_specs[positional_index];
     if (auto error = record_raw_value(schema, result, spec_index, value)) {
@@ -120,7 +124,8 @@ inline std::error_code record_raw_option(const ArgSchema& schema, RawParseResult
     if (spec.has_implicit) {
         return record_raw_value(schema, result, spec_index, spec.implicit_value);
     }
-    return make_error_code(ArgParserError::MissingValue);
+    return make_argparser_error(ArgParserError::MissingValue,
+                                format_error_option_label(spec) + " expects a value");
 }
 
 inline expected::expected<RawParseResult, std::error_code> parse_raw_arguments(const ArgSchema& schema, int argc,
@@ -166,7 +171,8 @@ inline expected::expected<RawParseResult, std::error_code> parse_raw_arguments(c
                 if (config.allowUnknown) {
                     continue;
                 }
-                return unexpected_error(make_error_code(ArgParserError::UnknownOption));
+                return unexpected_error(
+                    make_argparser_error(ArgParserError::UnknownOption, "--" + std::string(body)));
             }
             if (auto error =
                     record_raw_option(schema, result, *spec_index, argc, argv, idx, value, value_inline, config)) {
@@ -202,10 +208,14 @@ inline expected::expected<RawParseResult, std::error_code> parse_raw_arguments(c
                         if (config.allowUnknown) {
                             continue;
                         }
-                        return unexpected_error(make_error_code(ArgParserError::UnknownOption));
+                        return unexpected_error(
+                            make_argparser_error(ArgParserError::UnknownOption, "-" + std::string(short_name)));
                     }
                     if (!schema.specs[*spec_index].flag) {
-                        return unexpected_error(make_error_code(ArgParserError::MissingValue));
+                        return unexpected_error(make_argparser_error(
+                            ArgParserError::MissingValue,
+                            format_error_option_label(schema.specs[*spec_index]) + " in cluster " +
+                                quote_arg_value(arg) + " expects a value"));
                     }
                     if (auto error = record_raw_value(schema, result, *spec_index, {})) {
                         return unexpected_error(error);
@@ -227,7 +237,7 @@ inline expected::expected<RawParseResult, std::error_code> parse_raw_arguments(c
                 if (config.allowUnknown) {
                     continue;
                 }
-                return unexpected_error(make_error_code(ArgParserError::UnknownOption));
+                return unexpected_error(make_argparser_error(ArgParserError::UnknownOption, "-" + std::string(body)));
             }
             if (auto error =
                     record_raw_option(schema, result, *spec_index, argc, argv, idx, value, value_inline, config)) {
