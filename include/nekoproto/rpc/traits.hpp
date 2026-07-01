@@ -2,6 +2,7 @@
 
 #include <array>
 #include <concepts>
+#include <cstddef>
 #include <functional>
 #include <ilias/task.hpp>
 #include <optional>
@@ -34,151 +35,136 @@ namespace traits {
 
 template <typename T, class enable = void>
 struct TypeName {
-    static std::string name() { return std::string(NEKO_NAMESPACE::detail::class_nameof<T>); }
+    using RawType = std::remove_cvref_t<T>;
+
+    static std::string name() {
+        if constexpr (!std::is_same_v<T, RawType>) {
+            return TypeName<RawType>::name();
+        } else if constexpr (std::is_void_v<RawType>) {
+            return "void";
+        } else if constexpr (std::is_same_v<RawType, bool>) {
+            return "bool";
+        } else if constexpr (std::is_same_v<RawType, std::nullptr_t>) {
+            return "null";
+        } else if constexpr (std::is_same_v<RawType, std::byte>) {
+            return "byte";
+        } else if constexpr (std::is_same_v<RawType, std::string> || std::is_same_v<RawType, std::string_view>) {
+            return "string";
+        } else if constexpr (std::is_same_v<RawType, std::u8string>) {
+            return "u8string";
+        } else if constexpr (std::is_same_v<RawType, std::u16string>) {
+            return "u16string";
+        } else if constexpr (std::is_same_v<RawType, std::u32string>) {
+            return "u32string";
+        } else if constexpr (std::is_integral_v<RawType>) {
+            std::string result;
+            result += std::is_signed_v<RawType> ? "i" : "u";
+            result += std::to_string(sizeof(RawType) * 8U);
+            return result;
+        } else if constexpr (std::is_floating_point_v<RawType>) {
+            return "f" + std::to_string(sizeof(RawType) * 8U);
+        } else if constexpr (std::is_pointer_v<RawType>) {
+            std::string result = "ptr<";
+            result += TypeName<std::remove_pointer_t<RawType>>::name();
+            result += ">";
+            return result;
+        } else if constexpr (std::is_enum_v<RawType>) {
+            std::string result = "enum<";
+            result += NEKO_NAMESPACE::detail::class_nameof<RawType>;
+            result += ">";
+            return result;
+        } else {
+            std::string result = "object<";
+            result += NEKO_NAMESPACE::detail::class_nameof<RawType>;
+            result += ">";
+            return result;
+        }
+    }
 };
 
-template <ConstexprString... ArgNames>
-struct ArgNamesHelper {};
-
-template <typename RawParamsType, std::size_t... Is, ConstexprString... ArgNames>
-constexpr auto parameter_to_string(std::index_sequence<Is...> /*unused*/, ArgNamesHelper<ArgNames...> /*unused*/ = {})
+template <typename RawParamsType, std::size_t... Is>
+constexpr auto parameter_to_string(std::index_sequence<Is...> /*unused*/,
+                                   const std::vector<std::string>& names = {})
     -> std::string {
     if constexpr (sizeof...(Is) == 0) {
         return "";
     }
     std::string result;
-    auto appendParam = [&](auto idx) {
+    auto append_param = [&](auto idx) {
         constexpr size_t Idx = idx;
-        using ParamType      = std::tuple_element_t<Idx, RawParamsType>;
+        using param_type     = std::tuple_element_t<Idx, RawParamsType>;
 
-        if constexpr (sizeof...(ArgNames) == sizeof...(Is)) {
-            constexpr std::array<std::string_view, sizeof...(Is)> CArgNames = {ArgNames.view()...};
-            result += TypeName<ParamType>::name() + " " + std::string(CArgNames[Idx]);
+        if (names.size() == sizeof...(Is)) {
+            result += TypeName<param_type>::name() + " " + std::string(names[Idx]);
         } else {
-            result += TypeName<ParamType>::name();
+            result += TypeName<param_type>::name();
         }
 
         if constexpr (Idx < sizeof...(Is) - 1) {
             result += ", ";
         }
     };
-    (appendParam(std::integral_constant<size_t, Is>{}), ...);
+    (append_param(std::integral_constant<size_t, Is>{}), ...);
     return result;
 };
 
-template <>
-struct TypeName<void, void> {
-    static std::string name() { return "void"; }
-};
 template <typename T>
 struct TypeName<std::optional<T>, void> {
-    static std::string name() { return std::format("std::optional<{}>", TypeName<T>::name()); }
+    static std::string name() {
+        std::string result = "optional<";
+        result += TypeName<T>::name();
+        result += ">";
+        return result;
+    }
 };
 template <typename... Args>
 struct TypeName<std::variant<Args...>, void> {
     static std::string name() {
-        return std::format("std::variant<{}>",
-                           parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}));
+        std::string result = "variant<";
+        result += parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{});
+        result += ">";
+        return result;
     }
 };
 template <typename T, std::size_t N>
 struct TypeName<std::array<T, N>, void> {
-    static std::string name() { return std::format("std::array<{}, {}>", TypeName<T>::name(), N); }
+    static std::string name() {
+        std::string result = "array<";
+        result += TypeName<T>::name();
+        result += ", ";
+        result += std::to_string(N);
+        result += ">";
+        return result;
+    }
 };
 template <typename... Args>
 struct TypeName<std::tuple<Args...>, void> {
     static std::string name() {
-        return std::format("std::tuple<{}>",
-                           parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{}));
+        std::string result = "tuple<";
+        result += parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{});
+        result += ">";
+        return result;
     }
 };
 template <typename T, typename T2>
 struct TypeName<std::pair<T, T2>, void> {
-    static std::string name() { return std::format("std::pair<{}, {}>", TypeName<T>::name(), TypeName<T2>::name()); }
+    static std::string name() {
+        std::string result = "pair<";
+        result += TypeName<T>::name();
+        result += ", ";
+        result += TypeName<T2>::name();
+        result += ">";
+        return result;
+    }
 };
 template <typename T>
 struct TypeName<std::vector<T>, void> {
-    static std::string name() { return std::format("std::vector<{}>", TypeName<T>::name()); }
-};
-template <>
-struct TypeName<std::string, void> {
-    static std::string name() { return "std::string"; }
-};
-template <>
-struct TypeName<std::u8string, void> {
-    static std::string name() { return "std::u8string"; }
-};
-template <>
-struct TypeName<std::u16string, void> {
-    static std::string name() { return "std::u16string"; }
-};
-template <>
-struct TypeName<std::u32string, void> {
-    static std::string name() { return "std::u32string"; }
-};
-template <>
-struct TypeName<std::byte, void> {
-    static std::string name() { return "std::byte"; }
-};
-template <>
-struct TypeName<std::nullptr_t, void> {
-    static std::string name() { return "std::nullptr_t"; }
-};
-template <>
-struct TypeName<bool, void> {
-    static std::string name() { return "bool"; }
-};
-template <>
-struct TypeName<int, void> {
-    static std::string name() { return "int"; }
-};
-template <>
-struct TypeName<unsigned int, void> {
-    static std::string name() { return "unsigned int"; }
-};
-template <>
-struct TypeName<long, void> {
-    static std::string name() { return "long"; }
-};
-template <>
-struct TypeName<unsigned long, void> {
-    static std::string name() { return "unsigned long"; }
-};
-template <>
-struct TypeName<long long, void> {
-    static std::string name() { return "long long"; }
-};
-template <>
-struct TypeName<unsigned long long, void> {
-    static std::string name() { return "unsigned long long"; }
-};
-template <>
-struct TypeName<float, void> {
-    static std::string name() { return "float"; }
-};
-template <>
-struct TypeName<double, void> {
-    static std::string name() { return "double"; }
-};
-template <typename T>
-struct TypeName<T*, void> {
-    static std::string name() { return TypeName<T>::name() + "*"; }
-};
-template <typename T>
-struct TypeName<T&, void> {
-    static std::string name() { return TypeName<T>::name() + "&"; }
-};
-template <typename T>
-struct TypeName<const T&, void> {
-    static std::string name() { return std::format("const {}&", TypeName<T>::name()); }
-};
-template <typename T>
-struct TypeName<T&&, void> {
-    static std::string name() { return std::format("{}&&", TypeName<T>::name()); }
-};
-template <typename T>
-struct TypeName<const T, void> {
-    static std::string name() { return "const " + TypeName<T>::name(); }
+    static std::string name() {
+        std::string result = "array<";
+        result += TypeName<T>::name();
+        result += ">";
+        return result;
+    }
 };
 
 #if __cpp_lib_move_only_function >= 202110L

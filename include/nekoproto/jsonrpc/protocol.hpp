@@ -8,14 +8,8 @@
 #include "nekoproto/jsonrpc/jsonrpc_traits.hpp"
 #include "nekoproto/rpc/method.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
-#include "nekoproto/serialization/parsing/basic.hpp"
-#include "nekoproto/serialization/parsing/map.hpp"
-#include "nekoproto/serialization/parsing/pointer.hpp"
 #include "nekoproto/serialization/parsing/reflection.hpp"
-#include "nekoproto/serialization/parsing/sequence.hpp"
-#include "nekoproto/serialization/parsing/tuple.hpp"
-#include "nekoproto/serialization/parsing/utility.hpp"
-#include "nekoproto/serialization/parsing/variant.hpp"
+#include "nekoproto/serialization/parsing/parsers.hpp"
 
 NEKO_BEGIN_NAMESPACE
 namespace detail {
@@ -23,14 +17,10 @@ namespace detail {
 using JsonRpcIdType         = std::variant<std::monostate, uint64_t, std::string>;
 using JsonRpcResponseValues = std::vector<JsonSerializer::JsonValue>;
 
-template <typename MethodTraits, ConstexprString... ArgNames>
+template <typename MethodTraits>
 struct JsonRpcRequest2 {
     using JsonTraits      = JsonRpcMethodTraits<MethodTraits>;
     using ParamsTupleType = typename JsonTraits::ParamsTupleType;
-    static_assert(sizeof...(ArgNames) == 0 || JsonTraits::NumParams == sizeof...(ArgNames),
-                  "JsonRpcRequest2: The number of parameters and names do not match.");
-    static_assert((is_std_tuple_v<ParamsTupleType> ? true : (sizeof...(ArgNames) == 0)),
-                  "JsonRpcRequest2: ParamsTupleType must be tuple if argnames > 0 and not tuple if argnames == 0.");
 
     std::optional<std::string> jsonrpc = "2.0";
     std::string method;
@@ -40,25 +30,34 @@ struct JsonRpcRequest2 {
     NEKO_SERIALIZER(jsonrpc, method, params, id)
 };
 
-template <typename T, ConstexprString... ArgNames>
-struct disable_reflect_parser<JsonRpcSerializerHelperObject<T, ArgNames...>> : std::true_type {};
+template <typename T>
+struct JsonRpcRequestWithContext {
+    T& request;
+    JsonRpcMethodContext context{};
+};
 
-template <typename MethodTraits, ConstexprString... ArgNames>
-struct disable_reflect_parser<JsonRpcRequest2<MethodTraits, ArgNames...>> : std::true_type {};
+template <typename T>
+struct disable_reflect_parser<JsonRpcSerializerHelperObject<T>> : std::true_type {};
 
-template <typename W, typename T, ConstexprString... ArgNames>
-struct WriteParser<W, JsonRpcSerializerHelperObject<T, ArgNames...>, void> {
-    using Helper = JsonRpcSerializerHelperObject<T, ArgNames...>;
+template <typename MethodTraits>
+struct disable_reflect_parser<JsonRpcRequest2<MethodTraits>> : std::true_type {};
+
+template <typename T>
+struct disable_reflect_parser<JsonRpcRequestWithContext<T>> : std::true_type {};
+
+template <typename W, typename T>
+struct WriteParser<W, JsonRpcSerializerHelperObject<T>, void> {
+    using Helper = JsonRpcSerializerHelperObject<T>;
+    using Tuple  = std::decay_t<T>;
 
     template <std::size_t... Is>
     static ParserResult writeObject(W& writer, typename W::OutputObjectType& object, const Helper& value,
                                     std::index_sequence<Is...>) {
-        constexpr std::array<std::string_view, sizeof...(ArgNames)> argNames = {ArgNames.view()...};
         ParserResult result;
         const auto writeField = [&]<std::size_t I>() {
             if (result) {
-                result =
-                    parser_write_reflect_field<W>(writer, object, std::get<I>(value.mTuple), argNames[I], NoTags{});
+                result = parser_write_reflect_field<W>(writer, object, std::get<I>(value.mTuple),
+                                                       value.context.argNames[I], NoTags{});
             }
         };
         (writeField.template operator()<Is>(), ...);
@@ -67,26 +66,35 @@ struct WriteParser<W, JsonRpcSerializerHelperObject<T, ArgNames...>, void> {
 
     template <typename ParentType, typename Tags>
     static ParserResult write(W& writer, const Helper& value, const ParentType& parent, const Tags& tags) {
-        if constexpr (sizeof...(ArgNames) > 0) {
-            auto object = parsing::Parent<W>::addObject(writer, sizeof...(ArgNames), parent);
-            return writeObject(writer, object, value, std::make_index_sequence<sizeof...(ArgNames)>{});
-        } else {
-            return parser_write<W>(writer, value.mTuple, parent, tags);
+        if constexpr (is_std_tuple_v<Tuple>) {
+            constexpr auto tupleSize = std::tuple_size_v<Tuple>;
+            if (!value.context.argNames.empty()) {
+                if (value.context.argNames.size() != tupleSize) {
+                    return parser_error(sa::ErrorCode::InvalidLength,
+                                        "Named JSON-RPC params count does not match tuple size");
+                }
+                auto object = parsing::Parent<W>::addObject(writer, value.context.argNames.size(), parent);
+                return writeObject(writer, object, value, std::make_index_sequence<tupleSize>{});
+            }
+        } else if (!value.context.argNames.empty()) {
+            return parser_error(sa::ErrorCode::InvalidType, "Named JSON-RPC params require tuple parameters");
         }
+        return parser_write<W>(writer, value.mTuple, parent, tags);
     }
 };
 
-template <typename R, typename T, ConstexprString... ArgNames>
-struct ReadParser<R, JsonRpcSerializerHelperObject<T, ArgNames...>, void> {
-    using Helper = JsonRpcSerializerHelperObject<T, ArgNames...>;
+template <typename R, typename T>
+struct ReadParser<R, JsonRpcSerializerHelperObject<T>, void> {
+    using Helper = JsonRpcSerializerHelperObject<T>;
+    using Tuple  = std::decay_t<T>;
 
     template <std::size_t... Is>
     static ParserResult readObject(typename R::InputValueType in, Helper& value, std::index_sequence<Is...>) {
-        constexpr std::array<std::string_view, sizeof...(ArgNames)> argNames = {ArgNames.view()...};
         ParserResult result;
         const auto readField = [&]<std::size_t I>() {
             if (result) {
-                result = parser_read_reflect_field<R>(in, std::get<I>(value.mTuple), argNames[I], NoTags{});
+                result =
+                    parser_read_reflect_field<R>(in, std::get<I>(value.mTuple), value.context.argNames[I], NoTags{});
             }
         };
         (readField.template operator()<Is>(), ...);
@@ -95,22 +103,42 @@ struct ReadParser<R, JsonRpcSerializerHelperObject<T, ArgNames...>, void> {
 
     template <typename Tags>
     static ParserResult read(typename R::InputValueType in, Helper& value, const Tags& tags) {
-        if constexpr (sizeof...(ArgNames) > 0) {
-            auto object = R::toObject(in);
-            if (object) {
-                return readObject(in, value, std::make_index_sequence<sizeof...(ArgNames)>{});
+        if constexpr (is_std_tuple_v<Tuple>) {
+            constexpr auto tupleSize = std::tuple_size_v<Tuple>;
+            if (!value.context.argNames.empty()) {
+                if (value.context.argNames.size() != tupleSize) {
+                    return parser_error(sa::ErrorCode::InvalidLength,
+                                        "Named JSON-RPC params count does not match tuple size");
+                }
+                auto object = R::toObject(in);
+                if (object) {
+                    return readObject(in, value, std::make_index_sequence<tupleSize>{});
+                }
             }
+        } else if (!value.context.argNames.empty()) {
+            return parser_error(sa::ErrorCode::InvalidType, "Named JSON-RPC params require tuple parameters");
         }
         return parser_read<R>(in, value.mTuple, tags);
     }
 };
 
-template <typename W, typename MethodTraits, ConstexprString... ArgNames>
-struct WriteParser<W, JsonRpcRequest2<MethodTraits, ArgNames...>, void> {
-    using Request = JsonRpcRequest2<MethodTraits, ArgNames...>;
+template <typename MethodTraits>
+struct JsonRpcNamedParams {
+    static bool provided(const JsonRpcMethodContext& context) noexcept { return !context.argNames.empty(); }
 
-    template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Request& value, const ParentType& parent, const Tags& /*tags*/) {
+    static bool matchesParamsSize(const JsonRpcMethodContext& context) noexcept {
+        return !context.argNames.empty() &&
+               context.argNames.size() == static_cast<std::size_t>(JsonRpcMethodTraits<MethodTraits>::ParamsSize);
+    }
+};
+
+template <typename MethodTraits>
+struct JsonRpcRequestParser {
+    using Request = JsonRpcRequest2<MethodTraits>;
+
+    template <typename W, typename ParentType, typename Tags>
+    static ParserResult write(W& writer, const Request& value, const JsonRpcMethodContext& context,
+                              const ParentType& parent, const Tags& /*tags*/) {
         auto object = parsing::Parent<W>::addObject(writer, 4, parent);
         auto result = parser_write_reflect_field<W>(writer, object, value.jsonrpc, "jsonrpc", NoTags{});
         if (!result) {
@@ -124,23 +152,27 @@ struct WriteParser<W, JsonRpcRequest2<MethodTraits, ArgNames...>, void> {
         if (!result) {
             return result;
         }
-        if constexpr (sizeof...(ArgNames) == 0) {
+        if (JsonRpcNamedParams<MethodTraits>::provided(context)) {
+            if (!JsonRpcNamedParams<MethodTraits>::matchesParamsSize(context)) {
+                return parser_error(sa::ErrorCode::InvalidLength,
+                                    "Named JSON-RPC params count does not match params size");
+            }
+            if constexpr (Request::JsonTraits::ParamsSize > 0 && is_std_tuple_v<typename Request::ParamsTupleType>) {
+                JsonRpcSerializerHelperObject<const typename Request::ParamsTupleType> paramsHelper(value.params,
+                                                                                                     context);
+                result = parser_write_reflect_field<W>(writer, object, paramsHelper, "params", NoTags{});
+            } else {
+                return parser_error(sa::ErrorCode::InvalidType, "Named JSON-RPC params require tuple parameters");
+            }
+        } else {
             result = parser_write_reflect_field<W>(writer, object, value.params, "params", NoTags{});
-        } else if constexpr (Request::JsonTraits::NumParams > 0 && Request::JsonTraits::ParamsSize > 0) {
-            JsonRpcSerializerHelperObject<const typename Request::ParamsTupleType, ArgNames...> paramsHelper(
-                value.params);
-            result = parser_write_reflect_field<W>(writer, object, paramsHelper, "params", NoTags{});
         }
         return result;
     }
-};
 
-template <typename R, typename MethodTraits, ConstexprString... ArgNames>
-struct ReadParser<R, JsonRpcRequest2<MethodTraits, ArgNames...>, void> {
-    using Request = JsonRpcRequest2<MethodTraits, ArgNames...>;
-
-    template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Request& value, const Tags& /*tags*/) {
+    template <typename R, typename Tags>
+    static ParserResult read(typename R::InputValueType in, Request& value, const JsonRpcMethodContext& context,
+                             const Tags& /*tags*/) {
         auto object = R::toObject(in);
         if (!object) {
             return object.error();
@@ -157,17 +189,65 @@ struct ReadParser<R, JsonRpcRequest2<MethodTraits, ArgNames...>, void> {
         if (!result) {
             return result;
         }
-        if constexpr (sizeof...(ArgNames) == 0) {
-            result = parser_read_reflect_field<R>(in, value.params, "params", NoTags{});
+        if (JsonRpcNamedParams<MethodTraits>::provided(context)) {
+            if (!JsonRpcNamedParams<MethodTraits>::matchesParamsSize(context)) {
+                return parser_error(sa::ErrorCode::InvalidLength,
+                                    "Named JSON-RPC params count does not match params size");
+            }
+            if constexpr (Request::JsonTraits::ParamsSize > 0 && is_std_tuple_v<typename Request::ParamsTupleType>) {
+                JsonRpcSerializerHelperObject<typename Request::ParamsTupleType> params_helper(value.params, context);
+                result = parser_read_reflect_field<R>(in, params_helper, "params", NoTags{});
+            } else {
+                return parser_error(sa::ErrorCode::InvalidType, "Named JSON-RPC params require tuple parameters");
+            }
         } else {
-            JsonRpcSerializerHelperObject<typename Request::ParamsTupleType, ArgNames...> paramsHelper(value.params);
-            result = parser_read_reflect_field<R>(in, paramsHelper, "params", NoTags{});
+            result = parser_read_reflect_field<R>(in, value.params, "params", NoTags{});
         }
         if (!result && Request::JsonTraits::IsNullAble &&
             result.error().ec == sa::make_error_code(sa::ErrorCode::InvalidField)) {
             return sa::success();
         }
         return result;
+    }
+};
+
+template <typename W, typename MethodTraits>
+struct WriteParser<W, JsonRpcRequest2<MethodTraits>, void> {
+    using Request = JsonRpcRequest2<MethodTraits>;
+
+    template <typename ParentType, typename Tags>
+    static ParserResult write(W& writer, const Request& value, const ParentType& parent, const Tags& tags) {
+        return JsonRpcRequestParser<MethodTraits>::template write<W>(writer, value, {}, parent, tags);
+    }
+};
+
+template <typename R, typename MethodTraits>
+struct ReadParser<R, JsonRpcRequest2<MethodTraits>, void> {
+    using Request = JsonRpcRequest2<MethodTraits>;
+
+    template <typename Tags>
+    static ParserResult read(typename R::InputValueType in, Request& value, const Tags& tags) {
+        return JsonRpcRequestParser<MethodTraits>::template read<R>(in, value, {}, tags);
+    }
+};
+
+template <typename W, typename MethodTraits>
+struct WriteParser<W, JsonRpcRequestWithContext<JsonRpcRequest2<MethodTraits>>, void> {
+    using Wrapped = JsonRpcRequestWithContext<JsonRpcRequest2<MethodTraits>>;
+
+    template <typename ParentType, typename Tags>
+    static ParserResult write(W& writer, const Wrapped& value, const ParentType& parent, const Tags& tags) {
+        return JsonRpcRequestParser<MethodTraits>::template write<W>(writer, value.request, value.context, parent, tags);
+    }
+};
+
+template <typename R, typename MethodTraits>
+struct ReadParser<R, JsonRpcRequestWithContext<JsonRpcRequest2<MethodTraits>>, void> {
+    using Wrapped = JsonRpcRequestWithContext<JsonRpcRequest2<MethodTraits>>;
+
+    template <typename Tags>
+    static ParserResult read(typename R::InputValueType in, Wrapped& value, const Tags& tags) {
+        return JsonRpcRequestParser<MethodTraits>::template read<R>(in, value.request, value.context, tags);
     }
 };
 

@@ -539,11 +539,11 @@ TEST_F(JsonRpcTest, RpcMethodSpecMergesFieldTagsWithPriority) {
 
     auto methodInfo = client->rpc.getMethodInfo("tag.add").wait();
     ASSERT_TRUE(methodInfo.has_value()) << methodInfo.error().message();
-    EXPECT_EQ(methodInfo.value(), "int tag.add(int left, int right)");
+    EXPECT_EQ(methodInfo.value(), "i32 tag.add(i32 left, i32 right)");
 
     auto metadata = server.methodDatas("tag.add");
     EXPECT_EQ(metadata.description, "tag desc");
-    EXPECT_EQ(metadata.signature, "int tag.add(int left, int right)");
+    EXPECT_EQ(metadata.signature, "i32 tag.add(i32 left, i32 right)");
     EXPECT_EQ(metadata.rpcVersion, "2.0.0");
     ASSERT_EQ(metadata.argNames.size(), 2U);
     EXPECT_EQ(metadata.argNames[0], "left");
@@ -628,11 +628,11 @@ TEST_F(JsonRpcTest, Basic) {
 
     auto methodInfo = client->rpc.getMethodInfo("test1").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "int test1(int num1, int num2)");
+    EXPECT_EQ(methodInfo.value(), "i32 test1(i32 num1, i32 num2)");
 
     methodInfo = client->rpc.getMethodInfo("test2").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "void test2(int num1, int num2)");
+    EXPECT_EQ(methodInfo.value(), "void test2(i32 num1, i32 num2)");
 
     methodInfo = client->rpc.getMethodInfo("test3").wait();
     ASSERT_TRUE(methodInfo.has_value());
@@ -640,35 +640,35 @@ TEST_F(JsonRpcTest, Basic) {
 
     methodInfo = client->rpc.getMethodInfo("test4").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "int test4()");
+    EXPECT_EQ(methodInfo.value(), "i32 test4()");
 
     methodInfo = client->rpc.getMethodInfo("test5").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "std::string test5(std::string, double)");
+    EXPECT_EQ(methodInfo.value(), "string test5(string, f64)");
 
     methodInfo = client->rpc.getMethodInfo("test6").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "std::string test6(std::tuple<int, double, bool>)");
+    EXPECT_EQ(methodInfo.value(), "string test6(tuple<i32, f64, bool>)");
 
     methodInfo = client->rpc.getMethodInfo("test7").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "std::string test7()");
+    EXPECT_EQ(methodInfo.value(), "string test7()");
 
     methodInfo = client->rpc.getMethodInfo("test8").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "int test8(std::nullptr_t)");
+    EXPECT_EQ(methodInfo.value(), "i32 test8(null)");
 
     methodInfo = client->rpc.getMethodInfo("test9").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "std::vector<int> test9(std::vector<bool>)");
+    EXPECT_EQ(methodInfo.value(), "array<i32> test9(array<bool>)");
 
     methodInfo = client->rpc.getMethodInfo("test10").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "Copytest test10(int)");
+    EXPECT_EQ(methodInfo.value(), "object<Copytest> test10(i32)");
 
     methodInfo = client->rpc.getMethodInfo("test11").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "int test11(int aa, int bb)");
+    EXPECT_EQ(methodInfo.value(), "i32 test11(i32 aa, i32 bb)");
 
     auto result = client.callRemote<int>("test11", 1, 2).wait();
     ASSERT_TRUE(result.has_value());

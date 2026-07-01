@@ -3,6 +3,9 @@
  */
 #pragma once
 
+#include <span>
+#include <string>
+
 #include "nekoproto/rpc/traits.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/private/traits.hpp"
@@ -29,16 +32,14 @@ struct IsSerializable<void> : std::true_type {};
 
 namespace detail {
 
-template <typename T, ConstexprString... ArgNames>
+struct JsonRpcMethodContext {
+    std::span<const std::string> argNames{};
+};
+
+template <typename T>
 struct JsonRpcSerializerHelperObject {
     T& mTuple;
-
-    struct Neko {
-        static constexpr std::array<std::string_view, sizeof...(ArgNames)> names = {ArgNames.view()...};
-        static constexpr std::tuple values = []<std::size_t... Is>(std::index_sequence<Is...>) {
-            return std::tuple{([](auto&& self) -> auto& { return std::get<Is>(self.mTuple); })...};
-        }(std::make_index_sequence<sizeof...(ArgNames)>{});
-    };
+    JsonRpcMethodContext context{};
 };
 
 template <typename... Args>

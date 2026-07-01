@@ -2,6 +2,7 @@
 
 #include <ilias/platform.hpp>
 #include <ilias/task/scope.hpp>
+#include <array>
 #include <concepts>
 #include <functional>
 #include <list>
@@ -134,20 +135,21 @@ public:
     auto bindMethod(std::string_view name, traits::FunctionT<RetT(Args...)> func) noexcept -> void {
         static_assert(sizeof...(ArgNames) == 0 || sizeof...(ArgNames) == sizeof...(Args),
                       "bindMethod: The number of parameters and names do not match.");
-        mDispatcher.bindRpcMethod(name, std::move(func), traits::ArgNamesHelper<ArgNames...>{});
+        mDispatcher.bindRpcMethod(name, std::move(func),
+                                  std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...});
         _refreshEndpointMethodTables();
     }
 
     // Function-pointer binding API:
     //   server.bindMethod<&free_function, "lhs", "rhs">();
-    // The method name follows RpcMethodF<Ptr>::MethodName, so it matches the
+    // The method name follows RpcMethodF<Ptr>::method_name, so it matches the
     // static RpcMethodF declaration form used inside protocol structs.
     template <auto Ptr, ConstexprString... ArgNames>
         requires detail::RpcMethodFuncT<Ptr>
     auto bindMethod() noexcept -> void {
-        mDispatcher.bindRpcMethod(detail::RpcMethodF<Ptr, ArgNames...>::MethodName,
+        mDispatcher.bindRpcMethod(detail::func_nameof<Ptr>,
                                   traits::FunctionT<std::remove_pointer_t<decltype(Ptr)>>(Ptr),
-                                  traits::ArgNamesHelper<ArgNames...>{});
+                                  std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...});
         _refreshEndpointMethodTables();
     }
 
@@ -155,7 +157,10 @@ public:
     // shape as the synchronous overload; only the stored callable differs.
     template <ConstexprString... ArgNames, typename RetT, typename... Args>
     auto bindMethod(std::string_view name, traits::FunctionT<ilias::IoTask<RetT>(Args...)> func) noexcept -> void {
-        mDispatcher.bindRpcMethod(name, std::move(func), traits::ArgNamesHelper<ArgNames...>{});
+        static_assert(sizeof...(ArgNames) == 0 || sizeof...(ArgNames) == sizeof...(Args),
+                      "bindMethod: The number of parameters and names do not match.");
+        mDispatcher.bindRpcMethod(name, std::move(func),
+                                  std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...});
         _refreshEndpointMethodTables();
     }
 

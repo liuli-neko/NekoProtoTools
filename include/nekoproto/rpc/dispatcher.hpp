@@ -1,8 +1,9 @@
 #pragma once
 
-#include <ilias/task/group.hpp>
+#include <array>
 #include <ilias/io/system_error.hpp>
 #include <ilias/platform.hpp>
+#include <ilias/task/group.hpp>
 #include <map>
 #include <memory>
 #include <span>
@@ -22,19 +23,19 @@ namespace detail {
 template <RpcBackend Backend>
 class RpcMethodWrapperBase {
 public:
-    RpcMethodWrapperBase()                  = default;
+    RpcMethodWrapperBase()                       = default;
     RpcMethodWrapperBase(RpcMethodWrapperBase&&) = default;
-    virtual ~RpcMethodWrapperBase()         = default;
+    virtual ~RpcMethodWrapperBase()              = default;
 
-    virtual auto call(const typename Backend::DecodedRequest& request, typename Backend::ResponseValues& responses)
-        noexcept -> ilias::Task<void> = 0;
-    virtual auto name() noexcept -> std::string_view         = 0;
-    virtual auto signature() noexcept -> std::string_view    = 0;
-    virtual auto description() noexcept -> std::string_view  = 0;
-    virtual auto rpcVersion() noexcept -> std::string_view   = 0;
-    virtual auto argNames() noexcept -> std::vector<std::string> = 0;
-    virtual auto isNotification() noexcept -> bool           = 0;
-    virtual auto isBind() noexcept -> bool                   = 0;
+    virtual auto call(const typename Backend::DecodedRequest& request,
+                      typename Backend::ResponseValues& responses) noexcept -> ilias::Task<void> = 0;
+    virtual auto name() noexcept -> std::string_view                                             = 0;
+    virtual auto signature() noexcept -> std::string_view                                        = 0;
+    virtual auto description() noexcept -> std::string_view                                      = 0;
+    virtual auto rpcVersion() noexcept -> std::string_view                                       = 0;
+    virtual auto argNames() noexcept -> std::vector<std::string>                                 = 0;
+    virtual auto isNotification() noexcept -> bool                                               = 0;
+    virtual auto isBind() noexcept -> bool                                                       = 0;
 };
 
 template <typename T>
@@ -59,7 +60,8 @@ template <RpcBackend Backend, typename T>
 class RpcMethodWrapperImpl : public RpcMethodWrapperBase<Backend> {
 public:
     using MethodType = typename RpcMethodTypeHelper<T>::MethodType;
-    RpcMethodWrapperImpl(T methodData, RpcDispatcher<Backend>* self) : mMethodData(std::move(methodData)), mSelf(self) {}
+    RpcMethodWrapperImpl(T methodData, RpcDispatcher<Backend>* self)
+        : mMethodData(std::move(methodData)), mSelf(self) {}
 
     auto call(const typename Backend::DecodedRequest& request, typename Backend::ResponseValues& responses) noexcept
         -> ilias::Task<void> override;
@@ -79,7 +81,7 @@ private:
 template <RpcBackend Backend>
 class RpcDispatcher {
 public:
-    using Id = typename Backend::Id;
+    using Id      = typename Backend::Id;
     using Message = typename Backend::Message;
 
     struct MethodData {
@@ -89,7 +91,7 @@ public:
         std::string_view rpcVersion;
         std::vector<std::string> argNames;
         bool isNotification = false;
-        bool isBind = false;
+        bool isBind         = false;
     };
 
     explicit RpcDispatcher([[maybe_unused]] ilias::IoContext& ctx) : mTaskScope() {}
@@ -108,28 +110,29 @@ public:
         mHandlers[name] = std::make_unique<RpcMethodWrapperImpl<Backend, T*>>(&metadata, this);
     }
 
-    template <typename RetT, typename... Args, ConstexprString... ArgNames>
+    template <typename RetT, typename... Args, std::size_t N>
     auto bindRpcMethod(std::string_view name, traits::FunctionT<RetT(Args...)> func,
-                       traits::ArgNamesHelper<ArgNames...> /*unused*/ = {}) noexcept -> void {
-        return _registerRpcMethod<RpcMethodDynamic<RetT(Args...), ArgNames...>>(name, std::move(func));
+                       const std::array<std::string_view, N>& argNames) noexcept -> void {
+        return _registerRpcMethod<RpcMethodDynamic<RetT(Args...)>>(
+            argNames, name, std::move(func));
     }
 
-    template <typename RetT, typename... Args, ConstexprString... ArgNames>
+    template <typename RetT, typename... Args, std::size_t N>
     auto bindRpcMethod(std::string_view name, traits::FunctionT<ilias::IoTask<RetT>(Args...)> func,
-                       traits::ArgNamesHelper<ArgNames...> /*unused*/ = {}) noexcept -> void {
-        _registerRpcMethod<RpcMethodDynamic<RetT(Args...), ArgNames...>>(name, std::move(func));
+                       const std::array<std::string_view, N>& argNames) noexcept -> void {
+        _registerRpcMethod<RpcMethodDynamic<RetT(Args...)>>(argNames, name, std::move(func));
     }
 
     auto methodDatas() noexcept -> std::vector<MethodData> {
         std::vector<MethodData> metas;
         for (auto& [name, handler] : mHandlers) {
-            metas.push_back({.name             = handler->name(),
-                             .signature        = handler->signature(),
-                             .description      = handler->description(),
-                             .rpcVersion       = handler->rpcVersion(),
-                             .argNames         = handler->argNames(),
-                             .isNotification   = handler->isNotification(),
-                             .isBind           = handler->isBind()});
+            metas.push_back({.name           = handler->name(),
+                             .signature      = handler->signature(),
+                             .description    = handler->description(),
+                             .rpcVersion     = handler->rpcVersion(),
+                             .argNames       = handler->argNames(),
+                             .isNotification = handler->isNotification(),
+                             .isBind         = handler->isBind()});
         }
         return metas;
     }
@@ -214,9 +217,10 @@ public:
     auto getCurrentIds() const noexcept -> const std::vector<Id>& { return mCurrentIds; }
 
 private:
-    template <typename T, typename Callable>
-    auto _registerRpcMethod(std::string_view name, traits::FunctionT<Callable> func) noexcept -> void {
-        auto method = std::make_unique<T>(name, std::move(func));
+    template <typename T, size_t N, typename Callable>
+    auto _registerRpcMethod(const std::array<std::string_view, N>& array, std::string_view name,
+                            traits::FunctionT<Callable> func) noexcept -> void {
+        auto method    = std::make_unique<T>(array, name, std::move(func));
         const auto key = std::string(method->name());
         mHandlers[key] = std::make_unique<RpcMethodWrapperImpl<Backend, std::unique_ptr<T>>>(std::move(method), this);
     }
@@ -224,17 +228,22 @@ private:
     template <typename T>
     auto _handle(const typename Backend::DecodedRequest& request, typename Backend::ResponseValues& responses,
                  T& metadata) noexcept -> ilias::Task<void> {
-        auto decodedParams = Backend::template decodeParams<T>(request);
+        auto decodedParams = [&]() {
+            if constexpr (requires { Backend::template decodeParams<T>(request, metadata); }) {
+                return Backend::template decodeParams<T>(request, metadata);
+            } else {
+                return Backend::template decodeParams<T>(request);
+            }
+        }();
         if (!decodedParams) {
             Backend::appendError(responses, request, decodedParams.error());
             co_return;
         }
 
-        auto handle = mTaskScope.spawn([&, this, request, params = std::move(decodedParams.value())]() mutable
-                                           -> ilias::Task<void> {
-            ilias::Result<typename T::RawReturnType, std::error_code> result =
-                ilias::Err(ilias::SystemError::Canceled);
-            auto onfinally = [&]() -> ilias::Task<void> {
+        auto handle = mTaskScope.spawn([&, request,
+                                        params = std::move(decodedParams.value())]() mutable -> ilias::Task<void> {
+            ilias::Result<typename T::RawReturnType, std::error_code> result = ilias::Err(ilias::SystemError::Canceled);
+            auto onfinally                                                   = [&]() -> ilias::Task<void> {
                 Backend::template appendMethodReturn<T>(responses, request, std::move(result));
                 co_return;
             };
