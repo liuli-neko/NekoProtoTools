@@ -2,6 +2,7 @@
 
 #include <ilias/platform.hpp>
 #include <ilias/sync/mutex.hpp>
+#include <array>
 #include <memory>
 #include <span>
 #include <string_view>
@@ -84,9 +85,10 @@ public:
 
     template <typename RetT, ConstexprString... ArgNames, typename... Args>
     auto callRemote(std::string_view name, Args... args) noexcept -> ilias::IoTask<RetT> {
-        using Metadata           = detail::RpcMethodDynamic<RetT(Args...), ArgNames...>;
+        using Metadata           = detail::RpcMethodDynamic<RetT(Args...)>;
         using CoroutinesFuncType = typename Metadata::CoroutinesFuncType;
-        Metadata metadata(name, (CoroutinesFuncType)(nullptr), false);
+        Metadata metadata(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...}, name,
+                          (CoroutinesFuncType)(nullptr), false);
         co_return co_await _callRemote(metadata, std::forward<Args>(args)...);
     }
 
@@ -94,17 +96,19 @@ public:
         requires detail::RpcMethodFuncT<Ptr>
     auto callRemote(Args... args) noexcept
         -> ilias::IoTask<typename traits::function_traits<decltype(Ptr)>::return_type> {
-        using Metadata           = detail::RpcMethodDynamic<decltype(Ptr), ArgNames...>;
+        using Metadata           = detail::RpcMethodDynamic<decltype(Ptr)>;
         using CoroutinesFuncType = typename Metadata::CoroutinesFuncType;
-        Metadata metadata(detail::RpcMethodF<Ptr, ArgNames...>::MethodName, (CoroutinesFuncType)(nullptr), false);
+        Metadata metadata(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
+                          detail::func_nameof<Ptr>, (CoroutinesFuncType)(nullptr), false);
         co_return co_await _callRemote(metadata, std::forward<Args>(args)...);
     }
 
     template <typename RetT, ConstexprString... ArgNames, typename... Args>
     auto notifyRemote(std::string_view name, Args... args) noexcept -> ilias::IoTask<RetT> {
-        using Metadata           = detail::RpcMethodDynamic<RetT(Args...), ArgNames...>;
+        using Metadata           = detail::RpcMethodDynamic<RetT(Args...)>;
         using CoroutinesFuncType = typename Metadata::CoroutinesFuncType;
-        Metadata metadata(name, (CoroutinesFuncType)(nullptr), true);
+        Metadata metadata(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...}, name,
+                          (CoroutinesFuncType)(nullptr), true);
         co_return co_await _callRemote(metadata, std::forward<Args>(args)...);
     }
 
@@ -112,9 +116,10 @@ public:
         requires detail::RpcMethodFuncT<Ptr>
     auto notifyRemote(Args... args) noexcept
         -> ilias::IoTask<typename traits::function_traits<decltype(Ptr)>::return_type> {
-        using Metadata           = detail::RpcMethodDynamic<decltype(Ptr), ArgNames...>;
+        using Metadata           = detail::RpcMethodDynamic<decltype(Ptr)>;
         using CoroutinesFuncType = typename Metadata::CoroutinesFuncType;
-        Metadata metadata(detail::RpcMethodF<Ptr, ArgNames...>::MethodName, (CoroutinesFuncType)(nullptr), true);
+        Metadata metadata(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
+                          detail::func_nameof<Ptr>, (CoroutinesFuncType)(nullptr), true);
         co_return co_await _callRemote(metadata, std::forward<Args>(args)...);
     }
 
@@ -144,8 +149,8 @@ private:
             co_return ilias::Err(encoded.error());
         }
         auto& request = encoded.value();
-        ILIAS_CO_TRY(auto sendRet, co_await mEndpoint->send(
-            {reinterpret_cast<const std::byte*>(request.message.data()), request.message.size()}));
+        ILIAS_CO_TRY(auto sendRet, co_await mEndpoint->send({reinterpret_cast<const std::byte*>(request.message.data()),
+                                                             request.message.size()}));
         if (sendRet != request.message.size()) {
             co_return ilias::Err(ilias::IoError::Other);
         }
@@ -171,7 +176,7 @@ private:
 
 private:
     std::unique_ptr<detail::IMessageEndpoint> mEndpoint = nullptr;
-    std::uint64_t mId                                      = 0;
+    std::uint64_t mId                                   = 0;
     ilias::Mutex mMutex;
 };
 

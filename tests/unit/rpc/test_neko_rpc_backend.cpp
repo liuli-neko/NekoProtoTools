@@ -216,9 +216,9 @@ TEST(NekoRpcBackend, RequireMethodIdModeCallsThroughNegotiatedTable) {
 }
 
 TEST(NekoRpcBackend, MethodIdTableDynamicUpdatesTrackCompatibility) {
-    const auto addHash  = detail::NekoRpcMethodIdTable::signatureHash("add", "int add(int, int)");
-    const auto sinkHash = detail::NekoRpcMethodIdTable::signatureHash("sink", "void sink(int)");
-    const auto mulHash  = detail::NekoRpcMethodIdTable::signatureHash("mul", "int mul(int, int)");
+    const auto addHash  = detail::NekoRpcMethodIdTable::signatureHash("add", "i32 add(i32, i32)");
+    const auto sinkHash = detail::NekoRpcMethodIdTable::signatureHash("sink", "void sink(i32)");
+    const auto mulHash  = detail::NekoRpcMethodIdTable::signatureHash("mul", "i32 mul(i32, i32)");
 
     detail::NekoRpcMethodIdTable table;
     table.reset({
@@ -258,9 +258,9 @@ TEST(NekoRpcBackend, MethodIdTableDynamicUpdatesTrackCompatibility) {
 }
 
 TEST(NekoRpcBackend, MethodIdDeltaRoundTripsTableUpdates) {
-    const auto addHash  = detail::NekoRpcMethodIdTable::signatureHash("add", "int add(int, int)");
-    const auto sinkHash = detail::NekoRpcMethodIdTable::signatureHash("sink", "void sink(int)");
-    const auto mulHash  = detail::NekoRpcMethodIdTable::signatureHash("mul", "int mul(int, int)");
+    const auto addHash  = detail::NekoRpcMethodIdTable::signatureHash("add", "i32 add(i32, i32)");
+    const auto sinkHash = detail::NekoRpcMethodIdTable::signatureHash("sink", "void sink(i32)");
+    const auto mulHash  = detail::NekoRpcMethodIdTable::signatureHash("mul", "i32 mul(i32, i32)");
 
     detail::NekoRpcMethodIdTable serverTable;
     serverTable.reset({
@@ -476,14 +476,14 @@ TEST(NekoRpcBackend, BuiltinMethodsAvailableOnClientByDefault) {
     EXPECT_TRUE(contains(methods.value(), "rpc.get_method_info_list"));
     EXPECT_TRUE(contains(methods.value(), "rpc.get_bind_method_list"));
 
-    auto methodInfo = client->rpc.getMethodInfo("rpc.get_method_list").wait();
-    ASSERT_TRUE(methodInfo.has_value()) << methodInfo.error().message();
-    EXPECT_EQ(methodInfo.value(), "std::vector<std::string> rpc.get_method_list()");
+    auto method_info = client->rpc.getMethodInfo("rpc.get_method_list").wait();
+    ASSERT_TRUE(method_info.has_value()) << method_info.error().message();
+    EXPECT_EQ(method_info.value(), "array<string> rpc.get_method_list()");
 
-    auto boundMethods = client->rpc.getBindedMethodList().wait();
-    ASSERT_TRUE(boundMethods.has_value()) << boundMethods.error().message();
-    EXPECT_TRUE(contains(boundMethods.value(), "rpc.get_method_list"));
-    EXPECT_TRUE(contains(boundMethods.value(), "rpc.get_bind_method_list"));
+    auto bound_methods = client->rpc.getBindedMethodList().wait();
+    ASSERT_TRUE(bound_methods.has_value()) << bound_methods.error().message();
+    EXPECT_TRUE(contains(bound_methods.value(), "rpc.get_method_list"));
+    EXPECT_TRUE(contains(bound_methods.value(), "rpc.get_bind_method_list"));
 
     client.close();
     server.close();

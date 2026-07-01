@@ -57,17 +57,23 @@ bool readJson(std::string_view json, T& value) {
 } // namespace
 
 TEST(JsonRpcProtocol, NamedParamsRequestRoundTripsAsObject) {
-    using Request = detail::JsonRpcRequest2<AddTraits, "lhs", "rhs">;
+    using Request = detail::JsonRpcRequest2<AddTraits>;
+    const std::vector<std::string> argNames{"lhs", "rhs"};
+    const detail::JsonRpcMethodContext context{.argNames = argNames};
 
     Request request;
-    request.method = "math.add";
-    request.params = std::make_tuple(20, 22);
-    request.id     = uint64_t{7};
+    request.method   = "math.add";
+    request.params   = std::make_tuple(20, 22);
+    request.id       = uint64_t{7};
+    detail::JsonRpcRequestWithContext<Request> requestWithContext{request, context};
 
-    EXPECT_EQ(writeJson(request), R"({"jsonrpc":"2.0","method":"math.add","id":7,"params":{"lhs":20,"rhs":22}})");
+    EXPECT_EQ(writeJson(requestWithContext),
+              R"({"jsonrpc":"2.0","method":"math.add","id":7,"params":{"lhs":20,"rhs":22}})");
 
     Request decoded;
-    ASSERT_TRUE(readJson(R"({"jsonrpc":"2.0","method":"math.add","id":7,"params":{"rhs":22,"lhs":20}})", decoded));
+    detail::JsonRpcRequestWithContext<Request> decodedWithContext{decoded, context};
+    ASSERT_TRUE(
+        readJson(R"({"jsonrpc":"2.0","method":"math.add","id":7,"params":{"rhs":22,"lhs":20}})", decodedWithContext));
     EXPECT_EQ(decoded.method, "math.add");
     EXPECT_EQ(std::get<0>(decoded.params), 20);
     EXPECT_EQ(std::get<1>(decoded.params), 22);
@@ -142,19 +148,25 @@ TEST(JsonRpcProtocol, EmptyParamsRequestWritesEmptyArray) {
 }
 
 TEST(JsonRpcProtocol, OmittedNullableParamsAreAccepted) {
-    using Request = detail::JsonRpcRequest2<OptionalTraits, "value">;
+    using Request = detail::JsonRpcRequest2<OptionalTraits>;
+    const std::vector<std::string> argNames{"value"};
+    const detail::JsonRpcMethodContext context{.argNames = argNames};
 
     Request request;
-    ASSERT_TRUE(readJson(R"({"jsonrpc":"2.0","method":"maybe","id":1})", request));
+    detail::JsonRpcRequestWithContext<Request> requestWithContext{request, context};
+    ASSERT_TRUE(readJson(R"({"jsonrpc":"2.0","method":"maybe","id":1})", requestWithContext));
     EXPECT_EQ(request.method, "maybe");
     EXPECT_FALSE(std::get<0>(request.params).has_value());
 }
 
 TEST(JsonRpcProtocol, OmittedRequiredParamsAreRejected) {
-    using Request = detail::JsonRpcRequest2<AddTraits, "lhs", "rhs">;
+    using Request = detail::JsonRpcRequest2<AddTraits>;
+    const std::vector<std::string> argNames{"lhs", "rhs"};
+    const detail::JsonRpcMethodContext context{.argNames = argNames};
 
     Request request;
-    EXPECT_FALSE(readJson(R"({"jsonrpc":"2.0","method":"math.add","id":1})", request));
+    detail::JsonRpcRequestWithContext<Request> requestWithContext{request, context};
+    EXPECT_FALSE(readJson(R"({"jsonrpc":"2.0","method":"math.add","id":1})", requestWithContext));
 }
 
 TEST(JsonRpcProtocol, NonObjectRequestIsRejected) {

@@ -114,12 +114,29 @@ public:
     static auto decodeParams(const DecodedRequest& request)
         -> ilias::Result<typename detail::JsonRpcMethodTraits<typename Method::MethodTraits>::ParamsTupleType,
                          std::error_code> {
-        using Request = typename Method::template ApplyArgNames<detail::JsonRpcRequest2>;
+        using Request = detail::JsonRpcRequest2<typename Method::MethodTraits>;
         static_assert(BackendSerializable<JsonRpcBackend, Request>,
                       "JsonRpcBackend: method parameters are not serializable by JsonSerializer");
         Request decoded;
         JsonSerializer::InputSerializer in(request.value);
         if (in(decoded)) {
+            return std::move(decoded.params);
+        }
+        return ilias::Err(JsonRpcError::InvalidRequest);
+    }
+
+    template <typename Method>
+    static auto decodeParams(const DecodedRequest& request, const Method& method)
+        -> ilias::Result<typename detail::JsonRpcMethodTraits<typename Method::MethodTraits>::ParamsTupleType,
+                         std::error_code> {
+        using Request = detail::JsonRpcRequest2<typename Method::MethodTraits>;
+        static_assert(BackendSerializable<JsonRpcBackend, Request>,
+                      "JsonRpcBackend: method parameters are not serializable by JsonSerializer");
+        Request decoded;
+        detail::JsonRpcMethodContext context{.argNames = method.rpcArgNames()};
+        detail::JsonRpcRequestWithContext<Request> decodedWithContext{decoded, context};
+        JsonSerializer::InputSerializer in(request.value);
+        if (in(decodedWithContext)) {
             return std::move(decoded.params);
         }
         return ilias::Err(JsonRpcError::InvalidRequest);
@@ -225,7 +242,7 @@ public:
     template <typename Method, typename... Args>
     static auto encodeRequest(Method& method, bool notification, std::uint64_t& nextId, Args&&... args)
         -> ilias::Result<EncodedRequest, std::error_code> {
-        using Request = typename Method::template ApplyArgNames<detail::JsonRpcRequest2>;
+        using Request = detail::JsonRpcRequest2<typename Method::MethodTraits>;
         static_assert(BackendSerializable<JsonRpcBackend, Request>,
                       "JsonRpcBackend: request parameters are not serializable by JsonSerializer");
         Request request;
@@ -239,7 +256,9 @@ public:
 
         Message buffer;
         JsonSerializer::OutputSerializer out(buffer);
-        if (out(request) && out.end()) {
+        detail::JsonRpcMethodContext context{.argNames = method.rpcArgNames()};
+        detail::JsonRpcRequestWithContext<Request> requestWithContext{request, context};
+        if (out(requestWithContext) && out.end()) {
             return EncodedRequest{.message = std::move(buffer), .id = request.id};
         }
         return ilias::Err(JsonRpcError::InvalidRequest);

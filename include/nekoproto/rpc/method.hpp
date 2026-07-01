@@ -25,8 +25,8 @@ class RpcMethodTraits<Callable,
                       std::void_t<typename traits::function_traits<std::remove_cvref_t<Callable>>::return_type>>
     : public traits::RpcMethodTraitsUnpacker<std::remove_cvref_t<Callable>> {
 private:
-    using Traits   = traits::function_traits<std::remove_cvref_t<Callable>>;
-    using Base     = traits::RpcMethodTraitsUnpacker<std::remove_cvref_t<Callable>>;
+    using Traits = traits::function_traits<std::remove_cvref_t<Callable>>;
+    using Base   = traits::RpcMethodTraitsUnpacker<std::remove_cvref_t<Callable>>;
 
 public:
     using RawReturnType = typename Base::RawReturnType;
@@ -41,23 +41,6 @@ concept RpcMethodT = requires() { std::is_constructible_v<typename RpcMethodTrai
 
 template <auto Ptr>
 concept RpcMethodFuncT = requires() { typename RpcMethodTraits<decltype(Ptr)>::FunctionType; };
-
-template <ConstexprString... Names>
-struct RpcSpecArgNames {};
-
-template <typename Current, auto... Specs>
-struct RpcSpecArgNamesOfImpl {
-    using type = Current;
-};
-
-template <typename Current, auto Head, auto... Tail>
-struct RpcSpecArgNamesOfImpl<Current, Head, Tail...> : RpcSpecArgNamesOfImpl<Current, Tail...> {};
-
-template <typename Current, ConstexprString... Names, auto... Tail>
-struct RpcSpecArgNamesOfImpl<Current, rpc_args<Names...>, Tail...> : RpcSpecArgNamesOfImpl<RpcSpecArgNames<Names...>, Tail...> {};
-
-template <auto... Specs>
-struct RpcSpecArgNamesOf : RpcSpecArgNamesOfImpl<RpcSpecArgNames<>, Specs...> {};
 
 class RpcMethodNameState {
 public:
@@ -78,11 +61,18 @@ private:
     std::string mRemoteName;
 };
 
-template <typename MethodTraits, ConstexprString... ArgNames>
+template <typename MethodTraits>
 class RpcMethodMetadataState {
 public:
     using RawParamsType = typename MethodTraits::RawParamsType;
 
+    template <size_t N>
+    RpcMethodMetadataState(const std::array<std::string_view, N>& names) {
+        static_assert(MethodTraits::NumParams == N || N == 0, "Invalid number of names");
+        if constexpr (N != 0) {
+            mArgNameOverride.assign(names.begin(), names.end());
+        }
+    }
     std::string_view rpcPrefix() const noexcept { return mRpcPrefix; }
     bool rpcNoPrefix() const noexcept { return mRpcNoPrefix; }
     std::string_view description() const noexcept { return mDescription; }
@@ -114,20 +104,12 @@ public:
         return true;
     }
 
-    auto metadataArgNames() const -> std::vector<std::string> {
-        if (!mArgNameOverride.empty()) {
-            return mArgNameOverride;
-        }
-
-        std::vector<std::string> names;
-        names.reserve(sizeof...(ArgNames));
-        (names.emplace_back(ArgNames.view()), ...);
-        return names;
-    }
-
     auto parameterSignature() const -> std::string {
         return _parameterSignature(std::make_index_sequence<std::tuple_size_v<RawParamsType>>{});
     }
+
+    const std::vector<std::string>& rpcArgNames() const noexcept { return mArgNameOverride; }
+    auto metadataArgNames() const -> std::vector<std::string> { return mArgNameOverride; }
 
 private:
     template <std::size_t... Is>
@@ -135,23 +117,22 @@ private:
         if constexpr (sizeof...(Is) == 0) {
             return "";
         } else {
+            std::string result;
             if (mArgNameOverride.size() == sizeof...(Is)) {
-                std::string result;
-                auto appendParam = [&](auto idx) {
+                auto append_param = [&](auto idx) {
                     constexpr size_t Idx = idx;
-                    using ParamType      = std::tuple_element_t<Idx, RawParamsType>;
+                    using param_type     = std::tuple_element_t<Idx, RawParamsType>;
 
-                    result += traits::TypeName<ParamType>::name() + " " + mArgNameOverride[Idx];
+                    result += traits::TypeName<param_type>::name() + " " + mArgNameOverride[Idx];
                     if constexpr (Idx < sizeof...(Is) - 1) {
                         result += ", ";
                     }
                 };
-                (appendParam(std::integral_constant<size_t, Is>{}), ...);
+                (append_param(std::integral_constant<size_t, Is>{}), ...);
                 return result;
             }
-
             return traits::parameter_to_string<RawParamsType>(
-                std::make_index_sequence<std::tuple_size_v<RawParamsType>>{}, traits::ArgNamesHelper<ArgNames...>{});
+                std::make_index_sequence<std::tuple_size_v<RawParamsType>>{}, mArgNameOverride);
         }
     }
 
@@ -163,12 +144,11 @@ private:
     std::vector<std::string> mArgNameOverride;
 };
 
-template <typename MethodTraits, ConstexprString... ArgNames>
+template <typename MethodTraits>
 struct RpcMethodSignatureBuilder {
     using RawReturnType = typename MethodTraits::RawReturnType;
 
-    static auto build(std::string_view name, const RpcMethodMetadataState<MethodTraits, ArgNames...>& metadata)
-        -> std::string {
+    static auto build(std::string_view name, const RpcMethodMetadataState<MethodTraits>& metadata) -> std::string {
         return std::string(traits::TypeName<RawReturnType>::name()) + " " + std::string(name) + "(" +
                metadata.parameterSignature() + ")";
     }
@@ -176,12 +156,9 @@ struct RpcMethodSignatureBuilder {
 
 // Dynamic registration surface used by RpcServer::bindMethod(name, func) and
 // by RpcClient::callRemote(name, ...). The method name is supplied at runtime,
-// while the signature and optional argument names still stay in the type.
-template <RpcMethodT T, ConstexprString... ArgNames>
+// while optional argument names are stored as runtime metadata.
+template <RpcMethodT T>
 class RpcMethodDynamic : public RpcMethodTraits<T> {
-    static_assert(sizeof...(ArgNames) == 0 || RpcMethodTraits<T>::NumParams == sizeof...(ArgNames),
-                  "RpcMethodDynamic: The number of parameters and names do not match.");
-
 public:
     using RpcMethodMarker = void;
     using MethodType      = T;
@@ -190,26 +167,29 @@ public:
     using typename MethodTraits::FunctionType;
     using typename MethodTraits::RawParamsType;
     using typename MethodTraits::RawReturnType;
-    using ArgNamesHelper = traits::ArgNamesHelper<ArgNames...>;
 
-    template <template <typename, ConstexprString...> class Template>
-    using ApplyArgNames = Template<MethodTraits, ArgNames...>;
-
-    constexpr static std::array<std::string_view, sizeof...(ArgNames)> argNames = {ArgNames.view()...};
-
-    RpcMethodDynamic(std::string_view name, bool isNotification = false) noexcept
-        : mNames(name) {
+    template <size_t N>
+        requires(N == 0 || N == MethodTraits::NumParams)
+    RpcMethodDynamic(const std::array<std::string_view, N>& argNames, std::string_view name,
+                     bool isNotification = false) noexcept
+        : mNames(name), mMetadata(argNames) {
         this->mIsNotification = isNotification;
         _updateSignature();
     }
 
-    RpcMethodDynamic(std::string_view name, FunctionType func, bool isNotification = false) noexcept
-        : RpcMethodDynamic(name, isNotification) {
+    template <size_t N>
+        requires(N == 0 || N == MethodTraits::NumParams)
+    RpcMethodDynamic(const std::array<std::string_view, N>& argNames, std::string_view name, FunctionType func,
+                     bool isNotification = false) noexcept
+        : RpcMethodDynamic(argNames, name, isNotification) {
         set(std::move(func));
     }
 
-    RpcMethodDynamic(std::string_view name, CoroutinesFuncType func, bool isNotification = false) noexcept
-        : RpcMethodDynamic(name, isNotification) {
+    template <size_t N>
+        requires(N == 0 || N == MethodTraits::NumParams)
+    RpcMethodDynamic(const std::array<std::string_view, N>& argNames, std::string_view name, CoroutinesFuncType func,
+                     bool isNotification = false) noexcept
+        : RpcMethodDynamic(argNames, name, isNotification) {
         set(std::move(func));
     }
 
@@ -306,22 +286,19 @@ public:
         }
     }
 
-    auto metadataArgNames() const -> std::vector<std::string> {
-        return mMetadata.metadataArgNames();
-    }
+    const std::vector<std::string>& rpcArgNames() const noexcept { return mMetadata.rpcArgNames(); }
+    auto metadataArgNames() const -> std::vector<std::string> { return mMetadata.metadataArgNames(); }
 
     std::string signature;
 
 private:
     void setRpcNotification(bool isNotification = true) noexcept { this->mIsNotification = isNotification; }
 
-    void _updateSignature() {
-        signature = RpcMethodSignatureBuilder<MethodTraits, ArgNames...>::build(name(), mMetadata);
-    }
+    void _updateSignature() { signature = RpcMethodSignatureBuilder<MethodTraits>::build(name(), mMetadata); }
 
 private:
     RpcMethodNameState mNames;
-    RpcMethodMetadataState<MethodTraits, ArgNames...> mMetadata;
+    RpcMethodMetadataState<MethodTraits> mMetadata;
 };
 
 // Static protocol-field declaration:
@@ -329,11 +306,15 @@ private:
 // This is the common shape inside reflected protocol structs. The name is
 // declared in the type and may later be prefixed by registry tags.
 template <RpcMethodT T, ConstexprString MethodName, ConstexprString... ArgNames>
-class RpcMethod : public RpcMethodDynamic<T, ArgNames...> {
+class RpcMethod : public RpcMethodDynamic<T> {
 public:
-    RpcMethod() : RpcMethodDynamic<T, ArgNames...>(MethodName.view()) {}
-    explicit RpcMethod(bool isNotification) : RpcMethodDynamic<T, ArgNames...>(MethodName.view(), isNotification) {}
-    using RpcMethodDynamic<T, ArgNames...>::operator=;
+    RpcMethod()
+        : RpcMethodDynamic<T>(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
+                              MethodName.view()) {}
+    explicit RpcMethod(bool is_notification)
+        : RpcMethodDynamic<T>(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
+                              MethodName.view(), is_notification) {}
+    using RpcMethodDynamic<T>::operator=;
     operator bool() const noexcept { return this->mCoFunction != nullptr; }
     bool operator==(std::nullptr_t) const noexcept { return this->mCoFunction == nullptr; }
 };
@@ -341,23 +322,21 @@ public:
 // Verbose metadata-first declaration. This keeps the compact RpcMethod API
 // intact while allowing method attributes to live next to the signature:
 //   RpcMethodSpec<int(int), rpc_name<"calc.add">, rpc_args<"value">> add;
-template <RpcMethodT T, typename ArgNames, auto... Specs>
-class RpcMethodSpecImpl;
-
-template <RpcMethodT T, ConstexprString... ArgNames, auto... Specs>
-class RpcMethodSpecImpl<T, RpcSpecArgNames<ArgNames...>, Specs...> : public RpcMethodDynamic<T, ArgNames...> {
+template <RpcMethodT T, auto... Specs>
+class RpcMethodSpecImpl : public RpcMethodDynamic<T> {
     constexpr static auto SpecTags = normalize_tags_v<Specs...>;
     static_assert(!(tag_query::has<tag_property::rpc_prefix>(SpecTags) &&
                     tag_query::has<tag_property::rpc_no_prefix>(SpecTags)),
                   "RpcMethodSpec cannot use rpc_prefix<...> and rpc_no_prefix together.");
 
-    using Base = RpcMethodDynamic<T, ArgNames...>;
+    using Base = RpcMethodDynamic<T>;
 
 public:
-    RpcMethodSpecImpl() : Base(_methodName(), _notification()) {
+    RpcMethodSpecImpl() : Base(std::array<std::string_view, 0>{}, _methodName(), _notification()) {
         _applySpecMetadata();
     }
-    explicit RpcMethodSpecImpl(bool isNotification) : Base(_methodName(), isNotification) {
+    explicit RpcMethodSpecImpl(bool isNotification)
+        : Base(std::array<std::string_view, 0>{}, _methodName(), isNotification) {
         _applySpecMetadata();
     }
     using Base::operator=;
@@ -381,15 +360,13 @@ private:
         }
     }
 
-    void _applySpecMetadata() {
-        this->applyRpcProperties(collect_rpc_properties(SpecTags));
-    }
+    void _applySpecMetadata() { this->applyRpcProperties(collect_rpc_properties(SpecTags)); }
 };
 
 template <RpcMethodT T, auto... Specs>
-class RpcMethodSpec : public RpcMethodSpecImpl<T, typename RpcSpecArgNamesOf<Specs...>::type, Specs...> {
+class RpcMethodSpec : public RpcMethodSpecImpl<T, Specs...> {
 public:
-    using Base = RpcMethodSpecImpl<T, typename RpcSpecArgNamesOf<Specs...>::type, Specs...>;
+    using Base = RpcMethodSpecImpl<T, Specs...>;
     using Base::Base;
     using Base::operator=;
 };
@@ -398,30 +375,50 @@ public:
 //   RpcMethodF<&free_function, "lhs", "rhs"> method;
 // RpcServer::bindMethod<Ptr>() uses the same naming rule for ad-hoc binding.
 template <auto Ptr, ConstexprString... ArgNames>
-class RpcMethodF : public RpcMethodDynamic<decltype(Ptr), ArgNames...> {
+class RpcMethodF : public RpcMethodDynamic<decltype(Ptr)> {
 public:
-    constexpr static std::string_view MethodName = detail::func_nameof<Ptr>;
-    RpcMethodF() : RpcMethodDynamic<decltype(Ptr), ArgNames...>(MethodName) { this->operator=(Ptr); }
-    explicit RpcMethodF(bool isNotification) : RpcMethodDynamic<decltype(Ptr), ArgNames...>(MethodName, isNotification) {
+    constexpr static std::string_view method_name = detail::func_nameof<Ptr>;
+    constexpr static std::string_view MethodName  = method_name;
+
+    RpcMethodF()
+        : RpcMethodDynamic<decltype(Ptr)>(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
+                                          method_name) {
         this->operator=(Ptr);
     }
-    using RpcMethodDynamic<decltype(Ptr), ArgNames...>::operator=;
+
+    explicit RpcMethodF(bool is_notification)
+        : RpcMethodDynamic<decltype(Ptr)>(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
+                                          method_name, is_notification) {
+        this->operator=(Ptr);
+    }
+
+    using RpcMethodDynamic<decltype(Ptr)>::operator=;
 };
 
 // Function-pointer declaration with an explicit class namespace prefix:
 //   RpcMethodFN<&Class::method, Class, "arg"> method;
 template <auto Ptr, typename T, ConstexprString... ArgNames>
-class RpcMethodFN : public RpcMethodDynamic<decltype(Ptr), ArgNames...> {
+class RpcMethodFN : public RpcMethodDynamic<decltype(Ptr)> {
     constexpr static std::string_view seq = ".";
 
 public:
-    constexpr static std::string_view MethodName = detail::join<detail::class_nameof<T>, seq, detail::func_nameof<Ptr>>;
-    RpcMethodFN() : RpcMethodDynamic<decltype(Ptr), ArgNames...>(MethodName) { this->operator=(Ptr); }
-    explicit RpcMethodFN(bool isNotification)
-        : RpcMethodDynamic<decltype(Ptr), ArgNames...>(MethodName, isNotification) {
+    constexpr static std::string_view method_name =
+        detail::join<detail::class_nameof<T>, seq, detail::func_nameof<Ptr>>;
+    constexpr static std::string_view MethodName = method_name;
+
+    RpcMethodFN()
+        : RpcMethodDynamic<decltype(Ptr)>(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
+                                          method_name) {
         this->operator=(Ptr);
     }
-    using RpcMethodDynamic<decltype(Ptr), ArgNames...>::operator=;
+
+    explicit RpcMethodFN(bool is_notification)
+        : RpcMethodDynamic<decltype(Ptr)>(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
+                                          method_name, is_notification) {
+        this->operator=(Ptr);
+    }
+
+    using RpcMethodDynamic<decltype(Ptr)>::operator=;
 };
 
 template <typename T, class enable = void>
