@@ -139,6 +139,27 @@ TEST(ArgParser, RangeConstraint) {
     EXPECT_EQ(result.error(), make_error_code(ArgParserError::InvalidValue));
 }
 
+TEST(ArgParser, ErrorMessagesIncludeArgumentContext) {
+    const char* missingArgv[] = {"demo", "--database.host", "db.local"};
+    auto missing              = parser<CliOptions>(static_cast<int>(std::size(missingArgv)), missingArgv);
+    ASSERT_FALSE(missing.has_value());
+    auto message = missing.error().message();
+    EXPECT_NE(message.find("--output"), std::string::npos);
+
+    const char* rangeArgv[] = {"demo", "--output", "out.txt", "--database.host", "db.local", "--count", "101"};
+    auto range              = parser<CliOptions>(static_cast<int>(std::size(rangeArgv)), rangeArgv);
+    ASSERT_FALSE(range.has_value());
+    message = range.error().message();
+    EXPECT_NE(message.find("--count"), std::string::npos);
+    EXPECT_NE(message.find("101"), std::string::npos);
+
+    const char* unknownArgv[] = {"demo", "--does-not-exist"};
+    auto unknown              = parser<CliOptions>(static_cast<int>(std::size(unknownArgv)), unknownArgv);
+    ASSERT_FALSE(unknown.has_value());
+    message = unknown.error().message();
+    EXPECT_NE(message.find("--does-not-exist"), std::string::npos);
+}
+
 TEST(ArgParser, HelpRequestedAndFormatHelp) {
     const char* argv[] = {"demo", "--help"};
 
