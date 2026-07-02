@@ -15,9 +15,21 @@
 
 NEKO_BEGIN_NAMESPACE
 namespace argparser {
+
+template <auto Value>
+struct ArgCommand {
+    constexpr static auto value = tag_detail::tag_value_declared(Value);
+};
+
 namespace detail {
 
 // Type traits ----------------------------------------------------------------
+
+template <typename T>
+struct is_command_type : std::false_type {};
+
+template <auto Value>
+struct is_command_type<ArgCommand<Value>> : std::true_type {};
 
 template <typename T>
 struct is_arg_optional : std::false_type {}; // NOLINT(readability-identifier-naming)
@@ -98,10 +110,6 @@ inline constexpr bool is_nested_option_v = // NOLINT
     NEKO_NAMESPACE::detail::has_values_meta<std::remove_cvref_t<T>>;
 } // namespace detail
 
-struct ArgCommand {
-    bool value;
-};
-
 struct ArgTags {
     tag_detail::tag_value<bool> required{};    // NOLINT
     tag_detail::tag_value<bool> positional{};  // NOLINT
@@ -116,7 +124,8 @@ struct ArgTags {
     constexpr static bool constexpr_check() { // NOLINT
         using raw_t = std::remove_cvref_t<T>;
 
-        constexpr bool is_command   = Tags.command.declared && static_cast<bool>(Tags.command);
+        constexpr bool is_command =
+            (Tags.command.declared && static_cast<bool>(Tags.command)) || detail::is_command_type<raw_t>::value;
         constexpr bool is_flag      = Tags.flag.declared && static_cast<bool>(Tags.flag);
         constexpr bool is_position  = Tags.positional.declared && static_cast<bool>(Tags.positional);
         constexpr bool has_range    = Tags.range_min.declared || Tags.range_max.declared;
@@ -138,7 +147,7 @@ struct ArgTags {
             static_assert(!is_flag, "argparser positional fields cannot also be flags");
         }
         if constexpr (is_command) {
-            static_assert(std::is_same_v<raw_t, ArgCommand> || NEKO_NAMESPACE::detail::has_values_meta<raw_t>,
+            static_assert(detail::is_command_type<raw_t>::value || NEKO_NAMESPACE::detail::has_values_meta<raw_t>,
                           "argparser command tags require a reflected command struct or ArgCommand placeholder");
             static_assert(!is_flag && !is_position && !has_range && !has_required && !has_repeat,
                           "argparser command tags cannot also be flag, positional, range, required, or repeatable");

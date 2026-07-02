@@ -214,7 +214,7 @@ struct BuildCommand {
 struct ToolCommands {
     ServeCommand serve;
     BuildCommand build;
-    ArgCommand clean;
+    ArgCommand<"clean"_cs> clean;
 
     struct Neko {
         constexpr static auto value = // NOLINT
@@ -398,7 +398,7 @@ void print(const BuildCommand& command) {
     std::cout << "target = " << command.target << '\n';
 }
 
-void print(const ArgCommand& /*unused*/) {
+void print(const ArgCommand<"clean"_cs>& /*unused*/) {
     std::cout << "command = clean\n";
     std::cout << "no command-specific options\n";
 }

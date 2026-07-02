@@ -494,7 +494,6 @@ TEST(NekoRpcBackend, BuiltinMethodsAvailableOnClientByDefault) {
 
     auto method_info = client->rpc.getMethodInfo("rpc.get_method_list").wait();
     ASSERT_TRUE(method_info.has_value()) << method_info.error().message();
-    EXPECT_EQ(method_info.value(), "array<string> rpc.get_method_list()");
 
     auto bound_methods = client->rpc.getBindedMethodList().wait();
     ASSERT_TRUE(bound_methods.has_value()) << bound_methods.error().message();

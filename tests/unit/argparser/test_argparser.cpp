@@ -203,7 +203,7 @@ struct BuildCommand {
 
 struct ToolCommands {
     BuildCommand build;
-    ArgCommand clean;
+    ArgCommand<1> clean;
 
     struct Neko {
         constexpr static auto value = // NOLINT
@@ -222,7 +222,7 @@ TEST(ArgParser, CommandSetReturnsVariant) {
 
     auto result = parser<ToolCommands>(static_cast<int>(std::size(argv)), argv);
 
-    using ExpectedType = expected::expected<std::variant<BuildCommand, ArgCommand>, std::error_code>;
+    using ExpectedType = expected::expected<std::variant<BuildCommand, ArgCommand<1>>, std::error_code>;
     static_assert(std::is_same_v<decltype(result), ExpectedType>);
 
     ASSERT_TRUE(result.has_value()) << result.error().message();
@@ -262,7 +262,7 @@ TEST(ArgParser, PlaceholderCommand) {
     auto result = parser<ToolCommands>(static_cast<int>(std::size(argv)), argv);
 
     ASSERT_TRUE(result.has_value()) << result.error().message();
-    EXPECT_TRUE(std::holds_alternative<ArgCommand>(*result));
+    EXPECT_TRUE(std::holds_alternative<ArgCommand<1>>(*result));
 }
 
 TEST(ArgParser, CommandContextHelpAndVersion) {

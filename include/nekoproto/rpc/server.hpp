@@ -1,10 +1,10 @@
 #pragma once
 
-#include <ilias/platform.hpp>
-#include <ilias/task/scope.hpp>
 #include <array>
 #include <concepts>
 #include <functional>
+#include <ilias/platform.hpp>
+#include <ilias/task/scope.hpp>
 #include <list>
 #include <memory>
 #include <string>
@@ -26,8 +26,8 @@ template <RpcBackend Backend, typename... ProtocolSets>
 class RpcServer : public ProtocolSets... {
 
 private:
-    using Dispatcher = detail::RpcDispatcher<Backend>;
-    using MethodData = typename Dispatcher::MethodData;
+    using Dispatcher      = detail::RpcDispatcher<Backend>;
+    using MethodData      = typename Dispatcher::MethodData;
     using EndpointRefresh = std::function<ilias::IoTask<void>(std::vector<detail::RpcMethodMetadata>)>;
 
     struct EndpointSlot {
@@ -39,9 +39,7 @@ private:
 
 public:
     explicit RpcServer(ilias::IoContext& ctx) : ProtocolSets()..., mRpc(), mDispatcher(ctx), mScope() { _init(); }
-    ~RpcServer() {
-        close();
-    }
+    ~RpcServer() { close(); }
 
     auto operator->() noexcept -> RpcServer* { return this; }
     auto operator->() const noexcept -> const RpcServer* { return this; }
@@ -185,37 +183,64 @@ private:
         detail::for_each_rpc_method(protocol, [this](auto& method) { mDispatcher.registerRpcMethod(method); }, prefix);
     }
 
+    auto _buildMethodInfo(const MethodData& methodData) noexcept -> std::string {
+        std::string method_info;
+        method_info.reserve(256);
+        method_info += "name: " + std::string(methodData.name) + "\n";
+        method_info += "signature: " + std::string(methodData.signature) + "\n";
+        if (!methodData.description.empty()) {
+            method_info += "description: " + std::string(methodData.description) + "\n";
+        }
+        if (!methodData.rpcVersion.empty()) {
+            method_info += "version: " + std::string(methodData.rpcVersion) + "\n";
+        }
+        if (!methodData.argNames.empty()) {
+            method_info += "args: ";
+            for (auto& arg : methodData.argNames) {
+                method_info += arg + ", ";
+            }
+            if (!methodData.argNames.empty()) {
+                method_info.pop_back();
+                method_info.pop_back();
+            }
+            method_info += "\n";
+        }
+        method_info += "notification: " + std::string(methodData.isNotification ? "true" : "false") + "\n";
+        method_info += "bind: " + std::string(methodData.isBind ? "true" : "false") + "\n";
+        return method_info;
+    }
+
     auto _init() noexcept -> void {
         (_registerProtocol(static_cast<ProtocolSets&>(*this)), ...);
         _registerProtocol(mRpc, "rpc");
-        mRpc.getMethodInfo = [this](std::string methodName) -> ilias::IoTask<std::string> {
-            if (auto ret = mDispatcher.methodDatas(methodName); !ret.name.empty()) {
-                co_return std::string(ret.signature);
+        mRpc.getMethodInfo = [this](std::string method_name) -> ilias::IoTask<std::string> {
+            if (auto ret = mDispatcher.methodDatas(method_name); !ret.name.empty()) {
+                co_return _buildMethodInfo(ret);
             }
             co_return std::string("Method not found!");
         };
         mRpc.getMethodInfoList = [this]() -> ilias::IoTask<std::vector<std::string>> {
-            std::vector<std::string> methodDesList;
-            for (auto& item : methodDatas()) {
-                methodDesList.emplace_back(item.signature);
+            std::vector<std::string> method_des_list;
+            for (const auto& item : methodDatas()) {
+                method_des_list.emplace_back(_buildMethodInfo(item));
             }
-            co_return methodDesList;
+            co_return method_des_list;
         };
         mRpc.getMethodList = [this]() -> ilias::IoTask<std::vector<std::string>> {
-            std::vector<std::string> methodList;
+            std::vector<std::string> method_list;
             for (auto& item : methodDatas()) {
-                methodList.emplace_back(item.name);
+                method_list.emplace_back(item.name);
             }
-            co_return methodList;
+            co_return method_list;
         };
         mRpc.getBindedMethodList = [this]() -> ilias::IoTask<std::vector<std::string>> {
-            std::vector<std::string> methodList;
+            std::vector<std::string> method_list;
             for (auto& item : methodDatas()) {
                 if (item.isBind) {
-                    methodList.emplace_back(item.name);
+                    method_list.emplace_back(item.name);
                 }
             }
-            co_return methodList;
+            co_return method_list;
         };
     }
 
@@ -223,13 +248,13 @@ private:
         std::vector<detail::RpcMethodMetadata> methods;
         for (const auto& item : methodDatas()) {
             methods.push_back({
-                .name              = std::string(item.name),
-                .signature         = std::string(item.signature),
-                .description       = std::string(item.description),
-                .rpcVersion        = std::string(item.rpcVersion),
-                .argNames          = item.argNames,
-                .isNotification    = item.isNotification,
-                .isBind            = item.isBind,
+                .name           = std::string(item.name),
+                .signature      = std::string(item.signature),
+                .description    = std::string(item.description),
+                .rpcVersion     = std::string(item.rpcVersion),
+                .argNames       = item.argNames,
+                .isNotification = item.isNotification,
+                .isBind         = item.isBind,
             });
         }
         return methods;

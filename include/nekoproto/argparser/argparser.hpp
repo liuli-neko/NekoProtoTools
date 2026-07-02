@@ -30,8 +30,7 @@ NEKO_BEGIN_NAMESPACE
 namespace argparser::detail {
 
 template <typename T>
-inline constexpr bool is_command_placeholder_v = // NOLINT
-    std::is_same_v<std::decay_t<T>, ArgCommand>;
+inline constexpr bool is_command_placeholder_v = detail::is_command_type<T>::value;
 
 template <typename Tuple>
 struct tuple_to_variant;
@@ -60,7 +59,8 @@ consteval bool tuple_types_unique() {
 
 template <typename T, std::size_t I>
 consteval bool field_is_command() {
-    return tag_query::get<tag_property::command>(std::get<I>(Reflect<std::remove_cvref_t<T>>::field_tags));
+    return is_command_placeholder_v<T> ||
+           tag_query::get<tag_property::command>(std::get<I>(Reflect<std::remove_cvref_t<T>>::field_tags));
 }
 
 template <typename T>
@@ -175,9 +175,9 @@ bool try_parse_command(std::string_view command, int argc, const char* const* ar
                 error = make_error_code(ArgParserError::VersionRequested);
                 return true;
             }
-            error = make_argparser_error(ArgParserError::UnexpectedPositional,
-                                         "command " + quote_arg_value(command) + " does not accept " +
-                                             quote_arg_value(arg));
+            error = make_argparser_error(ArgParserError::UnexpectedPositional, "command " + quote_arg_value(command) +
+                                                                                   " does not accept " +
+                                                                                   quote_arg_value(arg));
             return true;
         }
         result.template emplace<I>();

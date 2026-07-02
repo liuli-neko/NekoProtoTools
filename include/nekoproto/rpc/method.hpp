@@ -42,116 +42,20 @@ concept RpcMethodT = requires() { std::is_constructible_v<typename RpcMethodTrai
 template <auto Ptr>
 concept RpcMethodFuncT = requires() { typename RpcMethodTraits<decltype(Ptr)>::FunctionType; };
 
-class RpcMethodNameState {
-public:
-    explicit RpcMethodNameState(std::string_view name) : mDeclaredName(name), mRemoteName(name) {}
-
-    const std::string& remoteName() const noexcept { return mRemoteName; }
-    std::string_view declaredName() const noexcept { return mDeclaredName; }
-
-    void setDeclaredName(std::string_view name) {
-        mDeclaredName = std::string(name);
-        mRemoteName   = mDeclaredName;
-    }
-
-    void setRemoteName(std::string_view name) { mRemoteName = std::string(name); }
-
-private:
-    std::string mDeclaredName;
-    std::string mRemoteName;
-};
-
-template <typename MethodTraits>
-class RpcMethodMetadataState {
-public:
-    using RawParamsType = typename MethodTraits::RawParamsType;
-
+struct RpcMethodData {
     template <size_t N>
-    RpcMethodMetadataState(const std::array<std::string_view, N>& names) {
-        static_assert(MethodTraits::NumParams == N || N == 0, "Invalid number of names");
-        if constexpr (N != 0) {
-            mArgNameOverride.assign(names.begin(), names.end());
-        }
-    }
-    std::string_view rpcPrefix() const noexcept { return mRpcPrefix; }
-    bool rpcNoPrefix() const noexcept { return mRpcNoPrefix; }
-    std::string_view description() const noexcept { return mDescription; }
-    std::string_view rpcVersion() const noexcept { return mRpcVersion; }
-
-    void setDescription(std::string_view description) { mDescription = std::string(description); }
-    void setRpcVersion(std::string_view version) { mRpcVersion = std::string(version); }
-    void setRpcPrefix(std::string_view prefix) {
-        mRpcPrefix   = std::string(prefix);
-        mRpcNoPrefix = false;
+    explicit RpcMethodData(std::array<std::string_view, N> arg_names, std::string_view name)
+        : declared_name(name), remote_name(name) {
+        this->arg_names.assign(arg_names.begin(), arg_names.end());
     }
 
-    void setRpcNoPrefix(bool noPrefix = true) {
-        mRpcNoPrefix = noPrefix;
-        if (mRpcNoPrefix) {
-            mRpcPrefix.clear();
-        }
-    }
-
-    bool setRpcArgNames(const std::vector<std::string_view>& names) {
-        if (names.size() != std::tuple_size_v<RawParamsType>) {
-            return false;
-        }
-        mArgNameOverride.clear();
-        mArgNameOverride.reserve(names.size());
-        for (auto name : names) {
-            mArgNameOverride.emplace_back(name);
-        }
-        return true;
-    }
-
-    auto parameterSignature() const -> std::string {
-        return _parameterSignature(std::make_index_sequence<std::tuple_size_v<RawParamsType>>{});
-    }
-
-    const std::vector<std::string>& rpcArgNames() const noexcept { return mArgNameOverride; }
-    auto metadataArgNames() const -> std::vector<std::string> { return mArgNameOverride; }
-
-private:
-    template <std::size_t... Is>
-    auto _parameterSignature(std::index_sequence<Is...> /*unused*/) const -> std::string {
-        if constexpr (sizeof...(Is) == 0) {
-            return "";
-        } else {
-            std::string result;
-            if (mArgNameOverride.size() == sizeof...(Is)) {
-                auto append_param = [&](auto idx) {
-                    constexpr size_t Idx = idx;
-                    using param_type     = std::tuple_element_t<Idx, RawParamsType>;
-
-                    result += traits::TypeName<param_type>::name() + " " + mArgNameOverride[Idx];
-                    if constexpr (Idx < sizeof...(Is) - 1) {
-                        result += ", ";
-                    }
-                };
-                (append_param(std::integral_constant<size_t, Is>{}), ...);
-                return result;
-            }
-            return traits::parameter_to_string<RawParamsType>(
-                std::make_index_sequence<std::tuple_size_v<RawParamsType>>{}, mArgNameOverride);
-        }
-    }
-
-private:
-    std::string mRpcPrefix;
-    bool mRpcNoPrefix = false;
-    std::string mDescription;
-    std::string mRpcVersion;
-    std::vector<std::string> mArgNameOverride;
-};
-
-template <typename MethodTraits>
-struct RpcMethodSignatureBuilder {
-    using RawReturnType = typename MethodTraits::RawReturnType;
-
-    static auto build(std::string_view name, const RpcMethodMetadataState<MethodTraits>& metadata) -> std::string {
-        return std::string(traits::TypeName<RawReturnType>::name()) + " " + std::string(name) + "(" +
-               metadata.parameterSignature() + ")";
-    }
+    std::string declared_name;
+    std::string remote_name;
+    std::string rpc_prefix;
+    bool rpc_no_prefix = false;
+    std::string description;
+    std::string rpc_version;
+    std::vector<std::string> arg_names;
 };
 
 // Dynamic registration surface used by RpcServer::bindMethod(name, func) and
@@ -172,7 +76,7 @@ public:
         requires(N == 0 || N == MethodTraits::NumParams)
     RpcMethodDynamic(const std::array<std::string_view, N>& argNames, std::string_view name,
                      bool isNotification = false) noexcept
-        : mNames(name), mMetadata(argNames) {
+        : mMetadata(argNames, name) {
         this->mIsNotification = isNotification;
         _updateSignature();
     }
@@ -234,31 +138,33 @@ public:
     bool operator==(std::nullptr_t) const noexcept { return this->mCoFunction == nullptr; }
     void clear() noexcept { this->mCoFunction = nullptr; }
 
-    const std::string& name() const noexcept { return mNames.remoteName(); }
-    std::string_view name() noexcept { return mNames.remoteName(); }
-    std::string_view declaredName() const noexcept { return mNames.declaredName(); }
-    std::string_view rpcPrefix() const noexcept { return mMetadata.rpcPrefix(); }
-    bool rpcNoPrefix() const noexcept { return mMetadata.rpcNoPrefix(); }
-    std::string_view description() const noexcept { return mMetadata.description(); }
-    std::string_view rpcVersion() const noexcept { return mMetadata.rpcVersion(); }
+    const std::string& name() const noexcept { return mMetadata.remote_name; }
+    std::string_view name() noexcept { return mMetadata.remote_name; }
+    std::string_view declaredName() const noexcept { return mMetadata.declared_name; }
+    std::string_view rpcPrefix() const noexcept { return mMetadata.rpc_prefix; }
+    bool rpcNoPrefix() const noexcept { return mMetadata.rpc_no_prefix; }
+    std::string_view description() const noexcept { return mMetadata.description; }
+    std::string_view rpcVersion() const noexcept { return mMetadata.rpc_version; }
 
     void setDeclaredName(std::string_view name) {
-        mNames.setDeclaredName(name);
+        mMetadata.declared_name = name;
         _updateSignature();
     }
 
     void setRemoteName(std::string_view name) {
-        mNames.setRemoteName(name);
+        mMetadata.remote_name = name;
         _updateSignature();
     }
 
-    void setDescription(std::string_view description) { mMetadata.setDescription(description); }
-    void setRpcVersion(std::string_view version) { mMetadata.setRpcVersion(version); }
-    void setRpcPrefix(std::string_view prefix) { mMetadata.setRpcPrefix(prefix); }
-    void setRpcNoPrefix(bool noPrefix = true) { mMetadata.setRpcNoPrefix(noPrefix); }
+    void setDescription(std::string_view description) { mMetadata.description = description; }
+    void setRpcVersion(std::string_view version) { mMetadata.rpc_version = version; }
+    void setRpcPrefix(std::string_view prefix) { mMetadata.rpc_prefix = prefix; }
+    void setRpcNoPrefix(bool noPrefix = true) { mMetadata.rpc_no_prefix = noPrefix; }
 
     void setRpcArgNames(const std::vector<std::string_view>& names) {
-        if (mMetadata.setRpcArgNames(names)) {
+        if (!std::equal(names.begin(), names.end(), mMetadata.arg_names.begin(), mMetadata.arg_names.end(),
+                        [](const std::string_view& aa, const std::string_view& bb) { return aa == bb; })) {
+            mMetadata.arg_names.assign(names.begin(), names.end());
             _updateSignature();
         }
     }
@@ -286,19 +192,22 @@ public:
         }
     }
 
-    const std::vector<std::string>& rpcArgNames() const noexcept { return mMetadata.rpcArgNames(); }
-    auto metadataArgNames() const -> std::vector<std::string> { return mMetadata.metadataArgNames(); }
+    const std::vector<std::string>& rpcArgNames() const noexcept { return mMetadata.arg_names; }
 
     std::string signature;
 
 private:
     void setRpcNotification(bool isNotification = true) noexcept { this->mIsNotification = isNotification; }
-
-    void _updateSignature() { signature = RpcMethodSignatureBuilder<MethodTraits>::build(name(), mMetadata); }
+    static auto _build(std::string_view name, const RpcMethodData& metadata) -> std::string {
+        auto parameter_string = traits::parameter_to_string<RawParamsType>(
+            std::make_index_sequence<std::tuple_size_v<RawParamsType>>{}, metadata.arg_names);
+        return std::string(traits::TypeName<RawReturnType>::name()) + " " + std::string(name) + "(" + parameter_string +
+               ")";
+    }
+    void _updateSignature() { signature = _build(name(), mMetadata); }
 
 private:
-    RpcMethodNameState mNames;
-    RpcMethodMetadataState<MethodTraits> mMetadata;
+    RpcMethodData mMetadata;
 };
 
 // Static protocol-field declaration:
@@ -312,8 +221,8 @@ public:
         : RpcMethodDynamic<T>(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
                               MethodName.view()) {}
     explicit RpcMethod(bool is_notification)
-        : RpcMethodDynamic<T>(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
-                              MethodName.view(), is_notification) {}
+        : RpcMethodDynamic<T>(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...}, MethodName.view(),
+                              is_notification) {}
     using RpcMethodDynamic<T>::operator=;
     operator bool() const noexcept { return this->mCoFunction != nullptr; }
     bool operator==(std::nullptr_t) const noexcept { return this->mCoFunction == nullptr; }

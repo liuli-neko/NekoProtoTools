@@ -69,7 +69,7 @@ public:
     auto signature() noexcept -> std::string_view override { return mMethodData->signature; }
     auto description() noexcept -> std::string_view override { return mMethodData->description(); }
     auto rpcVersion() noexcept -> std::string_view override { return mMethodData->rpcVersion(); }
-    auto argNames() noexcept -> std::vector<std::string> override { return mMethodData->metadataArgNames(); }
+    auto argNames() noexcept -> std::vector<std::string> override { return mMethodData->rpcArgNames(); }
     auto isNotification() noexcept -> bool override { return mMethodData->isNotification(); }
     auto isBind() noexcept -> bool override { return (bool)(*mMethodData); }
 
