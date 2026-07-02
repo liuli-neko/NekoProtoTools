@@ -9,11 +9,16 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <type_traits>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 #include <ilias/result.hpp>
 
 #include "nekoproto/global/global.hpp"
+#include "nekoproto/serialization/reflection.hpp"
+#include "nekoproto/serialization/serializer_base.hpp"
 
 NEKO_BEGIN_NAMESPACE
 namespace detail {
@@ -57,6 +62,31 @@ enum class NekoRpcCompressionAlgorithm : std::uint8_t {
     RunLength = 1,
 };
 
+enum class NekoRpcExtensionType : std::uint16_t {
+    // Client Hello advertises MethodId support. Server Hello includes this only when MethodId is enabled for the
+    // connection; later request/notify frames may then set NekoRpcFlag::MethodId and put an 8-byte id in `method`.
+    MethodId = 1U,
+    // Server Hello/table refresh publishes the current method table version.
+    // MethodId request frames echo this value so the server can reject stale ids.
+    MethodTableVersion = 2U,
+    // Server Hello sends a complete method-id table when a client first negotiates MethodId.
+    MethodTable = 3U,
+    // Server Hello/table refresh sends incremental method-id updates after negotiation.
+    MethodTableDelta = 4U,
+    // MethodId request frames carry the resolved method signature hash.
+    // The server uses it to detect stale or incompatible client-side method metadata.
+    MethodSignatureHash = 5U,
+    // Server Hello/table refresh tells clients which older table versions are still accepted.
+    MethodMinimumCompatibleVersion = 6U,
+    // Client Hello advertises compression support. Server Hello includes this only when compression is enabled for the
+    // connection; later non-Hello frames may then set NekoRpcFlag::Compressed.
+    Compression = 16U,
+    // Hello frames name the compression algorithm supported by the client or selected by the server.
+    CompressionAlgorithm = 17U,
+    // Hello frames carry the smallest payload size worth compressing for this connection.
+    CompressionMinPayloadSize = 18U,
+};
+
 struct NekoRpcCompressionStats {
     std::atomic<std::uint64_t> compressionAttempts{0};
     std::atomic<std::uint64_t> compressedFrames{0};
@@ -89,17 +119,34 @@ public:
     using Id             = std::uint64_t;
     using Message        = std::vector<char>;
     using ResponseValues = std::vector<Message>;
+    using ExtensionType  = NekoRpcExtensionType;
+    using ExtensionValue = std::span<const std::byte>;
+    using ExtensionMap   = std::map<ExtensionType, ExtensionValue>;
+
+    static constexpr std::uint16_t Magic  = 0x4E52U;
+    static constexpr std::uint8_t Version = 1U;
 
     struct Header {
+        // Protocol sentinel, encoded on the wire as "NR".
         std::uint16_t magic         = Magic;
+        // Wire format version.
         std::uint8_t version        = Version;
+        // Request, response, notification, cancel, or hello frame.
         NekoRpcKind kind            = NekoRpcKind::Request;
+        // NekoRpcFlag bitset describing optional frame features.
         std::uint8_t flags          = 0;
+        // Serializer/backend codec id expected by the endpoint.
         std::uint8_t codec          = 0;
+        // Bytes of TLV extensions between method and payload.
         std::uint16_t extensionSize = 0;
+        // Correlation id for request/response pairs.
         Id id                       = 0;
+        // Bytes of method name, or method-id bytes when MethodId is set.
         std::uint32_t methodSize    = 0;
+        // Bytes of serialized payload following method and extensions.
         std::uint32_t payloadSize   = 0;
+
+        NEKO_SERIALIZER(magic, version, kind, flags, codec, extensionSize, id, methodSize, payloadSize)
     };
 
     struct DecodedRequest {
@@ -115,15 +162,41 @@ public:
     };
 
     struct FrameParts {
+        // Parsed or to-be-encoded fixed header.
         Header header;
+        // Method name bytes, or method-id bytes when MethodId is set.
         std::span<const std::byte> method;
-        std::span<const std::byte> extensions;
+        // TLV extensions keyed by protocol extension; values point into the frame or caller-owned storage.
+        ExtensionMap extensions;
+        // Serialized RPC payload bytes.
         std::span<const std::byte> payload;
     };
 
-    static constexpr std::uint16_t Magic    = 0x4E52U;
-    static constexpr std::uint8_t Version   = 1U;
-    static constexpr std::size_t HeaderSize = 24U;
+private:
+    template <typename T>
+    static consteval auto _wireFieldSize() -> std::size_t {
+        using Value = std::remove_cvref_t<T>;
+        if constexpr (std::is_enum_v<Value>) {
+            return sizeof(std::underlying_type_t<Value>);
+        } else if constexpr (std::is_integral_v<Value>) {
+            return sizeof(Value);
+        } else {
+            static_assert(always_false_v<Value>, "NekoRpcFrameCodec::Header contains a non-fixed-width wire field");
+        }
+    }
+
+    template <typename Tuple, std::size_t... Is>
+    static consteval auto _wireTupleSize(std::index_sequence<Is...>) -> std::size_t {
+        return (_wireFieldSize<std::tuple_element_t<Is, Tuple>>() + ... + 0U);
+    }
+
+    static consteval auto _headerSize() -> std::size_t {
+        using Fields = typename Reflect<Header>::value_types;
+        return _wireTupleSize<Fields>(std::make_index_sequence<std::tuple_size_v<Fields>>{});
+    }
+
+public:
+    static auto headerSize() noexcept -> std::size_t;
 
     static auto decodeIncoming(std::span<const std::byte> message, std::uint8_t codec) -> DecodeResult;
     static auto methodName(const DecodedRequest& request) noexcept -> std::string_view;
@@ -131,89 +204,122 @@ public:
     static auto expectsResponse(const DecodedRequest& request) noexcept -> bool;
     static auto encodeResponses(const ResponseValues& responses, bool batch) -> Message;
 
-    static auto encodeFrame(NekoRpcKind kind, Id id, std::string_view method, const Message& payload,
-                            std::uint8_t flags, std::uint8_t codec) -> Message;
-    static auto encodeFrame(NekoRpcKind kind, Id id, std::string_view method, std::span<const std::byte> extensions,
-                            std::span<const std::byte> payload, std::uint8_t flags, std::uint8_t codec) -> Message;
-    static auto encodeHello(std::span<const std::byte> extensions, std::uint8_t codec) -> Message;
+    static auto encodeFrame(FrameParts frame) -> Message;
+    static auto encodeHello(ExtensionMap extensions, std::uint8_t codec) -> Message;
     static auto decodeFrame(std::span<const std::byte> data) -> ilias::Result<DecodedRequest, std::error_code>;
 
     static auto knownKind(NekoRpcKind kind) -> bool;
     static auto headerBodySize(std::span<const std::byte> header, std::uint8_t codec)
         -> ilias::Result<std::size_t, std::error_code>;
     static auto parseFrame(std::span<const std::byte> data, std::uint8_t codec, FrameParts& parts) -> bool;
-
-private:
-    static auto _byteAt(std::span<const std::byte> data, std::size_t offset) -> std::uint8_t;
-    static auto _readU16(std::span<const std::byte> data, std::size_t offset) -> std::uint16_t;
-    static auto _readU32(std::span<const std::byte> data, std::size_t offset) -> std::uint32_t;
-    static auto _readU64(std::span<const std::byte> data, std::size_t offset) -> std::uint64_t;
-    static auto _extensionsSupported(std::span<const std::byte> extensions) -> bool;
-
-    static auto _appendU8(Message& out, std::uint8_t value) -> void;
-    static auto _appendU16(Message& out, std::uint16_t value) -> void;
-    static auto _appendU32(Message& out, std::uint32_t value) -> void;
-    static auto _appendU64(Message& out, std::uint64_t value) -> void;
 };
 
 class NEKO_PROTO_API NekoRpcExtensionCodec {
 public:
-    using Message = NekoRpcFrameCodec::Message;
+    using Message      = NekoRpcFrameCodec::Message;
+    using ExtensionType = NekoRpcFrameCodec::ExtensionType;
+    using ExtensionMap = NekoRpcFrameCodec::ExtensionMap;
 
     static auto asBytes(const Message& message) -> std::span<const std::byte>;
     static auto copyBytes(std::span<const std::byte> bytes) -> Message;
 
-    static auto appendTlv(Message& out, std::uint16_t type, std::span<const std::byte> value) -> bool;
-    static auto makeTlv(std::uint16_t type, std::span<const std::byte> value) -> Message;
-    static auto findTlv(std::span<const std::byte> extensions, std::uint16_t expected, std::span<const std::byte>& out)
-        -> bool;
-    static auto withoutTlv(std::span<const std::byte> extensions, std::uint16_t skippedType)
-        -> ilias::Result<Message, std::error_code>;
+    static auto loadTlvs(std::span<const std::byte> data, ExtensionMap& extensions) -> bool;
+    static auto appendTlvs(Message& out, const ExtensionMap& extensions) -> bool;
 
-    static auto featureModeTlv(std::uint16_t type, NekoRpcFeatureMode mode) -> Message;
-    static auto parseFeatureMode(std::span<const std::byte> extensions, std::uint16_t type) -> NekoRpcFeatureMode;
-    static auto u64Tlv(std::uint16_t type, std::uint64_t value) -> Message;
-    static auto readU64Tlv(std::span<const std::byte> extensions, std::uint16_t type, std::uint64_t& value) -> bool;
+    template <typename Int>
+    static auto appendInteger(Message& out, Int value) -> void {
+        using Value = std::remove_cvref_t<Int>;
+        static_assert(std::is_integral_v<Value> && !std::is_same_v<Value, bool>,
+                      "appendInteger requires an integer wire value");
+        using Wire = std::make_unsigned_t<Value>;
 
-    static auto appendU8(Message& out, std::uint8_t value) -> void;
-    static auto appendU16(Message& out, std::uint16_t value) -> void;
-    static auto appendU32(Message& out, std::uint32_t value) -> void;
-    static auto appendU64(Message& out, std::uint64_t value) -> void;
-    static auto byteAt(std::span<const std::byte> data, std::size_t offset) -> std::uint8_t;
-    static auto readU16(std::span<const std::byte> data, std::size_t offset) -> std::uint16_t;
-    static auto readU32(std::span<const std::byte> data, std::size_t offset) -> std::uint32_t;
-    static auto readU64(std::span<const std::byte> data, std::size_t offset) -> std::uint64_t;
+        auto wire = static_cast<Wire>(value);
+        for (std::size_t ix = sizeof(Wire); ix > 0U; --ix) {
+            const auto shift = static_cast<unsigned>((ix - 1U) * 8U);
+            out.push_back(static_cast<char>((wire >> shift) & static_cast<Wire>(0xFFU)));
+        }
+    }
+
+    template <typename Int>
+    static auto readInteger(std::span<const std::byte> data, std::size_t offset = 0) -> Int {
+        using Value = std::remove_cvref_t<Int>;
+        static_assert(std::is_integral_v<Value> && !std::is_same_v<Value, bool>,
+                      "readInteger requires an integer wire value");
+        using Wire = std::make_unsigned_t<Value>;
+
+        Wire wire = 0;
+        for (std::size_t ix = 0; ix < sizeof(Wire); ++ix) {
+            wire = static_cast<Wire>((wire << 8U) | static_cast<Wire>(static_cast<std::uint8_t>(data[offset + ix])));
+        }
+        return static_cast<Value>(wire);
+    }
+
+    template <typename UInt>
+    static auto integerValue(UInt value) -> Message {
+        using Value = std::remove_cvref_t<UInt>;
+        static_assert(std::is_integral_v<Value> && !std::is_same_v<Value, bool>,
+                      "integerValue requires an integer wire value");
+
+        Message out;
+        appendInteger(out, value);
+        return out;
+    }
+
+    template <typename Enum>
+    static auto enumValue(Enum value) -> Message {
+        static_assert(std::is_enum_v<Enum>, "enumValue requires an enum wire value");
+        return integerValue(static_cast<std::underlying_type_t<Enum>>(value));
+    }
+
+    template <typename UInt>
+    static auto readIntegerValue(std::span<const std::byte> data, UInt& value) -> bool {
+        using Value = std::remove_cvref_t<UInt>;
+        static_assert(std::is_integral_v<Value> && !std::is_same_v<Value, bool>,
+                      "readIntegerValue requires an integer wire value");
+        if (data.size() != sizeof(Value)) {
+            return false;
+        }
+        value = readInteger<Value>(data);
+        return true;
+    }
+
+    template <typename UInt>
+    static auto readIntegerTlv(const ExtensionMap& extensions, ExtensionType type, UInt& value) -> bool {
+        const auto item = extensions.find(type);
+        return item != extensions.end() && readIntegerValue(item->second, value);
+    }
+
+    template <typename Enum>
+    static auto readEnumValue(std::span<const std::byte> data, Enum& value) -> bool {
+        static_assert(std::is_enum_v<Enum>, "readEnumValue requires an enum wire value");
+        std::underlying_type_t<Enum> raw{};
+        if (!readIntegerValue(data, raw)) {
+            return false;
+        }
+        value = static_cast<Enum>(raw);
+        return true;
+    }
+
+    template <typename Enum>
+    static auto readEnumTlv(const ExtensionMap& extensions, ExtensionType type, Enum& value) -> bool {
+        const auto item = extensions.find(type);
+        return item != extensions.end() && readEnumValue(item->second, value);
+    }
+
 };
 
 class NEKO_PROTO_API NekoRpcMethodIdExtension {
 public:
-    using Message = NekoRpcFrameCodec::Message;
+    using Message      = NekoRpcFrameCodec::Message;
+    using ExtensionType = NekoRpcFrameCodec::ExtensionType;
+    using ExtensionMap = NekoRpcFrameCodec::ExtensionMap;
 
-    static constexpr std::uint16_t ModeTlv                     = 1U;
-    static constexpr std::uint16_t TableVersionTlv             = 2U;
-    static constexpr std::uint16_t TableTlv                    = 3U;
-    static constexpr std::uint16_t TableDeltaTlv               = 4U;
-    static constexpr std::uint16_t SignatureHashTlv            = 5U;
-    static constexpr std::uint16_t MinimumCompatibleVersionTlv = 6U;
     static constexpr std::uint64_t InitialTableVersion         = 1U;
 
-    static auto modeTlv(NekoRpcFeatureMode mode) -> Message;
-    static auto parseMode(std::span<const std::byte> extensions) -> NekoRpcFeatureMode;
-    static auto tableVersionTlv(std::uint64_t version) -> Message;
-    static auto readTableVersion(std::span<const std::byte> extensions, std::uint64_t& version) -> bool;
-    static auto minimumCompatibleVersionTlv(std::uint64_t version) -> Message;
-    static auto readMinimumCompatibleVersion(std::span<const std::byte> extensions, std::uint64_t& version) -> bool;
-    static auto signatureHashTlv(std::uint64_t hash) -> Message;
-    static auto readSignatureHash(std::span<const std::byte> extensions, std::uint64_t& hash) -> bool;
-    static auto methodTableTlv(const std::vector<NekoRpcMethodEntry>& entries) -> Message;
-    static auto methodTableTlv(const std::vector<std::string>& names) -> Message;
-    static auto methodTableDeltaTlv(const std::vector<NekoRpcMethodEntry>& entries) -> Message;
-    static auto parseMethodTable(std::span<const std::byte> extensions, std::vector<NekoRpcMethodEntry>& entries)
-        -> bool;
-    static auto parseMethodTableDelta(std::span<const std::byte> extensions, std::vector<NekoRpcMethodEntry>& entries)
-        -> bool;
-    static auto parseMethodTable(std::span<const std::byte> extensions, std::vector<std::string>& names,
-                                 std::map<std::string, std::uint64_t>& ids) -> bool;
+    static auto methodTableValue(const std::vector<NekoRpcMethodEntry>& entries) -> Message;
+    static auto methodTableDeltaValue(const std::vector<NekoRpcMethodEntry>& entries) -> Message;
+    static auto parseMethodTable(const ExtensionMap& extensions, std::vector<NekoRpcMethodEntry>& entries) -> bool;
+    static auto parseMethodTableDelta(const ExtensionMap& extensions, std::vector<NekoRpcMethodEntry>& entries) -> bool;
 };
 
 class NEKO_PROTO_API NekoRpcMethodIdTable {
@@ -252,22 +358,6 @@ private:
     std::uint64_t mNextId                   = 0;
     std::vector<NekoRpcMethodEntry> mEntries;
     std::map<std::string, std::uint64_t, std::less<>> mNameToId;
-};
-
-class NEKO_PROTO_API NekoRpcCompressionExtension {
-public:
-    using Message = NekoRpcFrameCodec::Message;
-
-    static constexpr std::uint16_t ModeTlv           = 16U;
-    static constexpr std::uint16_t AlgorithmTlv      = 17U;
-    static constexpr std::uint16_t MinPayloadSizeTlv = 18U;
-
-    static auto modeTlv(NekoRpcFeatureMode mode) -> Message;
-    static auto parseMode(std::span<const std::byte> extensions) -> NekoRpcFeatureMode;
-    static auto algorithmTlv(NekoRpcCompressionAlgorithm algorithm) -> Message;
-    static auto parseAlgorithm(std::span<const std::byte> extensions) -> NekoRpcCompressionAlgorithm;
-    static auto minPayloadSizeTlv(std::uint32_t size) -> Message;
-    static auto readMinPayloadSize(std::span<const std::byte> extensions, std::uint32_t& size) -> bool;
 };
 
 class NEKO_PROTO_API NekoRpcCompressionCodec {

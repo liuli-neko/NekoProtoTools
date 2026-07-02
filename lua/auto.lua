@@ -49,7 +49,7 @@ function autofunc.auto_add_packages(target, options)
         target:add("packages", "fmt", {public = true})
     end
 
-    if uses_expected and not has_config("has_std_expected") then
+    if (uses_expected or uses_ilias) and not has_config("has_std_expected") then
         target:add("packages", "zeus_expected", {public = true})
     end
     

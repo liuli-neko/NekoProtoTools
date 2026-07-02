@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -283,8 +282,10 @@ public:
     }
 
 private:
-    static constexpr std::size_t HeaderSize = Codec::HeaderSize;
-    using FrameParts                        = typename Codec::FrameParts;
+    using FrameParts     = typename Codec::FrameParts;
+    using ExtensionType  = typename Codec::ExtensionType;
+    using ExtensionMap   = typename Codec::ExtensionMap;
+    using ExtensionStore = std::map<ExtensionType, Message>;
 
     template <typename Methods>
     static auto _methodEntries(Methods&& methods) -> std::vector<detail::NekoRpcMethodEntry> {
@@ -310,6 +311,28 @@ private:
         -> std::vector<detail::NekoRpcMethodEntry> {
         return _methodEntries(methods);
     }
+
+    static auto _extensionViews(const ExtensionStore& extensions) -> ExtensionMap {
+        ExtensionMap views;
+        for (const auto& [type, value] : extensions) {
+            views.emplace(type, detail::NekoRpcExtensionCodec::asBytes(value));
+        }
+        return views;
+    }
+
+    static auto _ownExtensions(const ExtensionMap& extensions) -> ExtensionStore {
+        ExtensionStore owned;
+        for (const auto& [type, value] : extensions) {
+            owned[type] = detail::NekoRpcExtensionCodec::copyBytes(value);
+        }
+        return owned;
+    }
+
+    static auto _encodeHello(const ExtensionStore& extensions) -> Message {
+        return Codec::encodeHello(_extensionViews(extensions), CodecId);
+    }
+
+    static constexpr bool _featureEnabled(MethodIdMode mode) noexcept { return mode != MethodIdMode::Disable; }
 
     static constexpr auto _featureModeName(MethodIdMode mode) noexcept -> std::string_view {
         switch (mode) {
@@ -368,7 +391,16 @@ private:
 
     static auto _encodeFrame(Kind kind, Id id, std::string_view method, const Message& payload, std::uint8_t flags)
         -> Message {
-        return Codec::encodeFrame(kind, id, method, payload, flags, CodecId);
+        Header header;
+        header.kind  = kind;
+        header.flags = flags;
+        header.codec = CodecId;
+        header.id    = id;
+        return Codec::encodeFrame({
+            .header  = header,
+            .method  = {reinterpret_cast<const std::byte*>(method.data()), method.size()},
+            .payload = detail::NekoRpcExtensionCodec::asBytes(payload),
+        });
     }
 
     static auto _encodeErrorFrame(Id id, std::error_code error) -> Message {
@@ -437,9 +469,6 @@ private:
                 }
                 frame = std::move(decompressed.value());
                 if (mRole == EndpointRole::Server && !mHandshakeDone) {
-                    if (mOptions.methodId == MethodIdMode::Require) {
-                        co_return ilias::Err(RpcError::InvalidRequest);
-                    }
                     mHandshakeDone = true;
                 }
                 if (mRole == EndpointRole::Server) {
@@ -521,13 +550,14 @@ private:
 
     private:
         auto _readFrame(Message& buffer) -> ilias::IoTask<void> {
-            std::array<std::byte, HeaderSize> headerBytes{};
+            const auto headerSize = Codec::headerSize();
+            std::vector<std::byte> headerBytes(headerSize);
             auto headerRet =
                 co_await ilias::io::readAll(mStream, std::span<std::byte>{headerBytes.data(), headerBytes.size()});
             if (!headerRet) {
                 co_return ilias::Err(headerRet.error());
             }
-            if (headerRet.value() != HeaderSize) {
+            if (headerRet.value() != headerSize) {
                 co_return ilias::Err(ilias::IoError::UnexpectedEOF);
             }
 
@@ -538,14 +568,14 @@ private:
             }
 
             const auto bodySize = bodySizeRet.value();
-            buffer.resize(HeaderSize + bodySize);
-            std::memcpy(buffer.data(), headerBytes.data(), HeaderSize);
+            buffer.resize(headerSize + bodySize);
+            std::memcpy(buffer.data(), headerBytes.data(), headerSize);
             if (bodySize == 0U) {
                 co_return {};
             }
 
             auto bodyRet = co_await ilias::io::readAll(
-                mStream, std::span<std::byte>{reinterpret_cast<std::byte*>(buffer.data() + HeaderSize), bodySize});
+                mStream, std::span<std::byte>{reinterpret_cast<std::byte*>(buffer.data() + headerSize), bodySize});
             if (!bodyRet) {
                 co_return ilias::Err(bodyRet.error());
             }
@@ -572,31 +602,35 @@ private:
         }
 
         auto _ensureClientHandshake() -> ilias::IoTask<void> {
-            if (mHandshakeDone ||
-                (mOptions.methodId == MethodIdMode::Disable && mOptions.compression == CompressionMode::Disable)) {
+            if (mHandshakeDone || (!_featureEnabled(mOptions.methodId) && !_featureEnabled(mOptions.compression))) {
                 mHandshakeDone = true;
                 co_return {};
             }
-            Message helloExtensions;
-            if (mOptions.methodId != MethodIdMode::Disable) {
-                auto methodIdTlv = detail::NekoRpcMethodIdExtension::modeTlv(mOptions.methodId);
-                helloExtensions.insert(helloExtensions.end(), methodIdTlv.begin(), methodIdTlv.end());
+
+            ExtensionStore helloExtensions;
+            if (_featureEnabled(mOptions.methodId)) {
+                helloExtensions[ExtensionType::MethodId] = {};
             }
-            if (mOptions.compression != CompressionMode::Disable) {
-                auto compressionTlv = detail::NekoRpcCompressionExtension::modeTlv(mOptions.compression);
-                auto algorithmTlv =
-                    detail::NekoRpcCompressionExtension::algorithmTlv(CompressionCodec::preferredAlgorithm());
-                auto minSizeTlv =
-                    detail::NekoRpcCompressionExtension::minPayloadSizeTlv(mOptions.compressionMinPayloadSize);
-                helloExtensions.insert(helloExtensions.end(), compressionTlv.begin(), compressionTlv.end());
-                helloExtensions.insert(helloExtensions.end(), algorithmTlv.begin(), algorithmTlv.end());
-                helloExtensions.insert(helloExtensions.end(), minSizeTlv.begin(), minSizeTlv.end());
+            const auto compressionAlgorithm = CompressionCodec::preferredAlgorithm();
+            if (_featureEnabled(mOptions.compression) && compressionAlgorithm != CompressionAlgorithm::None &&
+                CompressionCodec::supports(compressionAlgorithm)) {
+                helloExtensions[ExtensionType::Compression] = {};
+                helloExtensions[ExtensionType::CompressionAlgorithm] =
+                    detail::NekoRpcExtensionCodec::enumValue(compressionAlgorithm);
+                helloExtensions[ExtensionType::CompressionMinPayloadSize] =
+                    detail::NekoRpcExtensionCodec::integerValue(mOptions.compressionMinPayloadSize);
             }
-            NEKO_LOG_INFO("rpc", "rpc backend client hello: method_id={} compression={} algorithm={} min_payload={}",
+            if (helloExtensions.empty()) {
+                mHandshakeDone = true;
+                co_return {};
+            }
+
+            NEKO_LOG_INFO("rpc",
+                          "rpc backend client hello: method_id_option={} compression_option={} algorithm={} "
+                          "min_payload={}",
                           _featureModeName(mOptions.methodId), _featureModeName(mOptions.compression),
-                          _compressionAlgorithmName(CompressionCodec::preferredAlgorithm()),
-                          mOptions.compressionMinPayloadSize);
-            auto hello = Codec::encodeHello(detail::NekoRpcExtensionCodec::asBytes(helloExtensions), CodecId);
+                          _compressionAlgorithmName(compressionAlgorithm), mOptions.compressionMinPayloadSize);
+            auto hello = _encodeHello(helloExtensions);
             if (auto ret = co_await _writeFrame(hello); !ret) {
                 co_return ilias::Err(ret.error());
             }
@@ -607,14 +641,6 @@ private:
             if (!_isHello(response) || !_handleServerHello(response)) {
                 co_return ilias::Err(RpcError::InvalidRequest);
             }
-            if (mOptions.methodId == MethodIdMode::Require && !mMethodIdEnabled) {
-                NEKO_LOG_WARN("rpc", "rpc backend method-id negotiation failed: required by client");
-                co_return ilias::Err(RpcError::MethodIdRequiredButUnsupported);
-            }
-            if (mOptions.compression == CompressionMode::Require && !mCompressionEnabled) {
-                NEKO_LOG_WARN("rpc", "rpc backend compression negotiation failed: required by client");
-                co_return ilias::Err(RpcError::CompressionRequiredButUnsupported);
-            }
             mHandshakeDone = true;
             co_return {};
         }
@@ -624,18 +650,21 @@ private:
             if (!Codec::parseFrame(detail::NekoRpcExtensionCodec::asBytes(frame), CodecId, parts)) {
                 co_return ilias::Err(RpcError::InvalidRequest);
             }
-            const auto clientMode            = detail::NekoRpcMethodIdExtension::parseMode(parts.extensions);
-            const auto clientCompressionMode = detail::NekoRpcCompressionExtension::parseMode(parts.extensions);
-            const auto clientCompressionAlgorithm =
-                detail::NekoRpcCompressionExtension::parseAlgorithm(parts.extensions);
+
+            const bool clientSupportsMethodId = parts.extensions.contains(ExtensionType::MethodId);
+            CompressionAlgorithm clientCompressionAlgorithm = CompressionAlgorithm::None;
+            const bool hasClientCompressionAlgorithm        = detail::NekoRpcExtensionCodec::readEnumTlv(
+                parts.extensions, ExtensionType::CompressionAlgorithm, clientCompressionAlgorithm);
             std::uint32_t clientMinPayloadSize = 0;
-            detail::NekoRpcCompressionExtension::readMinPayloadSize(parts.extensions, clientMinPayloadSize);
-            const bool canEnable = mOptions.methodId != MethodIdMode::Disable && clientMode != MethodIdMode::Disable &&
-                                   !mMethodTable.empty();
-            mMethodIdEnabled    = canEnable;
-            mCompressionEnabled = mOptions.compression != CompressionMode::Disable &&
-                                  clientCompressionMode != CompressionMode::Disable &&
-                                  clientCompressionAlgorithm != CompressionAlgorithm::None &&
+            detail::NekoRpcExtensionCodec::readIntegerTlv(parts.extensions, ExtensionType::CompressionMinPayloadSize,
+                                                          clientMinPayloadSize);
+
+            const bool clientSupportsCompression = parts.extensions.contains(ExtensionType::Compression) &&
+                                                   hasClientCompressionAlgorithm &&
+                                                   clientCompressionAlgorithm != CompressionAlgorithm::None &&
+                                                   CompressionCodec::supports(clientCompressionAlgorithm);
+            mMethodIdEnabled    = _featureEnabled(mOptions.methodId) && clientSupportsMethodId && !mMethodTable.empty();
+            mCompressionEnabled = _featureEnabled(mOptions.compression) && clientSupportsCompression &&
                                   CompressionCodec::supports(clientCompressionAlgorithm);
             mCompressionAlgorithm = mCompressionEnabled ? clientCompressionAlgorithm : CompressionAlgorithm::None;
             if (mCompressionEnabled && clientMinPayloadSize > mCompressionMinPayloadSize) {
@@ -644,54 +673,30 @@ private:
             NEKO_LOG_INFO("rpc",
                           "rpc backend server hello: client_method_id={} method_id_enabled={} table_version={} "
                           "method_count={} client_compression={} compression_enabled={} algorithm={} min_payload={}",
-                          _featureModeName(clientMode), mMethodIdEnabled, mMethodTable.version(),
-                          mMethodTable.entries().size(), _featureModeName(clientCompressionMode), mCompressionEnabled,
+                          clientSupportsMethodId, mMethodIdEnabled, mMethodTable.version(),
+                          mMethodTable.entries().size(), clientSupportsCompression, mCompressionEnabled,
                           _compressionAlgorithmName(mCompressionAlgorithm), mCompressionMinPayloadSize);
 
-            Message extensions = detail::NekoRpcMethodIdExtension::modeTlv(mMethodIdEnabled ? MethodIdMode::Auto
-                                                                                            : MethodIdMode::Disable);
+            ExtensionStore extensions;
             if (mMethodIdEnabled) {
-                const auto versionTlv    = detail::NekoRpcMethodIdExtension::tableVersionTlv(mMethodTable.version());
-                const auto minVersionTlv = detail::NekoRpcMethodIdExtension::minimumCompatibleVersionTlv(
-                    mMethodTable.minimumCompatibleVersion());
-                const auto tableTlv = detail::NekoRpcMethodIdExtension::methodTableTlv(mMethodTable.entries());
-                extensions.insert(extensions.end(), versionTlv.begin(), versionTlv.end());
-                extensions.insert(extensions.end(), minVersionTlv.begin(), minVersionTlv.end());
-                extensions.insert(extensions.end(), tableTlv.begin(), tableTlv.end());
+                extensions[ExtensionType::MethodId] = {};
+                extensions[ExtensionType::MethodTableVersion] =
+                    detail::NekoRpcExtensionCodec::integerValue(mMethodTable.version());
+                extensions[ExtensionType::MethodMinimumCompatibleVersion] =
+                    detail::NekoRpcExtensionCodec::integerValue(mMethodTable.minimumCompatibleVersion());
+                extensions[ExtensionType::MethodTable] =
+                    detail::NekoRpcMethodIdExtension::methodTableValue(mMethodTable.entries());
             }
-            if (mOptions.compression != CompressionMode::Disable || clientCompressionMode != CompressionMode::Disable) {
-                const auto compressionTlv = detail::NekoRpcCompressionExtension::modeTlv(
-                    mCompressionEnabled ? CompressionMode::Auto : CompressionMode::Disable);
-                extensions.insert(extensions.end(), compressionTlv.begin(), compressionTlv.end());
-                if (mCompressionEnabled) {
-                    const auto algorithmTlv = detail::NekoRpcCompressionExtension::algorithmTlv(mCompressionAlgorithm);
-                    const auto minSizeTlv =
-                        detail::NekoRpcCompressionExtension::minPayloadSizeTlv(mCompressionMinPayloadSize);
-                    extensions.insert(extensions.end(), algorithmTlv.begin(), algorithmTlv.end());
-                    extensions.insert(extensions.end(), minSizeTlv.begin(), minSizeTlv.end());
-                }
+            if (mCompressionEnabled) {
+                extensions[ExtensionType::Compression] = {};
+                extensions[ExtensionType::CompressionAlgorithm] =
+                    detail::NekoRpcExtensionCodec::enumValue(mCompressionAlgorithm);
+                extensions[ExtensionType::CompressionMinPayloadSize] =
+                    detail::NekoRpcExtensionCodec::integerValue(mCompressionMinPayloadSize);
             }
-            auto response = Codec::encodeHello(detail::NekoRpcExtensionCodec::asBytes(extensions), CodecId);
+            auto response = _encodeHello(extensions);
             if (auto ret = co_await _writeFrame(response); !ret) {
                 co_return ilias::Err(ret.error());
-            }
-            if ((mOptions.methodId == MethodIdMode::Require || clientMode == MethodIdMode::Require) && !canEnable) {
-                NEKO_LOG_WARN("rpc",
-                              "rpc backend method-id negotiation failed: server_mode={} client_mode={} "
-                              "method_count={}",
-                              _featureModeName(mOptions.methodId), _featureModeName(clientMode),
-                              mMethodTable.entries().size());
-                co_return ilias::Err(RpcError::MethodIdRequiredButUnsupported);
-            }
-            if ((mOptions.compression == CompressionMode::Require ||
-                 clientCompressionMode == CompressionMode::Require) &&
-                !mCompressionEnabled) {
-                NEKO_LOG_WARN("rpc",
-                              "rpc backend compression negotiation failed: server_mode={} client_mode={} "
-                              "client_algorithm={}",
-                              _featureModeName(mOptions.compression), _featureModeName(clientCompressionMode),
-                              _compressionAlgorithmName(clientCompressionAlgorithm));
-                co_return ilias::Err(RpcError::CompressionRequiredButUnsupported);
             }
             mHandshakeDone = true;
             co_return {};
@@ -702,13 +707,13 @@ private:
             if (!Codec::parseFrame(detail::NekoRpcExtensionCodec::asBytes(frame), CodecId, parts)) {
                 return false;
             }
-            const auto mode              = detail::NekoRpcMethodIdExtension::parseMode(parts.extensions);
-            mMethodIdEnabled             = mode != MethodIdMode::Disable;
+            mMethodIdEnabled             = parts.extensions.contains(ExtensionType::MethodId);
             std::string_view tableUpdate = "none";
             std::size_t tableEntryCount  = 0;
             if (mMethodIdEnabled) {
                 std::uint64_t version = 0;
-                if (!detail::NekoRpcMethodIdExtension::readTableVersion(parts.extensions, version)) {
+                if (!detail::NekoRpcExtensionCodec::readIntegerTlv(parts.extensions,
+                                                                    ExtensionType::MethodTableVersion, version)) {
                     return false;
                 }
                 std::vector<detail::NekoRpcMethodEntry> entries;
@@ -728,25 +733,25 @@ private:
                     return false;
                 }
                 std::uint64_t minimumVersion = 0;
-                if (detail::NekoRpcMethodIdExtension::readMinimumCompatibleVersion(parts.extensions, minimumVersion)) {
+                if (detail::NekoRpcExtensionCodec::readIntegerTlv(
+                        parts.extensions, ExtensionType::MethodMinimumCompatibleVersion, minimumVersion)) {
                     mMethodTable.setMinimumCompatibleVersion(minimumVersion);
                 }
             }
-            const auto compressionMode = detail::NekoRpcCompressionExtension::parseMode(parts.extensions);
-            if (compressionMode != CompressionMode::Disable) {
-                mCompressionAlgorithm = detail::NekoRpcCompressionExtension::parseAlgorithm(parts.extensions);
-                mCompressionEnabled   = mCompressionAlgorithm != CompressionAlgorithm::None &&
-                                      CompressionCodec::supports(mCompressionAlgorithm);
-                std::uint32_t minPayloadSize = 0;
-                if (detail::NekoRpcCompressionExtension::readMinPayloadSize(parts.extensions, minPayloadSize)) {
-                    mCompressionMinPayloadSize = minPayloadSize;
+            mCompressionEnabled   = parts.extensions.contains(ExtensionType::Compression);
+            mCompressionAlgorithm = CompressionAlgorithm::None;
+            if (mCompressionEnabled) {
+                if (!detail::NekoRpcExtensionCodec::readEnumTlv(parts.extensions,
+                                                                 ExtensionType::CompressionAlgorithm,
+                                                                 mCompressionAlgorithm) ||
+                    mCompressionAlgorithm == CompressionAlgorithm::None ||
+                    !CompressionCodec::supports(mCompressionAlgorithm)) {
+                    return false;
                 }
-            } else {
-                std::span<const std::byte> compressionValue;
-                if (detail::NekoRpcExtensionCodec::findTlv(
-                        parts.extensions, detail::NekoRpcCompressionExtension::ModeTlv, compressionValue)) {
-                    mCompressionEnabled   = false;
-                    mCompressionAlgorithm = CompressionAlgorithm::None;
+                std::uint32_t minPayloadSize = 0;
+                if (detail::NekoRpcExtensionCodec::readIntegerTlv(
+                        parts.extensions, ExtensionType::CompressionMinPayloadSize, minPayloadSize)) {
+                    mCompressionMinPayloadSize = minPayloadSize;
                 }
             }
             NEKO_LOG_INFO("rpc",
@@ -766,19 +771,25 @@ private:
         }
 
         auto _methodTableHello(const std::vector<detail::NekoRpcMethodEntry>& entries, bool full) const -> Message {
-            Message extensions = detail::NekoRpcMethodIdExtension::modeTlv(mMethodIdEnabled ? MethodIdMode::Auto
-                                                                                            : MethodIdMode::Disable);
+            ExtensionStore extensions;
             if (mMethodIdEnabled) {
-                const auto versionTlv    = detail::NekoRpcMethodIdExtension::tableVersionTlv(mMethodTable.version());
-                const auto minVersionTlv = detail::NekoRpcMethodIdExtension::minimumCompatibleVersionTlv(
-                    mMethodTable.minimumCompatibleVersion());
-                const auto tableTlv = full ? detail::NekoRpcMethodIdExtension::methodTableTlv(entries)
-                                           : detail::NekoRpcMethodIdExtension::methodTableDeltaTlv(entries);
-                extensions.insert(extensions.end(), versionTlv.begin(), versionTlv.end());
-                extensions.insert(extensions.end(), minVersionTlv.begin(), minVersionTlv.end());
-                extensions.insert(extensions.end(), tableTlv.begin(), tableTlv.end());
+                extensions[ExtensionType::MethodId] = {};
+                extensions[ExtensionType::MethodTableVersion] =
+                    detail::NekoRpcExtensionCodec::integerValue(mMethodTable.version());
+                extensions[ExtensionType::MethodMinimumCompatibleVersion] =
+                    detail::NekoRpcExtensionCodec::integerValue(mMethodTable.minimumCompatibleVersion());
+                extensions[full ? ExtensionType::MethodTable : ExtensionType::MethodTableDelta] =
+                    full ? detail::NekoRpcMethodIdExtension::methodTableValue(entries)
+                         : detail::NekoRpcMethodIdExtension::methodTableDeltaValue(entries);
             }
-            return Codec::encodeHello(detail::NekoRpcExtensionCodec::asBytes(extensions), CodecId);
+            if (mCompressionEnabled) {
+                extensions[ExtensionType::Compression] = {};
+                extensions[ExtensionType::CompressionAlgorithm] =
+                    detail::NekoRpcExtensionCodec::enumValue(mCompressionAlgorithm);
+                extensions[ExtensionType::CompressionMinPayloadSize] =
+                    detail::NekoRpcExtensionCodec::integerValue(mCompressionMinPayloadSize);
+            }
+            return _encodeHello(extensions);
         }
 
         auto _syncMethodTable(const std::vector<detail::NekoRpcMethodEntry>& activeEntries,
@@ -878,13 +889,15 @@ private:
                           _compressionAlgorithmName(mCompressionAlgorithm), parts.payload.size(),
                           compressed.value().size());
 
-            Message method     = detail::NekoRpcExtensionCodec::copyBytes(parts.method);
-            Message extensions = detail::NekoRpcExtensionCodec::copyBytes(parts.extensions);
-            auto flags         = static_cast<std::uint8_t>(parts.header.flags | Flag::Compressed);
-            return Codec::encodeFrame(parts.header.kind, parts.header.id,
-                                      std::string_view{method.data(), method.size()},
-                                      detail::NekoRpcExtensionCodec::asBytes(extensions),
-                                      detail::NekoRpcExtensionCodec::asBytes(compressed.value()), flags, CodecId);
+            auto header  = parts.header;
+            header.flags = static_cast<std::uint8_t>(header.flags | Flag::Compressed);
+            header.codec = CodecId;
+            return Codec::encodeFrame({
+                .header     = header,
+                .method     = parts.method,
+                .extensions = parts.extensions,
+                .payload    = detail::NekoRpcExtensionCodec::asBytes(compressed.value()),
+            });
         }
 
         auto _decompressIncomingFrame(const Message& frame) -> ilias::Result<Message, std::error_code> {
@@ -918,16 +931,15 @@ private:
                           _kindName(parts.header.kind), parts.header.id,
                           _compressionAlgorithmName(mCompressionAlgorithm), parts.payload.size(),
                           payload.value().size());
-            Message method     = detail::NekoRpcExtensionCodec::copyBytes(parts.method);
-            Message extensions = detail::NekoRpcExtensionCodec::copyBytes(parts.extensions);
-            auto flags         = static_cast<std::uint8_t>(parts.header.flags & ~Flag::Compressed);
-            if (extensions.empty()) {
-                flags = static_cast<std::uint8_t>(flags & ~Flag::HasExtensions);
-            }
-            return Codec::encodeFrame(parts.header.kind, parts.header.id,
-                                      std::string_view{method.data(), method.size()},
-                                      detail::NekoRpcExtensionCodec::asBytes(extensions),
-                                      detail::NekoRpcExtensionCodec::asBytes(payload.value()), flags, CodecId);
+            auto header  = parts.header;
+            header.flags = static_cast<std::uint8_t>(header.flags & ~Flag::Compressed);
+            header.codec = CodecId;
+            return Codec::encodeFrame({
+                .header     = header,
+                .method     = parts.method,
+                .extensions = parts.extensions,
+                .payload    = detail::NekoRpcExtensionCodec::asBytes(payload.value()),
+            });
         }
 
         auto _sendMethodIdError(const Message& frame, std::error_code error) -> ilias::IoTask<void> {
@@ -1036,31 +1048,25 @@ private:
             }
 
             Message methodBytes;
-            detail::NekoRpcExtensionCodec::appendU64(methodBytes, entry->id);
-            auto extensionsRet = detail::NekoRpcExtensionCodec::withoutTlv(
-                parts.extensions, detail::NekoRpcMethodIdExtension::TableVersionTlv);
-            if (!extensionsRet) {
-                return frame;
-            }
-            auto signatureRet =
-                detail::NekoRpcExtensionCodec::withoutTlv(detail::NekoRpcExtensionCodec::asBytes(extensionsRet.value()),
-                                                          detail::NekoRpcMethodIdExtension::SignatureHashTlv);
-            if (!signatureRet) {
-                return frame;
-            }
-            auto extensions   = std::move(signatureRet.value());
-            auto versionTlv   = detail::NekoRpcMethodIdExtension::tableVersionTlv(mMethodTable.version());
-            auto signatureTlv = detail::NekoRpcMethodIdExtension::signatureHashTlv(entry->signatureHash);
-            extensions.insert(extensions.end(), versionTlv.begin(), versionTlv.end());
-            extensions.insert(extensions.end(), signatureTlv.begin(), signatureTlv.end());
-            Message payload = detail::NekoRpcExtensionCodec::copyBytes(parts.payload);
-            auto flags      = static_cast<std::uint8_t>(parts.header.flags | Flag::MethodId);
+            detail::NekoRpcExtensionCodec::appendInteger(methodBytes, entry->id);
+            auto extensions = _ownExtensions(parts.extensions);
+            extensions.erase(ExtensionType::MethodTableVersion);
+            extensions.erase(ExtensionType::MethodSignatureHash);
+            extensions[ExtensionType::MethodTableVersion] =
+                detail::NekoRpcExtensionCodec::integerValue(mMethodTable.version());
+            extensions[ExtensionType::MethodSignatureHash] =
+                detail::NekoRpcExtensionCodec::integerValue(entry->signatureHash);
+            auto header     = parts.header;
+            header.flags    = static_cast<std::uint8_t>(header.flags | Flag::MethodId);
+            header.codec    = CodecId;
             NEKO_LOG_INFO("rpc", "rpc backend method-id encode: method={} id={} table_version={} signature={}", method,
                           entry->id, mMethodTable.version(), entry->signatureHash);
-            return Codec::encodeFrame(parts.header.kind, parts.header.id,
-                                      std::string_view{methodBytes.data(), methodBytes.size()},
-                                      detail::NekoRpcExtensionCodec::asBytes(extensions),
-                                      detail::NekoRpcExtensionCodec::asBytes(payload), flags, CodecId);
+            return Codec::encodeFrame({
+                .header     = header,
+                .method     = detail::NekoRpcExtensionCodec::asBytes(methodBytes),
+                .extensions = _extensionViews(extensions),
+                .payload    = parts.payload,
+            });
         }
 
         auto _rewriteIncomingMethodId(const Message& frame) -> ilias::Result<Message, std::error_code> {
@@ -1073,10 +1079,6 @@ private:
                 return frame;
             }
             if ((parts.header.flags & Flag::MethodId) == 0U) {
-                if (mOptions.methodId == MethodIdMode::Require && mMethodIdEnabled) {
-                    NEKO_LOG_WARN("rpc", "rpc backend method-id request rejected: string method used while required");
-                    return ilias::Err(RpcError::MethodIdRequiredButUnsupported);
-                }
                 return frame;
             }
             if (!mMethodIdEnabled || parts.method.size() != sizeof(std::uint64_t)) {
@@ -1085,14 +1087,15 @@ private:
                 return ilias::Err(RpcError::MethodIdNotNegotiated);
             }
             std::uint64_t version = 0;
-            if (!detail::NekoRpcMethodIdExtension::readTableVersion(parts.extensions, version)) {
+            if (!detail::NekoRpcExtensionCodec::readIntegerTlv(parts.extensions, ExtensionType::MethodTableVersion,
+                                                                version)) {
                 NEKO_LOG_WARN("rpc", "rpc backend method-id request rejected: missing table version");
                 return ilias::Err(RpcError::MethodTableOutdated);
             }
             std::uint64_t signatureHash = 0;
-            const bool hasSignature =
-                detail::NekoRpcMethodIdExtension::readSignatureHash(parts.extensions, signatureHash);
-            const auto methodId = detail::NekoRpcExtensionCodec::readU64(parts.method, 0);
+            const bool hasSignature = detail::NekoRpcExtensionCodec::readIntegerTlv(
+                parts.extensions, ExtensionType::MethodSignatureHash, signatureHash);
+            const auto methodId = detail::NekoRpcExtensionCodec::readInteger<std::uint64_t>(parts.method);
             auto resolved       = mMethodTable.resolve(methodId, version, signatureHash, true);
             if (!hasSignature && resolved.status == detail::NekoRpcMethodIdResolveStatus::SignatureMismatch) {
                 NEKO_LOG_WARN("rpc",
@@ -1130,30 +1133,23 @@ private:
                 return ilias::Err(RpcError::MethodSignatureMismatch);
             }
 
-            auto extensionsRet = detail::NekoRpcExtensionCodec::withoutTlv(
-                parts.extensions, detail::NekoRpcMethodIdExtension::TableVersionTlv);
-            if (!extensionsRet) {
-                return ilias::Err(extensionsRet.error());
-            }
-            auto signatureRet =
-                detail::NekoRpcExtensionCodec::withoutTlv(detail::NekoRpcExtensionCodec::asBytes(extensionsRet.value()),
-                                                          detail::NekoRpcMethodIdExtension::SignatureHashTlv);
-            if (!signatureRet) {
-                return ilias::Err(signatureRet.error());
-            }
-            auto extensions = std::move(signatureRet.value());
-            Message payload = detail::NekoRpcExtensionCodec::copyBytes(parts.payload);
-            auto flags      = static_cast<std::uint8_t>(parts.header.flags & ~Flag::MethodId);
-            if (extensions.empty()) {
-                flags = static_cast<std::uint8_t>(flags & ~Flag::HasExtensions);
-            }
+            auto extensions = _ownExtensions(parts.extensions);
+            extensions.erase(ExtensionType::MethodTableVersion);
+            extensions.erase(ExtensionType::MethodSignatureHash);
+            auto header     = parts.header;
+            header.flags    = static_cast<std::uint8_t>(header.flags & ~Flag::MethodId);
+            header.codec    = CodecId;
             NEKO_LOG_INFO("rpc",
                           "rpc backend method-id decode: id={} method={} client_version={} server_version={} "
                           "signature={}",
                           methodId, resolved.entry->name, version, mMethodTable.version(), signatureHash);
-            return Codec::encodeFrame(parts.header.kind, parts.header.id, resolved.entry->name,
-                                      detail::NekoRpcExtensionCodec::asBytes(extensions),
-                                      detail::NekoRpcExtensionCodec::asBytes(payload), flags, CodecId);
+            return Codec::encodeFrame({
+                .header     = header,
+                .method     = {reinterpret_cast<const std::byte*>(resolved.entry->name.data()),
+                               resolved.entry->name.size()},
+                .extensions = _extensionViews(extensions),
+                .payload    = parts.payload,
+            });
         }
 
         StreamT mStream;
