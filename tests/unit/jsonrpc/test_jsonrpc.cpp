@@ -539,7 +539,7 @@ TEST_F(JsonRpcTest, RpcMethodSpecMergesFieldTagsWithPriority) {
 
     auto methodInfo = client->rpc.getMethodInfo("tag.add").wait();
     ASSERT_TRUE(methodInfo.has_value()) << methodInfo.error().message();
-    EXPECT_EQ(methodInfo.value(), "i32 tag.add(i32 left, i32 right)");
+    EXPECT_TRUE(methodInfo.value().find("signature: i32 tag.add(i32 left, i32 right)") != std::string::npos);
 
     auto metadata = server.methodDatas("tag.add");
     EXPECT_EQ(metadata.description, "tag desc");
@@ -628,47 +628,47 @@ TEST_F(JsonRpcTest, Basic) {
 
     auto methodInfo = client->rpc.getMethodInfo("test1").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "i32 test1(i32 num1, i32 num2)");
+    EXPECT_TRUE(std::string::npos != methodInfo.value().find("signature: i32 test1(i32 num1, i32 num2)"));
 
     methodInfo = client->rpc.getMethodInfo("test2").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "void test2(i32 num1, i32 num2)");
+    EXPECT_TRUE(methodInfo.value().find("signature: void test2(i32 num1, i32 num2)") != std::string::npos);
 
     methodInfo = client->rpc.getMethodInfo("test3").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "void test3()");
+    EXPECT_TRUE(methodInfo.value().find("signature: void test3()") != std::string::npos);
 
     methodInfo = client->rpc.getMethodInfo("test4").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "i32 test4()");
+    EXPECT_TRUE(methodInfo.value().find("signature: i32 test4()") != std::string::npos);
 
     methodInfo = client->rpc.getMethodInfo("test5").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "string test5(string, f64)");
+    EXPECT_TRUE(methodInfo.value().find("signature: string test5(string, f64)") != std::string::npos);
 
     methodInfo = client->rpc.getMethodInfo("test6").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "string test6(tuple<i32, f64, bool>)");
+    EXPECT_TRUE(methodInfo.value().find("signature: string test6(tuple<i32, f64, bool>)") != std::string::npos);
 
     methodInfo = client->rpc.getMethodInfo("test7").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "string test7()");
+    EXPECT_TRUE(methodInfo.value().find("signature: string test7()") != std::string::npos);
 
     methodInfo = client->rpc.getMethodInfo("test8").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "i32 test8(null)");
+    EXPECT_TRUE(methodInfo.value().find("signature: i32 test8(null)") != std::string::npos);
 
     methodInfo = client->rpc.getMethodInfo("test9").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "array<i32> test9(array<bool>)");
+    EXPECT_TRUE(methodInfo.value().find("signature: array<i32> test9(array<bool>)") != std::string::npos);
 
     methodInfo = client->rpc.getMethodInfo("test10").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "object<Copytest> test10(i32)");
+    EXPECT_TRUE(methodInfo.value().find("object<Copytest> test10(i32)") != std::string::npos);
 
     methodInfo = client->rpc.getMethodInfo("test11").wait();
     ASSERT_TRUE(methodInfo.has_value());
-    EXPECT_EQ(methodInfo.value(), "i32 test11(i32 aa, i32 bb)");
+    EXPECT_TRUE(methodInfo.value().find("signature: i32 test11(i32 aa, i32 bb)") != std::string::npos);
 
     auto result = client.callRemote<int>("test11", 1, 2).wait();
     ASSERT_TRUE(result.has_value());

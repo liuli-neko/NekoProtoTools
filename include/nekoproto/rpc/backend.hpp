@@ -399,17 +399,18 @@ private:
         return Codec::encodeFrame({
             .header  = header,
             .method  = {reinterpret_cast<const std::byte*>(method.data()), method.size()},
+            .extensions = {},
             .payload = detail::NekoRpcExtensionCodec::asBytes(payload),
         });
     }
 
     static auto _encodeErrorFrame(Id id, std::error_code error) -> Message {
-        const NekoRpcError rpcError{
+        const NekoRpcError rpc_error{
             .code    = static_cast<std::int32_t>(error.value()),
             .message = error.message(),
             .data    = {},
         };
-        auto payload = _encodePayload(rpcError);
+        auto payload = _encodePayload(rpc_error);
         if (!payload) {
             return _encodeFrame(Kind::Response, id, {}, {}, Flag::Error);
         }
