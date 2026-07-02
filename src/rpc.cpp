@@ -1,6 +1,8 @@
 #include "nekoproto/rpc/backend_base.hpp"
 #include "nekoproto/rpc/error.hpp"
 
+#include "nekoproto/serialization/reflection.hpp"
+
 #include <cstring>
 #include <limits>
 #include <utility>
@@ -22,8 +24,97 @@ auto appendBytes(NekoRpcFrameCodec::Message& out, std::span<const std::byte> byt
 
 constexpr std::uint8_t MethodTableFormatVersion = 2U;
 
-auto encodeMethodEntries(const std::vector<NekoRpcMethodEntry>& entries, std::uint16_t tlvType)
-    -> NekoRpcFrameCodec::Message {
+auto readHeader(std::span<const std::byte> data) -> NekoRpcFrameCodec::Header {
+    std::size_t offset = 0;
+    NekoRpcFrameCodec::Header header;
+    Reflect<NekoRpcFrameCodec::Header>::forEach(header, [&](auto& field) {
+        using value_type = std::remove_reference_t<decltype(field)>;
+        if constexpr (std::is_enum_v<value_type>) {
+            using wire_type = std::underlying_type_t<value_type>;
+            field           = static_cast<value_type>(NekoRpcExtensionCodec::readInteger<wire_type>(data, offset));
+            offset += sizeof(wire_type);
+        } else if constexpr (std::is_integral_v<value_type>) {
+            field = NekoRpcExtensionCodec::readInteger<value_type>(data, offset);
+            offset += sizeof(value_type);
+        } else {
+            static_assert(always_false_v<value_type>, "Unsupported type");
+        }
+    });
+    return header;
+}
+
+auto appendHeader(NekoRpcFrameCodec::Message& out, const NekoRpcFrameCodec::Header& header) -> void {
+    Reflect<NekoRpcFrameCodec::Header>::forEach(header, [&](auto& field) {
+        using value_type = std::remove_reference_t<decltype(field)>;
+        if constexpr (std::is_enum_v<value_type>) {
+            NekoRpcExtensionCodec::appendInteger(out, static_cast<std::underlying_type_t<value_type>>(field));
+        } else if constexpr (std::is_integral_v<value_type>) {
+            NekoRpcExtensionCodec::appendInteger(out, field);
+        } else {
+            static_assert(always_false_v<value_type>, "Unsupported type");
+        }
+    });
+}
+
+auto frameBodySize(const NekoRpcFrameCodec::Header& header) -> ilias::Result<std::size_t, std::error_code> {
+    const auto methodSize    = static_cast<std::size_t>(header.methodSize);
+    const auto extensionSize = static_cast<std::size_t>(header.extensionSize);
+    const auto payloadSize   = static_cast<std::size_t>(header.payloadSize);
+    const auto maxSize       = std::numeric_limits<std::size_t>::max();
+    if (methodSize > maxSize - extensionSize || methodSize + extensionSize > maxSize - payloadSize ||
+        methodSize + extensionSize + payloadSize > maxSize - NekoRpcFrameCodec::headerSize()) {
+        return ilias::Err(RpcError::InvalidRequest);
+    }
+    return methodSize + extensionSize + payloadSize;
+}
+
+auto validHeader(const NekoRpcFrameCodec::Header& header) -> bool {
+    return header.magic == NekoRpcFrameCodec::Magic && header.version == NekoRpcFrameCodec::Version &&
+           NekoRpcFrameCodec::knownKind(header.kind);
+}
+
+auto extensionsSupported(const NekoRpcFrameCodec::ExtensionMap& extensions) -> bool {
+    for (const auto& extension : extensions) {
+        const auto wireType = static_cast<std::underlying_type_t<NekoRpcExtensionType>>(extension.first);
+        if ((wireType & 0x8000U) != 0U) {
+            NEKO_LOG_ERROR("rpcbackend", "Extension {} is not supported", wireType);
+            return false;
+        }
+    }
+    return true;
+}
+
+auto parseFrameParts(std::span<const std::byte> data, NekoRpcFrameCodec::FrameParts& parts) -> bool {
+    if (data.size() < NekoRpcFrameCodec::headerSize()) {
+        return false;
+    }
+
+    parts.header = readHeader(data);
+    if (!validHeader(parts.header)) {
+        return false;
+    }
+
+    const auto body_size = frameBodySize(parts.header);
+    if (!body_size || NekoRpcFrameCodec::headerSize() + body_size.value() != data.size()) {
+        return false;
+    }
+
+    const auto method_size     = static_cast<std::size_t>(parts.header.methodSize);
+    const auto extension_size  = static_cast<std::size_t>(parts.header.extensionSize);
+    const auto payload_size    = static_cast<std::size_t>(parts.header.payloadSize);
+    const auto method_begin    = NekoRpcFrameCodec::headerSize();
+    const auto extension_begin = method_begin + method_size;
+    const auto payload_begin   = extension_begin + extension_size;
+
+    parts.method = data.subspan(method_begin, method_size);
+    parts.extensions.clear();
+    const auto extensionsLoaded =
+        NekoRpcExtensionCodec::loadTlvs(data.subspan(extension_begin, extension_size), parts.extensions);
+    parts.payload = data.subspan(payload_begin, payload_size);
+    return extensionsLoaded && extensionsSupported(parts.extensions);
+}
+
+auto encodeMethodEntriesValue(const std::vector<NekoRpcMethodEntry>& entries) -> NekoRpcFrameCodec::Message {
     NekoRpcFrameCodec::Message value;
     std::uint32_t count = 0;
     for (const auto& entry : entries) {
@@ -32,47 +123,46 @@ auto encodeMethodEntries(const std::vector<NekoRpcMethodEntry>& entries, std::ui
         }
     }
 
-    NekoRpcExtensionCodec::appendU8(value, MethodTableFormatVersion);
-    NekoRpcExtensionCodec::appendU32(value, count);
+    NekoRpcExtensionCodec::appendInteger(value, MethodTableFormatVersion);
+    NekoRpcExtensionCodec::appendInteger(value, count);
     for (const auto& entry : entries) {
         if (entry.name.size() > std::numeric_limits<std::uint16_t>::max()) {
             continue;
         }
-        NekoRpcExtensionCodec::appendU64(value, entry.id);
-        NekoRpcExtensionCodec::appendU8(value, static_cast<std::uint8_t>(entry.state));
-        NekoRpcExtensionCodec::appendU64(value, entry.signatureHash);
-        NekoRpcExtensionCodec::appendU16(value, static_cast<std::uint16_t>(entry.name.size()));
+        NekoRpcExtensionCodec::appendInteger(value, entry.id);
+        NekoRpcExtensionCodec::appendInteger(value, static_cast<std::uint8_t>(entry.state));
+        NekoRpcExtensionCodec::appendInteger(value, entry.signatureHash);
+        NekoRpcExtensionCodec::appendInteger(value, static_cast<std::uint16_t>(entry.name.size()));
         value.insert(value.end(), entry.name.begin(), entry.name.end());
     }
-    return NekoRpcExtensionCodec::makeTlv(tlvType, NekoRpcExtensionCodec::asBytes(value));
+    return value;
 }
 
-auto parseMethodEntries(std::span<const std::byte> extensions, std::uint16_t tlvType,
-                        std::vector<NekoRpcMethodEntry>& entries) -> bool {
-    std::span<const std::byte> value;
-    if (!NekoRpcExtensionCodec::findTlv(extensions, tlvType, value) || value.size() < 4U) {
+auto parseMethodEntriesValue(std::span<const std::byte> value, std::vector<NekoRpcMethodEntry>& entries) -> bool {
+    if (value.size() < 4U) {
         return false;
     }
 
     entries.clear();
-    if (value.size() >= 5U && NekoRpcExtensionCodec::byteAt(value, 0) == MethodTableFormatVersion) {
-        const auto count   = NekoRpcExtensionCodec::readU32(value, 1);
+    if (value.size() >= 5U &&
+        NekoRpcExtensionCodec::readInteger<std::uint8_t>(value, 0) == MethodTableFormatVersion) {
+        const auto count   = NekoRpcExtensionCodec::readInteger<std::uint32_t>(value, 1);
         std::size_t offset = 5U;
         for (std::uint32_t ix = 0; ix < count; ++ix) {
             if (value.size() - offset < 19U) {
                 return false;
             }
             NekoRpcMethodEntry entry;
-            entry.id = NekoRpcExtensionCodec::readU64(value, offset);
+            entry.id = NekoRpcExtensionCodec::readInteger<std::uint64_t>(value, offset);
             offset += 8U;
-            entry.state =
-                NekoRpcExtensionCodec::byteAt(value, offset) == static_cast<std::uint8_t>(NekoRpcMethodState::Removed)
-                    ? NekoRpcMethodState::Removed
-                    : NekoRpcMethodState::Active;
+            entry.state = NekoRpcExtensionCodec::readInteger<std::uint8_t>(value, offset) ==
+                                  static_cast<std::uint8_t>(NekoRpcMethodState::Removed)
+                              ? NekoRpcMethodState::Removed
+                              : NekoRpcMethodState::Active;
             offset += 1U;
-            entry.signatureHash = NekoRpcExtensionCodec::readU64(value, offset);
+            entry.signatureHash = NekoRpcExtensionCodec::readInteger<std::uint64_t>(value, offset);
             offset += 8U;
-            const auto nameSize = NekoRpcExtensionCodec::readU16(value, offset);
+            const auto nameSize = NekoRpcExtensionCodec::readInteger<std::uint16_t>(value, offset);
             offset += 2U;
             if (value.size() - offset < nameSize) {
                 return false;
@@ -84,16 +174,16 @@ auto parseMethodEntries(std::span<const std::byte> extensions, std::uint16_t tlv
         return offset == value.size();
     }
 
-    const auto count   = NekoRpcExtensionCodec::readU32(value, 0);
+    const auto count   = NekoRpcExtensionCodec::readInteger<std::uint32_t>(value, 0);
     std::size_t offset = 4U;
     for (std::uint32_t ix = 0; ix < count; ++ix) {
         if (value.size() - offset < 10U) {
             return false;
         }
         NekoRpcMethodEntry entry;
-        entry.id = NekoRpcExtensionCodec::readU64(value, offset);
+        entry.id = NekoRpcExtensionCodec::readInteger<std::uint64_t>(value, offset);
         offset += 8U;
-        const auto nameSize = NekoRpcExtensionCodec::readU16(value, offset);
+        const auto nameSize = NekoRpcExtensionCodec::readInteger<std::uint16_t>(value, offset);
         offset += 2U;
         if (value.size() - offset < nameSize) {
             return false;
@@ -106,7 +196,21 @@ auto parseMethodEntries(std::span<const std::byte> extensions, std::uint16_t tlv
     return offset == value.size();
 }
 
+auto parseMethodEntries(const NekoRpcFrameCodec::ExtensionMap& extensions, NekoRpcExtensionType tlvType,
+                        std::vector<NekoRpcMethodEntry>& entries) -> bool {
+    const auto item = extensions.find(tlvType);
+    if (item == extensions.end()) {
+        return false;
+    }
+    return parseMethodEntriesValue(item->second, entries);
+}
+
 } // namespace
+
+auto NekoRpcFrameCodec::headerSize() noexcept -> std::size_t {
+    static const auto size = _headerSize();
+    return size;
+}
 
 auto NekoRpcFrameCodec::decodeIncoming(std::span<const std::byte> message, std::uint8_t codec) -> DecodeResult {
     DecodeResult result;
@@ -150,104 +254,59 @@ auto NekoRpcFrameCodec::encodeResponses(const ResponseValues& responses, bool /*
     return responses.front();
 }
 
-auto NekoRpcFrameCodec::encodeFrame(NekoRpcKind kind, Id id, std::string_view method, const Message& payload,
-                                    std::uint8_t flags, std::uint8_t codec) -> Message {
-    return encodeFrame(kind, id, method, std::span<const std::byte>{}, NekoRpcExtensionCodec::asBytes(payload), flags,
-                       codec);
-}
-
-auto NekoRpcFrameCodec::encodeFrame(NekoRpcKind kind, Id id, std::string_view method,
-                                    std::span<const std::byte> extensions, std::span<const std::byte> payload,
-                                    std::uint8_t flags, std::uint8_t codec) -> Message {
-    if (method.size() > std::numeric_limits<std::uint32_t>::max() ||
+auto NekoRpcFrameCodec::encodeFrame(FrameParts frame) -> Message {
+    Message extensions;
+    if (!NekoRpcExtensionCodec::appendTlvs(extensions, frame.extensions)) {
+        return {};
+    }
+    if (frame.method.size() > std::numeric_limits<std::uint32_t>::max() ||
         extensions.size() > std::numeric_limits<std::uint16_t>::max() ||
-        payload.size() > std::numeric_limits<std::uint32_t>::max()) {
+        frame.payload.size() > std::numeric_limits<std::uint32_t>::max()) {
         return {};
     }
 
-    Message out;
-    const auto methodSize  = static_cast<std::uint32_t>(method.size());
-    const auto extSize     = static_cast<std::uint16_t>(extensions.size());
-    const auto payloadSize = static_cast<std::uint32_t>(payload.size());
+    frame.header.magic         = Magic;
+    frame.header.version       = Version;
+    frame.header.methodSize    = static_cast<std::uint32_t>(frame.method.size());
+    frame.header.extensionSize = static_cast<std::uint16_t>(extensions.size());
+    frame.header.payloadSize   = static_cast<std::uint32_t>(frame.payload.size());
     if (!extensions.empty()) {
-        flags = static_cast<std::uint8_t>(flags | NekoRpcFlag::HasExtensions);
+        frame.header.flags = static_cast<std::uint8_t>(frame.header.flags | NekoRpcFlag::HasExtensions);
+    } else {
+        frame.header.flags = static_cast<std::uint8_t>(frame.header.flags & ~NekoRpcFlag::HasExtensions);
     }
 
-    out.reserve(HeaderSize + method.size() + extensions.size() + payload.size());
-    _appendU16(out, Magic);
-    _appendU8(out, Version);
-    _appendU8(out, static_cast<std::uint8_t>(kind));
-    _appendU8(out, flags);
-    _appendU8(out, codec);
-    _appendU16(out, extSize);
-    _appendU64(out, id);
-    _appendU32(out, methodSize);
-    _appendU32(out, payloadSize);
-    out.insert(out.end(), method.begin(), method.end());
-    appendBytes(out, extensions);
-    appendBytes(out, payload);
+    Message out;
+    out.reserve(headerSize() + frame.method.size() + extensions.size() + frame.payload.size());
+    appendHeader(out, frame.header);
+    appendBytes(out, frame.method);
+    appendBytes(out, NekoRpcExtensionCodec::asBytes(extensions));
+    appendBytes(out, frame.payload);
     return out;
 }
 
-auto NekoRpcFrameCodec::encodeHello(std::span<const std::byte> extensions, std::uint8_t codec) -> Message {
-    return encodeFrame(NekoRpcKind::Hello, 0, {}, extensions, std::span<const std::byte>{}, 0, codec);
+auto NekoRpcFrameCodec::encodeHello(ExtensionMap extensions, std::uint8_t codec) -> Message {
+    Header header;
+    header.kind  = NekoRpcKind::Hello;
+    header.codec = codec;
+    return encodeFrame({
+        .header     = header,
+        .extensions = extensions,
+    });
 }
 
 auto NekoRpcFrameCodec::decodeFrame(std::span<const std::byte> data) -> ilias::Result<DecodedRequest, std::error_code> {
-    if (data.size() < HeaderSize) {
-        return ilias::Err(RpcError::InvalidRequest);
-    }
-
-    Header header;
-    header.magic         = _readU16(data, 0);
-    header.version       = _byteAt(data, 2);
-    header.kind          = static_cast<NekoRpcKind>(_byteAt(data, 3));
-    header.flags         = _byteAt(data, 4);
-    header.codec         = _byteAt(data, 5);
-    header.extensionSize = _readU16(data, 6);
-    header.id            = _readU64(data, 8);
-    header.methodSize    = _readU32(data, 16);
-    header.payloadSize   = _readU32(data, 20);
-
-    if (header.magic != Magic || header.version != Version) {
-        return ilias::Err(RpcError::InvalidRequest);
-    }
-    if (!knownKind(header.kind)) {
-        return ilias::Err(RpcError::InvalidRequest);
-    }
-    const auto methodSize    = static_cast<std::size_t>(header.methodSize);
-    const auto extensionSize = static_cast<std::size_t>(header.extensionSize);
-    const auto payloadSize   = static_cast<std::size_t>(header.payloadSize);
-    const auto maxSize       = std::numeric_limits<std::size_t>::max();
-    if (methodSize > maxSize - extensionSize || methodSize + extensionSize > maxSize - payloadSize ||
-        methodSize + extensionSize + payloadSize > maxSize - HeaderSize) {
-        return ilias::Err(RpcError::InvalidRequest);
-    }
-    const auto expectedSize = HeaderSize + methodSize + extensionSize + payloadSize;
-    if (expectedSize != data.size()) {
-        return ilias::Err(RpcError::InvalidRequest);
-    }
-
-    const auto methodBegin    = HeaderSize;
-    const auto extensionBegin = methodBegin + methodSize;
-    const auto payloadBegin   = extensionBegin + extensionSize;
-    if (methodBegin > data.size() || methodSize > data.size() - methodBegin || extensionBegin > data.size() ||
-        extensionSize > data.size() - extensionBegin || payloadBegin > data.size() ||
-        payloadSize > data.size() - payloadBegin) {
-        return ilias::Err(RpcError::InvalidRequest);
-    }
-
-    const auto extensions = std::span<const std::byte>(data.data() + extensionBegin, extensionSize);
-    if (!_extensionsSupported(extensions)) {
+    FrameParts parts;
+    if (!parseFrameParts(data, parts)) {
         return ilias::Err(RpcError::InvalidRequest);
     }
 
     DecodedRequest request;
-    request.header = header;
-    request.method.assign(reinterpret_cast<const char*>(data.data() + methodBegin), methodSize);
-    request.payload.resize(payloadSize);
-    if (payloadSize > 0U) {
-        std::memcpy(request.payload.data(), data.data() + payloadBegin, payloadSize);
+    request.header = parts.header;
+    request.method.assign(reinterpret_cast<const char*>(parts.method.data()), parts.method.size());
+    request.payload.resize(parts.payload.size());
+    if (!parts.payload.empty()) {
+        std::memcpy(request.payload.data(), parts.payload.data(), parts.payload.size());
     }
     return request;
 }
@@ -267,138 +326,19 @@ auto NekoRpcFrameCodec::knownKind(NekoRpcKind kind) -> bool {
 
 auto NekoRpcFrameCodec::headerBodySize(std::span<const std::byte> header, std::uint8_t codec)
     -> ilias::Result<std::size_t, std::error_code> {
-    if (header.size() != HeaderSize) {
-        return ilias::Err(RpcError::InvalidRequest);
-    }
-    if (_readU16(header, 0) != Magic || _byteAt(header, 2) != Version ||
-        !knownKind(static_cast<NekoRpcKind>(_byteAt(header, 3))) || _byteAt(header, 5) != codec) {
+    if (header.size() != headerSize()) {
         return ilias::Err(RpcError::InvalidRequest);
     }
 
-    const auto extensionSize = static_cast<std::size_t>(_readU16(header, 6));
-    const auto methodSize    = static_cast<std::size_t>(_readU32(header, 16));
-    const auto payloadSize   = static_cast<std::size_t>(_readU32(header, 20));
-    const auto maxSize       = std::numeric_limits<std::size_t>::max();
-    if (methodSize > maxSize - extensionSize || methodSize + extensionSize > maxSize - payloadSize ||
-        methodSize + extensionSize + payloadSize > maxSize - HeaderSize) {
+    const auto parsed = readHeader(header);
+    if (!validHeader(parsed) || parsed.codec != codec) {
         return ilias::Err(RpcError::InvalidRequest);
     }
-    return methodSize + extensionSize + payloadSize;
+    return frameBodySize(parsed);
 }
 
 auto NekoRpcFrameCodec::parseFrame(std::span<const std::byte> data, std::uint8_t codec, FrameParts& parts) -> bool {
-    if (data.size() < HeaderSize) {
-        return false;
-    }
-
-    parts.header.magic         = _readU16(data, 0);
-    parts.header.version       = _byteAt(data, 2);
-    parts.header.kind          = static_cast<NekoRpcKind>(_byteAt(data, 3));
-    parts.header.flags         = _byteAt(data, 4);
-    parts.header.codec         = _byteAt(data, 5);
-    parts.header.extensionSize = _readU16(data, 6);
-    parts.header.id            = _readU64(data, 8);
-    parts.header.methodSize    = _readU32(data, 16);
-    parts.header.payloadSize   = _readU32(data, 20);
-    if (parts.header.magic != Magic || parts.header.version != Version || parts.header.codec != codec ||
-        !knownKind(parts.header.kind)) {
-        return false;
-    }
-
-    const auto methodSize    = static_cast<std::size_t>(parts.header.methodSize);
-    const auto extensionSize = static_cast<std::size_t>(parts.header.extensionSize);
-    const auto payloadSize   = static_cast<std::size_t>(parts.header.payloadSize);
-    const auto maxSize       = std::numeric_limits<std::size_t>::max();
-    if (methodSize > maxSize - extensionSize || methodSize + extensionSize > maxSize - payloadSize ||
-        methodSize + extensionSize + payloadSize > maxSize - HeaderSize) {
-        return false;
-    }
-    const auto expectedSize = HeaderSize + methodSize + extensionSize + payloadSize;
-    if (expectedSize != data.size()) {
-        return false;
-    }
-    if (methodSize > data.size() - HeaderSize) {
-        return false;
-    }
-    const auto methodBegin    = HeaderSize;
-    const auto extensionBegin = methodBegin + methodSize;
-    if (extensionBegin > data.size() || extensionSize > data.size() - extensionBegin) {
-        return false;
-    }
-    const auto payloadBegin = extensionBegin + extensionSize;
-    if (payloadBegin > data.size() || payloadSize > data.size() - payloadBegin ||
-        payloadBegin + payloadSize != data.size()) {
-        return false;
-    }
-
-    parts.method     = data.subspan(methodBegin, methodSize);
-    parts.extensions = data.subspan(extensionBegin, extensionSize);
-    parts.payload    = data.subspan(payloadBegin, payloadSize);
-    return _extensionsSupported(parts.extensions);
-}
-
-auto NekoRpcFrameCodec::_byteAt(std::span<const std::byte> data, std::size_t offset) -> std::uint8_t {
-    return static_cast<std::uint8_t>(data[offset]);
-}
-
-auto NekoRpcFrameCodec::_readU16(std::span<const std::byte> data, std::size_t offset) -> std::uint16_t {
-    return static_cast<std::uint16_t>((static_cast<std::uint16_t>(_byteAt(data, offset)) << 8U) |
-                                      static_cast<std::uint16_t>(_byteAt(data, offset + 1U)));
-}
-
-auto NekoRpcFrameCodec::_readU32(std::span<const std::byte> data, std::size_t offset) -> std::uint32_t {
-    std::uint32_t value = 0;
-    for (std::size_t ix = 0; ix < 4; ++ix) {
-        value = (value << 8U) | _byteAt(data, offset + ix);
-    }
-    return value;
-}
-
-auto NekoRpcFrameCodec::_readU64(std::span<const std::byte> data, std::size_t offset) -> std::uint64_t {
-    std::uint64_t value = 0;
-    for (std::size_t ix = 0; ix < 8; ++ix) {
-        value = (value << 8U) | _byteAt(data, offset + ix);
-    }
-    return value;
-}
-
-auto NekoRpcFrameCodec::_extensionsSupported(std::span<const std::byte> extensions) -> bool {
-    std::size_t offset = 0;
-    while (offset < extensions.size()) {
-        if (extensions.size() - offset < 4U) {
-            return false;
-        }
-        const auto type = _readU16(extensions, offset);
-        const auto size = _readU16(extensions, offset + 2U);
-        offset += 4U;
-        if (extensions.size() - offset < size) {
-            return false;
-        }
-        if ((type & 0x8000U) != 0U) {
-            return false;
-        }
-        offset += size;
-    }
-    return true;
-}
-
-auto NekoRpcFrameCodec::_appendU8(Message& out, std::uint8_t value) -> void { out.push_back(static_cast<char>(value)); }
-
-auto NekoRpcFrameCodec::_appendU16(Message& out, std::uint16_t value) -> void {
-    out.push_back(static_cast<char>((value >> 8U) & 0xFFU));
-    out.push_back(static_cast<char>(value & 0xFFU));
-}
-
-auto NekoRpcFrameCodec::_appendU32(Message& out, std::uint32_t value) -> void {
-    for (int shift = 24; shift >= 0; shift -= 8) {
-        out.push_back(static_cast<char>((value >> static_cast<unsigned>(shift)) & 0xFFU));
-    }
-}
-
-auto NekoRpcFrameCodec::_appendU64(Message& out, std::uint64_t value) -> void {
-    for (int shift = 56; shift >= 0; shift -= 8) {
-        out.push_back(static_cast<char>((value >> static_cast<unsigned>(shift)) & 0xFFU));
-    }
+    return parseFrameParts(data, parts) && parts.header.codec == codec;
 }
 
 auto NekoRpcExtensionCodec::asBytes(const Message& message) -> std::span<const std::byte> {
@@ -411,224 +351,58 @@ auto NekoRpcExtensionCodec::copyBytes(std::span<const std::byte> bytes) -> Messa
     return out;
 }
 
-auto NekoRpcExtensionCodec::appendTlv(Message& out, std::uint16_t type, std::span<const std::byte> value) -> bool {
-    if (value.size() > std::numeric_limits<std::uint16_t>::max()) {
-        return false;
+auto NekoRpcExtensionCodec::loadTlvs(std::span<const std::byte> data, ExtensionMap& extensions) -> bool {
+    extensions.clear();
+    std::size_t offset = 0;
+    while (offset < data.size()) {
+        if (data.size() - offset < 4U) {
+            return false;
+        }
+        const auto wireType = readInteger<std::underlying_type_t<ExtensionType>>(data, offset);
+        const auto size     = readInteger<std::uint16_t>(data, offset + sizeof(wireType));
+        offset += sizeof(wireType) + sizeof(size);
+        if (data.size() - offset < size) {
+            return false;
+        }
+        const auto type = static_cast<ExtensionType>(wireType);
+        if (extensions.contains(type)) {
+            NEKO_LOG_ERROR("rpcbackend", "Extension {} has duplicate", wireType);
+            return false;
+        }
+        extensions.emplace(type, data.subspan(offset, size));
+        offset += size;
     }
-    appendU16(out, type);
-    appendU16(out, static_cast<std::uint16_t>(value.size()));
-    appendBytes(out, value);
     return true;
 }
 
-auto NekoRpcExtensionCodec::makeTlv(std::uint16_t type, std::span<const std::byte> value) -> Message {
-    Message out;
-    appendTlv(out, type, value);
-    return out;
-}
-
-auto NekoRpcExtensionCodec::findTlv(std::span<const std::byte> extensions, std::uint16_t expected,
-                                    std::span<const std::byte>& out) -> bool {
-    std::size_t offset = 0;
-    while (offset < extensions.size()) {
-        if (extensions.size() - offset < 4U) {
+auto NekoRpcExtensionCodec::appendTlvs(Message& out, const ExtensionMap& extensions) -> bool {
+    for (const auto& [type, value] : extensions) {
+        if (value.size() > std::numeric_limits<std::uint16_t>::max()) {
             return false;
         }
-        const auto type = readU16(extensions, offset);
-        const auto size = readU16(extensions, offset + 2U);
-        offset += 4U;
-        if (extensions.size() - offset < size) {
-            return false;
-        }
-        if (type == expected) {
-            out = extensions.subspan(offset, size);
-            return true;
-        }
-        offset += size;
+        appendInteger(out, static_cast<std::underlying_type_t<ExtensionType>>(type));
+        appendInteger(out, static_cast<std::uint16_t>(value.size()));
+        appendBytes(out, value);
     }
-    return false;
-}
-
-auto NekoRpcExtensionCodec::withoutTlv(std::span<const std::byte> extensions, std::uint16_t skippedType)
-    -> ilias::Result<Message, std::error_code> {
-    Message out;
-    std::size_t offset = 0;
-    while (offset < extensions.size()) {
-        if (extensions.size() - offset < 4U) {
-            return ilias::Err(RpcError::InvalidRequest);
-        }
-        const auto type      = readU16(extensions, offset);
-        const auto size      = readU16(extensions, offset + 2U);
-        const auto itemBegin = offset;
-        offset += 4U;
-        if (extensions.size() - offset < size) {
-            return ilias::Err(RpcError::InvalidRequest);
-        }
-        if (type != skippedType) {
-            appendBytes(out, extensions.subspan(itemBegin, 4U + static_cast<std::size_t>(size)));
-        }
-        offset += size;
-    }
-    return out;
-}
-
-auto NekoRpcExtensionCodec::featureModeTlv(std::uint16_t type, NekoRpcFeatureMode mode) -> Message {
-    Message value;
-    appendU8(value, static_cast<std::uint8_t>(mode));
-    return makeTlv(type, asBytes(value));
-}
-
-auto NekoRpcExtensionCodec::parseFeatureMode(std::span<const std::byte> extensions, std::uint16_t type)
-    -> NekoRpcFeatureMode {
-    std::span<const std::byte> value;
-    if (!findTlv(extensions, type, value) || value.empty()) {
-        return NekoRpcFeatureMode::Disable;
-    }
-    switch (byteAt(value, 0)) {
-    case static_cast<std::uint8_t>(NekoRpcFeatureMode::Auto):
-        return NekoRpcFeatureMode::Auto;
-    case static_cast<std::uint8_t>(NekoRpcFeatureMode::Require):
-        return NekoRpcFeatureMode::Require;
-    default:
-        return NekoRpcFeatureMode::Disable;
-    }
-}
-
-auto NekoRpcExtensionCodec::u64Tlv(std::uint16_t type, std::uint64_t value) -> Message {
-    Message encoded;
-    appendU64(encoded, value);
-    return makeTlv(type, asBytes(encoded));
-}
-
-auto NekoRpcExtensionCodec::readU64Tlv(std::span<const std::byte> extensions, std::uint16_t type, std::uint64_t& value)
-    -> bool {
-    std::span<const std::byte> encoded;
-    if (!findTlv(extensions, type, encoded) || encoded.size() != sizeof(std::uint64_t)) {
-        return false;
-    }
-    value = readU64(encoded, 0);
     return true;
 }
 
-auto NekoRpcExtensionCodec::appendU8(Message& out, std::uint8_t value) -> void {
-    out.push_back(static_cast<char>(value));
+auto NekoRpcMethodIdExtension::methodTableValue(const std::vector<NekoRpcMethodEntry>& entries) -> Message {
+    return encodeMethodEntriesValue(entries);
 }
 
-auto NekoRpcExtensionCodec::appendU16(Message& out, std::uint16_t value) -> void {
-    out.push_back(static_cast<char>((value >> 8U) & 0xFFU));
-    out.push_back(static_cast<char>(value & 0xFFU));
+auto NekoRpcMethodIdExtension::methodTableDeltaValue(const std::vector<NekoRpcMethodEntry>& entries) -> Message {
+    return encodeMethodEntriesValue(entries);
 }
 
-auto NekoRpcExtensionCodec::appendU32(Message& out, std::uint32_t value) -> void {
-    for (int shift = 24; shift >= 0; shift -= 8) {
-        out.push_back(static_cast<char>((value >> static_cast<unsigned>(shift)) & 0xFFU));
-    }
-}
-
-auto NekoRpcExtensionCodec::appendU64(Message& out, std::uint64_t value) -> void {
-    for (int shift = 56; shift >= 0; shift -= 8) {
-        out.push_back(static_cast<char>((value >> static_cast<unsigned>(shift)) & 0xFFU));
-    }
-}
-
-auto NekoRpcExtensionCodec::byteAt(std::span<const std::byte> data, std::size_t offset) -> std::uint8_t {
-    return static_cast<std::uint8_t>(data[offset]);
-}
-
-auto NekoRpcExtensionCodec::readU16(std::span<const std::byte> data, std::size_t offset) -> std::uint16_t {
-    return static_cast<std::uint16_t>((static_cast<std::uint16_t>(byteAt(data, offset)) << 8U) |
-                                      static_cast<std::uint16_t>(byteAt(data, offset + 1U)));
-}
-
-auto NekoRpcExtensionCodec::readU32(std::span<const std::byte> data, std::size_t offset) -> std::uint32_t {
-    std::uint32_t value = 0;
-    for (std::size_t ix = 0; ix < 4; ++ix) {
-        value = (value << 8U) | byteAt(data, offset + ix);
-    }
-    return value;
-}
-
-auto NekoRpcExtensionCodec::readU64(std::span<const std::byte> data, std::size_t offset) -> std::uint64_t {
-    std::uint64_t value = 0;
-    for (std::size_t ix = 0; ix < 8; ++ix) {
-        value = (value << 8U) | byteAt(data, offset + ix);
-    }
-    return value;
-}
-
-auto NekoRpcMethodIdExtension::modeTlv(NekoRpcFeatureMode mode) -> Message {
-    return NekoRpcExtensionCodec::featureModeTlv(ModeTlv, mode);
-}
-
-auto NekoRpcMethodIdExtension::parseMode(std::span<const std::byte> extensions) -> NekoRpcFeatureMode {
-    return NekoRpcExtensionCodec::parseFeatureMode(extensions, ModeTlv);
-}
-
-auto NekoRpcMethodIdExtension::tableVersionTlv(std::uint64_t version) -> Message {
-    return NekoRpcExtensionCodec::u64Tlv(TableVersionTlv, version);
-}
-
-auto NekoRpcMethodIdExtension::readTableVersion(std::span<const std::byte> extensions, std::uint64_t& version) -> bool {
-    return NekoRpcExtensionCodec::readU64Tlv(extensions, TableVersionTlv, version);
-}
-
-auto NekoRpcMethodIdExtension::minimumCompatibleVersionTlv(std::uint64_t version) -> Message {
-    return NekoRpcExtensionCodec::u64Tlv(MinimumCompatibleVersionTlv, version);
-}
-
-auto NekoRpcMethodIdExtension::readMinimumCompatibleVersion(std::span<const std::byte> extensions,
-                                                            std::uint64_t& version) -> bool {
-    return NekoRpcExtensionCodec::readU64Tlv(extensions, MinimumCompatibleVersionTlv, version);
-}
-
-auto NekoRpcMethodIdExtension::signatureHashTlv(std::uint64_t hash) -> Message {
-    return NekoRpcExtensionCodec::u64Tlv(SignatureHashTlv, hash);
-}
-
-auto NekoRpcMethodIdExtension::readSignatureHash(std::span<const std::byte> extensions, std::uint64_t& hash) -> bool {
-    return NekoRpcExtensionCodec::readU64Tlv(extensions, SignatureHashTlv, hash);
-}
-
-auto NekoRpcMethodIdExtension::methodTableTlv(const std::vector<NekoRpcMethodEntry>& entries) -> Message {
-    return encodeMethodEntries(entries, TableTlv);
-}
-
-auto NekoRpcMethodIdExtension::methodTableTlv(const std::vector<std::string>& names) -> Message {
-    return methodTableTlv(NekoRpcMethodIdTable::entriesFromNames(names));
-}
-
-auto NekoRpcMethodIdExtension::methodTableDeltaTlv(const std::vector<NekoRpcMethodEntry>& entries) -> Message {
-    return encodeMethodEntries(entries, TableDeltaTlv);
-}
-
-auto NekoRpcMethodIdExtension::parseMethodTable(std::span<const std::byte> extensions,
+auto NekoRpcMethodIdExtension::parseMethodTable(const ExtensionMap& extensions,
                                                 std::vector<NekoRpcMethodEntry>& entries) -> bool {
-    return parseMethodEntries(extensions, TableTlv, entries);
+    return parseMethodEntries(extensions, NekoRpcExtensionType::MethodTable, entries);
 }
 
-auto NekoRpcMethodIdExtension::parseMethodTableDelta(std::span<const std::byte> extensions,
+auto NekoRpcMethodIdExtension::parseMethodTableDelta(const ExtensionMap& extensions,
                                                      std::vector<NekoRpcMethodEntry>& entries) -> bool {
-    return parseMethodEntries(extensions, TableDeltaTlv, entries);
-}
-
-auto NekoRpcMethodIdExtension::parseMethodTable(std::span<const std::byte> extensions, std::vector<std::string>& names,
-                                                std::map<std::string, std::uint64_t>& ids) -> bool {
-    std::vector<NekoRpcMethodEntry> entries;
-    if (!parseMethodTable(extensions, entries)) {
-        return false;
-    }
-    names.clear();
-    ids.clear();
-    for (const auto& entry : entries) {
-        if (entry.id >= names.size()) {
-            names.resize(static_cast<std::size_t>(entry.id) + 1U);
-        }
-        if (entry.state == NekoRpcMethodState::Active) {
-            names[static_cast<std::size_t>(entry.id)] = entry.name;
-            ids.emplace(entry.name, entry.id);
-        }
-    }
-    return true;
+    return parseMethodEntries(extensions, NekoRpcExtensionType::MethodTableDelta, entries);
 }
 
 auto NekoRpcMethodIdTable::signatureHash(std::string_view name, std::string_view signature) -> std::uint64_t {
@@ -842,48 +616,6 @@ auto NekoRpcMethodIdTable::_installEntry(NekoRpcMethodEntry entry) -> bool {
     return true;
 }
 
-auto NekoRpcCompressionExtension::modeTlv(NekoRpcFeatureMode mode) -> Message {
-    return NekoRpcExtensionCodec::featureModeTlv(ModeTlv, mode);
-}
-
-auto NekoRpcCompressionExtension::parseMode(std::span<const std::byte> extensions) -> NekoRpcFeatureMode {
-    return NekoRpcExtensionCodec::parseFeatureMode(extensions, ModeTlv);
-}
-
-auto NekoRpcCompressionExtension::algorithmTlv(NekoRpcCompressionAlgorithm algorithm) -> Message {
-    Message value;
-    NekoRpcExtensionCodec::appendU8(value, static_cast<std::uint8_t>(algorithm));
-    return NekoRpcExtensionCodec::makeTlv(AlgorithmTlv, NekoRpcExtensionCodec::asBytes(value));
-}
-
-auto NekoRpcCompressionExtension::parseAlgorithm(std::span<const std::byte> extensions) -> NekoRpcCompressionAlgorithm {
-    std::span<const std::byte> value;
-    if (!NekoRpcExtensionCodec::findTlv(extensions, AlgorithmTlv, value) || value.empty()) {
-        return NekoRpcCompressionAlgorithm::None;
-    }
-    if (NekoRpcExtensionCodec::byteAt(value, 0) == static_cast<std::uint8_t>(NekoRpcCompressionAlgorithm::RunLength)) {
-        return NekoRpcCompressionAlgorithm::RunLength;
-    }
-    return NekoRpcCompressionAlgorithm::None;
-}
-
-auto NekoRpcCompressionExtension::minPayloadSizeTlv(std::uint32_t size) -> Message {
-    Message value;
-    NekoRpcExtensionCodec::appendU32(value, size);
-    return NekoRpcExtensionCodec::makeTlv(MinPayloadSizeTlv, NekoRpcExtensionCodec::asBytes(value));
-}
-
-auto NekoRpcCompressionExtension::readMinPayloadSize(std::span<const std::byte> extensions, std::uint32_t& size)
-    -> bool {
-    std::span<const std::byte> value;
-    if (!NekoRpcExtensionCodec::findTlv(extensions, MinPayloadSizeTlv, value) ||
-        value.size() != sizeof(std::uint32_t)) {
-        return false;
-    }
-    size = NekoRpcExtensionCodec::readU32(value, 0);
-    return true;
-}
-
 auto NekoRpcCompressionCodec::compress(std::span<const std::byte> payload, NekoRpcCompressionAlgorithm algorithm)
     -> ilias::Result<Message, std::error_code> {
     switch (algorithm) {
@@ -949,7 +681,7 @@ auto NekoRpcCompressionCodec::_decompressRunLength(std::span<const std::byte> pa
     Message out;
     std::size_t offset = 0;
     while (offset < payload.size()) {
-        const auto control = NekoRpcExtensionCodec::byteAt(payload, offset);
+        const auto control = NekoRpcExtensionCodec::readInteger<std::uint8_t>(payload, offset);
         ++offset;
         if ((control & 0x80U) != 0U) {
             if (offset >= payload.size()) {

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <span>
 #include <string>
@@ -272,10 +273,12 @@ TEST(NekoRpcBackend, MethodIdDeltaRoundTripsTableUpdates) {
 
     const auto* mul = serverTable.upsert("mul", mulHash);
     ASSERT_NE(mul, nullptr);
-    auto deltaTlv = detail::NekoRpcMethodIdExtension::methodTableDeltaTlv({*mul});
+    auto deltaValue = detail::NekoRpcMethodIdExtension::methodTableDeltaValue({*mul});
+    detail::NekoRpcFrameCodec::ExtensionMap deltaExtensions;
+    deltaExtensions[detail::NekoRpcExtensionType::MethodTableDelta] =
+        detail::NekoRpcExtensionCodec::asBytes(deltaValue);
     std::vector<detail::NekoRpcMethodEntry> parsedDelta;
-    ASSERT_TRUE(detail::NekoRpcMethodIdExtension::parseMethodTableDelta(
-        detail::NekoRpcExtensionCodec::asBytes(deltaTlv), parsedDelta));
+    ASSERT_TRUE(detail::NekoRpcMethodIdExtension::parseMethodTableDelta(deltaExtensions, parsedDelta));
     ASSERT_TRUE(clientTable.applyRemoteDelta(parsedDelta, serverTable.version()));
 
     auto mulResolved = clientTable.resolve(mul->id, clientTable.version(), mulHash, true);
@@ -289,29 +292,42 @@ TEST(NekoRpcBackend, MethodIdDeltaRoundTripsTableUpdates) {
     ASSERT_TRUE(serverTable.remove("sink"));
     const auto* tombstone = serverTable.findById(sinkId);
     ASSERT_NE(tombstone, nullptr);
-    deltaTlv = detail::NekoRpcMethodIdExtension::methodTableDeltaTlv({*tombstone});
-    ASSERT_TRUE(detail::NekoRpcMethodIdExtension::parseMethodTableDelta(
-        detail::NekoRpcExtensionCodec::asBytes(deltaTlv), parsedDelta));
+    deltaValue = detail::NekoRpcMethodIdExtension::methodTableDeltaValue({*tombstone});
+    deltaExtensions[detail::NekoRpcExtensionType::MethodTableDelta] =
+        detail::NekoRpcExtensionCodec::asBytes(deltaValue);
+    ASSERT_TRUE(detail::NekoRpcMethodIdExtension::parseMethodTableDelta(deltaExtensions, parsedDelta));
     ASSERT_TRUE(clientTable.applyRemoteDelta(parsedDelta, serverTable.version()));
 
     auto sinkResolved = clientTable.resolve(sinkId, clientTable.version(), sinkHash, true);
     EXPECT_EQ(sinkResolved.status, detail::NekoRpcMethodIdResolveStatus::MethodRemoved);
 }
 
-TEST(NekoRpcBackend, CompressionTlvRoundTripsNegotiationStrategy) {
-    auto modeTlv = detail::NekoRpcCompressionExtension::modeTlv(detail::NekoRpcFeatureMode::Auto);
-    auto algorithmTlv =
-        detail::NekoRpcCompressionExtension::algorithmTlv(detail::NekoRpcCompressionAlgorithm::RunLength);
-    auto minSizeTlv = detail::NekoRpcCompressionExtension::minPayloadSizeTlv(256);
-    modeTlv.insert(modeTlv.end(), algorithmTlv.begin(), algorithmTlv.end());
-    modeTlv.insert(modeTlv.end(), minSizeTlv.begin(), minSizeTlv.end());
+TEST(NekoRpcBackend, CompressionExtensionsRoundTripNegotiationContext) {
+    auto algorithmValue =
+        detail::NekoRpcExtensionCodec::enumValue(detail::NekoRpcCompressionAlgorithm::RunLength);
+    auto minSizeValue = detail::NekoRpcExtensionCodec::integerValue<std::uint32_t>(256);
 
-    auto bytes = detail::NekoRpcExtensionCodec::asBytes(modeTlv);
-    EXPECT_EQ(detail::NekoRpcCompressionExtension::parseMode(bytes), detail::NekoRpcFeatureMode::Auto);
-    EXPECT_EQ(detail::NekoRpcCompressionExtension::parseAlgorithm(bytes),
-              detail::NekoRpcCompressionAlgorithm::RunLength);
+    detail::NekoRpcFrameCodec::ExtensionMap extensions;
+    extensions[detail::NekoRpcExtensionType::Compression] = {};
+    extensions[detail::NekoRpcExtensionType::CompressionAlgorithm] =
+        detail::NekoRpcExtensionCodec::asBytes(algorithmValue);
+    extensions[detail::NekoRpcExtensionType::CompressionMinPayloadSize] =
+        detail::NekoRpcExtensionCodec::asBytes(minSizeValue);
+
+    detail::NekoRpcFrameCodec::Message bytes;
+    ASSERT_TRUE(detail::NekoRpcExtensionCodec::appendTlvs(bytes, extensions));
+
+    detail::NekoRpcFrameCodec::ExtensionMap parsed;
+    ASSERT_TRUE(detail::NekoRpcExtensionCodec::loadTlvs(detail::NekoRpcExtensionCodec::asBytes(bytes), parsed));
+    EXPECT_TRUE(parsed.contains(detail::NekoRpcExtensionType::Compression));
+
+    detail::NekoRpcCompressionAlgorithm algorithm = detail::NekoRpcCompressionAlgorithm::None;
+    ASSERT_TRUE(detail::NekoRpcExtensionCodec::readEnumTlv(
+        parsed, detail::NekoRpcExtensionType::CompressionAlgorithm, algorithm));
+    EXPECT_EQ(algorithm, detail::NekoRpcCompressionAlgorithm::RunLength);
     std::uint32_t minSize = 0;
-    ASSERT_TRUE(detail::NekoRpcCompressionExtension::readMinPayloadSize(bytes, minSize));
+    ASSERT_TRUE(detail::NekoRpcExtensionCodec::readIntegerTlv(
+        parsed, detail::NekoRpcExtensionType::CompressionMinPayloadSize, minSize));
     EXPECT_EQ(minSize, 256U);
 }
 
@@ -361,7 +377,7 @@ TEST(NekoRpcBackend, RequireCompressionCallsThroughCompressedPayloads) {
     server.close();
 }
 
-TEST(NekoRpcBackend, ReplaceableCompressionCodecCanRejectRequiredCompression) {
+TEST(NekoRpcBackend, ReplaceableCompressionCodecFallsBackWhenUnsupported) {
     ilias::PlatformContext context;
     context.install();
     RpcServer<NoCompressionRpcBackend, BinaryRpcTestApi> server{context};
@@ -377,8 +393,8 @@ TEST(NekoRpcBackend, ReplaceableCompressionCodecCanRejectRequiredCompression) {
     connect_endpoint<NoCompressionRpcBackend>(server, client, options);
 
     auto result = client->add(20, 22).wait();
-    ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error().value(), static_cast<int>(RpcError::CompressionRequiredButUnsupported));
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    EXPECT_EQ(result.value(), 42);
     EXPECT_EQ(stats->compressionAttempts.load(), 0U);
 
     client.close();
