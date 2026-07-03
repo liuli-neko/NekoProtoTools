@@ -751,7 +751,7 @@ struct MyRpcBackend {
 
     template <typename Method>
     static ilias::Result</* decoded params tuple */, std::error_code>
-    decodeParams(const DecodedRequest& request);
+    decodeParams(const DecodedRequest& request, const Method& method);
 
     template <typename Method>
     static ilias::IoTask<typename Method::RawReturnType>

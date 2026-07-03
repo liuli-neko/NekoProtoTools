@@ -5,6 +5,7 @@
 #include "nekoproto/serialization/private/integer.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -14,13 +15,14 @@
 NEKO_BEGIN_NAMESPACE
 namespace binary {
 
+template <typename BufferT = std::vector<char>>
 class Writer {
 public:
     struct OutputArrayType {};
     struct OutputObjectType {};
     struct OutputValueType {};
 
-    explicit Writer(std::vector<char>& buffer) noexcept : mBuffer(buffer) {}
+    explicit Writer(BufferT& buffer) noexcept : mBuffer(buffer) {}
 
     OutputArrayType arrayAsRoot(std::size_t size) {
         _writeVariable(size);
@@ -124,13 +126,12 @@ private:
             if constexpr (std::is_integral_v<T> && sizeof(T) > 1) {
                 encoded = htobe(value);
             }
-            const auto* bytes = reinterpret_cast<const char*>(&encoded);
-            mBuffer.insert(mBuffer.end(), bytes, bytes + size);
+            _appendBytes(&encoded, size);
         } else {
             const auto begin = mBuffer.size();
             _writeValue(value);
             while (mBuffer.size() - begin < size) {
-                mBuffer.push_back(0);
+                _pushByte(0);
             }
         }
     }
@@ -142,17 +143,17 @@ private:
             const bool negative = value < 0;
             const auto magnitude =
                 negative ? static_cast<Unsigned>(-(value + 1)) + 1U : static_cast<Unsigned>(value);
-            mBuffer.push_back(negative ? static_cast<char>(0x80U) : static_cast<char>(0x00U));
+            _pushByte(negative ? 0x80U : 0x00U);
             detail::IntegerEncoder::encode(magnitude, mBuffer, 1);
         } else {
-            mBuffer.push_back(0);
+            _pushByte(0);
             detail::IntegerEncoder::encode(value, mBuffer, 1);
         }
     }
 
     void _writeString(std::string_view value) {
         _writeVariable(value.size());
-        mBuffer.insert(mBuffer.end(), value.begin(), value.end());
+        _appendBytes(value.data(), value.size());
     }
 
     template <typename T>
@@ -161,19 +162,38 @@ private:
         if constexpr (std::is_same_v<U, std::string> || std::is_same_v<U, std::string_view>) {
             _writeString(value);
         } else if constexpr (std::is_same_v<U, bool>) {
-            mBuffer.push_back(value ? 1 : 0);
+            _pushByte(value ? 1U : 0U);
         } else if constexpr (std::is_integral_v<U>) {
             _writeVariable(value);
         } else if constexpr (std::is_floating_point_v<U>) {
-            const auto* bytes = reinterpret_cast<const char*>(&value);
-            mBuffer.insert(mBuffer.end(), bytes, bytes + sizeof(U));
+            _appendBytes(&value, sizeof(U));
         } else {
             static_assert(std::is_same_v<U, void>, "Unsupported binary value type");
         }
     }
 
+    void _pushByte(std::uint8_t byte) {
+        mBuffer.push_back(static_cast<typename BufferT::value_type>(byte));
+    }
+
+    void _appendBytes(const void* data, std::size_t size) {
+        if constexpr (std::is_same_v<typename BufferT::value_type, char>) {
+            const auto* bytes = static_cast<const char*>(data);
+            mBuffer.insert(mBuffer.end(), bytes, bytes + size);
+        } else if constexpr (std::is_same_v<typename BufferT::value_type, std::byte>) {
+            const auto* bytes = static_cast<const std::byte*>(data);
+            mBuffer.insert(mBuffer.end(), bytes, bytes + size);
+        } else {
+            const auto* bytes = static_cast<const std::uint8_t*>(data);
+            mBuffer.reserve(mBuffer.size() + size);
+            for (std::size_t ix = 0; ix < size; ++ix) {
+                _pushByte(bytes[ix]);
+            }
+        }
+    }
+
 private:
-    std::vector<char>& mBuffer;
+    BufferT& mBuffer;
 };
 
 } // namespace binary

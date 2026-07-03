@@ -13,15 +13,17 @@ NEKO_BEGIN_NAMESPACE
 
 struct BinaryBackend {
     using Reader              = binary::Reader;
-    using Writer              = binary::Writer;
+    using Writer              = binary::Writer<>;
     using DefaultOutputBuffer = std::vector<char>;
     using DefaultInputSource  = void;
 
     template <typename BufferT>
     struct OutputState {
+        using WriterType = binary::Writer<BufferT>;
+
         explicit OutputState(BufferT& buffer) noexcept : writer(buffer) {}
 
-        binary::Writer writer;
+        WriterType writer;
     };
 
     template <typename SourceT>
@@ -33,7 +35,9 @@ struct BinaryBackend {
 
     template <typename BufferT, typename T>
     static sa::Result<void> write(OutputState<BufferT>& state, const T& value) {
-        return parser_write<binary::Writer>(state.writer, value, parsing::Parent<binary::Writer>::Root{});
+        using WriterType = typename OutputState<BufferT>::WriterType;
+        using Root       = typename parsing::Parent<WriterType>::Root;
+        return parser_write<WriterType>(state.writer, value, Root{});
     }
 
     template <typename SourceT, typename T>
@@ -47,14 +51,16 @@ struct BinaryBackend {
     }
 };
 
-using BinaryOutputSerializer = detail::OutputSerializerAdapter<BinaryBackend, BinaryBackend::DefaultOutputBuffer>;
-using BinaryInputSerializer  = detail::InputSerializerAdapter<BinaryBackend, BinaryBackend::DefaultInputSource>;
+using BinaryOutputSerializer     = detail::OutputSerializerAdapter<BinaryBackend, BinaryBackend::DefaultOutputBuffer>;
+using BinaryByteOutputSerializer = detail::OutputSerializerAdapter<BinaryBackend, std::vector<std::byte>>;
+using BinaryInputSerializer      = detail::InputSerializerAdapter<BinaryBackend, BinaryBackend::DefaultInputSource>;
 
 struct BinarySerializer {
-    using OutputSerializer = BinaryOutputSerializer;
-    using InputSerializer  = BinaryInputSerializer;
-    using Reader           = binary::Reader;
-    using Writer           = binary::Writer;
+    using OutputSerializer     = BinaryOutputSerializer;
+    using ByteOutputSerializer = BinaryByteOutputSerializer;
+    using InputSerializer      = BinaryInputSerializer;
+    using Reader               = binary::Reader;
+    using Writer               = binary::Writer<>;
 };
 
 NEKO_END_NAMESPACE

@@ -89,11 +89,15 @@ CheckOptions:
   - key: readability-identifier-naming.ConstexprFunctionCase
     value: lower_case
   - key: readability-identifier-naming.PublicMethodCase
-    value: lower_case
+    value: camelBack
   - key: readability-identifier-naming.ProtectedMethodCase
-    value: lower_case
+    value: camelBack
+  - key: readability-identifier-naming.ProtectedMethodPrefix
+    value: '_'
   - key: readability-identifier-naming.PrivateMethodCase
-    value: lower_case
+    value: camelBack
+  - key: readability-identifier-naming.PrivateMethodPrefix
+    value: '_'
   - key: readability-identifier-naming.ConstexprMethodCase
     value: lower_case
 
@@ -143,7 +147,8 @@ CheckOptions:
   #
   - key: readability-identifier-naming.PublicMemberCase
     value: lower_case
-
+  - key: readability-identifier-naming.ClassConstexprCase
+    value: CamelCase
   # Private/protected members get trailing underscore.
   - key: readability-identifier-naming.PrivateMemberCase
     value: CamelCase
@@ -158,9 +163,11 @@ CheckOptions:
   # Type aliases
   # --------------------------------------------------------------------------
   - key: readability-identifier-naming.TypeAliasCase
-    value: lower_case
+    value: CamelCase
+  - key: readability-identifier-naming.TypeAliasSuffix
+    value: ''
   - key: readability-identifier-naming.TypedefCase
-    value: lower_case
+    value: CamelCase
 
   # --------------------------------------------------------------------------
   # Concepts

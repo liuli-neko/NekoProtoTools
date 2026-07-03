@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "nekoproto/global/log.hpp"
 #include "nekoproto/rpc/builtin.hpp"
 #include "nekoproto/rpc/concepts.hpp"
 #include "nekoproto/rpc/endpoint.hpp"
@@ -24,7 +25,13 @@ public:
     RpcBuiltinMethods rpc;
     static constexpr int BuiltinMethodsCount = Reflect<RpcBuiltinMethods>::value_count;
 
-    explicit RpcClient(ilias::IoContext& /*unused*/) : ProtocolSets()..., rpc() {
+    explicit RpcClient(ilias::IoContext& ctx) : RpcClient(ctx, typename Backend::Options{}) {}
+
+    explicit RpcClient(ilias::IoContext& /*unused*/, typename Backend::Options options)
+        : ProtocolSets()...,
+          rpc(),
+          mBackendContext(Backend::makeClientContext(std::move(options))),
+          mPeerSession(Backend::makeClientPeerSession(mBackendContext)) {
         (_registerProtocol(static_cast<ProtocolSets&>(*this)), ...);
         _registerProtocol(rpc, "rpc");
     }
@@ -69,6 +76,7 @@ public:
         } else {
             mEndpoint = std::make_unique<detail::MessageEndpointWrapper<EndpointT>>(std::move(endpoint));
         }
+        mPeerSession = Backend::makeClientPeerSession(mBackendContext);
     }
 
     template <typename StreamT>
@@ -126,14 +134,14 @@ public:
 private:
     template <typename Protocol>
     void _registerProtocol(Protocol& protocol, std::string_view prefix = {}) {
-        detail::for_each_rpc_method(protocol, [this](auto& method) { _registerRpcMethod(method); }, prefix);
+        detail::for_each_rpc_method(protocol, [this](auto& method) { this->_registerRpcMethod(method); }, prefix);
     }
 
     template <typename T>
     void _registerRpcMethod(T& metadata) noexcept {
         metadata = (typename std::decay_t<T>::CoroutinesFuncType)[this, &metadata](auto... args) noexcept
             -> ilias::IoTask<typename std::decay_t<T>::RawReturnType> {
-            return _callRemote<T, decltype(args)...>(metadata, std::forward<decltype(args)>(args)...);
+            return this->_callRemote<T, decltype(args)...>(metadata, std::forward<decltype(args)>(args)...);
         };
     }
 
@@ -142,41 +150,58 @@ private:
         if (mEndpoint == nullptr) {
             co_return ilias::Err(Backend::clientNotInitError());
         }
+        NEKO_LOG_TRACE("rpc", "rpc client call begin: method={} notification={}", metadata.name(),
+                       metadata.isNotification());
         auto guard = co_await mMutex.lock();
-        auto encoded =
-            Backend::template encodeRequest<T>(metadata, metadata.isNotification(), mId, std::forward<Args>(args)...);
+        ILIAS_CO_TRYV(co_await Backend::ensureClientReady(mBackendContext, mPeerSession, *mEndpoint));
+        auto encoded = Backend::template encodeRequest<T>(mBackendContext, mPeerSession, metadata,
+                                                          metadata.isNotification(), std::forward<Args>(args)...);
         if (!encoded) {
             co_return ilias::Err(encoded.error());
         }
         auto& request = encoded.value();
-        ILIAS_CO_TRY(auto sendRet, co_await mEndpoint->send({reinterpret_cast<const std::byte*>(request.message.data()),
+        ILIAS_CO_TRY(auto send_ret, co_await mEndpoint->send({reinterpret_cast<const std::byte*>(request.message.data()),
                                                              request.message.size()}));
-        if (sendRet != request.message.size()) {
+        if (send_ret != request.message.size()) {
             co_return ilias::Err(ilias::IoError::Other);
         }
+        NEKO_LOG_TRACE("rpc", "rpc client request send: method={} bytes={}", metadata.name(),
+                       request.message.size());
         if (!metadata.isNotification()) {
-            std::vector<std::byte> buffer;
-            if (auto ret = co_await mEndpoint->recv(buffer); ret) {
-                auto decoded = Backend::template decodeResponse<T>(buffer, request.id);
-                if (!decoded) {
-                    co_return ilias::Err(decoded.error());
-                }
-                if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
-                    co_return {};
+            while (true) {
+                std::vector<std::byte> buffer;
+                if (auto ret = co_await mEndpoint->recv(buffer); ret) {
+                    if (Backend::handleClientControl(mBackendContext, mPeerSession, buffer)) {
+                        NEKO_LOG_INFO("rpc", "rpc client consumed control frame while waiting");
+                        continue;
+                    }
+                    // Response decoding is the backend boundary: client code only
+                    // supplies the expected id and receives the typed result.
+                    auto decoded = Backend::template decodeResponse<T>(mBackendContext, mPeerSession, buffer,
+                                                                       request.id);
+                    if (!decoded) {
+                        co_return ilias::Err(decoded.error());
+                    }
+                    NEKO_LOG_TRACE("rpc", "rpc client call end: method={}", metadata.name());
+                    if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
+                        co_return {};
+                    } else {
+                        co_return decoded.value();
+                    }
                 } else {
-                    co_return decoded.value();
+                    co_return ilias::Err(ret.error());
                 }
-            } else {
-                co_return ilias::Err(ret.error());
             }
         } else {
+            NEKO_LOG_TRACE("rpc", "rpc client notification sent: method={}", metadata.name());
             co_return ilias::Err(Backend::notificationOk());
         }
     }
 
 private:
     std::unique_ptr<detail::IMessageEndpoint> mEndpoint = nullptr;
-    std::uint64_t mId                                   = 0;
+    typename Backend::ClientContext mBackendContext;
+    typename Backend::PeerSession mPeerSession;
     ilias::Mutex mMutex;
 };
 

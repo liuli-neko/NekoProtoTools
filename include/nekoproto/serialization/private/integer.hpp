@@ -3,6 +3,7 @@
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/global/log.hpp"
 
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <type_traits>
@@ -29,8 +30,8 @@ struct IntegerEncoder {
      * @param bitsOffset
      * @return int
      */
-    template <typename T>
-    static int encode(T&& value, std::vector<char>& outputBuffer, uint8_t bitsOffset = 0);
+    template <typename T, typename OutputBuffer>
+    static int encode(T&& value, OutputBuffer& outputBuffer, uint8_t bitsOffset = 0);
 };
 
 struct IntegerDecoder {
@@ -85,25 +86,28 @@ struct IntegerDecoder {
     static int decode(const uint8_t* buffer, int size, T& value, uint8_t bitsOffset = 0);
 };
 
-template <typename T>
-inline int IntegerEncoder::encode(T&& value, std::vector<char>& outputBuffer, uint8_t bitsOffset) {
+template <typename T, typename OutputBuffer>
+inline int IntegerEncoder::encode(T&& value, OutputBuffer& outputBuffer, uint8_t bitsOffset) {
+    using Byte = typename OutputBuffer::value_type;
     NEKO_ASSERT(bitsOffset < 8, "serializer", "bitsOffset must be between 0 and 8");
     if (outputBuffer.empty()) {
-        outputBuffer.emplace_back(0);
+        outputBuffer.emplace_back(static_cast<Byte>(0));
     }
     uint8_t byte{static_cast<uint8_t>((1U << (8 - bitsOffset)) - 1U)};
     if (value < byte) {
-        outputBuffer.back() |= value;
+        const auto current = static_cast<std::uint8_t>(outputBuffer.back());
+        outputBuffer.back() = static_cast<Byte>(current | static_cast<std::uint8_t>(value));
     } else {
-        outputBuffer.back() |= byte;
+        const auto current = static_cast<std::uint8_t>(outputBuffer.back());
+        outputBuffer.back() = static_cast<Byte>(current | byte);
         auto remain = value - byte;
         while (remain > 0x7F) {
             auto remainByte = remain % 0x80;
             remainByte += 0x80;
-            outputBuffer.push_back((char)remainByte);
+            outputBuffer.push_back(static_cast<Byte>(remainByte));
             remain /= 0x80;
         }
-        outputBuffer.push_back((char)remain);
+        outputBuffer.push_back(static_cast<Byte>(remain));
     }
     return 0;
 }

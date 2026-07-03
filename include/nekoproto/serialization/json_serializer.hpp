@@ -36,7 +36,6 @@ JsonSerializer::JsonValue to_json_value(const T& obj) {
     JsonSerializer::OutputSerializer out(buffer);
     out(obj);
     out.end();
-    NEKO_LOG_INFO("mcp server", "Tool call info: {}", std::string_view{buffer.data(), buffer.size()});
     JsonSerializer::InputSerializer in(buffer.data(), buffer.size());
     in(json);
     return json;

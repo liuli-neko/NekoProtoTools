@@ -15,6 +15,7 @@
 #include "nekoproto/global/log.hpp"
 #include "nekoproto/global/reflect.hpp"
 
+#include <cstddef>
 #include <cstring>
 #include <memory>
 #include <ostream>
@@ -90,6 +91,12 @@ template <>
 struct json_output_sink_traits<std::vector<char>, void> {
     using output_buffer_type = std::vector<char>;
     using wrapper_type       = OutBufferWrapper;
+};
+
+template <>
+struct json_output_sink_traits<std::vector<std::byte>, void> {
+    using output_buffer_type = std::vector<std::byte>;
+    using wrapper_type       = ByteOutBufferWrapper;
 };
 
 template <>
@@ -394,6 +401,8 @@ public:
 template <typename BufferT>
 RapidJsonOutputSerializer(BufferT&) -> RapidJsonOutputSerializer<BufferT>;
 
+using RapidJsonByteOutputSerializer = RapidJsonOutputSerializer<std::vector<std::byte>>;
+
 template <typename BufferT = RapidJsonBackend::DefaultInputSource>
 class RapidJsonInputSerializer : public detail::InputSerializerAdapter<RapidJsonBackend, BufferT> {
 public:
@@ -410,11 +419,12 @@ RapidJsonInputSerializer(BufferT&) -> RapidJsonInputSerializer<BufferT>;
 // #####################################################
 // default JsonSerializer type definition
 struct RapidJsonSerializer {
-    using OutputSerializer = RapidJsonOutputSerializer<>;
-    using InputSerializer  = RapidJsonInputSerializer<>;
-    using JsonValue        = detail::RapidJsonValue;
-    using Reader           = rapid::Reader;
-    using Writer           = rapid::Writer;
+    using OutputSerializer     = RapidJsonOutputSerializer<>;
+    using ByteOutputSerializer = RapidJsonByteOutputSerializer;
+    using InputSerializer      = RapidJsonInputSerializer<>;
+    using JsonValue            = detail::RapidJsonValue;
+    using Reader               = rapid::Reader;
+    using Writer               = rapid::Writer;
 };
 
 NEKO_END_NAMESPACE

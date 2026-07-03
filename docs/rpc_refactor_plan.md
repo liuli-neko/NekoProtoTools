@@ -4,6 +4,8 @@
 
 核心结论：RPC 的声明、注册、绑定、调用 API 不应绑定 JSON-RPC 2.0。JSON-RPC 应成为一个后端，负责 request/response 协议封装、编解码和对应的 message transport 适配。RPC 前端只关心方法元数据、协议集合、调用分发和通用通信端点。
 
+Backend context/session 的完整边界见 [`rpc_backend_context_model.md`](rpc_backend_context_model.md)。本计划中的后端扩展、可选功能、协商、重试和 method-id 均以该模型为准：endpoint 只提供 complete-message transport；扩展只能由具体 backend 的 context/session 执行；RPC API 只保存和传递 opaque backend context。
+
 目标模板参数顺序固定为：
 
 ```cpp
@@ -58,12 +60,13 @@ RPC 前端层不负责：
 Backend 负责：
 
 - 定义协议 id、错误类型和错误映射。
+- 创建和维护 backend-owned client/server context 与 peer session。
 - 将 method metadata 和参数编码为 request。
 - 将 request 解码为 method name、id、params payload。
 - 将返回值或错误编码为 response。
 - 将 response 解码为返回值或错误。
-- 处理 batch、notification、协议版本字段等后端语义。
-- 提供该后端适用的 complete-message endpoint wrapper。
+- 处理 batch、notification、协议版本字段、扩展协商、可选策略等后端语义。
+- 在需要时提供 stream/datagram 到 complete-message 的 transport adapter，但 adapter 不执行协议扩展。
 
 JSON-RPC 只是其中一个 backend：
 
@@ -104,7 +107,7 @@ concept RpcEndpoint = requires(T endpoint, std::vector<std::byte>& out, std::spa
 
 RPC 层不关心 endpoint 后面是 socket、file、stdio、pipe 还是内存队列。
 
-每个 backend 或应用层可以自己提供 transport wrapper：
+每个 backend 或应用层可以自己提供 transport wrapper。wrapper 只处理消息边界，不能承担 method-id、压缩、hello、重试等 backend context 职责。
 
 ```cpp
 auto endpoint = JsonRpcBackend::makeEndpoint(std::move(stream));
@@ -112,7 +115,7 @@ server.addEndpoint(std::move(endpoint));
 client.setEndpoint(std::move(endpoint));
 ```
 
-RPC 核心不提供 listener/user/session 管理。应用层负责 accept、握手、鉴权、对端选择和连接生命周期，然后把已建立的 endpoint 交给 RPC 层；或者直接使用 `processMessage()` 做单条消息处理。
+RPC 核心不提供 listener/user/session 管理。应用层负责 accept、鉴权、对端选择和连接生命周期，然后把已建立的 endpoint 交给 RPC 层；backend 负责为该 endpoint 建立自己的 peer session。应用层也可以直接使用 `processMessage()` 做单条消息处理，但 backend context 仍是协议状态的归属处。
 
 对于 stream-like 传输，backend 可以提供：
 
@@ -344,7 +347,7 @@ struct JsonRpcBackend {
 
     template <typename Method>
     static Result<ParamsType<Method>, Error>
-    decodeParams(const DecodedRequest& request);
+    decodeParams(const DecodedRequest& request, const Method& method);
 
     template <typename Method, typename... Args>
     static Result<EncodedRequest, Error>
@@ -545,7 +548,7 @@ Dispatcher/Server 侧迁移路径：
 - `RpcMethodWrapperBase` 新增 `metadata()` 或 `methodInfo()`，返回稳定存储的 `RpcMethodInfo`/view。
 - `RpcDispatcher::MethodData` 从 `name/signature/description/isBind` 继续扩展为结构化信息。
 - `RpcServer::_methodMetadata()` 不再手写 `name/description/isBind`，改为调用收集层。
-- Endpoint refresh 从 `std::vector<RpcMethodMetadata>` 迁移到结构化 `std::vector<RpcMethodInfo>`，不保留无实际用途的兼容别名。
+- Backend context/session 的 method catalog refresh 从 `std::vector<RpcMethodMetadata>` 迁移到结构化 `std::vector<RpcMethodInfo>`，不保留无实际用途的兼容别名。
 
 内建 introspection 迁移路径：
 
@@ -558,7 +561,7 @@ Dispatcher/Server 侧迁移路径：
 1. 新增 RPC metadata tags 和 `metadata.hpp`，只做编译期/运行期收集，不改变注册行为。
 2. 给现有四类注册 API 补测试：静态字段、函数指针字段、带 owner 的函数指针字段、动态 bind/call 都能生成一致 `RpcMethodInfo`。
 3. Dispatcher 内部改存结构化元数据，但保持 `methodDatas()` 返回旧 view，避免一次性波及后端。
-4. 后端 endpoint refresh 改收结构化 metadata，并让 method-id signature hash 使用结构化签名。
+4. Backend context/session 的 method catalog refresh 改收结构化 metadata，并让 method-id signature hash 使用结构化签名。
 5. 增加结构化 introspection 内建方法，再逐步让文档/补全工具消费新接口。
 
 ## RPC 属性收集重构 Checklist

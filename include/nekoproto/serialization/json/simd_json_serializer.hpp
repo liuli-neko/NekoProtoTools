@@ -101,9 +101,26 @@ private:
     std::shared_ptr<JsonParser> mParser;
 };
 
+template <typename BufferT, typename = void>
+struct JsonOutputValueType {
+    using type = void;
+};
+
+template <typename BufferT>
+struct JsonOutputValueType<BufferT, std::void_t<typename BufferT::value_type>> {
+    using type = typename BufferT::value_type;
+};
+
 template <typename BufferT>
 void appendJson(BufferT& buffer, std::string_view json) {
-    if constexpr (requires { buffer.insert(buffer.end(), json.begin(), json.end()); }) {
+    using ValueType = typename JsonOutputValueType<std::remove_cvref_t<BufferT>>::type;
+    if constexpr (std::is_same_v<ValueType, std::byte>) {
+        if constexpr (requires { buffer.reserve(buffer.size() + json.size()); }) {
+            buffer.reserve(buffer.size() + json.size());
+        }
+        buffer.insert(buffer.end(), reinterpret_cast<const std::byte*>(json.data()),
+                      reinterpret_cast<const std::byte*>(json.data()) + json.size());
+    } else if constexpr (requires { buffer.insert(buffer.end(), json.begin(), json.end()); }) {
         buffer.insert(buffer.end(), json.begin(), json.end());
     } else if constexpr (requires { buffer.write(json.data(), static_cast<std::streamsize>(json.size())); }) {
         buffer.write(json.data(), static_cast<std::streamsize>(json.size()));
@@ -243,6 +260,8 @@ public:
 template <typename BufferT>
 SimdJsonOutputSerializer(BufferT&) -> SimdJsonOutputSerializer<BufferT>;
 
+using SimdJsonByteOutputSerializer = SimdJsonOutputSerializer<std::vector<std::byte>>;
+
 class SimdJsonInputSerializer
     : public detail::InputSerializerAdapter<SimdJsonBackend, SimdJsonBackend::DefaultInputSource> {
 public:
@@ -251,11 +270,12 @@ public:
 };
 
 struct SimdJsonSerializer {
-    using OutputSerializer = SimdJsonOutputSerializer<>;
-    using InputSerializer  = SimdJsonInputSerializer;
-    using JsonValue        = detail::simd::SimdJsonValue;
-    using Reader           = detail::simd::Reader;
-    using Writer           = detail::simd::Writer;
+    using OutputSerializer     = SimdJsonOutputSerializer<>;
+    using ByteOutputSerializer = SimdJsonByteOutputSerializer;
+    using InputSerializer      = SimdJsonInputSerializer;
+    using JsonValue            = detail::simd::SimdJsonValue;
+    using Reader               = detail::simd::Reader;
+    using Writer               = detail::simd::Writer;
 };
 
 NEKO_END_NAMESPACE

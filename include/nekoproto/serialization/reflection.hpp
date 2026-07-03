@@ -64,8 +64,7 @@ template <std::size_t Diameter, std::size_t Offset, typename... ValueTs>
 consteval bool all_names_at() {
     using tuple = std::tuple<ValueTs...>;
     return []<std::size_t... Is>(std::index_sequence<Is...>) {
-        return (std::is_convertible_v<std::tuple_element_t<(Is * Diameter) + Offset, tuple>, std::string_view> &&
-                ...);
+        return (std::is_convertible_v<std::tuple_element_t<(Is * Diameter) + Offset, tuple>, std::string_view> && ...);
     }(std::make_index_sequence<sizeof...(ValueTs) / Diameter>{});
 }
 
@@ -120,34 +119,28 @@ using double_type_tuple = decltype(init_values_tuple<2, 1>(std::make_index_seque
                                                            std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
 
 template <typename... ValueTs>
-using double_field_values_tuple =
-    decltype(init_field_values_tuple<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
-                                           std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+using double_field_values_tuple = decltype(init_field_values_tuple<2, 1>(
+    std::make_index_sequence<sizeof...(ValueTs) / 2>{}, std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
 
 template <typename... ValueTs>
-using double_field_tags_tuple =
-    decltype(init_field_tags_tuple<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
-                                         std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+using double_field_tags_tuple = decltype(init_field_tags_tuple<2, 1>(
+    std::make_index_sequence<sizeof...(ValueTs) / 2>{}, std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
 
 template <typename... ValueTs>
-using double_enum_tags_tuple =
-    decltype(init_field_tags_tuple<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
-                                         std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+using double_enum_tags_tuple = decltype(init_field_tags_tuple<2, 1>(
+    std::make_index_sequence<sizeof...(ValueTs) / 2>{}, std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
 
 template <typename... ValueTs>
-using field_values_tuple =
-    decltype(init_field_values_tuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
-                                           std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+using field_values_tuple = decltype(init_field_values_tuple<1, 0>(
+    std::make_index_sequence<sizeof...(ValueTs)>{}, std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
 
 template <typename... ValueTs>
-using field_tags_tuple =
-    decltype(init_field_tags_tuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
-                                         std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+using field_tags_tuple = decltype(init_field_tags_tuple<1, 0>(
+    std::make_index_sequence<sizeof...(ValueTs)>{}, std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
 
 template <typename... ValueTs>
-using enum_tags_tuple =
-    decltype(init_field_tags_tuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
-                                         std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+using enum_tags_tuple = decltype(init_field_tags_tuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
+                                                             std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
 
 template <typename T, class Obj>
 concept is_member_ref_function = requires(T val, Obj& obj) { std::is_lvalue_reference<decltype(val(obj))>::value; };
@@ -205,16 +198,15 @@ struct Enumerate {
 
     template <typename... ValueTs>
         requires(sizeof...(ValueTs) > 0U) && (sizeof...(ValueTs) % 2 == 0U) &&
-                (detail::all_names_at<2, 0, ValueTs...>()) &&
-                (detail::all_enum_field_values_at<2, 1, ValueTs...>()) &&
+                (detail::all_names_at<2, 0, ValueTs...>()) && (detail::all_enum_field_values_at<2, 1, ValueTs...>()) &&
                 (detail::enum_field_values_same_at<2, 1, ValueTs...>())
     constexpr Enumerate(ValueTs&&... values) noexcept {
         names               = detail::init_names_array<2, 0>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
                                                              std::forward_as_tuple(values...));
-        const auto& avalues = detail::init_field_values_array<2, 1>(
-            std::make_index_sequence<sizeof...(ValueTs) / 2>{}, std::forward_as_tuple(values...));
-        const auto& atags = detail::init_field_tags_tuple<2, 1>(
-            std::make_index_sequence<sizeof...(ValueTs) / 2>{}, std::forward_as_tuple(values...));
+        const auto& avalues = detail::init_field_values_array<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
+                                                                    std::forward_as_tuple(values...));
+        const auto& atags   = detail::init_field_tags_tuple<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
+                                                                  std::forward_as_tuple(values...));
         [this, &avalues]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
             ((std::get<Is>(this->values) = std::get<Is>(avalues)), ...);
         }(std::make_index_sequence<N>{});
@@ -236,11 +228,10 @@ struct Enumerate {
             }
             return {};
         };
-        const auto& avalues =
-            detail::init_field_values_array<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
-                                                  std::forward_as_tuple(values...));
-        const auto& atags = detail::init_field_tags_tuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
-                                                                std::forward_as_tuple(values...));
+        const auto& avalues = detail::init_field_values_array<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
+                                                                    std::forward_as_tuple(values...));
+        const auto& atags   = detail::init_field_tags_tuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
+                                                                  std::forward_as_tuple(values...));
         [this, &avalues, &enum_to_string]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
             ((std::get<Is>(this->values) = std::get<Is>(avalues),
               std::get<Is>(this->names)  = enum_to_string(std::get<Is>(avalues))),
@@ -269,8 +260,8 @@ struct Object {
                                                              std::forward_as_tuple(values...));
         const auto& avalues = detail::init_values_tuple<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
                                                               std::forward_as_tuple(values...));
-        const auto& atags   = detail::init_field_tags_tuple<2, 1>(
-            std::make_index_sequence<sizeof...(ValueTs) / 2>{}, std::forward_as_tuple(values...));
+        const auto& atags   = detail::init_field_tags_tuple<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
+                                                                  std::forward_as_tuple(values...));
         [this, &avalues]<std::size_t... Is>(std::index_sequence<Is...>) mutable {
             ((std::get<Is>(this->values) = field_accessor(std::get<Is>(avalues))), ...);
         }(std::make_index_sequence<std::tuple_size_v<T>>{});
@@ -305,23 +296,21 @@ struct Array {
 };
 
 template <typename... ValueTs>
-    requires(sizeof...(ValueTs) > 0U) && (sizeof...(ValueTs) % 2 == 0U) &&
-            (detail::all_names_at<2, 0, ValueTs...>()) &&
+    requires(sizeof...(ValueTs) > 0U) && (sizeof...(ValueTs) % 2 == 0U) && (detail::all_names_at<2, 0, ValueTs...>()) &&
             (detail::all_enum_field_values_at<2, 1, ValueTs...>()) &&
             (detail::enum_field_values_same_at<2, 1, ValueTs...>())
-Enumerate(ValueTs&&...)
-    -> Enumerate<detail::field_value_decay_t<std::tuple_element_t<1, std::tuple<ValueTs...>>>,
-                 sizeof...(ValueTs) / 2, detail::double_enum_tags_tuple<ValueTs...>>;
+Enumerate(ValueTs&&...) -> Enumerate<detail::field_value_decay_t<std::tuple_element_t<1, std::tuple<ValueTs...>>>,
+                                     sizeof...(ValueTs) / 2, detail::double_enum_tags_tuple<ValueTs...>>;
 
 template <typename... ValueTs>
     requires(sizeof...(ValueTs) > 0U) && (detail::all_enum_field_values_at<1, 0, ValueTs...>()) &&
             (detail::enum_field_values_same_at<1, 0, ValueTs...>())
-Enumerate(ValueTs&&...)
-    -> Enumerate<detail::field_value_decay_t<std::tuple_element_t<0, std::tuple<ValueTs...>>>, sizeof...(ValueTs),
-                 detail::enum_tags_tuple<ValueTs...>>;
+Enumerate(ValueTs&&...) -> Enumerate<detail::field_value_decay_t<std::tuple_element_t<0, std::tuple<ValueTs...>>>,
+                                     sizeof...(ValueTs), detail::enum_tags_tuple<ValueTs...>>;
 
 template <typename... ValueTs>
-Object(ValueTs&&...) -> Object<detail::double_field_values_tuple<ValueTs...>, detail::double_field_tags_tuple<ValueTs...>>;
+Object(ValueTs&&...)
+    -> Object<detail::double_field_values_tuple<ValueTs...>, detail::double_field_tags_tuple<ValueTs...>>;
 
 template <typename... ValueTs>
 Array(ValueTs&&...) -> Array<detail::field_values_tuple<ValueTs...>, detail::field_tags_tuple<ValueTs...>>;
@@ -344,13 +333,13 @@ struct is_ref_enumerate<Enumerate<T, N, TagsT>, void> : std::true_type {};
 
 template <typename T, typename U, class = void>
 struct MemberMetadata {
-    using raw_type                        = field_accessor_t<T>;
-    using parent_type                     = U;
-    constexpr static bool is_ref           = std::is_reference_v<raw_type>;
+    using raw_type                          = field_accessor_t<T>;
+    using parent_type                       = U;
+    constexpr static bool is_ref            = std::is_reference_v<raw_type>;
     constexpr static bool is_l_ref          = std::is_lvalue_reference_v<raw_type>;
-    constexpr static bool is_lambda        = is_member_ref_function<raw_type, U>;
+    constexpr static bool is_lambda         = is_member_ref_function<raw_type, U>;
     constexpr static bool is_member_pointer = std::is_member_object_pointer_v<raw_type>;
-    constexpr static bool is_ok            = is_ref || is_lambda || is_member_pointer;
+    constexpr static bool is_ok             = is_ref || is_lambda || is_member_pointer;
 
     constexpr static auto tags = field_tags_v<T>; // NOLINT
     static constexpr decltype(auto) get(auto&& accessor, U& obj) noexcept {
@@ -482,12 +471,7 @@ enum class MetaKind {
 // MetaPrivateBase. ReflectProviderKind describes which backend family owns the
 // type, so a future native reflection provider can replace only automatic
 // discovery without disturbing explicit T::Neko or Meta<T> metadata.
-enum class ReflectProviderKind {
-    Error,
-    ExplicitMetadata,
-    NativeReflection,
-    LegacyAutoUnwrap
-};
+enum class ReflectProviderKind { Error, ExplicitMetadata, NativeReflection, LegacyAutoUnwrap };
 
 template <typename T, class Enable = void>
 struct NativeReflectionProvider {
@@ -717,11 +701,11 @@ template <typename T>
 struct ReflectProvider {
     using context_type = std::decay_t<T>;
 
-    static constexpr ReflectProviderKind provider_kind = reflect_provider_kind_v<T>; // NOLINT
-    static constexpr MetaKind legacy_kind              = meta_kind_v<T>;             // NOLINT
-    static constexpr MetaKind kind                     = legacy_kind;                // NOLINT
-    static constexpr bool has_names                    = has_names_meta<T>;          // NOLINT
-    static constexpr bool has_values = provider_kind != ReflectProviderKind::Error;  // NOLINT
+    static constexpr ReflectProviderKind provider_kind = reflect_provider_kind_v<T>;                  // NOLINT
+    static constexpr MetaKind legacy_kind              = meta_kind_v<T>;                              // NOLINT
+    static constexpr MetaKind kind                     = legacy_kind;                                 // NOLINT
+    static constexpr bool has_names                    = has_names_meta<T>;                           // NOLINT
+    static constexpr bool has_values                   = provider_kind != ReflectProviderKind::Error; // NOLINT
 
     static constexpr auto names() {
         if constexpr (provider_kind == ReflectProviderKind::NativeReflection) {
@@ -849,7 +833,7 @@ struct RefAny {
     RefAny(const RefAny&) = default;
     RefAny(RefAny&&)      = default;
     template <typename T>
-        requires(!std::is_same_v<std::remove_cvref_t<T>, RefAny> && std::is_lvalue_reference_v<T&&>)
+        requires(!std::is_same_v<std::remove_cvref_t<T>, RefAny> && std::is_lvalue_reference_v<T &&>)
     RefAny(T&& obj) : mAny(std::ref(obj)) {}
     template <typename T>
     decltype(auto) as() {
@@ -1127,16 +1111,34 @@ public:
         NEKO_LOG_ERROR("reflection", "name not found");
         return T{}; // FIXME: this is not a good way to handle this
     }
+
     static constexpr auto name(T value) noexcept {
-        auto kNames = names();
-        auto kEnums = values();
+        const auto& k_names = names();
+        const auto& k_enums = values();
         for (int i = 0; i < (int)size(); ++i) {
-            if (kEnums[i] == value) {
-                return kNames[i];
+            if (k_enums[i] == value) {
+                return k_names[i];
             }
         }
         NEKO_LOG_ERROR("reflection", "value not found");
         return std::string_view{}; // FIXME: this is not a good way to handle this
+    }
+
+    template <typename U>
+        requires(std::is_same_v<T, U> || std::is_integral_v<U>)
+    static constexpr auto flagsToString(U value, std::string delimiter = "|") noexcept {
+        const auto& k_names = names();
+        const auto& k_enums = values();
+        std::string result;
+        for (int i = 0; i < (int)size(); ++i) {
+            if (static_cast<std::underlying_type_t<T>>(k_enums[i]) & static_cast<std::underlying_type_t<T>>(value)) {
+                result += std::string(k_names[i]) + delimiter;
+            }
+        }
+        if (result.size() > delimiter.size()) {
+            result.erase(result.size() - delimiter.size());
+        }
+        return result;
     }
 
     template <typename CallAbleT>

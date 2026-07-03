@@ -112,15 +112,14 @@ public:
 
     template <typename RetT, typename... Args, std::size_t N>
     auto bindRpcMethod(std::string_view name, traits::FunctionT<RetT(Args...)> func,
-                       const std::array<std::string_view, N>& argNames) noexcept -> void {
-        return _registerRpcMethod<RpcMethodDynamic<RetT(Args...)>>(
-            argNames, name, std::move(func));
+                       const std::array<std::string_view, N>& arg_names) noexcept -> void {
+        return _registerRpcMethod<RpcMethodDynamic<RetT(Args...)>>(arg_names, name, std::move(func));
     }
 
     template <typename RetT, typename... Args, std::size_t N>
     auto bindRpcMethod(std::string_view name, traits::FunctionT<ilias::IoTask<RetT>(Args...)> func,
-                       const std::array<std::string_view, N>& argNames) noexcept -> void {
-        _registerRpcMethod<RpcMethodDynamic<RetT(Args...)>>(argNames, name, std::move(func));
+                       const std::array<std::string_view, N>& arg_names) noexcept -> void {
+        _registerRpcMethod<RpcMethodDynamic<RetT(Args...)>>(arg_names, name, std::move(func));
     }
 
     auto methodDatas() noexcept -> std::vector<MethodData> {
@@ -150,34 +149,44 @@ public:
         return {};
     }
 
-    auto processMessage(std::span<const std::byte> data, IMessageEndpoint* endpoint = nullptr) noexcept
+    auto processMessage(std::span<const std::byte> data, typename Backend::ServerContext& context,
+                        typename Backend::PeerSession& session, IMessageEndpoint* endpoint = nullptr) noexcept
         -> ilias::Task<Message> {
         Message buffer;
-        auto decoded = Backend::decodeIncoming(data);
+        auto decoded = Backend::decodeIncoming(context, session, data);
         if (!decoded.ok) {
             NEKO_LOG_ERROR("rpc", "parse rpc request failed");
             co_return buffer;
         }
+        NEKO_LOG_TRACE("rpc", "rpc dispatcher message decoded: requests={} prebuilt_responses={} batch={}",
+                       decoded.requests.size(), decoded.responses.size(), decoded.batch);
 
         typename Backend::ResponseValues responses;
+        // The backend may already have protocol-level error responses, for
+        // example method-id resolution failures. Dispatcher only adds
+        // application method results after this point.
+        responses.insert(responses.end(), decoded.responses.begin(), decoded.responses.end());
         for (const auto& request : decoded.requests) {
             mCurrentIds.emplace_back(Backend::id(request));
-            const auto methodName = std::string(Backend::methodName(request));
-            if (auto it = mHandlers.find(methodName); it != mHandlers.end()) {
-                NEKO_LOG_INFO("rpc", "spawn taskhandle for method {}", methodName);
+            const auto method_name = std::string(Backend::methodName(request));
+            if (auto it = mHandlers.find(method_name); it != mHandlers.end()) {
+                NEKO_LOG_TRACE("rpc", "rpc dispatcher method dispatch: method={}", method_name);
                 mTaskScope.spawn(it->second->call(request, responses));
             } else {
-                NEKO_LOG_WARN("rpc", "method {} not found!", methodName);
+                NEKO_LOG_WARN("rpc", "method {} not found!", method_name);
                 Backend::appendError(responses, request, RpcError::MethodNotFound);
             }
         }
 
         co_await mTaskScope.waitAll();
-        NEKO_LOG_INFO("rpc", "Finished processing request, batch size {}", decoded.requests.size());
+        NEKO_LOG_TRACE("rpc", "Finished processing request, batch size {}", decoded.requests.size());
         mCurrentIds.clear();
         mCancelHandles.clear();
 
-        buffer = Backend::encodeResponses(responses, decoded.batch);
+        buffer = Backend::encodeResponses(context, session, responses, decoded.batch);
+        NEKO_LOG_TRACE("rpc", "rpc dispatcher response encoded: responses={} bytes={}", responses.size(),
+                       buffer.size());
+
         if (endpoint != nullptr && !buffer.empty()) {
             auto ret = co_await endpoint->send(
                 {reinterpret_cast<const std::byte*>(buffer.data()), static_cast<std::size_t>(buffer.size())});
@@ -186,17 +195,6 @@ public:
             }
         }
         co_return buffer;
-    }
-
-    auto receiveLoop(IMessageEndpoint* endpoint) noexcept -> ilias::Task<void> {
-        while (endpoint != nullptr) {
-            std::vector<std::byte> buffer;
-            if (auto ret = co_await endpoint->recv(buffer); ret && !buffer.empty()) {
-                co_await (processMessage(buffer, endpoint));
-            } else {
-                break;
-            }
-        }
     }
 
     void cancel(Id id) noexcept {
@@ -228,31 +226,33 @@ private:
     template <typename T>
     auto _handle(const typename Backend::DecodedRequest& request, typename Backend::ResponseValues& responses,
                  T& metadata) noexcept -> ilias::Task<void> {
-        auto decodedParams = [&]() {
-            if constexpr (requires { Backend::template decodeParams<T>(request, metadata); }) {
-                return Backend::template decodeParams<T>(request, metadata);
-            } else {
-                return Backend::template decodeParams<T>(request);
-            }
-        }();
-        if (!decodedParams) {
-            Backend::appendError(responses, request, decodedParams.error());
+        auto decoded_params = Backend::template decodeParams<T>(request, metadata);
+
+        if (!decoded_params) {
+            NEKO_LOG_WARN("rpc", "rpc dispatcher parameter decode failed: method={} error={}", metadata.name(),
+                          decoded_params.error().message());
+            Backend::appendError(responses, request, decoded_params.error());
             co_return;
         }
 
-        auto handle = mTaskScope.spawn([&, request,
-                                        params = std::move(decodedParams.value())]() mutable -> ilias::Task<void> {
-            ilias::Result<typename T::RawReturnType, std::error_code> result = ilias::Err(ilias::SystemError::Canceled);
-            auto onfinally                                                   = [&]() -> ilias::Task<void> {
-                Backend::template appendMethodReturn<T>(responses, request, std::move(result));
+        // From here onward we are in user-code territory. Backend decoding has
+        // already converted wire bytes into typed parameters.
+        NEKO_LOG_TRACE("rpc", "rpc dispatcher invoke begin: method={}", metadata.name());
+        auto handle =
+            mTaskScope.spawn([&, request, params = std::move(decoded_params.value())]() mutable -> ilias::Task<void> {
+                ilias::Result<typename T::RawReturnType, std::error_code> result =
+                    ilias::Err(ilias::SystemError::Canceled);
+                auto onfinally = [&]() -> ilias::Task<void> {
+                    Backend::template appendMethodReturn<T>(responses, request, std::move(result));
+                    NEKO_LOG_TRACE("rpc", "rpc dispatcher invoke end: method={}", metadata.name());
+                    co_return;
+                };
+                co_await ([&result, params = std::move(params)](T& metadata) mutable -> ilias::Task<void> {
+                    result = co_await Backend::template invoke<T>(metadata, std::move(params));
+                    co_return;
+                }(metadata) | ilias::finally(onfinally));
                 co_return;
-            };
-            co_await ([&result, params = std::move(params)](T& metadata) mutable -> ilias::Task<void> {
-                result = co_await Backend::template invoke<T>(metadata, std::move(params));
-                co_return;
-            }(metadata) | ilias::finally(onfinally));
-            co_return;
-        });
+            });
         if (Backend::expectsResponse(request)) {
             mCancelHandles[Backend::id(request)] = std::move(handle);
         }
