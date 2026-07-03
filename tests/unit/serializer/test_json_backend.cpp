@@ -1,5 +1,6 @@
 #include <atomic>
 #include <array>
+#include <cstddef>
 #include <list>
 #include <map>
 #include <memory>
@@ -111,6 +112,15 @@ void read_json(const std::vector<char>& buffer, T& value) {
 std::string as_string(const std::vector<char>& buffer) {
     return {buffer.begin(), buffer.end()};
 }
+
+std::string as_string(const std::vector<std::byte>& buffer) {
+    std::string text;
+    text.reserve(buffer.size());
+    for (auto byte : buffer) {
+        text.push_back(static_cast<char>(std::to_integer<unsigned char>(byte)));
+    }
+    return text;
+}
 } // namespace
 
 TEST(RapidJsonBackendParser, RoundTripsBasicRootThroughParserEntry) {
@@ -129,6 +139,19 @@ TEST(RapidJsonBackendParser, RoundTripsStringRootThroughGenericParser) {
     std::string decoded;
     read_json(buffer, decoded);
     EXPECT_EQ(decoded, "ready");
+}
+
+TEST(RapidJsonBackendParser, WritesByteOutputBuffer) {
+    std::vector<std::byte> buffer;
+    JsonSerializer::ByteOutputSerializer out(buffer);
+    ASSERT_TRUE(out(std::tuple{7, std::string{"byte"}}));
+    ASSERT_TRUE(out.end());
+    EXPECT_EQ(as_string(buffer), R"([7,"byte"])");
+
+    std::tuple<int, std::string> decoded;
+    JsonSerializer::InputSerializer in(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+    ASSERT_TRUE(in(decoded));
+    EXPECT_EQ(decoded, std::make_tuple(7, std::string{"byte"}));
 }
 
 TEST(RapidJsonBackendParser, WritesNullRootThroughGenericParser) {

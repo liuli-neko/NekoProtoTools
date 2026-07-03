@@ -16,20 +16,19 @@
 
 #include "nekoproto/jsonrpc/message_stream_wrapper.hpp"
 #include "nekoproto/rpc/rpc.hpp"
+#include "nekoproto/serialization/json_serializer.hpp"
 
 NEKO_USE_NAMESPACE
 
 namespace {
 
-auto asBytes(const std::vector<char>& message) -> std::span<const std::byte> {
-    return {reinterpret_cast<const std::byte*>(message.data()), message.size()};
+auto asBytes(const std::vector<std::byte>& message) -> std::span<const std::byte> {
+    return {message.data(), message.size()};
 }
 
 struct BinaryRpcTestApi {
-    RpcMethod<int(int, int), "add"> add;
-    RpcMethod<void(int), "sink"> sink;
-
-    NEKO_SERIALIZER(add, sink)
+    RpcMethodSpec<int(int, int), rpc_args<"a", "b">> add;
+    RpcMethodSpec<void(int), rpc_args<"a">> sink;
 };
 
 struct UnsupportedBinaryRpcValue {
@@ -37,31 +36,34 @@ struct UnsupportedBinaryRpcValue {
 };
 
 struct NoCompressionCodec {
-    using Message = detail::NekoRpcFrameCodec::Message;
+    using Message = rpc::NekoRpcFrameCodec::MessageType;
 
-    static constexpr auto preferredAlgorithm() noexcept -> detail::NekoRpcCompressionAlgorithm {
-        return detail::NekoRpcCompressionAlgorithm::None;
+    static constexpr auto preferred_algorithm() noexcept -> rpc::NekoRpcCompressionAlgorithm {
+        return rpc::NekoRpcCompressionAlgorithm::None;
     }
-    static constexpr bool supports(detail::NekoRpcCompressionAlgorithm algorithm) noexcept {
-        return algorithm == detail::NekoRpcCompressionAlgorithm::None;
+    static constexpr bool supports(rpc::NekoRpcCompressionAlgorithm algorithm) noexcept {
+        return algorithm == rpc::NekoRpcCompressionAlgorithm::None;
     }
 
-    static auto compress(std::span<const std::byte>, detail::NekoRpcCompressionAlgorithm)
+    static auto compress(std::span<const std::byte> /**/, rpc::NekoRpcCompressionAlgorithm /**/)
         -> ilias::Result<Message, std::error_code> {
         return ilias::Err(RpcError::InvalidRequest);
     }
-    static auto decompress(std::span<const std::byte>, detail::NekoRpcCompressionAlgorithm)
+    static auto decompress(std::span<const std::byte> /**/, rpc::NekoRpcCompressionAlgorithm /**/)
         -> ilias::Result<Message, std::error_code> {
         return ilias::Err(RpcError::InvalidRequest);
     }
 };
 
 using NoCompressionRpcBackend = NekoRpcBackend<BinarySerializer, 0, NoCompressionCodec>;
+using JsonSerializedRpcBackend = NekoRpcBackend<JsonSerializer, 1>;
 
 static_assert(RpcBackend<BinaryRpcBackend>);
 static_assert(RpcBackend<NoCompressionRpcBackend>);
+static_assert(RpcBackend<JsonSerializedRpcBackend>);
 static_assert(BackendSerializable<BinaryRpcBackend, int>);
 static_assert(BackendSerializable<BinaryRpcBackend, std::tuple<int, int>>);
+static_assert(BackendSerializable<JsonSerializedRpcBackend, std::tuple<int, int>>);
 static_assert(!BackendSerializable<BinaryRpcBackend, UnsupportedBinaryRpcValue>);
 
 auto contains(const std::vector<std::string>& values, std::string_view expected) -> bool {
@@ -87,29 +89,6 @@ void connect_endpoint(Server& server, Client& client) {
     client.setEndpoint(std::move(clientStream));
 }
 
-template <typename Backend, typename Server, typename Client>
-void connect_endpoint(Server& server, Client& client, typename Backend::Options options) {
-#if 0
-    auto serverStream = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12337 + NEKO_CPP_PLUS) +
-                                                        "-127.0.0.1:" + std::to_string(12338 + NEKO_CPP_PLUS)))
-                            .wait()
-                            .value();
-    auto clientStream = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12338 + NEKO_CPP_PLUS) +
-                                                        "-127.0.0.1:" + std::to_string(12337 + NEKO_CPP_PLUS)))
-                            .wait()
-                            .value();
-#else
-    auto [clientStream, serverStream] = ilias::DuplexStream::make(65536);
-#endif
-    server.addEndpoint(Backend::makeServerEndpoint(std::move(serverStream), server.methodDatas(), options));
-    client.setEndpoint(Backend::makeClientEndpoint(std::move(clientStream), options));
-}
-
-template <typename Server, typename Client>
-void connect_endpoint(Server& server, Client& client, BinaryRpcBackend::Options options) {
-    connect_endpoint<BinaryRpcBackend>(server, client, std::move(options));
-}
-
 } // namespace
 
 TEST(NekoRpcBackend, CallsRegisteredMethodThroughBinaryFrame) {
@@ -121,14 +100,34 @@ TEST(NekoRpcBackend, CallsRegisteredMethodThroughBinaryFrame) {
 
     server->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; };
 
-    std::uint64_t nextId = 0;
-    auto request         = BinaryRpcBackend::encodeRequest(server->add, false, nextId, 20, 22);
+    std::uint64_t next_id = 0;
+    auto request          = BinaryRpcBackend::encodeRequest(server->add, false, next_id, 20, 22);
     ASSERT_TRUE(request.has_value()) << request.error().message();
 
     auto response = server.processMessage(asBytes(request.value().message)).wait();
     ASSERT_FALSE(response.empty());
 
     auto decoded = BinaryRpcBackend::decodeResponse<decltype(server->add)>(asBytes(response), request.value().id);
+    ASSERT_TRUE(decoded.has_value()) << decoded.error().message();
+    EXPECT_EQ(decoded.value(), 42);
+}
+
+TEST(NekoRpcBackend, JsonSerializedBackendCallsRegisteredMethodThroughFrame) {
+    ilias::PlatformContext context;
+    context.install();
+    RpcServer<JsonSerializedRpcBackend, BinaryRpcTestApi> server{context};
+
+    server->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; };
+
+    std::uint64_t next_id = 0;
+    auto request          = JsonSerializedRpcBackend::encodeRequest(server->add, false, next_id, 20, 22);
+    ASSERT_TRUE(request.has_value()) << request.error().message();
+
+    auto response = server.processMessage(asBytes(request.value().message)).wait();
+    ASSERT_FALSE(response.empty());
+
+    auto decoded =
+        JsonSerializedRpcBackend::decodeResponse<decltype(server->add)>(asBytes(response), request.value().id);
     ASSERT_TRUE(decoded.has_value()) << decoded.error().message();
     EXPECT_EQ(decoded.value(), 42);
 }
@@ -165,48 +164,48 @@ TEST(NekoRpcBackend, MakeEndpointAcceptsIliasStreamAndMessageEndpoint) {
     server->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; };
 
     auto [clientStream, serverStream] = ilias::DuplexStream::make(65536);
-    auto rawClientEndpoint            = BinaryRpcBackend::makeEndpoint(std::move(clientStream));
-    static_assert(MessageEndpoint<decltype(rawClientEndpoint)>);
-    auto clientEndpoint = BinaryRpcBackend::makeEndpoint(std::move(rawClientEndpoint));
-    static_assert(MessageEndpoint<decltype(clientEndpoint)>);
-    auto serverEndpoint = BinaryRpcBackend::makeEndpoint(std::move(serverStream));
-    static_assert(MessageEndpoint<decltype(serverEndpoint)>);
+    auto raw_client_endpoint          = BinaryRpcBackend::makeEndpoint(std::move(clientStream));
+    static_assert(MessageEndpoint<decltype(raw_client_endpoint)>);
+    auto client_endpoint = BinaryRpcBackend::makeEndpoint(std::move(raw_client_endpoint));
+    static_assert(MessageEndpoint<decltype(client_endpoint)>);
+    auto server_endpoint = BinaryRpcBackend::makeEndpoint(std::move(serverStream));
+    static_assert(MessageEndpoint<decltype(server_endpoint)>);
 
-    std::uint64_t nextId = 0;
-    auto request         = BinaryRpcBackend::encodeRequest(server->add, false, nextId, 20, 22);
+    std::uint64_t next_id = 0;
+    auto request          = BinaryRpcBackend::encodeRequest(server->add, false, next_id, 20, 22);
     ASSERT_TRUE(request.has_value()) << request.error().message();
 
-    auto sent = clientEndpoint.send(asBytes(request.value().message)).wait();
+    auto sent = client_endpoint.send(asBytes(request.value().message)).wait();
     ASSERT_TRUE(sent.has_value()) << sent.error().message();
     EXPECT_EQ(sent.value(), request.value().message.size());
 
-    auto flushed = clientEndpoint.flush().wait();
+    auto flushed = client_endpoint.flush().wait();
     ASSERT_TRUE(flushed.has_value()) << flushed.error().message();
 
     std::vector<std::byte> received;
-    auto recved = serverEndpoint.recv(received).wait();
+    auto recved = server_endpoint.recv(received).wait();
     ASSERT_TRUE(recved.has_value()) << recved.error().message();
     EXPECT_EQ(recved.value(), request.value().message.size());
     ASSERT_EQ(received.size(), request.value().message.size());
     EXPECT_TRUE(std::equal(received.begin(), received.end(),
                            reinterpret_cast<const std::byte*>(request.value().message.data())));
 
-    auto shutdown = clientEndpoint.shutdown().wait();
+    auto shutdown = client_endpoint.shutdown().wait();
     ASSERT_TRUE(shutdown.has_value()) << shutdown.error().message();
-    serverEndpoint.close();
+    server_endpoint.close();
 }
 
 TEST(NekoRpcBackend, RequireMethodIdModeCallsThroughNegotiatedTable) {
     ilias::PlatformContext context;
     context.install();
-    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context};
-    RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context};
+    BinaryRpcBackend::Options options;
+    options.method_id = BinaryRpcBackend::MethodIdMode::Require;
+    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
+    RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
 
     server->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; };
 
-    BinaryRpcBackend::Options options;
-    options.methodId = BinaryRpcBackend::MethodIdMode::Require;
-    connect_endpoint(server, client, options);
+    connect_endpoint(server, client);
 
     auto result = client->add(20, 22).wait();
     ASSERT_TRUE(result.has_value()) << result.error().message();
@@ -217,72 +216,75 @@ TEST(NekoRpcBackend, RequireMethodIdModeCallsThroughNegotiatedTable) {
 }
 
 TEST(NekoRpcBackend, MethodIdTableDynamicUpdatesTrackCompatibility) {
-    const auto addHash  = detail::NekoRpcMethodIdTable::signatureHash("add", "i32 add(i32, i32)");
-    const auto sinkHash = detail::NekoRpcMethodIdTable::signatureHash("sink", "void sink(i32)");
-    const auto mulHash  = detail::NekoRpcMethodIdTable::signatureHash("mul", "i32 mul(i32, i32)");
+    const auto add_hash  = rpc::NekoRpcMethodIdTable::signatureHash("add", "i32 add(i32, i32)");
+    const auto sink_hash = rpc::NekoRpcMethodIdTable::signatureHash("sink", "void sink(i32)");
+    const auto mul_hash  = rpc::NekoRpcMethodIdTable::signatureHash("mul", "i32 mul(i32, i32)");
 
-    detail::NekoRpcMethodIdTable table;
-    table.reset({
-        {.id = 0, .name = "add", .signatureHash = addHash, .state = detail::NekoRpcMethodState::Active},
-        {.id = 1, .name = "sink", .signatureHash = sinkHash, .state = detail::NekoRpcMethodState::Active},
-    });
+    rpc::NekoRpcMethodIdTable table;
+    table.reset(
+        {
+            {.id = 0, .name = "add", .signature_hash = add_hash, .state = rpc::NekoRpcMethodState::Active},
+            {.id = 1, .name = "sink", .signature_hash = sink_hash, .state = rpc::NekoRpcMethodState::Active},
+        },
+        rpc::NekoRpcMethodIdExtension::InitialTableVersion);
     const auto version1 = table.version();
-    ASSERT_EQ(version1, detail::NekoRpcMethodIdExtension::InitialTableVersion);
+    ASSERT_EQ(version1, rpc::NekoRpcMethodIdExtension::InitialTableVersion);
 
     const auto* add  = table.findByName("add");
     const auto* sink = table.findByName("sink");
     ASSERT_NE(add, nullptr);
     ASSERT_NE(sink, nullptr);
-    const auto addId  = add->id;
-    const auto sinkId = sink->id;
+    const auto add_id  = add->id;
+    const auto sink_id = sink->id;
 
-    const auto* mul = table.upsert("mul", mulHash);
+    const auto* mul = table.upsert("mul", mul_hash);
     ASSERT_NE(mul, nullptr);
-    EXPECT_GT(mul->id, sinkId);
+    EXPECT_GT(mul->id, sink_id);
     EXPECT_GT(table.version(), version1);
 
-    auto compatibleOld = table.resolve(addId, version1, addHash, true);
-    EXPECT_EQ(compatibleOld.status, detail::NekoRpcMethodIdResolveStatus::Ok);
-    ASSERT_NE(compatibleOld.entry, nullptr);
-    EXPECT_EQ(compatibleOld.entry->name, "add");
+    auto compatible_old = table.resolve(add_id, version1, add_hash, true);
+    EXPECT_EQ(compatible_old.status, rpc::NekoRpcMethodIdResolveStatus::Ok);
+    ASSERT_NE(compatible_old.entry, nullptr);
+    EXPECT_EQ(compatible_old.entry->name, "add");
 
-    auto mismatch = table.resolve(addId, table.version(), addHash ^ 1U, true);
-    EXPECT_EQ(mismatch.status, detail::NekoRpcMethodIdResolveStatus::SignatureMismatch);
+    auto mismatch = table.resolve(add_id, table.version(), add_hash ^ 1U, true);
+    EXPECT_EQ(mismatch.status, rpc::NekoRpcMethodIdResolveStatus::SignatureMismatch);
 
     ASSERT_TRUE(table.remove("sink"));
-    auto removed = table.resolve(sinkId, version1, sinkHash, true);
-    EXPECT_EQ(removed.status, detail::NekoRpcMethodIdResolveStatus::MethodRemoved);
+    auto removed = table.resolve(sink_id, version1, sink_hash, true);
+    EXPECT_EQ(removed.status, rpc::NekoRpcMethodIdResolveStatus::MethodRemoved);
 
     table.setMinimumCompatibleVersion(table.version());
-    auto outdated = table.resolve(addId, version1, addHash, true);
-    EXPECT_EQ(outdated.status, detail::NekoRpcMethodIdResolveStatus::TableOutdated);
+    auto outdated = table.resolve(add_id, version1, add_hash, true);
+    EXPECT_EQ(outdated.status, rpc::NekoRpcMethodIdResolveStatus::TableOutdated);
 }
 
 TEST(NekoRpcBackend, MethodIdDeltaRoundTripsTableUpdates) {
-    const auto addHash  = detail::NekoRpcMethodIdTable::signatureHash("add", "i32 add(i32, i32)");
-    const auto sinkHash = detail::NekoRpcMethodIdTable::signatureHash("sink", "void sink(i32)");
-    const auto mulHash  = detail::NekoRpcMethodIdTable::signatureHash("mul", "i32 mul(i32, i32)");
+    const auto addHash  = rpc::NekoRpcMethodIdTable::signatureHash("add", "i32 add(i32, i32)");
+    const auto sinkHash = rpc::NekoRpcMethodIdTable::signatureHash("sink", "void sink(i32)");
+    const auto mulHash  = rpc::NekoRpcMethodIdTable::signatureHash("mul", "i32 mul(i32, i32)");
 
-    detail::NekoRpcMethodIdTable serverTable;
-    serverTable.reset({
-        {.id = 0, .name = "add", .signatureHash = addHash, .state = detail::NekoRpcMethodState::Active},
-        {.id = 1, .name = "sink", .signatureHash = sinkHash, .state = detail::NekoRpcMethodState::Active},
-    });
-    detail::NekoRpcMethodIdTable clientTable;
+    rpc::NekoRpcMethodIdTable serverTable;
+    serverTable.reset(
+        {
+            {.id = 0, .name = "add", .signature_hash = addHash, .state = rpc::NekoRpcMethodState::Active},
+            {.id = 1, .name = "sink", .signature_hash = sinkHash, .state = rpc::NekoRpcMethodState::Active},
+        },
+        rpc::NekoRpcMethodIdExtension::InitialTableVersion);
+    rpc::NekoRpcMethodIdTable clientTable;
     clientTable.applyRemoteTable(serverTable.entries(), serverTable.version());
 
     const auto* mul = serverTable.upsert("mul", mulHash);
     ASSERT_NE(mul, nullptr);
-    auto deltaValue = detail::NekoRpcMethodIdExtension::methodTableDeltaValue({*mul});
-    detail::NekoRpcFrameCodec::ExtensionMap deltaExtensions;
-    deltaExtensions[detail::NekoRpcExtensionType::MethodTableDelta] =
-        detail::NekoRpcExtensionCodec::asBytes(deltaValue);
-    std::vector<detail::NekoRpcMethodEntry> parsedDelta;
-    ASSERT_TRUE(detail::NekoRpcMethodIdExtension::parseMethodTableDelta(deltaExtensions, parsedDelta));
+    auto deltaValue = rpc::NekoRpcMethodIdExtension::methodTableDeltaValue({*mul});
+    rpc::NekoRpcFrameCodec::ExtensionMapType deltaExtensions;
+    deltaExtensions[rpc::NekoRpcExtensionType::MethodTableDelta] = rpc::NekoRpcExtensionCodec::asBytes(deltaValue);
+    std::vector<rpc::NekoRpcMethodEntry> parsedDelta;
+    ASSERT_TRUE(rpc::NekoRpcMethodIdExtension::parseMethodTableDelta(deltaExtensions, parsedDelta));
     ASSERT_TRUE(clientTable.applyRemoteDelta(parsedDelta, serverTable.version()));
 
     auto mulResolved = clientTable.resolve(mul->id, clientTable.version(), mulHash, true);
-    EXPECT_EQ(mulResolved.status, detail::NekoRpcMethodIdResolveStatus::Ok);
+    EXPECT_EQ(mulResolved.status, rpc::NekoRpcMethodIdResolveStatus::Ok);
     ASSERT_NE(mulResolved.entry, nullptr);
     EXPECT_EQ(mulResolved.entry->name, "mul");
 
@@ -292,54 +294,51 @@ TEST(NekoRpcBackend, MethodIdDeltaRoundTripsTableUpdates) {
     ASSERT_TRUE(serverTable.remove("sink"));
     const auto* tombstone = serverTable.findById(sinkId);
     ASSERT_NE(tombstone, nullptr);
-    deltaValue = detail::NekoRpcMethodIdExtension::methodTableDeltaValue({*tombstone});
-    deltaExtensions[detail::NekoRpcExtensionType::MethodTableDelta] =
-        detail::NekoRpcExtensionCodec::asBytes(deltaValue);
-    ASSERT_TRUE(detail::NekoRpcMethodIdExtension::parseMethodTableDelta(deltaExtensions, parsedDelta));
+    deltaValue = rpc::NekoRpcMethodIdExtension::methodTableDeltaValue({*tombstone});
+    deltaExtensions[rpc::NekoRpcExtensionType::MethodTableDelta] = rpc::NekoRpcExtensionCodec::asBytes(deltaValue);
+    ASSERT_TRUE(rpc::NekoRpcMethodIdExtension::parseMethodTableDelta(deltaExtensions, parsedDelta));
     ASSERT_TRUE(clientTable.applyRemoteDelta(parsedDelta, serverTable.version()));
 
     auto sinkResolved = clientTable.resolve(sinkId, clientTable.version(), sinkHash, true);
-    EXPECT_EQ(sinkResolved.status, detail::NekoRpcMethodIdResolveStatus::MethodRemoved);
+    EXPECT_EQ(sinkResolved.status, rpc::NekoRpcMethodIdResolveStatus::MethodRemoved);
 }
 
 TEST(NekoRpcBackend, CompressionExtensionsRoundTripNegotiationContext) {
-    auto algorithmValue =
-        detail::NekoRpcExtensionCodec::enumValue(detail::NekoRpcCompressionAlgorithm::RunLength);
-    auto minSizeValue = detail::NekoRpcExtensionCodec::integerValue<std::uint32_t>(256);
+    auto algorithmValue = rpc::NekoRpcExtensionCodec::enumValue(rpc::NekoRpcCompressionAlgorithm::RunLength);
+    auto minSizeValue   = rpc::NekoRpcExtensionCodec::integerValue<std::uint32_t>(256);
 
-    detail::NekoRpcFrameCodec::ExtensionMap extensions;
-    extensions[detail::NekoRpcExtensionType::Compression] = {};
-    extensions[detail::NekoRpcExtensionType::CompressionAlgorithm] =
-        detail::NekoRpcExtensionCodec::asBytes(algorithmValue);
-    extensions[detail::NekoRpcExtensionType::CompressionMinPayloadSize] =
-        detail::NekoRpcExtensionCodec::asBytes(minSizeValue);
+    rpc::NekoRpcFrameCodec::ExtensionMapType extensions;
+    extensions[rpc::NekoRpcExtensionType::Compression]          = {};
+    extensions[rpc::NekoRpcExtensionType::CompressionAlgorithm] = rpc::NekoRpcExtensionCodec::asBytes(algorithmValue);
+    extensions[rpc::NekoRpcExtensionType::CompressionMinPayloadSize] =
+        rpc::NekoRpcExtensionCodec::asBytes(minSizeValue);
 
-    detail::NekoRpcFrameCodec::Message bytes;
-    ASSERT_TRUE(detail::NekoRpcExtensionCodec::appendTlvs(bytes, extensions));
+    rpc::NekoRpcFrameCodec::MessageType bytes;
+    ASSERT_TRUE(rpc::NekoRpcExtensionCodec::appendTlvs(bytes, extensions));
 
-    detail::NekoRpcFrameCodec::ExtensionMap parsed;
-    ASSERT_TRUE(detail::NekoRpcExtensionCodec::loadTlvs(detail::NekoRpcExtensionCodec::asBytes(bytes), parsed));
-    EXPECT_TRUE(parsed.contains(detail::NekoRpcExtensionType::Compression));
+    rpc::NekoRpcFrameCodec::ExtensionMapType parsed;
+    ASSERT_TRUE(rpc::NekoRpcExtensionCodec::loadTlvs(rpc::NekoRpcExtensionCodec::asBytes(bytes), parsed));
+    EXPECT_TRUE(parsed.contains(rpc::NekoRpcExtensionType::Compression));
 
-    detail::NekoRpcCompressionAlgorithm algorithm = detail::NekoRpcCompressionAlgorithm::None;
-    ASSERT_TRUE(detail::NekoRpcExtensionCodec::readEnumTlv(
-        parsed, detail::NekoRpcExtensionType::CompressionAlgorithm, algorithm));
-    EXPECT_EQ(algorithm, detail::NekoRpcCompressionAlgorithm::RunLength);
+    rpc::NekoRpcCompressionAlgorithm algorithm = rpc::NekoRpcCompressionAlgorithm::None;
+    ASSERT_TRUE(
+        rpc::NekoRpcExtensionCodec::readEnumTlv(parsed, rpc::NekoRpcExtensionType::CompressionAlgorithm, algorithm));
+    EXPECT_EQ(algorithm, rpc::NekoRpcCompressionAlgorithm::RunLength);
     std::uint32_t minSize = 0;
-    ASSERT_TRUE(detail::NekoRpcExtensionCodec::readIntegerTlv(
-        parsed, detail::NekoRpcExtensionType::CompressionMinPayloadSize, minSize));
+    ASSERT_TRUE(rpc::NekoRpcExtensionCodec::readIntegerTlv(parsed, rpc::NekoRpcExtensionType::CompressionMinPayloadSize,
+                                                           minSize));
     EXPECT_EQ(minSize, 256U);
 }
 
 TEST(NekoRpcBackend, CompressionCodecRunLengthShrinksAndRestoresPayload) {
-    detail::NekoRpcFrameCodec::Message payload(512, 'A');
-    auto compressed = detail::NekoRpcCompressionCodec::compress(detail::NekoRpcExtensionCodec::asBytes(payload),
-                                                                detail::NekoRpcCompressionAlgorithm::RunLength);
+    rpc::NekoRpcFrameCodec::MessageType payload(512, static_cast<std::byte>('A'));
+    auto compressed = rpc::NekoRpcCompressionCodec::compress(rpc::NekoRpcExtensionCodec::asBytes(payload),
+                                                             rpc::NekoRpcCompressionAlgorithm::RunLength);
     ASSERT_TRUE(compressed.has_value()) << compressed.error().message();
     ASSERT_LT(compressed.value().size(), payload.size());
 
-    auto restored = detail::NekoRpcCompressionCodec::decompress(
-        detail::NekoRpcExtensionCodec::asBytes(compressed.value()), detail::NekoRpcCompressionAlgorithm::RunLength);
+    auto restored = rpc::NekoRpcCompressionCodec::decompress(rpc::NekoRpcExtensionCodec::asBytes(compressed.value()),
+                                                             rpc::NekoRpcCompressionAlgorithm::RunLength);
     ASSERT_TRUE(restored.has_value()) << restored.error().message();
     EXPECT_EQ(restored.value(), payload);
 }
@@ -347,31 +346,31 @@ TEST(NekoRpcBackend, CompressionCodecRunLengthShrinksAndRestoresPayload) {
 TEST(NekoRpcBackend, RequireCompressionCallsThroughCompressedPayloads) {
     ilias::PlatformContext context;
     context.install();
-    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context};
-    RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context};
+    auto stats = std::make_shared<BinaryRpcBackend::CompressionStats>();
+    BinaryRpcBackend::Options options;
+    options.method_id                    = BinaryRpcBackend::MethodIdMode::Disable;
+    options.compression                  = BinaryRpcBackend::CompressionMode::Require;
+    options.compression_min_payload_size = 16;
+    options.compression_stats            = stats;
+    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
+    RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
 
     server.bindMethod("echo", traits::FunctionT<ilias::IoTask<std::string>(std::string)>(
                                   [](std::string value) -> ilias::IoTask<std::string> { co_return value; }));
 
-    auto stats = std::make_shared<BinaryRpcBackend::CompressionStats>();
-    BinaryRpcBackend::Options options;
-    options.methodId                  = BinaryRpcBackend::MethodIdMode::Disable;
-    options.compression               = BinaryRpcBackend::CompressionMode::Require;
-    options.compressionMinPayloadSize = 16;
-    options.compressionStats          = stats;
-    connect_endpoint(server, client, options);
+    connect_endpoint(server, client);
 
     std::string payload(512, 'A');
     auto result = client.callRemote<std::string>("echo", payload).wait();
     ASSERT_TRUE(result.has_value()) << result.error().message();
     EXPECT_EQ(result.value(), payload);
-    EXPECT_GE(stats->compressionAttempts.load(), 2U);
-    EXPECT_GE(stats->compressedFrames.load(), 2U);
-    EXPECT_GE(stats->decompressedFrames.load(), 2U);
-    EXPECT_GT(stats->compressionInputBytes.load(), stats->compressionOutputBytes.load());
-    EXPECT_GT(stats->decompressionOutputBytes.load(), stats->decompressionInputBytes.load());
-    EXPECT_EQ(stats->compressionErrors.load(), 0U);
-    EXPECT_EQ(stats->decompressionErrors.load(), 0U);
+    EXPECT_GE(stats->compression_attempts.load(), 2U);
+    EXPECT_GE(stats->compressed_frames.load(), 2U);
+    EXPECT_GE(stats->decompressed_frames.load(), 2U);
+    EXPECT_GT(stats->compression_input_bytes.load(), stats->compression_output_bytes.load());
+    EXPECT_GT(stats->decompression_output_bytes.load(), stats->decompression_input_bytes.load());
+    EXPECT_EQ(stats->compression_errors.load(), 0U);
+    EXPECT_EQ(stats->decompression_errors.load(), 0U);
 
     client.close();
     server.close();
@@ -380,22 +379,22 @@ TEST(NekoRpcBackend, RequireCompressionCallsThroughCompressedPayloads) {
 TEST(NekoRpcBackend, ReplaceableCompressionCodecFallsBackWhenUnsupported) {
     ilias::PlatformContext context;
     context.install();
-    RpcServer<NoCompressionRpcBackend, BinaryRpcTestApi> server{context};
-    RpcClient<NoCompressionRpcBackend, BinaryRpcTestApi> client{context};
+    NoCompressionRpcBackend::Options options;
+    options.method_id         = NoCompressionRpcBackend::MethodIdMode::Disable;
+    options.compression       = NoCompressionRpcBackend::CompressionMode::Auto;
+    auto stats                = std::make_shared<NoCompressionRpcBackend::CompressionStats>();
+    options.compression_stats = stats;
+    RpcServer<NoCompressionRpcBackend, BinaryRpcTestApi> server{context, options};
+    RpcClient<NoCompressionRpcBackend, BinaryRpcTestApi> client{context, options};
 
     server->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; };
 
-    NoCompressionRpcBackend::Options options;
-    options.methodId         = NoCompressionRpcBackend::MethodIdMode::Disable;
-    options.compression      = NoCompressionRpcBackend::CompressionMode::Require;
-    auto stats               = std::make_shared<NoCompressionRpcBackend::CompressionStats>();
-    options.compressionStats = stats;
-    connect_endpoint<NoCompressionRpcBackend>(server, client, options);
+    connect_endpoint(server, client);
 
     auto result = client->add(20, 22).wait();
     ASSERT_TRUE(result.has_value()) << result.error().message();
     EXPECT_EQ(result.value(), 42);
-    EXPECT_EQ(stats->compressionAttempts.load(), 0U);
+    EXPECT_EQ(stats->compression_attempts.load(), 0U);
 
     client.close();
     server.close();
@@ -404,14 +403,14 @@ TEST(NekoRpcBackend, ReplaceableCompressionCodecFallsBackWhenUnsupported) {
 TEST(NekoRpcBackend, MethodIdTableRefreshAddsMethodWithinConnection) {
     ilias::PlatformContext context;
     context.install();
-    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context};
-    RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context};
+    BinaryRpcBackend::Options options;
+    options.method_id = BinaryRpcBackend::MethodIdMode::Require;
+    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
+    RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
 
     server->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; };
 
-    BinaryRpcBackend::Options options;
-    options.methodId = BinaryRpcBackend::MethodIdMode::Require;
-    connect_endpoint(server, client, options);
+    connect_endpoint(server, client);
 
     auto first = client->add(20, 22).wait();
     ASSERT_TRUE(first.has_value()) << first.error().message();
@@ -430,17 +429,17 @@ TEST(NekoRpcBackend, MethodIdTableRefreshAddsMethodWithinConnection) {
     server.close();
 }
 
-TEST(NekoRpcBackend, MethodIdErrorRefreshesAndRetriesWithStringFallback) {
+TEST(NekoRpcBackend, MethodIdErrorIsReturnedWithoutTransparentRetry) {
     ilias::PlatformContext context;
     context.install();
-    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context};
-    RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context};
+    BinaryRpcBackend::Options options;
+    options.method_id = BinaryRpcBackend::MethodIdMode::Auto;
+    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
+    RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
 
     server->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; };
 
-    BinaryRpcBackend::Options options;
-    options.methodId = BinaryRpcBackend::MethodIdMode::Auto;
-    connect_endpoint(server, client, options);
+    connect_endpoint(server, client);
 
     auto first = client->add(1, 2).wait();
     ASSERT_TRUE(first.has_value()) << first.error().message();
@@ -450,9 +449,14 @@ TEST(NekoRpcBackend, MethodIdErrorRefreshesAndRetriesWithStringFallback) {
                                     traits::FunctionT<ilias::IoTask<int>(int, int)>(
                                         [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs * 10 + rhs; }));
 
-    auto retried = client->add(4, 2).wait();
-    ASSERT_TRUE(retried.has_value()) << retried.error().message();
-    EXPECT_EQ(retried.value(), 42);
+    auto failed = client->add(4, 2).wait();
+    ASSERT_FALSE(failed.has_value());
+    EXPECT_GE(failed.error().value(), static_cast<int>(RpcError::MethodIdNotNegotiated));
+    EXPECT_LE(failed.error().value(), static_cast<int>(RpcError::MethodSignatureMismatch));
+
+    auto fallback = client->add(4, 2).wait();
+    ASSERT_TRUE(fallback.has_value()) << fallback.error().message();
+    EXPECT_EQ(fallback.value(), 42);
 
     client.close();
     server.close();
@@ -469,8 +473,8 @@ TEST(NekoRpcBackend, NotificationDoesNotReturnResponse) {
         co_return {};
     };
 
-    std::uint64_t nextId = 0;
-    auto request         = BinaryRpcBackend::encodeRequest(server->sink, true, nextId, 42);
+    std::uint64_t next_id = 0;
+    auto request          = BinaryRpcBackend::encodeRequest(server->sink, true, next_id, 42);
     ASSERT_TRUE(request.has_value()) << request.error().message();
 
     auto response = server.processMessage(asBytes(request.value().message)).wait();

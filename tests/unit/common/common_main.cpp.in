@@ -12,8 +12,7 @@
 int main(int argc, char** argv) {
     cpptrace::init();
     ::testing::InitGoogleTest(&argc, argv);
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
-    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
+    NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_TRACE);
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
     std::setlocale(LC_ALL, "en_US.UTF-8");
     CUSTOM_MAIN

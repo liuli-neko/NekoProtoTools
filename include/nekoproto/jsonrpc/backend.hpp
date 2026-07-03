@@ -39,12 +39,26 @@ struct JsonRpcBackend {
         bool ok    = false;
         bool batch = false;
         std::vector<DecodedRequest> requests;
+        ResponseValues responses;
     };
 
     struct EncodedRequest {
         Message message;
         Id id;
     };
+
+    struct Options {};
+
+    struct ClientContext {
+        Options options;
+        std::uint64_t next_id = 0;
+    };
+
+    struct ServerContext {
+        Options options;
+    };
+
+    struct PeerSession {};
 
 public:
     template <typename T>
@@ -56,7 +70,28 @@ public:
         }
     }
 
-    static DecodeResult decodeIncoming(std::span<const std::byte> message) {
+    static auto makeClientContext(Options options = {}) -> ClientContext {
+        return ClientContext{.options = std::move(options), .next_id = 0};
+    }
+
+    template <typename Methods>
+    static auto makeServerContext(Options options, Methods&& /*methods*/) -> ServerContext {
+        return ServerContext{.options = std::move(options)};
+    }
+
+    template <typename Methods>
+    static auto makeServerContext(Methods&& methods) -> ServerContext {
+        return makeServerContext(Options{}, std::forward<Methods>(methods));
+    }
+
+    static auto makeClientPeerSession(const ClientContext& /*context*/) -> PeerSession { return {}; }
+    static auto makeServerPeerSession(const ServerContext& /*context*/) -> PeerSession { return {}; }
+
+    static auto refreshMethodCatalog(ServerContext& /*context*/, std::vector<detail::RpcMethodMetadata> /*methods*/)
+        -> void {}
+
+    static DecodeResult decodeIncoming(ServerContext& /*context*/, PeerSession& /*session*/,
+                                       std::span<const std::byte> message) {
         DecodeResult result;
         auto data = reinterpret_cast<const char*>(message.data());
         auto size = message.size();
@@ -108,21 +143,6 @@ public:
             return false;
         }
         return true;
-    }
-
-    template <typename Method>
-    static auto decodeParams(const DecodedRequest& request)
-        -> ilias::Result<typename detail::JsonRpcMethodTraits<typename Method::MethodTraits>::ParamsTupleType,
-                         std::error_code> {
-        using Request = detail::JsonRpcRequest2<typename Method::MethodTraits>;
-        static_assert(BackendSerializable<JsonRpcBackend, Request>,
-                      "JsonRpcBackend: method parameters are not serializable by JsonSerializer");
-        Request decoded;
-        JsonSerializer::InputSerializer in(request.value);
-        if (in(decoded)) {
-            return std::move(decoded.params);
-        }
-        return ilias::Err(JsonRpcError::InvalidRequest);
     }
 
     template <typename Method>
@@ -239,9 +259,25 @@ public:
         return buffer;
     }
 
+    static Message encodeResponses(ServerContext& /*context*/, PeerSession& /*session*/,
+                                   const ResponseValues& responses, bool batch) {
+        return encodeResponses(responses, batch);
+    }
+
     template <typename Method, typename... Args>
     static auto encodeRequest(Method& method, bool notification, std::uint64_t& nextId, Args&&... args)
         -> ilias::Result<EncodedRequest, std::error_code> {
+        ClientContext context;
+        context.next_id = nextId;
+        PeerSession session;
+        auto encoded = encodeRequest(context, session, method, notification, std::forward<Args>(args)...);
+        nextId       = context.next_id;
+        return encoded;
+    }
+
+    template <typename Method, typename... Args>
+    static auto encodeRequest(ClientContext& context, PeerSession& /*session*/, Method& method, bool notification,
+                              Args&&... args) -> ilias::Result<EncodedRequest, std::error_code> {
         using Request = detail::JsonRpcRequest2<typename Method::MethodTraits>;
         static_assert(BackendSerializable<JsonRpcBackend, Request>,
                       "JsonRpcBackend: request parameters are not serializable by JsonSerializer");
@@ -250,14 +286,14 @@ public:
         if (notification) {
             request.id = std::monostate{};
         } else {
-            request.id = nextId++;
+            request.id = context.next_id++;
         }
         fillParams<Method>(request, std::forward<Args>(args)...);
 
         Message buffer;
         JsonSerializer::OutputSerializer out(buffer);
-        detail::JsonRpcMethodContext context{.argNames = method.rpcArgNames()};
-        detail::JsonRpcRequestWithContext<Request> requestWithContext{request, context};
+        detail::JsonRpcMethodContext methodContext{.argNames = method.rpcArgNames()};
+        detail::JsonRpcRequestWithContext<Request> requestWithContext{request, methodContext};
         if (out(requestWithContext) && out.end()) {
             return EncodedRequest{.message = std::move(buffer), .id = request.id};
         }
@@ -267,6 +303,14 @@ public:
     template <typename Method>
     static auto decodeResponse(std::span<const std::byte> buffer, const Id& expectedId)
         -> ilias::Result<typename Method::RawReturnType, std::error_code> {
+        ClientContext context;
+        PeerSession session;
+        return decodeResponse<Method>(context, session, buffer, expectedId);
+    }
+
+    template <typename Method>
+    static auto decodeResponse(ClientContext& /*context*/, PeerSession& /*session*/, std::span<const std::byte> buffer,
+                               const Id& expectedId) -> ilias::Result<typename Method::RawReturnType, std::error_code> {
         using Response = detail::JsonRpcResponse<typename Method::MethodTraits>;
         static_assert(BackendSerializable<JsonRpcBackend, Response>,
                       "JsonRpcBackend: response type is not serializable by JsonSerializer");
@@ -292,6 +336,23 @@ public:
 
     static std::error_code clientNotInitError() { return JsonRpcError::ClientNotInit; }
     static std::error_code notificationOk() { return JsonRpcError::Ok; }
+
+    template <typename Endpoint>
+    static auto ensureClientReady(ClientContext& /*context*/, PeerSession& /*session*/, Endpoint& /*endpoint*/)
+        -> ilias::IoTask<void> {
+        co_return {};
+    }
+
+    static bool handleClientControl(ClientContext& /*context*/, PeerSession& /*session*/,
+                                    std::span<const std::byte> /*message*/) {
+        return false;
+    }
+
+    template <typename Endpoint>
+    static auto handleServerControl(ServerContext& /*context*/, PeerSession& /*session*/, Endpoint& /*endpoint*/,
+                                    std::span<const std::byte> /*message*/) -> ilias::IoTask<bool> {
+        co_return false;
+    }
 
     template <ilias::Stream StreamT>
     static auto makeEndpoint(StreamT stream) {

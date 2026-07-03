@@ -31,6 +31,13 @@
 #include <string>
 #include <tuple>
 
+#define NEKO_LOG_LEVEL_TRACE "trace"
+#define NEKO_LOG_LEVEL_DEBUG "debug"
+#define NEKO_LOG_LEVEL_INFO  "info"
+#define NEKO_LOG_LEVEL_WARN  "warn"
+#define NEKO_LOG_LEVEL_ERROR "error"
+#define NEKO_LOG_LEVEL_FATAL "fatal"
+
 NEKO_BEGIN_NAMESPACE
 struct LogContext {
     const char* module;
@@ -97,20 +104,17 @@ enum LogFliterMode {
     FilterExclude,
 };
 inline bool log_level_filter(const std::string& level, int op) {
-    static std::vector<std::string> kLevels = {"fatal", "error", "warn", "info"};
-    static std::set<std::string> kFilter    = {"fatal", "error", "warn"};
+    static std::vector<std::string> kLevels = {NEKO_LOG_LEVEL_FATAL, NEKO_LOG_LEVEL_ERROR, NEKO_LOG_LEVEL_WARN,
+                                               NEKO_LOG_LEVEL_INFO,  NEKO_LOG_LEVEL_DEBUG, NEKO_LOG_LEVEL_TRACE};
+    static std::set<std::string> kFilter    = {NEKO_LOG_LEVEL_FATAL, NEKO_LOG_LEVEL_ERROR, NEKO_LOG_LEVEL_WARN};
     if (op == 0) {
-        if (level == "debug") {
-            kFilter.insert("debug");
-        } else {
-            kFilter.clear();
-            for (const auto& mlevel : kLevels) {
-                if (mlevel != level) {
-                    kFilter.insert(mlevel);
-                } else {
-                    kFilter.insert(mlevel);
-                    break;
-                }
+        kFilter.clear();
+        for (const auto& mlevel : kLevels) {
+            if (mlevel != level) {
+                kFilter.insert(mlevel);
+            } else {
+                kFilter.insert(mlevel);
+                break;
             }
         }
         return true;
@@ -193,11 +197,7 @@ inline void neko_proto_private_log_out(const char* level, const char* message, c
 }
 } // namespace logdetail
 NEKO_END_NAMESPACE
-#define NEKO_LOG_LEVEL_DEBUG "debug"
-#define NEKO_LOG_LEVEL_INFO  "info"
-#define NEKO_LOG_LEVEL_WARN  "warn"
-#define NEKO_LOG_LEVEL_ERROR "error"
-#define NEKO_LOG_LEVEL_FATAL "fatal"
+
 #define NEKO_LOG_INCLUDE(module, ...)                                                                                  \
     NEKO_NAMESPACE::logdetail::add_log_filter(NEKO_NAMESPACE::logdetail::FilterInclude, module, ##__VA_ARGS__)
 #define NEKO_LOG_EXCLUDE(module, ...)                                                                                  \
@@ -225,6 +225,7 @@ NEKO_END_NAMESPACE
 #else
 #define NEKO_PRIVATE_LOG(...)
 #define NEKO_LOG_LEVEL_DEBUG
+#define NEKO_LOG_LEVEL_TRACE
 #define NEKO_LOG_LEVEL_INFO
 #define NEKO_LOG_LEVEL_WARN
 #define NEKO_LOG_LEVEL_ERROR
@@ -236,6 +237,7 @@ NEKO_END_NAMESPACE
 
 #if defined(NEKO_PROTO_DEBUG)
 #define NEKO_LOG_DEBUG(module, ...) NEKO_PRIVATE_LOG(debug, blue, module, __VA_ARGS__)
+#define NEKO_LOG_TRACE(module, ...) NEKO_PRIVATE_LOG(trace, darkGray, module, __VA_ARGS__)
 #define NEKO_ASSERT(cond, module, ...)                                                                                 \
     if (!(cond)) {                                                                                                     \
         NEKO_PRIVATE_LOG(fatal, lightRed, module, __VA_ARGS__);                                                        \
@@ -244,11 +246,12 @@ NEKO_END_NAMESPACE
 #else
 #define NEKO_ASSERT(cond, fmt, ...)
 #define NEKO_LOG_DEBUG(...)
+#define NEKO_LOG_TRACE(...)
 #endif
 
 #if defined(NEKO_PROTO_LOG)
-#define NEKO_LOG_INFO(module, ...)  NEKO_PRIVATE_LOG(info, darkGray, module, __VA_ARGS__)
-#define NEKO_LOG_WARN(module, ...)  NEKO_PRIVATE_LOG(warn, yellow, module, __VA_ARGS__)
+#define NEKO_LOG_INFO(module, ...)  NEKO_PRIVATE_LOG(info, lightgray, module, __VA_ARGS__)
+#define NEKO_LOG_WARN(module, ...)  NEKO_PRIVATE_LOG(warn, lightyellow, module, __VA_ARGS__)
 #define NEKO_LOG_ERROR(module, ...) NEKO_PRIVATE_LOG(error, lightRed, module, __VA_ARGS__)
 #define NEKO_LOG_FATAL(module, ...)                                                                                    \
     NEKO_PRIVATE_LOG(fatal, red, module, __VA_ARGS__);                                                                 \

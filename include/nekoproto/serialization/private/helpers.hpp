@@ -98,6 +98,25 @@ private:
     std::vector<Ch> mVecUnique; // maybe make it a static.
 };
 
+class ByteOutBufferWrapper {
+public:
+    using Ch = char;
+
+    explicit ByteOutBufferWrapper(std::vector<std::byte>& vec) NEKO_NOEXCEPT : mVec(&vec) {}
+    void Put(Ch ch) NEKO_NOEXCEPT { // NOLINT(readability-identifier-naming)
+        mVec->push_back(static_cast<std::byte>(static_cast<unsigned char>(ch)));
+    }
+    void Flush() NEKO_NOEXCEPT {} // NOLINT(readability-identifier-naming)
+    const Ch* GetString() const NEKO_NOEXCEPT { // NOLINT(readability-identifier-naming)
+        return reinterpret_cast<const Ch*>(mVec->data());
+    }
+    std::size_t GetSize() const NEKO_NOEXCEPT { return mVec->size(); } // NOLINT(readability-identifier-naming)
+    void Clear() NEKO_NOEXCEPT { mVec->clear(); }                      // NOLINT(readability-identifier-naming)
+
+private:
+    std::vector<std::byte>* mVec;
+};
+
 inline OutBufferWrapper::OutBufferWrapper() NEKO_NOEXCEPT : mVec(&mVecUnique) {}
 inline OutBufferWrapper::OutBufferWrapper(std::vector<Ch>& vec) NEKO_NOEXCEPT : mVec(&vec) {}
 inline void OutBufferWrapper::setVector(std::vector<Ch>* vec) NEKO_NOEXCEPT {
