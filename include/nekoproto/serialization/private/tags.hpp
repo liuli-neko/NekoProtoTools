@@ -29,10 +29,12 @@ template <typename T, class = void>
 struct is_unframed_tag : std::false_type {}; // NOLINT
 
 namespace tag_property {
-NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, comment, comment) // NOLINT
-NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, name, name)       // NOLINT
-NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, raw_string, raw_string)       // NOLINT
-NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, skippable, skippable)         // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, leading_comment, leading_comment)   // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, trailing_comment, trailing_comment) // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, leading_comment, comment)           // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, name, name)                         // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, raw_string, raw_string)                         // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, skippable, skippable)                           // NOLINT
 
 NEKO_DETAIL_DEFINE_TYPE_TAG_PROPERTY(bool, flat, flat)         // NOLINT
 NEKO_DETAIL_DEFINE_TYPE_TAG_PROPERTY(bool, unframed, unframed) // NOLINT
@@ -68,8 +70,18 @@ struct fixed_length { // NOLINT
 
 namespace tag_detail {
 template <ConstexprString Comment>
-struct comment_tag_impl {
-    constexpr static auto comment = Comment.view(); // NOLINT
+struct leading_comment_tag_impl {
+    constexpr static auto leading_comment = Comment.view(); // NOLINT
+
+    template <typename T, auto /*tags*/>
+    constexpr static bool constexpr_check() { // NOLINT
+        return true;
+    }
+};
+
+template <ConstexprString Comment>
+struct trailing_comment_tag_impl {
+    constexpr static auto trailing_comment = Comment.view(); // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
@@ -89,7 +101,13 @@ struct rename_tag_impl {
 } // namespace tag_detail
 
 template <ConstexprString Comment>
-inline constexpr auto comment_tag = tag_detail::comment_tag_impl<Comment>{}; // NOLINT
+inline constexpr auto leading_comment_tag = tag_detail::leading_comment_tag_impl<Comment>{}; // NOLINT
+
+template <ConstexprString Comment>
+inline constexpr auto trailing_comment_tag = tag_detail::trailing_comment_tag_impl<Comment>{}; // NOLINT
+
+template <ConstexprString Comment>
+inline constexpr auto comment_tag = leading_comment_tag<Comment>; // NOLINT
 
 template <ConstexprString Name>
 inline constexpr auto rename_tag = tag_detail::rename_tag_impl<Name>{}; // NOLINT

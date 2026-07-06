@@ -158,12 +158,20 @@ TEST(PugiXmlBackend, MapsXmlContentFieldToNodeText) {
 
 TEST(PugiXmlBackend, WritesCommentTagsForObjectsAndArrays) {
     static_assert(parsing::supports_comments<xml::Writer>);
+    static_assert(tag_query::get<tag_property::leading_comment>(TagList<comment_tag<"values comment">>{}) ==
+                  std::string_view{"values comment"});
     static_assert(tag_query::get<tag_property::comment>(TagList<comment_tag<"values comment">>{}) ==
                   std::string_view{"values comment"});
+    static_assert(tag_query::get<tag_property::leading_comment>(TagList<leading_comment_tag<"lead">>{}) ==
+                  std::string_view{"lead"});
+    static_assert(tag_query::get<tag_property::trailing_comment>(TagList<trailing_comment_tag<"tail">>{}) ==
+                  std::string_view{"tail"});
+    static_assert(!tag_query::has<tag_property::comment>(TagList<trailing_comment_tag<"tail">>{}));
     static_assert(
         tag_query::get<tag_property::skippable>(TagList<comment_tag<"skip comment">, JsonTag{.skippable = true}>{}));
     static_assert(tag_query::has<tag_property::name>(TagList<rename_tag<"value">, comment_tag<"inner comment">>{}));
-    static_assert(tag_query::has<tag_property::comment>(TagList<rename_tag<"value">, comment_tag<"inner comment">>{}));
+    static_assert(
+        tag_query::has<tag_property::leading_comment>(TagList<rename_tag<"value">, comment_tag<"inner comment">>{}));
 
     XmlCommentedDocument source;
     source.values = {1, 2};
@@ -183,6 +191,10 @@ TEST(PugiXmlBackend, WritesCommentTagsForObjectsAndArrays) {
     ASSERT_TRUE(document.load_buffer(output.data(), output.size(), pugi::parse_default | pugi::parse_comments));
     const auto root = document.child("document");
     ASSERT_TRUE(root);
+    ASSERT_EQ(root.first_child().type(), pugi::node_comment);
+    EXPECT_STREQ(root.first_child().value(), "values comment");
+    ASSERT_EQ(root.first_child().next_sibling().type(), pugi::node_element);
+    EXPECT_STREQ(root.first_child().next_sibling().name(), "values");
 
     bool foundValuesComment = false;
     bool foundEmptyMarker   = false;
@@ -225,7 +237,8 @@ TEST(PugiXmlBackend, WritesCommentTagsForObjectsAndArrays) {
 
 struct Source {
     int source = 5;
-    NEKO_SERIALIZER((make_tags<rename_tag<"value">, comment_tag<"inner comment">>(source)));
+    NEKO_SERIALIZER(
+        (make_tags<rename_tag<"value">, comment_tag<"inner comment">, trailing_comment_tag<"tail comment">>(source)));
 };
 
 struct OuterSource { // same as Source, tag order will not effect the output
@@ -244,6 +257,7 @@ TEST(PugiXmlBackend, WriteModifierTagsCanBeLayered) {
     const auto output = asString(buffer);
     NEKO_LOG_INFO("test", "xml: {}", output);
     EXPECT_EQ(countOccurrences(output, "<!--inner comment-->"), 1U);
+    EXPECT_EQ(countOccurrences(output, "<!--tail comment-->"), 1U);
     EXPECT_NE(output.find("<value>5</value>"), std::string::npos);
 
     pugi::xml_document document;
@@ -252,8 +266,10 @@ TEST(PugiXmlBackend, WriteModifierTagsCanBeLayered) {
     ASSERT_TRUE(root);
     ASSERT_TRUE(root.child("value"));
     EXPECT_STREQ(root.child("value").child_value(), "5");
+    ASSERT_EQ(root.child("value").previous_sibling().type(), pugi::node_comment);
+    EXPECT_STREQ(root.child("value").previous_sibling().value(), "inner comment");
     ASSERT_EQ(root.child("value").next_sibling().type(), pugi::node_comment);
-    EXPECT_STREQ(root.child("value").next_sibling().value(), "inner comment");
+    EXPECT_STREQ(root.child("value").next_sibling().value(), "tail comment");
 
     Source target;
     PugiXmlInputSerializer in(output.data(), output.size());
@@ -274,8 +290,8 @@ TEST(PugiXmlBackend, WriteModifierTagsCanBeLayered) {
     const auto outerRoot = outerDocument.child("root");
     ASSERT_TRUE(outerRoot.child("value"));
     EXPECT_STREQ(outerRoot.child("value").child_value(), "5");
-    ASSERT_EQ(outerRoot.child("value").next_sibling().type(), pugi::node_comment);
-    EXPECT_STREQ(outerRoot.child("value").next_sibling().value(), "outer comment");
+    ASSERT_EQ(outerRoot.child("value").previous_sibling().type(), pugi::node_comment);
+    EXPECT_STREQ(outerRoot.child("value").previous_sibling().value(), "outer comment");
 }
 
 TEST(PugiXmlBackend, ReportsParseAndFieldErrors) {
