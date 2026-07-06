@@ -13,7 +13,7 @@ struct WriteParser<W, std::shared_ptr<T>, void> {
     template <typename ParentType, typename Tags>
     static ParserResult write(W& writer, const std::shared_ptr<T>& value, const ParentType& parent, const Tags& tags) {
         if (!value) {
-            parsing::Parent<W>::addNull(writer, parent);
+            parsing::Parent<W>::addNull(writer, parent, tags);
             return sa::success();
         }
         return parser_write<W>(writer, *value, parent, tags);
@@ -50,7 +50,7 @@ struct WriteParser<W, std::unique_ptr<T>, void> {
     template <typename ParentType, typename Tags>
     static ParserResult write(W& writer, const std::unique_ptr<T>& value, const ParentType& parent, const Tags& tags) {
         if (!value) {
-            parsing::Parent<W>::addNull(writer, parent);
+            parsing::Parent<W>::addNull(writer, parent, tags);
             return sa::success();
         }
         return parser_write<W>(writer, *value, parent, tags);

@@ -22,7 +22,7 @@ struct TypeLevelFlatTagInner {
     std::string label;
 
     NEKO_SERIALIZER(
-        (make_tags<comment_tag<"doc keeps parser depth">, rename_tag<"wire_code">, JsonTag{.flat = true}>(code)),
+        (make_tags<comment_tag<"doc keeps parser depth">, rename_tag<"wire_code">, ParserTag{.flat = true}>(code)),
         label)
 };
 
@@ -49,8 +49,8 @@ struct TypeLevelUnframedEnvelope {
 };
 
 inline constexpr auto RawStringTag     = JsonTag{.raw_string = true};
-inline constexpr auto SkippableTag      = JsonTag{.skippable = true};
-inline constexpr auto FlattenedDocsTag = TagList<comment_tag<"flattened docs">, JsonTag{.flat = true}>{};
+inline constexpr auto SkippableTag      = ParserTag{.skippable = true};
+inline constexpr auto FlattenedDocsTag = TagList<comment_tag<"flattened docs">, ParserTag{.flat = true}>{};
 
 struct MacroParsedTaggedObject {
     std::string raw;
@@ -83,8 +83,8 @@ struct SchemaTaggedObject {
         static constexpr auto value =
             Object("required", &SchemaTaggedObject::required, "renamed",
                    make_tags<rename_tag<"wire_required">>(&SchemaTaggedObject::renamed), "retained",
-                   make_tags<JsonTag{.skippable = true}>(&SchemaTaggedObject::retained), "optional",
-                   &SchemaTaggedObject::optional, "flat", make_tags<JsonTag{.flat = true}>(&SchemaTaggedObject::flat),
+                   make_tags<ParserTag{.skippable = true}>(&SchemaTaggedObject::retained), "optional",
+                   &SchemaTaggedObject::optional, "flat", make_tags<ParserTag{.flat = true}>(&SchemaTaggedObject::flat),
                    "fixed", make_tags<BinaryTag{.fixed_length = true}>(&SchemaTaggedObject::fixed)); // NOLINT
     };
 };
@@ -129,7 +129,7 @@ bool contains(const std::vector<std::string>& values, std::string_view expected)
 
 TEST(SerializationTags, AccessorsResolveDirectAndNestedTagFlags) {
     constexpr auto Tags =
-        TagList<comment_tag<"outer comment">, rename_tag<"wire_name">, JsonTag{.flat = true, .skippable = true}>{};
+        TagList<comment_tag<"outer comment">, rename_tag<"wire_name">, ParserTag{.flat = true, .skippable = true}>{};
 
     static_assert(tag_query::has<tag_property::comment>(Tags));
     static_assert(tag_query::get<tag_property::comment>(Tags) == "outer comment");
@@ -137,6 +137,7 @@ TEST(SerializationTags, AccessorsResolveDirectAndNestedTagFlags) {
     static_assert(tag_query::get<tag_property::name>(Tags) == "wire_name");
     static_assert(tag_query::get<tag_property::flat<TypeLevelFlatTagInner>>(Tags));
     static_assert(tag_query::get<tag_property::skippable>(Tags));
+    static_assert(tag_query::get<tag_property::skippable>(JsonTag{.skippable = true}));
 }
 
 TEST(SerializationTags, TypeLevelTagsAreVisibleThroughNoTags) {

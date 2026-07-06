@@ -14,9 +14,10 @@ template <typename W, typename... Ts>
 struct WriteParser<W, std::tuple<Ts...>, void> {
     using Tuple = std::tuple<Ts...>;
 
-    template <typename ParentType, std::size_t... Is>
-    static ParserResult writeImpl(W& writer, const Tuple& value, const ParentType& parent, std::index_sequence<Is...>) {
-        auto array = parsing::Parent<W>::addArray(writer, sizeof...(Ts), parent);
+    template <typename ParentType, typename Tags, std::size_t... Is>
+    static ParserResult writeImpl(W& writer, const Tuple& value, const ParentType& parent,
+                                  std::index_sequence<Is...>, const Tags& tags) {
+        auto array = parsing::Parent<W>::addArray(writer, sizeof...(Ts), parent, tags);
         ParserResult result;
         const auto writeElement = [&]<std::size_t I>() {
             if (result) {
@@ -30,8 +31,8 @@ struct WriteParser<W, std::tuple<Ts...>, void> {
     }
 
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Tuple& value, const ParentType& parent, const Tags& /*tags*/) {
-        return writeImpl(writer, value, parent, std::index_sequence_for<Ts...>{});
+    static ParserResult write(W& writer, const Tuple& value, const ParentType& parent, const Tags& tags) {
+        return writeImpl(writer, value, parent, std::index_sequence_for<Ts...>{}, tags);
     }
 };
 
@@ -84,8 +85,8 @@ struct WriteParser<W, std::pair<K, V>, void> {
     using Pair = std::pair<K, V>;
 
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Pair& value, const ParentType& parent, const Tags& /*tags*/) {
-        auto object = parsing::Parent<W>::addObject(writer, 2, parent);
+    static ParserResult write(W& writer, const Pair& value, const ParentType& parent, const Tags& tags) {
+        auto object = parsing::Parent<W>::addObject(writer, 2, parent, tags);
         auto result = parser_write<W>(writer, value.first, typename parsing::Parent<W>::Object{"first", &object});
         if (!result) {
             return parser_context(std::move(result), "Failed to write pair field 'first': ");

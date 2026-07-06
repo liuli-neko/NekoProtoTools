@@ -17,8 +17,8 @@ struct disable_reflect_parser<std::monostate> : std::true_type {};
 template <typename W>
 struct WriteParser<W, std::monostate, void> {
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const std::monostate&, const ParentType& parent, const Tags& /*tags*/) {
-        parsing::Parent<W>::addNull(writer, parent);
+    static ParserResult write(W& writer, const std::monostate&, const ParentType& parent, const Tags& tags) {
+        parsing::Parent<W>::addNull(writer, parent, tags);
         return sa::success();
     }
 };

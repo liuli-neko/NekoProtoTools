@@ -14,7 +14,7 @@ struct WriteParser<W, std::optional<T>, void> {
     template <typename ParentType, typename Tags>
     static ParserResult write(W& writer, const std::optional<T>& value, const ParentType& parent, const Tags& tags) {
         if (!value.has_value()) {
-            parsing::Parent<W>::addNull(writer, parent);
+            parsing::Parent<W>::addNull(writer, parent, tags);
             return sa::success();
         }
         return parser_write<W>(writer, *value, parent, tags);
