@@ -43,9 +43,9 @@ bool parser_insert_sequence_value(T& values, typename T::value_type&& value) {
     return true;
 }
 
-template <typename W, typename T, typename ParentType>
-ParserResult parser_write_sequence(W& writer, const T& values, const ParentType& parent) {
-    auto array        = parsing::Parent<W>::addArray(writer, values.size(), parent);
+template <typename W, typename T, typename ParentType, typename Tags>
+ParserResult parser_write_sequence(W& writer, const T& values, const ParentType& parent, const Tags& tags) {
+    auto array        = parsing::Parent<W>::addArray(writer, values.size(), parent, tags);
     std::size_t index = 0;
     for (const auto& value : values) {
         auto result = parser_write<W>(writer, value, typename parsing::Parent<W>::Array{&array});
@@ -82,8 +82,8 @@ struct SequenceWriteParser {
     using Container = Sequence;
 
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Container& value, const ParentType& parent, const Tags& /*tags*/) {
-        return parser_write_sequence<W>(writer, value, parent);
+    static ParserResult write(W& writer, const Container& value, const ParentType& parent, const Tags& tags) {
+        return parser_write_sequence<W>(writer, value, parent, tags);
     }
 };
 
@@ -116,8 +116,8 @@ struct WriteParser<W, std::vector<bool, Alloc>, void> {
     using Vector = std::vector<bool, Alloc>;
 
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Vector& value, const ParentType& parent, const Tags& /*tags*/) {
-        auto array        = parsing::Parent<W>::addArray(writer, value.size(), parent);
+    static ParserResult write(W& writer, const Vector& value, const ParentType& parent, const Tags& tags) {
+        auto array        = parsing::Parent<W>::addArray(writer, value.size(), parent, tags);
         std::size_t index = 0;
         for (bool item : value) {
             auto result = parser_write<W>(writer, item, typename parsing::Parent<W>::Array{&array});
@@ -185,8 +185,8 @@ struct WriteParser<W, std::array<T, N>, void> {
     using Array = std::array<T, N>;
 
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Array& value, const ParentType& parent, const Tags& /*tags*/) {
-        auto array = parsing::Parent<W>::addArray(writer, N, parent);
+    static ParserResult write(W& writer, const Array& value, const ParentType& parent, const Tags& tags) {
+        auto array = parsing::Parent<W>::addArray(writer, N, parent, tags);
         for (std::size_t i = 0; i < N; ++i) {
             auto result = parser_write<W>(writer, value[i], typename parsing::Parent<W>::Array{&array});
             if (!result) {

@@ -47,11 +47,11 @@ ParserResult parser_write_string(W& writer, std::string_view value, const Parent
             if (!W::parseRawValue(value, raw)) {
                 return parser_error(sa::ErrorCode::ParseError, "Invalid raw value");
             }
-            parsing::Parent<W>::addValue(writer, raw, parent);
+            parsing::Parent<W>::addValue(writer, raw, parent, tags);
             return sa::success();
         }
     }
-    parsing::Parent<W>::addValue(writer, value, parent);
+    parsing::Parent<W>::addValue(writer, value, parent, tags);
     return sa::success();
 }
 
@@ -87,11 +87,11 @@ struct WriteParser<W, T, std::enable_if_t<std::is_arithmetic_v<T>>> {
                                         "Fixed-length arithmetic field requires " + std::to_string(sizeof(T)) +
                                             " bytes for its C++ type, got " + std::to_string(fixed_length));
                 }
-                parsing::Parent<W>::addFixedValue(writer, value, fixed_length, parent);
+                parsing::Parent<W>::addFixedValue(writer, value, fixed_length, parent, tags);
                 return sa::success();
             }
         }
-        parsing::Parent<W>::addValue(writer, value, parent);
+        parsing::Parent<W>::addValue(writer, value, parent, tags);
         return sa::success();
     }
 };
@@ -133,8 +133,8 @@ struct SchemaParser<T, std::enable_if_t<std::is_arithmetic_v<T>>> {
 template <typename W>
 struct WriteParser<W, std::nullptr_t, void> {
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, std::nullptr_t, const ParentType& parent, const Tags& /*tags*/) {
-        parsing::Parent<W>::addNull(writer, parent);
+    static ParserResult write(W& writer, std::nullptr_t, const ParentType& parent, const Tags& tags) {
+        parsing::Parent<W>::addNull(writer, parent, tags);
         return sa::success();
     }
 };
@@ -160,7 +160,7 @@ struct WriteParser<W, const char*, void> {
     template <typename ParentType, typename Tags>
     static ParserResult write(W& writer, const char* value, const ParentType& parent, const Tags& tags) {
         if (value == nullptr) {
-            parsing::Parent<W>::addNull(writer, parent);
+            parsing::Parent<W>::addNull(writer, parent, tags);
             return sa::success();
         }
         return parser_write_string(writer, std::string_view{value}, parent, tags);

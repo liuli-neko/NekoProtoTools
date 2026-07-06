@@ -137,13 +137,13 @@ template <>
 struct WriteParser<simd::Writer, simd::SimdJsonValue, void> {
     template <typename ParentType, typename Tags>
     static ParserResult write(simd::Writer& writer, const simd::SimdJsonValue& value, const ParentType& parent,
-                              const Tags& /*tags*/) {
+                              const Tags& tags) {
         if (!value.hasValue()) {
-            parsing::Parent<simd::Writer>::addNull(writer, parent);
+            parsing::Parent<simd::Writer>::addNull(writer, parent, tags);
             return sa::success();
         }
         json::RawValue raw{simdjson::minify(value.nativeValue())};
-        parsing::Parent<simd::Writer>::addValue(writer, raw, parent);
+        parsing::Parent<simd::Writer>::addValue(writer, raw, parent, tags);
         return sa::success();
     }
 };

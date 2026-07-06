@@ -255,12 +255,12 @@ template <>
 struct WriteParser<rapid::Writer, RapidJsonValue, void> {
     template <typename ParentType, typename Tags>
     static ParserResult write(rapid::Writer& writer, const RapidJsonValue& value, const ParentType& parent,
-                              const Tags& /*tags*/) {
+                              const Tags& tags) {
         if (value.hasValue()) {
-            parsing::Parent<rapid::Writer>::addValue(writer, value.nativeValue(), parent);
+            parsing::Parent<rapid::Writer>::addValue(writer, value.nativeValue(), parent, tags);
             return sa::success();
         }
-        parsing::Parent<rapid::Writer>::addNull(writer, parent);
+        parsing::Parent<rapid::Writer>::addNull(writer, parent, tags);
         return sa::success();
     }
 };

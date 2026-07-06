@@ -39,9 +39,9 @@ parsing::schema::Type parser_map_schema() {
     }
 }
 
-template <typename W, typename T, typename ParentType>
-ParserResult parser_write_key_value_array(W& writer, const T& values, const ParentType& parent) {
-    auto array        = parsing::Parent<W>::addArray(writer, values.size(), parent);
+template <typename W, typename T, typename ParentType, typename Tags>
+ParserResult parser_write_key_value_array(W& writer, const T& values, const ParentType& parent, const Tags& tags) {
+    auto array        = parsing::Parent<W>::addArray(writer, values.size(), parent, tags);
     std::size_t index = 0;
     for (const auto& item : values) {
         auto object = parsing::Parent<W>::addObject(writer, 2, typename parsing::Parent<W>::Array{&array});
@@ -98,9 +98,9 @@ ParserResult parser_read_key_value_array(typename R::InputValueType in, T& value
     return sa::success();
 }
 
-template <typename W, typename T, typename ParentType>
-ParserResult parser_write_string_key_map(W& writer, const T& values, const ParentType& parent) {
-    auto object = parsing::Parent<W>::addObject(writer, values.size(), parent);
+template <typename W, typename T, typename ParentType, typename Tags>
+ParserResult parser_write_string_key_map(W& writer, const T& values, const ParentType& parent, const Tags& tags) {
+    auto object = parsing::Parent<W>::addObject(writer, values.size(), parent, tags);
     for (const auto& item : values) {
         auto result = parser_write<W>(writer, item.second, typename parsing::Parent<W>::Object{item.first, &object});
         if (!result) {
@@ -140,16 +140,16 @@ struct MapWriteParser;
 template <typename W, typename Map>
 struct MapWriteParser<W, Map, true> {
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Map& value, const ParentType& parent, const Tags& /*tags*/) {
-        return parser_write_string_key_map<W>(writer, value, parent);
+    static ParserResult write(W& writer, const Map& value, const ParentType& parent, const Tags& tags) {
+        return parser_write_string_key_map<W>(writer, value, parent, tags);
     }
 };
 
 template <typename W, typename Map>
 struct MapWriteParser<W, Map, false> {
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Map& value, const ParentType& parent, const Tags& /*tags*/) {
-        return parser_write_key_value_array<W>(writer, value, parent);
+    static ParserResult write(W& writer, const Map& value, const ParentType& parent, const Tags& tags) {
+        return parser_write_key_value_array<W>(writer, value, parent, tags);
     }
 };
 

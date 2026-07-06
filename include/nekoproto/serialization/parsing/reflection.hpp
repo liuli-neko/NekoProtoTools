@@ -143,7 +143,7 @@ ParserResult parser_write_reflect_field(W& writer, typename W::OutputObjectType&
         if (!traits::optional_like_type<FieldType>::has_value(field)) {
             const auto parent = typename parsing::Parent<W>::Object{name, &object};
             parser_write_leading_comment(writer, parent, tags);
-            parsing::Parent<W>::addNull(writer, parent);
+            parsing::Parent<W>::addNull(writer, parent, tags);
             parser_write_trailing_comment(writer, parent, tags);
             return sa::success();
         }
@@ -244,10 +244,10 @@ struct WriteParser<W, T,
                     return result;
                 }
             }
-            auto object = parsing::Parent<W>::addObject(writer, Reflect<T>::size(), parent);
+            auto object = parsing::Parent<W>::addObject(writer, Reflect<T>::size(), parent, tags);
             return parser_write_reflect_fields<W>(writer, object, value);
         } else {
-            auto array = parsing::Parent<W>::addArray(writer, Reflect<T>::size(), parent);
+            auto array = parsing::Parent<W>::addArray(writer, Reflect<T>::size(), parent, tags);
             ParserResult result;
             std::size_t index = 0;
             Reflect<T>::forEach(value, [&writer, &array, &result, &index](auto&& field, const auto& tags) {

@@ -53,6 +53,14 @@ option("enable_pugixml")
     set_configvar("NEKO_PROTO_ENABLE_PUGIXML", true)
 option_end()
 
+option("enable_libfyaml")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable libfyaml YAML support, should install libfyaml")
+    set_category("serializer provider")
+    set_configvar("NEKO_PROTO_ENABLE_LIBFYAML", true)
+option_end()
+
 option("enable_spdlog")
     set_default(false)
     set_showmenu(true)
@@ -156,6 +164,10 @@ if has_config("enable_pugixml") then
     add_requires("pugixml", {configs = { shared = is_kind("shared")}})
 end
 
+if has_config("enable_libfyaml") then
+    add_requires("libfyaml", {configs = { shared = is_kind("shared")}})
+end
+
 if has_config("enable_spdlog") then
     add_requires("spdlog", {configs = { shared = is_kind("shared")}})
 end
@@ -212,6 +224,7 @@ target("NekoSerializer")
                 "enable_rapidjson", 
                 "enable_simdjson", 
                 "enable_pugixml",
+                "enable_libfyaml",
                 "enable_protocol",
                 "enable_communication",
                 "enable_jsonrpc",

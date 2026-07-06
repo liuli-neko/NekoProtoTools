@@ -40,6 +40,10 @@ function autofunc.auto_add_packages(target, options)
     if has_config("enable_pugixml") then
         target:add("packages", "pugixml", {public = true})
     end
+
+    if has_config("enable_libfyaml") then
+        target:add("packages", "libfyaml", {public = true})
+    end
     
     if has_config("enable_spdlog") then
         target:add("packages", "spdlog", {public = true})

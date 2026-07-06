@@ -79,16 +79,16 @@ template <typename W, typename T>
 struct WriteParser<W, NameValuePair<T>, void> {
     template <typename ParentType, typename Tags>
     static ParserResult write(W& writer, const NameValuePair<T>& value, const ParentType& parent, const Tags& tags) {
-        auto object = parsing::Parent<W>::addObject(writer, 1, parent);
+        auto object = parsing::Parent<W>::addObject(writer, 1, parent, tags);
         return parser_write<W>(writer, value.value,
-                               typename parsing::Parent<W>::Object{{value.name, value.nameLen}, &object}, tags);
+                               typename parsing::Parent<W>::Object{{value.name, value.nameLen}, &object});
     }
 };
 
 template <typename R, typename T>
 struct ReadParser<R, NameValuePair<T>, void> {
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, NameValuePair<T>& value, const Tags& tags) {
+    static ParserResult read(typename R::InputValueType in, NameValuePair<T>& value, const Tags& /*tags*/) {
         auto object = R::toObject(in);
         if (!object) {
             return object.error();
@@ -98,7 +98,7 @@ struct ReadParser<R, NameValuePair<T>, void> {
             return parser_error(sa::ErrorCode::InvalidField,
                                 "Required field '" + std::string(value.name, value.nameLen) + "' is missing");
         }
-        return parser_context(parser_read<R>(field.value(), value.value, tags),
+        return parser_context(parser_read<R>(field.value(), value.value),
                               "Failed to parse field '" + std::string(value.name, value.nameLen) + "': ");
     }
 };

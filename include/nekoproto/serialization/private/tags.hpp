@@ -28,6 +28,21 @@ struct is_flat_tag : std::false_type {}; // NOLINT
 template <typename T, class = void>
 struct is_unframed_tag : std::false_type {}; // NOLINT
 
+enum class YamlScalarStyle {
+    Any,
+    Plain,
+    SingleQuoted,
+    DoubleQuoted,
+    Literal,
+    Folded,
+};
+
+enum class YamlCollectionStyle {
+    Any,
+    Flow,
+    Block,
+};
+
 namespace tag_property {
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, leading_comment, leading_comment)   // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, trailing_comment, trailing_comment) // NOLINT
@@ -35,6 +50,11 @@ NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, leading_comment, comment)     
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, name, name)                         // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, raw_string, raw_string)                         // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, skippable, skippable)                           // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, yaml_tag, yaml_tag)                 // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, yaml_anchor, yaml_anchor)           // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(YamlScalarStyle, yaml_scalar_style, yaml_scalar_style) // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(YamlCollectionStyle, yaml_collection_style,            // NOLINT
+                                yaml_collection_style)
 
 NEKO_DETAIL_DEFINE_TYPE_TAG_PROPERTY(bool, flat, flat)         // NOLINT
 NEKO_DETAIL_DEFINE_TYPE_TAG_PROPERTY(bool, unframed, unframed) // NOLINT
@@ -98,6 +118,48 @@ struct rename_tag_impl {
         return true;
     }
 };
+
+template <ConstexprString Tag>
+struct yaml_tag_impl {
+    constexpr static auto yaml_tag = Tag.view(); // NOLINT
+
+    template <typename T, auto /*tags*/>
+    constexpr static bool constexpr_check() { // NOLINT
+        static_assert(Tag.size() > 0, "YAML tag must not be empty");
+        return true;
+    }
+};
+
+template <ConstexprString Anchor>
+struct yaml_anchor_tag_impl {
+    constexpr static auto yaml_anchor = Anchor.view(); // NOLINT
+
+    template <typename T, auto /*tags*/>
+    constexpr static bool constexpr_check() { // NOLINT
+        static_assert(Anchor.size() > 0, "YAML anchor must not be empty");
+        return true;
+    }
+};
+
+template <YamlScalarStyle Style>
+struct yaml_scalar_style_tag_impl {
+    constexpr static auto yaml_scalar_style = Style; // NOLINT
+
+    template <typename T, auto /*tags*/>
+    constexpr static bool constexpr_check() { // NOLINT
+        return true;
+    }
+};
+
+template <YamlCollectionStyle Style>
+struct yaml_collection_style_tag_impl {
+    constexpr static auto yaml_collection_style = Style; // NOLINT
+
+    template <typename T, auto /*tags*/>
+    constexpr static bool constexpr_check() { // NOLINT
+        return true;
+    }
+};
 } // namespace tag_detail
 
 template <ConstexprString Comment>
@@ -112,7 +174,32 @@ inline constexpr auto comment_tag = leading_comment_tag<Comment>; // NOLINT
 template <ConstexprString Name>
 inline constexpr auto rename_tag = tag_detail::rename_tag_impl<Name>{}; // NOLINT
 
+template <ConstexprString Tag>
+inline constexpr auto yaml_tag = tag_detail::yaml_tag_impl<Tag>{}; // NOLINT
+
+template <ConstexprString Anchor>
+inline constexpr auto yaml_anchor_tag = tag_detail::yaml_anchor_tag_impl<Anchor>{}; // NOLINT
+
+template <YamlScalarStyle Style>
+inline constexpr auto yaml_scalar_style_tag = tag_detail::yaml_scalar_style_tag_impl<Style>{}; // NOLINT
+
+template <YamlCollectionStyle Style>
+inline constexpr auto yaml_collection_style_tag = tag_detail::yaml_collection_style_tag_impl<Style>{}; // NOLINT
+
+struct ParserTag {
+    tag_detail::tag_value<bool> flat{};
+    tag_detail::tag_value<bool> skippable{};
+
+    template <typename T, auto /*Tags*/>
+    constexpr static bool constexpr_check() { // NOLINT
+        return true;
+    }
+};
+
 struct JsonTag {
+    ParserTag base{};
+    // Compatibility shim: flat/skippable are parser-level tags. Prefer ParserTag
+    // for new metadata while existing JsonTag users keep working.
     tag_detail::tag_value<bool> flat{};
     tag_detail::tag_value<bool> skippable{};
     tag_detail::tag_value<bool> raw_string{};
@@ -139,11 +226,6 @@ struct JsonTag {
                 static_assert(is_string, "raw_string is true, but the type is not std::string or std::string_view");
                 return is_string;
             }
-        }
-        if constexpr (Tags.skippable) {
-            // Missing fields are handled by the enclosing object parser. Any field
-            // type can be skipped because deserialization targets an existing object.
-            return true;
         }
         return true;
     }
