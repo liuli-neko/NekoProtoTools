@@ -86,6 +86,20 @@ void parser_schema_add_reflect_field(parsing::schema::Type::Object& object, std:
     }
 }
 
+template <typename W, typename ParentType, typename Tags>
+void parser_write_leading_comment(W& writer, const ParentType& parent, const Tags& tags) {
+    if constexpr (tag_query::has<tag_property::leading_comment>(Tags{})) {
+        parsing::Parent<W>::addComment(writer, tag_query::get<tag_property::leading_comment>(tags), parent);
+    }
+}
+
+template <typename W, typename ParentType, typename Tags>
+void parser_write_trailing_comment(W& writer, const ParentType& parent, const Tags& tags) {
+    if constexpr (tag_query::has<tag_property::trailing_comment>(Tags{})) {
+        parsing::Parent<W>::addComment(writer, tag_query::get<tag_property::trailing_comment>(tags), parent);
+    }
+}
+
 template <typename T>
 parsing::schema::Type parser_schema_named_reflection() {
     parsing::schema::Type::Object object;
@@ -127,7 +141,10 @@ ParserResult parser_write_reflect_field(W& writer, typename W::OutputObjectType&
 #if defined(NEKO_WRITE_NULL_FOR_EMPTY_OPTIONAL)
     if constexpr (traits::optional_like_type<FieldType>::value) {
         if (!traits::optional_like_type<FieldType>::has_value(field)) {
-            parsing::Parent<W>::addNull(writer, typename parsing::Parent<W>::Object{name, &object});
+            const auto parent = typename parsing::Parent<W>::Object{name, &object};
+            parser_write_leading_comment(writer, parent, tags);
+            parsing::Parent<W>::addNull(writer, parent);
+            parser_write_trailing_comment(writer, parent, tags);
             return sa::success();
         }
     }
@@ -137,12 +154,11 @@ ParserResult parser_write_reflect_field(W& writer, typename W::OutputObjectType&
         fieldName = tag_query::get<tag_property::name>(tags);
     }
     const auto parent = typename parsing::Parent<W>::Object{fieldName, &object};
+    parser_write_leading_comment(writer, parent, tags);
     auto result       = parser_context(parser_write<W>(writer, field, parent, tags),
                                        "Failed to write field '" + std::string(fieldName) + "': ");
     if (result) {
-        if constexpr (tag_query::has<tag_property::comment>(Tags{})) {
-            parsing::Parent<W>::addComment(writer, tag_query::get<tag_property::comment>(tags), parent);
-        }
+        parser_write_trailing_comment(writer, parent, tags);
     }
     return result;
 }
@@ -237,12 +253,11 @@ struct WriteParser<W, T,
             Reflect<T>::forEach(value, [&writer, &array, &result, &index](auto&& field, const auto& tags) {
                 if (result) {
                     const auto parent = typename parsing::Parent<W>::Array{&array};
+                    parser_write_leading_comment(writer, parent, tags);
                     result            = parser_context(parser_write<W>(writer, field, parent, tags),
                                                        "Failed to write reflected element " + std::to_string(index) + ": ");
                     if (result) {
-                        if constexpr (tag_query::has<tag_property::comment>(std::remove_cvref_t<decltype(tags)>{})) {
-                            parsing::Parent<W>::addComment(writer, tag_query::get<tag_property::comment>(tags), parent);
-                        }
+                        parser_write_trailing_comment(writer, parent, tags);
                     }
                 }
                 ++index;
