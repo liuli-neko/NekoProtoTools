@@ -5,6 +5,9 @@
 
 #include <array>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -438,6 +441,61 @@ TEST(ArgParser, ParallelTagsComposeArgMetadata) {
     EXPECT_NE(help.find("-v, --verbose"), std::string::npos);
 }
 
+struct ArgIgnoredNestedOptions {
+    int visible = 0;
+    int ignored = 7;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("visible", &ArgIgnoredNestedOptions::visible, "ignored",
+                   make_tags<arg_ignore_tag, arg_help<"ignored nested value">>(
+                       &ArgIgnoredNestedOptions::ignored));
+    };
+};
+
+struct ArgIgnoredOptions {
+    bool verbose       = false;
+    std::string ignored = "keep";
+    ArgIgnoredNestedOptions nested;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("verbose", make_tags<arg_help<"visible flag">, ArgTags{.flag = true}>(&ArgIgnoredOptions::verbose),
+                   "ignored",
+                   make_tags<arg_ignore_tag, arg_help<"ignored root value">>(&ArgIgnoredOptions::ignored), "nested",
+                   &ArgIgnoredOptions::nested);
+    };
+};
+
+TEST(ArgParser, IgnoreTagRemovesFieldsFromSchemaHelpAndMaterialization) {
+    constexpr auto ignoredSpec = make_tags<arg_ignore_tag>(&ArgIgnoredOptions::ignored);
+    static_assert(tag_query::get<argparser::tag_property::ignore>(field_tags_v<decltype(ignoredSpec)>));
+
+    const char* argv[] = {"demo", "--verbose", "--nested.visible", "42"};
+    auto result        = parser<ArgIgnoredOptions>(static_cast<int>(std::size(argv)), argv);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    EXPECT_TRUE(result->verbose);
+    EXPECT_EQ(result->ignored, "keep");
+    EXPECT_EQ(result->nested.visible, 42);
+    EXPECT_EQ(result->nested.ignored, 7);
+
+    ArgParserConfig config;
+    config.programName = "demo";
+    auto help          = format_help<ArgIgnoredOptions>(config);
+    EXPECT_NE(help.find("--verbose"), std::string::npos);
+    EXPECT_NE(help.find("--nested.visible"), std::string::npos);
+    EXPECT_EQ(help.find("--ignored"), std::string::npos);
+    EXPECT_EQ(help.find("--nested.ignored"), std::string::npos);
+    EXPECT_EQ(help.find("ignored root value"), std::string::npos);
+    EXPECT_EQ(help.find("ignored nested value"), std::string::npos);
+
+    const char* ignoredArgv[] = {"demo", "--ignored", "changed"};
+    auto ignoredResult        = parser<ArgIgnoredOptions>(static_cast<int>(std::size(ignoredArgv)), ignoredArgv);
+    ASSERT_FALSE(ignoredResult.has_value());
+    EXPECT_EQ(ignoredResult.error(), make_error_code(ArgParserError::UnknownOption));
+}
+
 struct TagListComposeOptions {
     bool enabled = false;
 };
@@ -723,6 +781,359 @@ TEST(ArgParser, UnknownCommand) {
 
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), make_error_code(ArgParserError::UnknownCommand));
+}
+
+std::filesystem::path argparser_config_io_path(std::string_view file_name) {
+    auto path = std::filesystem::temp_directory_path() / std::string(file_name);
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
+    return path;
+}
+
+void write_file_bytes(const std::filesystem::path& path, const std::vector<char>& bytes) {
+    std::ofstream file{path, std::ios::binary};
+    ASSERT_TRUE(file) << path;
+    file.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    ASSERT_TRUE(file) << path;
+}
+
+std::vector<char> read_file_bytes(const std::filesystem::path& path) {
+    std::ifstream file{path, std::ios::binary};
+    EXPECT_TRUE(file) << path;
+    return {std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{}};
+}
+
+template <typename Serializer, typename T>
+void write_serialized_config(const std::filesystem::path& path, const T& value) {
+    std::vector<char> buffer;
+    typename Serializer::OutputSerializer output(buffer);
+    EXPECT_TRUE(output(value));
+    EXPECT_TRUE(output.end());
+    write_file_bytes(path, buffer);
+}
+
+template <typename Serializer, typename T>
+T read_serialized_config(const std::filesystem::path& path) {
+    auto buffer = read_file_bytes(path);
+    T value{};
+    typename Serializer::InputSerializer input(buffer.data(), buffer.size());
+    EXPECT_TRUE(input(value));
+    return value;
+}
+
+// clang-format off
+struct ConfigIoOptions {
+    int count = 0;
+    std::string output;
+    std::optional<std::string> token;
+    BuildMode mode = BuildMode::Debug;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("count",
+                   make_tags<arg_default<1>,
+                             arg_help<"count value">,
+                             ArgTags{.range_min = 1, .range_max = 10}>(&ConfigIoOptions::count),
+
+                   "output",
+                   make_tags<arg_env<"NEKO_ARGPARSER_CONFIG_IO_OUTPUT">,
+                             arg_default<"default"_cs>,
+                             arg_help<"output value">>(&ConfigIoOptions::output),
+
+                   "token",
+                   make_tags<arg_help<"optional token">>(&ConfigIoOptions::token),
+
+                   "mode",
+                   make_tags<arg_default<"release"_cs>,
+                             arg_choices<"debug", "release">,
+                             arg_help<"build mode">>(&ConfigIoOptions::mode));
+    };
+};
+// clang-format on
+
+ArgParserConfig config_io_parser_config() {
+    ArgParserConfig config;
+    config.configIo.emplace();
+    return config;
+}
+
+#if !defined(NEKO_PROTO_NO_JSON_SERIALIZER)
+TEST(ArgParser, JsonConfigImportUsesExpectedPriorityAndExportsResolvedOptions) {
+    set_test_env("NEKO_ARGPARSER_CONFIG_IO_OUTPUT", nullptr);
+    auto import_path = argparser_config_io_path("neko_argparser_import.json");
+    auto export_path = argparser_config_io_path("neko_argparser_export.json");
+
+    ConfigIoOptions imported;
+    imported.count  = 3;
+    imported.output = "from-file";
+    imported.mode   = BuildMode::Debug;
+    write_serialized_config<JsonSerializer>(import_path, imported);
+
+    set_test_env("NEKO_ARGPARSER_CONFIG_IO_OUTPUT", "from-env");
+
+    auto config = config_io_parser_config();
+    config.configIo->importJson = true;
+    config.configIo->exportJson = true;
+    const auto import_arg       = import_path.string();
+    const auto export_arg       = export_path.string();
+    const char* argv[]          = {"demo", "--import-json", import_arg.c_str(), "--count", "5",
+                                   "--export-json", export_arg.c_str()};
+
+    auto result = parser<ConfigIoOptions>(static_cast<int>(std::size(argv)), argv, config);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    EXPECT_EQ(result->count, 5);
+    EXPECT_EQ(result->output, "from-env");
+    EXPECT_FALSE(result->token.has_value());
+    EXPECT_EQ(result->mode, BuildMode::Debug);
+
+    auto exported = read_serialized_config<JsonSerializer, ConfigIoOptions>(export_path);
+    EXPECT_EQ(exported.count, 5);
+    EXPECT_EQ(exported.output, "from-env");
+    EXPECT_FALSE(exported.token.has_value());
+    EXPECT_EQ(exported.mode, BuildMode::Debug);
+
+    set_test_env("NEKO_ARGPARSER_CONFIG_IO_OUTPUT", nullptr);
+}
+
+TEST(ArgParser, CommandConfigJsonImportExportsCommandWrapper) {
+    auto import_path = argparser_config_io_path("neko_argparser_command_import.json");
+    auto export_path = argparser_config_io_path("neko_argparser_command_export.json");
+
+    NEKO_NAMESPACE::argparser::detail::CommandConfig<BuildCommand> imported;
+    imported.command        = "build";
+    imported.params.jobs    = 4;
+    imported.params.release = true;
+    imported.params.mode    = BuildMode::Release;
+    write_serialized_config<JsonSerializer>(import_path, imported);
+
+    auto config = config_io_parser_config();
+    config.configIo->importJson = true;
+    config.configIo->exportJson = true;
+    const auto import_arg       = import_path.string();
+    const auto export_arg       = export_path.string();
+    const char* argv[]          = {"tool", "--import-json", import_arg.c_str(), "--export-json", export_arg.c_str(),
+                                   "build", "--jobs", "8"};
+
+    auto result = parser<ToolCommands>(static_cast<int>(std::size(argv)), argv, config);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    ASSERT_TRUE(std::holds_alternative<BuildCommand>(*result));
+    const auto& build = std::get<BuildCommand>(*result);
+    EXPECT_EQ(build.jobs, 8);
+    EXPECT_TRUE(build.release);
+    EXPECT_EQ(build.mode, BuildMode::Release);
+
+    auto exported =
+        read_serialized_config<JsonSerializer, NEKO_NAMESPACE::argparser::detail::CommandConfig<BuildCommand>>(
+            export_path);
+    EXPECT_EQ(exported.command, "build");
+    EXPECT_EQ(exported.params.jobs, 8);
+    EXPECT_TRUE(exported.params.release);
+    EXPECT_EQ(exported.params.mode, BuildMode::Release);
+
+    const char* import_only_argv[] = {"tool", "--import-json", import_arg.c_str()};
+    auto import_only = parser<ToolCommands>(static_cast<int>(std::size(import_only_argv)), import_only_argv, config);
+    ASSERT_TRUE(import_only.has_value()) << import_only.error().message();
+    ASSERT_TRUE(std::holds_alternative<BuildCommand>(*import_only));
+    EXPECT_EQ(std::get<BuildCommand>(*import_only).jobs, 4);
+}
+
+TEST(ArgParser, PlaceholderCommandJsonExportOmitsParams) {
+    auto export_path = argparser_config_io_path("neko_argparser_clean_command_export.json");
+
+    auto config = config_io_parser_config();
+    config.configIo->exportJson = true;
+    const auto export_arg       = export_path.string();
+    const char* argv[]          = {"tool", "--export-json", export_arg.c_str(), "clean"};
+
+    auto result = parser<ToolCommands>(static_cast<int>(std::size(argv)), argv, config);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    ASSERT_TRUE(std::holds_alternative<ArgCommand<1>>(*result));
+
+    auto bytes = read_file_bytes(export_path);
+    auto text  = std::string(bytes.begin(), bytes.end());
+    EXPECT_NE(text.find("command"), std::string::npos);
+    EXPECT_NE(text.find("clean"), std::string::npos);
+    EXPECT_EQ(text.find("params"), std::string::npos);
+}
+#endif
+
+#if !defined(NEKO_PROTO_NO_YAML_SERIALIZER)
+TEST(ArgParser, YamlConfigImportAndExport) {
+    set_test_env("NEKO_ARGPARSER_CONFIG_IO_OUTPUT", nullptr);
+    auto import_path = argparser_config_io_path("neko_argparser_import.yaml");
+    auto export_path = argparser_config_io_path("neko_argparser_export.yaml");
+
+    ConfigIoOptions imported;
+    imported.count  = 6;
+    imported.output = "yaml-file";
+    imported.token  = "yaml-token";
+    imported.mode   = BuildMode::Release;
+    write_serialized_config<YamlSerializer>(import_path, imported);
+
+    auto config = config_io_parser_config();
+    config.configIo->importYaml = true;
+    config.configIo->exportYaml = true;
+    const auto import_arg       = import_path.string();
+    const auto export_arg       = export_path.string();
+    const char* argv[]          = {"demo", "--import-yaml", import_arg.c_str(), "--export-yaml", export_arg.c_str()};
+
+    auto result = parser<ConfigIoOptions>(static_cast<int>(std::size(argv)), argv, config);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    EXPECT_EQ(result->count, 6);
+    EXPECT_EQ(result->output, "yaml-file");
+    ASSERT_TRUE(result->token.has_value());
+    EXPECT_EQ(*result->token, "yaml-token");
+    EXPECT_EQ(result->mode, BuildMode::Release);
+
+    auto exported = read_serialized_config<YamlSerializer, ConfigIoOptions>(export_path);
+    EXPECT_EQ(exported.count, 6);
+    EXPECT_EQ(exported.output, "yaml-file");
+    ASSERT_TRUE(exported.token.has_value());
+    EXPECT_EQ(*exported.token, "yaml-token");
+}
+#endif
+
+TEST(ArgParser, BinaryConfigImportAndExport) {
+    set_test_env("NEKO_ARGPARSER_CONFIG_IO_OUTPUT", nullptr);
+    auto import_path = argparser_config_io_path("neko_argparser_import.bin");
+    auto export_path = argparser_config_io_path("neko_argparser_export.bin");
+
+    ConfigIoOptions imported;
+    imported.count  = 2;
+    imported.output = "binary-file";
+    imported.token  = "binary-token";
+    imported.mode   = BuildMode::Debug;
+    write_serialized_config<BinarySerializer>(import_path, imported);
+
+    auto config = config_io_parser_config();
+    config.configIo->importBinary = true;
+    config.configIo->exportBinary = true;
+    const auto import_arg         = import_path.string();
+    const auto export_arg         = export_path.string();
+    const char* argv[]            = {"demo", "--import-binary", import_arg.c_str(), "--export-binary",
+                                     export_arg.c_str()};
+
+    auto result = parser<ConfigIoOptions>(static_cast<int>(std::size(argv)), argv, config);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    EXPECT_EQ(result->count, 2);
+    EXPECT_EQ(result->output, "binary-file");
+    ASSERT_TRUE(result->token.has_value());
+    EXPECT_EQ(*result->token, "binary-token");
+    EXPECT_EQ(result->mode, BuildMode::Debug);
+
+    auto exported = read_serialized_config<BinarySerializer, ConfigIoOptions>(export_path);
+    EXPECT_EQ(exported.count, 2);
+    EXPECT_EQ(exported.output, "binary-file");
+    ASSERT_TRUE(exported.token.has_value());
+    EXPECT_EQ(*exported.token, "binary-token");
+}
+
+// clang-format off
+struct ExportPositionalCommand {
+    int count = 0;
+    std::string root;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("count", make_tags<arg_help<"count value">>(&ExportPositionalCommand::count),
+                   "root", make_tags<arg_help<"root path">, ArgTags{.positional = true}>(
+                               &ExportPositionalCommand::root));
+    };
+};
+
+struct ExportPositionalTool {
+    ExportPositionalCommand serve;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("serve", make_tags<arg_help<"serve command">, ArgTags{.command = true}>(
+                                &ExportPositionalTool::serve));
+    };
+};
+// clang-format on
+
+TEST(ArgParser, CommandConfigExportCanAppearAfterCommandOptionsAndPositionals) {
+    auto export_path = argparser_config_io_path("neko_argparser_command_after_options_export.bin");
+
+    auto config = config_io_parser_config();
+    config.configIo->exportBinary = true;
+    const auto export_arg         = export_path.string();
+    const char* argv[]            = {"tool", "serve", "--count", "8", "app", "--export-binary",
+                                     export_arg.c_str()};
+
+    auto result = parser<ExportPositionalTool>(static_cast<int>(std::size(argv)), argv, config);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    ASSERT_TRUE(std::holds_alternative<ExportPositionalCommand>(*result));
+    const auto& serve = std::get<ExportPositionalCommand>(*result);
+    EXPECT_EQ(serve.count, 8);
+    EXPECT_EQ(serve.root, "app");
+
+    auto exported =
+        read_serialized_config<BinarySerializer,
+                               NEKO_NAMESPACE::argparser::detail::CommandConfig<ExportPositionalCommand>>(
+            export_path);
+    EXPECT_EQ(exported.command, "serve");
+    EXPECT_EQ(exported.params.count, 8);
+    EXPECT_EQ(exported.params.root, "app");
+}
+
+TEST(ArgParser, ImportedFalseBooleanDoesNotTriggerConflicts) {
+    auto import_path = argparser_config_io_path("neko_argparser_false_conflict_import.bin");
+
+    RelationshipOptions imported;
+    imported.login = false;
+    imported.json  = true;
+    imported.yaml  = false;
+    write_serialized_config<BinarySerializer>(import_path, imported);
+
+    auto config = config_io_parser_config();
+    config.configIo->importBinary = true;
+    const auto import_arg         = import_path.string();
+    const char* argv[]            = {"demo", "--import-binary", import_arg.c_str()};
+
+    auto result = parser<RelationshipOptions>(static_cast<int>(std::size(argv)), argv, config);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    EXPECT_FALSE(result->login);
+    EXPECT_TRUE(result->json);
+    EXPECT_FALSE(result->yaml);
+}
+
+// clang-format off
+struct BuiltinConflictOptions {
+    std::string import_json;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("import_json",
+                   make_tags<arg_long_name<"import-json">,
+                             arg_help<"user owned import-json">>(&BuiltinConflictOptions::import_json));
+    };
+};
+// clang-format on
+
+TEST(ArgParser, BuiltinConfigOptionNamesYieldToUserOptions) {
+    auto config = config_io_parser_config();
+    config.configIo->importJson = true;
+    config.configIo->importBinary = true;
+    config.configIo->importBinaryName = "import-json";
+
+    const char* argv[] = {"demo", "--import-json", "user-value"};
+    auto result        = parser<BuiltinConflictOptions>(static_cast<int>(std::size(argv)), argv, config);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    EXPECT_EQ(result->import_json, "user-value");
+
+    auto help = format_help<BuiltinConflictOptions>(config);
+    EXPECT_NE(help.find("user owned import-json"), std::string::npos);
+    EXPECT_EQ(help.find("import options from a JSON file"), std::string::npos);
+    EXPECT_EQ(help.find("import options from a binary file"), std::string::npos);
 }
 
 #include "../common/common_main.cpp.in" // IWYU pragma: export

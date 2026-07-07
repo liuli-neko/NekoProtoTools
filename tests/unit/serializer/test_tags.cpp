@@ -89,6 +89,32 @@ struct SchemaTaggedObject {
     };
 };
 
+struct SerializationIgnoredObject {
+    int id        = 0;
+    int transient = 0;
+    int value     = 0;
+
+    struct Neko {
+        static constexpr auto value =
+            Object("id", &SerializationIgnoredObject::id, "transient",
+                   make_tags<serialization_ignore_tag>(&SerializationIgnoredObject::transient), "value",
+                   &SerializationIgnoredObject::value); // NOLINT
+    };
+};
+
+struct SerializationIgnoredArray {
+    int first     = 0;
+    int transient = 0;
+    int last      = 0;
+
+    struct Neko {
+        static constexpr auto value =
+            Array(&SerializationIgnoredArray::first,
+                  make_tags<serialization_ignore_tag>(&SerializationIgnoredArray::transient),
+                  &SerializationIgnoredArray::last); // NOLINT
+    };
+};
+
 NEKO_BEGIN_NAMESPACE
 template <>
 struct is_flat_tag<TypeLevelFlatTagInner> : std::true_type {};
@@ -180,6 +206,8 @@ TEST(SerializationTags, SerializerMacroStripsMakeTagsWhenBuildingReflectionNames
     static_assert(tag_query::get<tag_property::skippable>(optionalTags));
     static_assert(tag_query::get<tag_property::comment>(nestedTags) == "flattened docs");
     static_assert(tag_query::get<tag_property::flat<TypeLevelFlatTagInner>>(nestedTags));
+    constexpr auto ignoredSpec = make_tags<serialization_ignore_tag>(&SerializationIgnoredObject::transient);
+    static_assert(tag_query::get<tag_property::ignore>(field_tags_v<decltype(ignoredSpec)>));
 
     constexpr auto innerNames = Reflect<TypeLevelFlatTagInner>::names();
     static_assert(innerNames.size() == 2);
@@ -259,6 +287,54 @@ TEST(SerializationTagIntegration, SchemaUsesFlatSkippableOptionalAndFixedLengthT
     const auto& fixed = object.properties.at("fixed");
     ASSERT_TRUE(fixed.fixed_length.has_value());
     EXPECT_EQ(fixed.fixed_length.value(), sizeof(std::uint32_t));
+}
+
+TEST(SerializationTagIntegration, SerializationIgnoreTagOmitsNamedFieldFromJsonReadAndSchema) {
+    const SerializationIgnoredObject source{
+        .id        = 1,
+        .transient = 99,
+        .value     = 2,
+    };
+    EXPECT_EQ(writeJson(source), R"({"id":1,"value":2})");
+
+    SerializationIgnoredObject decoded;
+    decoded.transient = 55;
+    ASSERT_TRUE(readJson(R"({"id":3,"transient":77,"value":4})", decoded));
+    EXPECT_EQ(decoded.id, 3);
+    EXPECT_EQ(decoded.transient, 55);
+    EXPECT_EQ(decoded.value, 4);
+
+    const auto object = objectSchema<SerializationIgnoredObject>();
+    EXPECT_TRUE(object.properties.contains("id"));
+    EXPECT_FALSE(object.properties.contains("transient"));
+    EXPECT_TRUE(object.properties.contains("value"));
+    EXPECT_TRUE(contains(object.required, "id"));
+    EXPECT_FALSE(contains(object.required, "transient"));
+    EXPECT_TRUE(contains(object.required, "value"));
+}
+
+TEST(SerializationTagIntegration, SerializationIgnoreTagRemovesPositionalFieldFromJsonLayout) {
+    const SerializationIgnoredArray source{
+        .first     = 1,
+        .transient = 99,
+        .last      = 2,
+    };
+    EXPECT_EQ(writeJson(source), R"([1,2])");
+
+    SerializationIgnoredArray decoded;
+    decoded.transient = 55;
+    ASSERT_TRUE(readJson(R"([3,4])", decoded));
+    EXPECT_EQ(decoded.first, 3);
+    EXPECT_EQ(decoded.transient, 55);
+    EXPECT_EQ(decoded.last, 4);
+
+    const auto schema = parser_schema<SerializationIgnoredArray>();
+    const auto array  = std::get<parsing::schema::Type::Array>(schema.value);
+    ASSERT_TRUE(array.minItems.has_value());
+    ASSERT_TRUE(array.maxItems.has_value());
+    EXPECT_EQ(array.minItems.value(), 2U);
+    EXPECT_EQ(array.maxItems.value(), 2U);
+    EXPECT_EQ(array.prefixItems.size(), 2U);
 }
 
 TEST(SerializationTagIntegration, TypeLevelUnframedTagRoundTripsBinaryLayout) {

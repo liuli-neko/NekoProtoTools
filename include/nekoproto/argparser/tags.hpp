@@ -336,6 +336,13 @@ struct arg_case_insensitive_choices_impl {
         return true;
     }
 };
+
+struct arg_ignore_tag_impl {
+    template <typename T, auto /*tags*/>
+    constexpr static bool constexpr_check() {
+        return true;
+    }
+};
 } // namespace detail
 
 template <ConstexprString Long = "">
@@ -385,6 +392,8 @@ inline constexpr auto arg_deprecated = detail::arg_deprecated_impl<Message>{};
 
 inline constexpr auto arg_case_insensitive_choices = detail::arg_case_insensitive_choices_impl{};
 
+inline constexpr auto arg_ignore_tag = detail::arg_ignore_tag_impl{}; // NOLINT
+
 // Tag access -----------------------------------------------------------------
 
 namespace tag_property {
@@ -412,6 +421,30 @@ NEKO_DETAIL_DEFINE_TAG_PROPERTY(double, range_max, range_max)                   
 
 NEKO_DETAIL_DEFINE_TAG_VALUE_PROPERTY(default_value, default_value)   // NOLINT
 NEKO_DETAIL_DEFINE_TAG_VALUE_PROPERTY(implicit_value, implicit_value) // NOLINT
+
+struct ignore { // NOLINT
+    using type = bool;
+
+    static constexpr type missing() noexcept { return false; }
+
+    template <typename Tag>
+    static constexpr bool has(const Tag& tag) {
+        using RawTag = std::remove_cvref_t<Tag>;
+        static_cast<void>(tag);
+        return std::is_same_v<RawTag, detail::arg_ignore_tag_impl>;
+    }
+
+    template <typename Tag>
+    static constexpr type get(const Tag& tag) {
+        using RawTag = std::remove_cvref_t<Tag>;
+        static_cast<void>(tag);
+        if constexpr (std::is_same_v<RawTag, detail::arg_ignore_tag_impl>) {
+            return true;
+        } else {
+            return missing();
+        }
+    }
+};
 } // namespace tag_property
 
 } // namespace argparser

@@ -89,6 +89,13 @@ struct fixed_length { // NOLINT
 } // namespace tag_property
 
 namespace tag_detail {
+struct serialization_ignore_tag_impl {
+    template <typename T, auto /*tags*/>
+    constexpr static bool constexpr_check() { // NOLINT
+        return true;
+    }
+};
+
 template <ConstexprString Comment>
 struct leading_comment_tag_impl {
     constexpr static auto leading_comment = Comment.view(); // NOLINT
@@ -161,6 +168,8 @@ struct yaml_collection_style_tag_impl {
     }
 };
 } // namespace tag_detail
+
+inline constexpr auto serialization_ignore_tag = tag_detail::serialization_ignore_tag_impl{}; // NOLINT
 
 template <ConstexprString Comment>
 inline constexpr auto leading_comment_tag = tag_detail::leading_comment_tag_impl<Comment>{}; // NOLINT
@@ -235,4 +244,30 @@ struct BinaryTag {
     tag_detail::tag_value<std::size_t> fixed_length{};
     tag_detail::tag_value<bool> unframed{};
 };
+
+namespace tag_property {
+struct ignore { // NOLINT
+    using type = bool;
+
+    static constexpr type missing() noexcept { return false; }
+
+    template <typename Tag>
+    static constexpr bool has(const Tag& tag) {
+        using RawTag = std::remove_cvref_t<Tag>;
+        static_cast<void>(tag);
+        return std::is_same_v<RawTag, tag_detail::serialization_ignore_tag_impl>;
+    }
+
+    template <typename Tag>
+    static constexpr type get(const Tag& tag) {
+        using RawTag = std::remove_cvref_t<Tag>;
+        static_cast<void>(tag);
+        if constexpr (std::is_same_v<RawTag, tag_detail::serialization_ignore_tag_impl>) {
+            return true;
+        } else {
+            return missing();
+        }
+    }
+};
+} // namespace tag_property
 NEKO_END_NAMESPACE

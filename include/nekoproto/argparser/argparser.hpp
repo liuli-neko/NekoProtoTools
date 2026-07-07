@@ -11,6 +11,7 @@
 #pragma once
 
 #include "nekoproto/argparser/config.hpp"
+#include "nekoproto/argparser/detail/config_io.hpp"
 #include "nekoproto/argparser/detail/help.hpp"
 #include "nekoproto/argparser/detail/materializer.hpp"
 #include "nekoproto/argparser/error.hpp"
@@ -19,11 +20,13 @@
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 #include <variant>
 
 NEKO_BEGIN_NAMESPACE
@@ -43,6 +46,14 @@ struct tuple_to_variant<std::tuple<Args...>> {
 template <typename Tuple>
 using tuple_to_variant_t = typename tuple_to_variant<Tuple>::type;
 
+template <typename Tuple, typename T>
+struct tuple_append;
+
+template <typename... Args, typename T>
+struct tuple_append<std::tuple<Args...>, T> {
+    using type = std::tuple<Args..., T>;
+};
+
 template <typename Tuple, std::size_t I>
 consteval bool tuple_type_unique_at() {
     return []<std::size_t... Is>(std::index_sequence<Is...>) {
@@ -58,9 +69,16 @@ consteval bool tuple_types_unique() {
 }
 
 template <typename T, std::size_t I>
+consteval bool field_is_ignored() {
+    return tag_query::get<tag_property::ignore>(std::get<I>(Reflect<std::remove_cvref_t<T>>::field_tags));
+}
+
+template <typename T, std::size_t I>
 consteval bool field_is_command() {
-    return is_command_placeholder_v<T> ||
-           tag_query::get<tag_property::command>(std::get<I>(Reflect<std::remove_cvref_t<T>>::field_tags));
+    using field_t = std::tuple_element_t<I, typename Reflect<std::remove_cvref_t<T>>::value_types>;
+    return !field_is_ignored<T, I>() && (is_command_placeholder_v<field_t> ||
+                                         tag_query::get<tag_property::command>(
+                                             std::get<I>(Reflect<std::remove_cvref_t<T>>::field_tags)));
 }
 
 template <typename T>
@@ -76,7 +94,7 @@ consteval bool all_fields_are_commands() {
         return false;
     } else {
         return []<std::size_t... Is>(std::index_sequence<Is...>) {
-            return (field_is_command<T, Is>() && ...);
+            return has_any_command<T>() && ((field_is_ignored<T, Is>() || field_is_command<T, Is>()) && ...);
         }(std::make_index_sequence<Reflect<std::remove_cvref_t<T>>::value_count>{});
     }
 }
@@ -89,11 +107,15 @@ inline constexpr bool is_command_set_v = all_fields_are_commands<T>(); // NOLINT
 
 template <typename T, std::size_t I>
 consteval bool command_type_valid_at() {
-    using field_t = std::tuple_element_t<I, typename Reflect<std::remove_cvref_t<T>>::value_types>;
-    if constexpr (is_command_placeholder_v<field_t>) {
+    if constexpr (field_is_ignored<T, I>()) {
         return true;
     } else {
-        return NEKO_NAMESPACE::detail::has_values_meta<field_t> && std::is_default_constructible_v<field_t>;
+        using field_t = std::tuple_element_t<I, typename Reflect<std::remove_cvref_t<T>>::value_types>;
+        if constexpr (is_command_placeholder_v<field_t>) {
+            return true;
+        } else {
+            return NEKO_NAMESPACE::detail::has_values_meta<field_t> && std::is_default_constructible_v<field_t>;
+        }
     }
 }
 
@@ -104,6 +126,27 @@ consteval bool command_types_valid() {
     }(std::make_index_sequence<Reflect<std::remove_cvref_t<T>>::value_count>{});
 }
 
+template <typename T, std::size_t I, typename Acc,
+          bool Done = I == Reflect<std::remove_cvref_t<T>>::value_count>
+struct command_result_tuple_builder;
+
+template <typename T, std::size_t I, typename... Acc>
+struct command_result_tuple_builder<T, I, std::tuple<Acc...>, false> {
+    using field_t = std::tuple_element_t<I, typename Reflect<std::remove_cvref_t<T>>::value_types>;
+    using next_acc =
+        std::conditional_t<field_is_ignored<T, I>(), std::tuple<Acc...>,
+                           typename tuple_append<std::tuple<Acc...>, field_t>::type>;
+    using type = typename command_result_tuple_builder<T, I + 1, next_acc>::type;
+};
+
+template <typename T, std::size_t I, typename Acc>
+struct command_result_tuple_builder<T, I, Acc, true> {
+    using type = Acc;
+};
+
+template <typename T>
+using command_result_tuple_t = typename command_result_tuple_builder<std::remove_cvref_t<T>, 0, std::tuple<>>::type;
+
 template <typename T>
 consteval void static_check_parser_definition() {
     constexpr bool has_any_command = has_any_command_v<T>;
@@ -111,10 +154,9 @@ consteval void static_check_parser_definition() {
     static_assert(!has_any_command || is_command_set,
                   "argparser command fields cannot be mixed with normal option fields in the same struct yet");
     if constexpr (is_command_set) {
-        using values = typename Reflect<std::remove_cvref_t<T>>::value_types;
         static_assert(command_types_valid<T>(), "argparser command field type must be a reflected struct or an empty "
                                                 "default-constructible placeholder type");
-        static_assert(tuple_types_unique<values>(),
+        static_assert(tuple_types_unique<command_result_tuple_t<T>>(),
                       "argparser command result variant requires unique command field types");
     }
 }
@@ -127,7 +169,7 @@ struct ParserResult {
 template <typename T>
     requires(is_command_set_v<T>)
 struct ParserResult<T> {
-    using type = tuple_to_variant_t<typename Reflect<std::remove_cvref_t<T>>::value_types>;
+    using type = tuple_to_variant_t<command_result_tuple_t<T>>;
 };
 
 template <typename T>
@@ -135,13 +177,49 @@ using parser_result_t = typename ParserResult<std::remove_cvref_t<T>>::type;
 
 template <typename T>
 std::error_code parse_options_into(T& object, int argc, const char* const* argv, int start_index,
-                                   const ArgParserConfig& config) {
+                                   const ArgParserConfig& config, const ConfigIoFile* external_import = nullptr,
+                                   const ConfigIoSelection* external_exports = nullptr) {
     auto schema = collect_schema<T>(config);
     auto raw    = parse_raw_arguments(schema, argc, argv, start_index, config);
     if (!raw.has_value()) {
         return raw.error();
     }
-    return materialize_options_into(object, schema, *raw, config);
+    if (schema.specs.size() != raw->options.size()) {
+        return make_argparser_error(ArgParserError::InvalidDefinition, "schema and raw option counts differ");
+    }
+
+    ConfigIoSelection local_io;
+    if (auto error = collect_config_io_selection(schema, *raw, local_io)) {
+        return error;
+    }
+    if (external_import != nullptr && local_io.import_file.has_value()) {
+        return make_argparser_error(ArgParserError::InvalidValue, "only one config import option can be used at a time");
+    }
+
+    PresenceList supplied(schema.specs.size(), 0);
+    if (auto error = apply_defaults_into(object, schema, supplied)) {
+        return error;
+    }
+    const auto* import_file = external_import != nullptr ? external_import : local_io.import_file.has_value()
+                                                                                  ? &*local_io.import_file
+                                                                                  : nullptr;
+    if (import_file != nullptr) {
+        if (auto error = import_config_file(*import_file, object)) {
+            return error;
+        }
+        if (auto error = mark_imported_options_supplied(object, schema, supplied)) {
+            return error;
+        }
+    }
+    if (auto error = materialize_explicit_options_into(object, schema, *raw, config, supplied)) {
+        return error;
+    }
+    if (auto error = validate_materialized_options(schema, supplied)) {
+        return error;
+    }
+
+    const auto& exports = external_exports == nullptr ? local_io : *external_exports;
+    return export_config_files(exports, object);
 }
 
 template <typename T, std::size_t I>
@@ -156,72 +234,324 @@ std::string command_name_at() {
     }
 }
 
-template <typename RootT, std::size_t I>
-bool try_parse_command(std::string_view command, int argc, const char* const* argv, int start_index,
-                       const ArgParserConfig& config, parser_result_t<RootT>& result, std::error_code& error) {
-    if (command != command_name_at<RootT, I>()) {
-        return false;
+inline ArgSchema collect_command_config_io_schema(const ArgParserConfig& config) {
+    ArgSchema schema;
+    schema.user_spec_count = 0;
+    append_config_io_specs(config, schema);
+    return schema;
+}
+
+struct CommandSelectorConfig {
+    std::string command;
+
+    struct Neko {
+        static constexpr auto value = Object("command", &CommandSelectorConfig::command); // NOLINT
+    };
+};
+
+struct CommandRootParseResult {
+    std::string command;
+    int start_index = 0;
+    ConfigIoSelection io;
+};
+
+inline std::error_code record_command_root_option(const ArgSchema& schema, RawParseResult& raw, int argc,
+                                                  const char* const* argv, int& idx,
+                                                  const ArgParserConfig& config) {
+    std::string_view arg = argv[idx] == nullptr ? std::string_view{} : std::string_view(argv[idx]);
+    if (arg.starts_with("--")) {
+        auto body         = arg.substr(2);
+        auto value        = std::string_view{};
+        bool value_inline = false;
+        if (const auto equal = body.find('='); equal != std::string_view::npos) {
+            value        = body.substr(equal + 1);
+            body         = body.substr(0, equal);
+            value_inline = true;
+        }
+
+        const auto spec_index = schema.find_long_index(body);
+        if (!spec_index.has_value()) {
+            return make_argparser_error(ArgParserError::UnknownOption, "--" + std::string(body));
+        }
+        return record_raw_option(schema, raw, *spec_index, argc, argv, idx, value, value_inline, config);
+    }
+    return make_argparser_error(ArgParserError::UnknownOption, std::string(arg));
+}
+
+inline expected::expected<CommandRootParseResult, std::error_code>
+parse_command_root_arguments(int argc, const char* const* argv, const ArgParserConfig& config) {
+    auto schema = collect_command_config_io_schema(config);
+
+    RawParseResult raw;
+    raw.options.resize(schema.specs.size());
+    CommandRootParseResult result;
+
+    for (int idx = 1; idx < argc; ++idx) {
+        std::string_view arg = argv[idx] == nullptr ? std::string_view{} : std::string_view(argv[idx]);
+        if (config.addHelp && is_help_token(arg)) {
+            return unexpected_error(make_error_code(ArgParserError::HelpRequested));
+        }
+        if (config.addVersion && !config.version.empty() && is_version_token(arg)) {
+            return unexpected_error(make_error_code(ArgParserError::VersionRequested));
+        }
+
+        if (arg == "--") {
+            if (idx + 1 < argc && argv[idx + 1] != nullptr) {
+                result.command     = argv[idx + 1];
+                result.start_index = idx + 2;
+                break;
+            }
+            break;
+        }
+
+        if (arg.starts_with("--") && !schema.specs.empty()) {
+            if (auto error = record_command_root_option(schema, raw, argc, argv, idx, config)) {
+                return unexpected_error(error);
+            }
+            continue;
+        }
+
+        if (arg.starts_with("-") && arg.size() > 1 && !schema.specs.empty()) {
+            if (config.allowUnknown) {
+                continue;
+            }
+            return unexpected_error(make_argparser_error(ArgParserError::UnknownOption, std::string(arg)));
+        }
+
+        result.command     = std::string(arg);
+        result.start_index = idx + 1;
+        break;
     }
 
-    using command_t = std::tuple_element_t<I, typename Reflect<std::remove_cvref_t<RootT>>::value_types>;
-    if constexpr (is_command_placeholder_v<command_t>) {
-        if (start_index < argc) {
-            const auto arg = argv[start_index] == nullptr ? std::string_view{} : std::string_view(argv[start_index]);
-            if (config.addHelp && is_help_token(arg)) {
-                error = make_error_code(ArgParserError::HelpRequested);
-                return true;
-            }
-            if (config.addVersion && !config.version.empty() && is_version_token(arg)) {
-                error = make_error_code(ArgParserError::VersionRequested);
-                return true;
-            }
-            error = make_argparser_error(ArgParserError::UnexpectedPositional, "command " + quote_arg_value(command) +
-                                                                                   " does not accept " +
-                                                                                   quote_arg_value(arg));
-            return true;
-        }
-        result.template emplace<I>();
-    } else {
-        command_t command_object{};
-        if (auto parse_error = parse_options_into(command_object, argc, argv, start_index, config)) {
-            error = parse_error;
-            return true;
-        }
-        result.template emplace<I>(std::move(command_object));
+    if (auto error = collect_config_io_selection(schema, raw, result.io)) {
+        return unexpected_error(error);
     }
-    return true;
+    if (result.command.empty() && result.io.import_file.has_value()) {
+        CommandSelectorConfig selector;
+        if (auto error = import_config_file(*result.io.import_file, selector)) {
+            return unexpected_error(error);
+        }
+        result.command     = std::move(selector.command);
+        result.start_index = argc;
+    }
+    if (result.command.empty()) {
+        return unexpected_error(make_argparser_error(ArgParserError::MissingRequired, "command name is required"));
+    }
+    return result;
+}
+
+inline std::error_code validate_imported_command_name(std::string_view expected, std::string_view actual) {
+    if (actual == expected) {
+        return {};
+    }
+    std::string message = "imported config command ";
+    message.append(quote_arg_value(actual));
+    message.append(" does not match selected command ");
+    message.append(quote_arg_value(expected));
+    return make_argparser_error(ArgParserError::InvalidValue, std::move(message));
+}
+
+template <typename T>
+CommandConfig<std::remove_cvref_t<T>> make_command_config(std::string command, T&& params) {
+    using CommandT = std::remove_cvref_t<T>;
+    if constexpr (is_command_placeholder_v<CommandT>) {
+        return CommandConfig<CommandT>{.command = std::move(command)};
+    } else {
+        return CommandConfig<CommandT>{.command = std::move(command), .params = std::forward<T>(params)};
+    }
+}
+
+template <typename RootT, typename CommandT, std::size_t... Is>
+std::string command_name_for_type_impl(std::index_sequence<Is...> /*unused*/) {
+    std::string name;
+    ((std::is_same_v<std::remove_cvref_t<CommandT>,
+                     std::tuple_element_t<Is, typename Reflect<std::remove_cvref_t<RootT>>::value_types>> &&
+              !field_is_ignored<RootT, Is>()
+          ? (name = command_name_at<RootT, Is>(), true)
+          : false),
+     ...);
+    return name;
+}
+
+template <typename RootT, typename CommandT>
+std::string command_name_for_type() {
+    return command_name_for_type_impl<RootT, CommandT>(
+        std::make_index_sequence<Reflect<std::remove_cvref_t<RootT>>::value_count>{});
+}
+
+template <typename RootT>
+std::error_code export_command_config_files(const ConfigIoSelection& selection, const parser_result_t<RootT>& result) {
+    std::error_code error;
+    std::visit(
+        [&](const auto& selected) {
+            using CommandT = std::remove_cvref_t<decltype(selected)>;
+            const auto command = command_name_for_type<RootT, CommandT>();
+            auto config_value  = make_command_config(command, selected);
+            error              = export_config_files(selection, config_value);
+        },
+        result);
+    return error;
+}
+
+inline std::error_code merge_config_io_selection(ConfigIoSelection& target, ConfigIoSelection source) {
+    if (source.import_file.has_value()) {
+        if (target.import_file.has_value()) {
+            return make_argparser_error(ArgParserError::InvalidValue,
+                                        "only one config import option can be used at a time");
+        }
+        target.import_file = std::move(source.import_file);
+    }
+    target.export_files.insert(target.export_files.end(), std::make_move_iterator(source.export_files.begin()),
+                               std::make_move_iterator(source.export_files.end()));
+    return {};
+}
+
+template <typename RootT, std::size_t I>
+bool try_parse_command(std::string_view command, int argc, const char* const* argv, int start_index,
+                       const ArgParserConfig& config, const ConfigIoSelection& root_io, parser_result_t<RootT>& result,
+                       ConfigIoSelection& selected_io, std::error_code& error) {
+    if constexpr (field_is_ignored<RootT, I>()) {
+        static_cast<void>(command);
+        static_cast<void>(argc);
+        static_cast<void>(argv);
+        static_cast<void>(start_index);
+        static_cast<void>(config);
+        static_cast<void>(root_io);
+        static_cast<void>(result);
+        static_cast<void>(selected_io);
+        static_cast<void>(error);
+        return false;
+    } else {
+        if (command != command_name_at<RootT, I>()) {
+            return false;
+        }
+
+        using command_t = std::tuple_element_t<I, typename Reflect<std::remove_cvref_t<RootT>>::value_types>;
+        if constexpr (is_command_placeholder_v<command_t>) {
+            auto schema = collect_command_config_io_schema(config);
+            auto raw    = parse_raw_arguments(schema, argc, argv, start_index, config);
+            if (!raw.has_value()) {
+                error = raw.error();
+                return true;
+            }
+            ConfigIoSelection local_io;
+            if (auto io_error = collect_config_io_selection(schema, *raw, local_io)) {
+                error = io_error;
+                return true;
+            }
+            ConfigIoSelection command_io = root_io;
+            if (auto merge_error = merge_config_io_selection(command_io, std::move(local_io))) {
+                error = merge_error;
+                return true;
+            }
+            if (command_io.import_file.has_value()) {
+                CommandConfig<command_t> imported;
+                if (auto import_error = import_config_file(*command_io.import_file, imported)) {
+                    error = import_error;
+                    return true;
+                }
+                if (auto name_error = validate_imported_command_name(command, imported.command)) {
+                    error = name_error;
+                    return true;
+                }
+            }
+            selected_io = std::move(command_io);
+            result.template emplace<command_t>();
+        } else {
+            command_t command_object{};
+
+            const ArgParserConfig& command_config = config;
+            auto schema = collect_schema<command_t>(command_config);
+            auto raw    = parse_raw_arguments(schema, argc, argv, start_index, command_config);
+            if (!raw.has_value()) {
+                error = raw.error();
+                return true;
+            }
+            if (schema.specs.size() != raw->options.size()) {
+                error = make_argparser_error(ArgParserError::InvalidDefinition, "schema and raw option counts differ");
+                return true;
+            }
+            ConfigIoSelection local_io;
+            if (auto io_error = collect_config_io_selection(schema, *raw, local_io)) {
+                error = io_error;
+                return true;
+            }
+            ConfigIoSelection command_io = root_io;
+            if (auto merge_error = merge_config_io_selection(command_io, std::move(local_io))) {
+                error = merge_error;
+                return true;
+            }
+
+            PresenceList supplied(schema.specs.size(), 0);
+            if (auto default_error = apply_defaults_into(command_object, schema, supplied)) {
+                error = default_error;
+                return true;
+            }
+            if (command_io.import_file.has_value()) {
+                CommandConfig<command_t> imported;
+                if (auto import_error = import_config_file(*command_io.import_file, imported)) {
+                    error = import_error;
+                    return true;
+                }
+                if (auto name_error = validate_imported_command_name(command, imported.command)) {
+                    error = name_error;
+                    return true;
+                }
+                command_object = std::move(imported.params);
+                if (auto import_presence_error = mark_imported_options_supplied(command_object, schema, supplied)) {
+                    error = import_presence_error;
+                    return true;
+                }
+            }
+            if (auto parse_error =
+                    materialize_explicit_options_into(command_object, schema, *raw, command_config, supplied)) {
+                error = parse_error;
+                return true;
+            }
+            if (auto validation_error = validate_materialized_options(schema, supplied)) {
+                error = validation_error;
+                return true;
+            }
+            selected_io = std::move(command_io);
+            result.template emplace<command_t>(std::move(command_object));
+        }
+        return true;
+    }
 }
 
 template <typename T>
 expected::expected<parser_result_t<T>, std::error_code> parse_command_set(int argc, const char* const* argv,
                                                                           const ArgParserConfig& config) {
-    if (argc <= 1 || argv == nullptr || argv[1] == nullptr) {
+    if (argv == nullptr) {
         return unexpected_error(make_argparser_error(ArgParserError::MissingRequired, "command name is required"));
     }
-    std::string_view command = argv[1];
-    if (config.addHelp && is_help_token(command)) {
-        return unexpected_error(make_error_code(ArgParserError::HelpRequested));
-    }
-    if (config.addVersion && !config.version.empty() && is_version_token(command)) {
-        return unexpected_error(make_error_code(ArgParserError::VersionRequested));
+    auto root = parse_command_root_arguments(argc, argv, config);
+    if (!root.has_value()) {
+        return unexpected_error(root.error());
     }
 
     parser_result_t<T> result;
+    ConfigIoSelection selected_io;
     std::error_code error;
     const bool matched =
         []<std::size_t... Is>(std::index_sequence<Is...>, std::string_view command_name, int argc_value,
                               const char* const* argv_value, const ArgParserConfig& parser_config,
-                              parser_result_t<T>& out, std::error_code& out_error) {
-            return (try_parse_command<T, Is>(command_name, argc_value, argv_value, 2, parser_config, out, out_error) ||
+                              const ConfigIoSelection& root_io, int command_start_index, parser_result_t<T>& out,
+                              ConfigIoSelection& out_io, std::error_code& out_error) {
+            return (try_parse_command<T, Is>(command_name, argc_value, argv_value, command_start_index, parser_config,
+                                             root_io, out, out_io, out_error) ||
                     ...);
-        }(std::make_index_sequence<Reflect<std::remove_cvref_t<T>>::value_count>{}, command, argc, argv, config, result,
-          error);
+        }(std::make_index_sequence<Reflect<std::remove_cvref_t<T>>::value_count>{}, root->command, argc, argv, config,
+          root->io, root->start_index, result, selected_io, error);
 
     if (!matched) {
-        return unexpected_error(make_argparser_error(ArgParserError::UnknownCommand, quote_arg_value(command)));
+        return unexpected_error(make_argparser_error(ArgParserError::UnknownCommand, quote_arg_value(root->command)));
     }
     if (error) {
         return unexpected_error(error);
+    }
+    if (auto export_error = export_command_config_files<T>(selected_io, result)) {
+        return unexpected_error(export_error);
     }
     return result;
 }
@@ -240,15 +570,21 @@ std::string format_command_help(const ArgParserConfig& config) {
         result.append(config.description);
         result.push_back('\n');
     }
+
+    auto root_schema = collect_command_config_io_schema(config);
+    if (config.addHelp || (config.addVersion && !config.version.empty()) || !root_schema.specs.empty()) {
+        result.append("\nOptions:\n");
+        if (config.addHelp) {
+            result.append("  -h, --help\n");
+        }
+        if (config.addVersion && !config.version.empty()) {
+            result.append("  -V, --version\n");
+        }
+        append_ungrouped_options(result, root_schema);
+    }
     result.append("\nCommands:\n");
-    if (config.addHelp) {
-        result.append("  -h, --help\n");
-    }
-    if (config.addVersion && !config.version.empty()) {
-        result.append("  -V, --version\n");
-    }
     Reflect<std::remove_cvref_t<T>>::forEachMeta([&result](std::string_view name, const auto& tags) {
-        if (!tag_query::get<tag_property::hidden>(tags)) {
+        if (!tag_query::get<tag_property::ignore>(tags) && !tag_query::get<tag_property::hidden>(tags)) {
             result.append("  ");
             std::string_view cname = tag_query::get<tag_property::long_name>(tags).empty()
                                          ? name
@@ -305,6 +641,9 @@ std::string format_context_help(int argc, const char* const* argv, ArgParserConf
             bool matched             = false;
             Reflect<std::remove_cvref_t<T>>::forEachMeta(
                 [&]<typename U>(std::type_identity<U>, std::string_view name, const auto& tags) {
+                    if (tag_query::get<tag_property::ignore>(tags)) {
+                        return;
+                    }
                     std::string_view cname = tag_query::get<tag_property::long_name>(tags).empty()
                                                  ? name
                                                  : tag_query::get<tag_property::long_name>(tags);

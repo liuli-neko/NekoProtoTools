@@ -472,6 +472,13 @@ int main(int argc, char** argv) {
     config.deprecatedOptionHandler = [](std::string_view optionName, std::string_view message) {
         std::cout << "warning: --" << optionName << ": " << message << '\n';
     };
+    config.configIo.emplace();
+    config.configIo->exportYaml   = true;
+    config.configIo->importYaml   = true;
+    config.configIo->exportJson   = true;
+    config.configIo->importJson   = true;
+    config.configIo->exportBinary = true;
+    config.configIo->importBinary = true;
 
     if (argc == 1) {
         std::cout << format_help<ToolCommands>(config) << '\n';
