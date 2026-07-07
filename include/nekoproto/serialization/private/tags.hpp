@@ -55,6 +55,7 @@ NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, yaml_anchor, yaml_anchor)     
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(YamlScalarStyle, yaml_scalar_style, yaml_scalar_style) // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(YamlCollectionStyle, yaml_collection_style,            // NOLINT
                                 yaml_collection_style)
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, inline_table, inline_table)            // NOLINT
 
 NEKO_DETAIL_DEFINE_TYPE_TAG_PROPERTY(bool, flat, flat)         // NOLINT
 NEKO_DETAIL_DEFINE_TYPE_TAG_PROPERTY(bool, unframed, unframed) // NOLINT
@@ -194,6 +195,15 @@ inline constexpr auto yaml_scalar_style_tag = tag_detail::yaml_scalar_style_tag_
 
 template <YamlCollectionStyle Style>
 inline constexpr auto yaml_collection_style_tag = tag_detail::yaml_collection_style_tag_impl<Style>{}; // NOLINT
+
+struct TomlTag {
+    tag_detail::tag_value<bool> inline_table{};
+
+    template <typename T, auto /*Tags*/>
+    constexpr static bool constexpr_check() { // NOLINT
+        return true;
+    }
+};
 
 struct ParserTag {
     tag_detail::tag_value<bool> flat{};

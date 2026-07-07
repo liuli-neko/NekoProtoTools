@@ -61,6 +61,14 @@ option("enable_libfyaml")
     set_configvar("NEKO_PROTO_ENABLE_LIBFYAML", true)
 option_end()
 
+option("enable_tomlplusplus")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable toml++ TOML support, should install toml++")
+    set_category("serializer provider")
+    set_configvar("NEKO_PROTO_ENABLE_TOMLPLUSPLUS", true)
+option_end()
+
 option("enable_spdlog")
     set_default(false)
     set_showmenu(true)
@@ -168,6 +176,13 @@ if has_config("enable_libfyaml") then
     add_requires("libfyaml", {configs = { shared = is_kind("shared")}})
 end
 
+if has_config("enable_tomlplusplus") then
+    add_requires("toml++", {configs = { header_only = true}})
+    if not has_config("3rd_custom") then
+        add_requireconfs("**toml++", {version = "v3.4.0"})
+    end
+end
+
 if has_config("enable_spdlog") then
     add_requires("spdlog", {configs = { shared = is_kind("shared")}})
 end
@@ -225,6 +240,7 @@ target("NekoSerializer")
                 "enable_simdjson", 
                 "enable_pugixml",
                 "enable_libfyaml",
+                "enable_tomlplusplus",
                 "enable_protocol",
                 "enable_communication",
                 "enable_jsonrpc",
@@ -252,6 +268,7 @@ target("NekoArgParser")
                 "enable_rapidjson",
                 "enable_simdjson",
                 "enable_libfyaml",
+                "enable_tomlplusplus",
                 "custom_namespace")
 
     set_configvar("NEKO_NAMESPACE", "$(custom_namespace)")
