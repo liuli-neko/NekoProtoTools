@@ -4,6 +4,7 @@
 #include "nekoproto/argparser/error.hpp"
 #include "nekoproto/argparser/tags.hpp"
 #include "nekoproto/global/global.hpp"
+#include "nekoproto/global/log.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
 #include <algorithm>
@@ -12,10 +13,21 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 NEKO_BEGIN_NAMESPACE
 namespace argparser::detail {
+enum class ArgBuiltinSpecKind {
+    None,
+    ImportJson,
+    ExportJson,
+    ImportYaml,
+    ExportYaml,
+    ImportBinary,
+    ExportBinary,
+};
+
 struct ArgSpec {
     std::string long_name;
     std::string short_name;
@@ -48,6 +60,22 @@ struct ArgSpec {
 struct ArgSchema {
     std::vector<ArgSpec> specs;
     std::vector<std::size_t> positional_specs;
+    std::vector<ArgBuiltinSpecKind> builtin_specs;
+    std::size_t user_spec_count = 0;
+
+    void push_user_spec(ArgSpec spec) {
+        specs.push_back(std::move(spec));
+        builtin_specs.push_back(ArgBuiltinSpecKind::None);
+    }
+
+    void push_builtin_spec(ArgBuiltinSpecKind kind, ArgSpec spec) {
+        specs.push_back(std::move(spec));
+        builtin_specs.push_back(kind);
+    }
+
+    [[nodiscard]] ArgBuiltinSpecKind builtin_kind(std::size_t index) const {
+        return index < builtin_specs.size() ? builtin_specs[index] : ArgBuiltinSpecKind::None;
+    }
 
     [[nodiscard]] std::optional<std::size_t> find_long_index(std::string_view name) const {
         for (std::size_t index = 0; index < specs.size(); ++index) {
@@ -262,6 +290,91 @@ ArgSpec make_arg_spec(std::string_view prefix, std::string_view reflected_name, 
     return spec;
 }
 
+template <typename Tags>
+constexpr bool should_ignore_arg_field(const Tags& tags) {
+    return tag_query::get<tag_property::ignore>(tags);
+}
+
+inline constexpr bool argparser_json_config_io_available() {
+    return
+#if defined(NEKO_PROTO_ENABLE_RAPIDJSON) || defined(NEKO_PROTO_ENABLE_SIMDJSON)
+        true;
+#else
+        false;
+#endif
+}
+
+inline constexpr bool argparser_yaml_config_io_available() {
+    return
+#if defined(NEKO_PROTO_ENABLE_LIBFYAML)
+        true;
+#else
+        false;
+#endif
+}
+
+inline constexpr bool argparser_binary_config_io_available() { return true; }
+
+inline ArgSpec make_config_io_spec(std::string_view name, std::string help) {
+    ArgSpec spec;
+    spec.long_name  = std::string(name);
+    spec.help       = std::move(help);
+    spec.value_name = "PATH";
+    return spec;
+}
+
+inline bool config_io_builtin_name_available(const ArgSchema& schema, std::string_view name) {
+    if (name.empty()) {
+        NEKO_LOG_WARN("argparser", "built-in argparser config option with an empty name is disabled");
+        return false;
+    }
+    if (schema.find_reference_index(name).has_value()) {
+        NEKO_LOG_WARN("argparser", "built-in argparser config option --{} is disabled because it is already used",
+                      name);
+        return false;
+    }
+    return true;
+}
+
+inline void push_config_io_spec_if_available(ArgSchema& schema, ArgBuiltinSpecKind kind, std::string_view name,
+                                             std::string help) {
+    if (!config_io_builtin_name_available(schema, name)) {
+        return;
+    }
+    schema.push_builtin_spec(kind, make_config_io_spec(name, std::move(help)));
+}
+
+inline void append_config_io_specs(const ArgParserConfig& config, ArgSchema& schema) {
+    if (!config.configIo.has_value()) {
+        return;
+    }
+    const auto& io = *config.configIo;
+    if (io.importJson && argparser_json_config_io_available()) {
+        push_config_io_spec_if_available(schema, ArgBuiltinSpecKind::ImportJson, io.importJsonName,
+                                         "import options from a JSON file");
+    }
+    if (io.exportJson && argparser_json_config_io_available()) {
+        push_config_io_spec_if_available(schema, ArgBuiltinSpecKind::ExportJson, io.exportJsonName,
+                                         "export resolved options to a JSON file");
+    }
+    if (io.importYaml && argparser_yaml_config_io_available()) {
+        push_config_io_spec_if_available(schema, ArgBuiltinSpecKind::ImportYaml, io.importYamlName,
+                                         "import options from a YAML file");
+    }
+    if (io.exportYaml && argparser_yaml_config_io_available()) {
+        push_config_io_spec_if_available(schema, ArgBuiltinSpecKind::ExportYaml, io.exportYamlName,
+                                         "export resolved options to a YAML file");
+    }
+    if (io.importBinary && argparser_binary_config_io_available()) {
+        push_config_io_spec_if_available(schema, ArgBuiltinSpecKind::ImportBinary, io.importBinaryName,
+                                         "import options from a binary file");
+    }
+    if (io.exportBinary && argparser_binary_config_io_available()) {
+        push_config_io_spec_if_available(schema, ArgBuiltinSpecKind::ExportBinary, io.exportBinaryName,
+                                         "export resolved options to a binary file");
+    }
+}
+
 template <typename T>
 void collect_schema_into(std::string_view prefix, const ArgParserConfig& config, ArgSchema& schema) {
     static_assert(NEKO_NAMESPACE::detail::has_values_meta<std::remove_cvref_t<T>>,
@@ -269,13 +382,16 @@ void collect_schema_into(std::string_view prefix, const ArgParserConfig& config,
 
     Reflect<std::remove_cvref_t<T>>::forEachMeta(
         [&]<typename FieldT>(std::type_identity<FieldT>, std::string_view reflected_name, const auto& tags) {
+            if (should_ignore_arg_field(tags)) {
+                return;
+            }
             const auto explicit_long_name = tag_query::get<tag_property::long_name>(tags);
             const auto name               = explicit_long_name.empty() ? reflected_name : explicit_long_name;
 
             if constexpr (is_nested_option_v<FieldT>) {
                 collect_schema_into<FieldT>(join_arg_name(prefix, name, config.nestedSeparator), config, schema);
             } else {
-                schema.specs.push_back(make_arg_spec<FieldT>(prefix, reflected_name, tags, config));
+                schema.push_user_spec(make_arg_spec<FieldT>(prefix, reflected_name, tags, config));
                 if (schema.specs.back().positional) {
                     schema.positional_specs.push_back(schema.specs.size() - 1);
                 }
@@ -287,6 +403,8 @@ template <typename T>
 ArgSchema collect_schema(const ArgParserConfig& config) {
     ArgSchema schema;
     collect_schema_into<T>({}, config, schema);
+    schema.user_spec_count = schema.specs.size();
+    append_config_io_specs(config, schema);
     return schema;
 }
 

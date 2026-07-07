@@ -249,6 +249,9 @@ target("NekoArgParser")
     add_options("enable_spdlog",
                 "enable_fmt",
                 "enable_stdformat",
+                "enable_rapidjson",
+                "enable_simdjson",
+                "enable_libfyaml",
                 "custom_namespace")
 
     set_configvar("NEKO_NAMESPACE", "$(custom_namespace)")

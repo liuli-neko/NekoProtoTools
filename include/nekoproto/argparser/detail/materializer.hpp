@@ -393,30 +393,9 @@ std::error_code assign_default_to_field(const ArgSpec& spec, FieldT& field, cons
 }
 
 template <typename FieldT, typename Tags>
-std::error_code materialize_one_option(const ArgSpec& spec, const RawOptionValues& raw, FieldT& field, const Tags& tags,
-                                       const ArgParserConfig& config, bool& supplied) {
+std::error_code apply_default_option(const ArgSpec& spec, FieldT& field, const Tags& tags, bool& supplied) {
     if (auto error = validate_field_definition<std::remove_cvref_t<FieldT>>(spec)) {
         return contextual_argparser_error(error, spec, "invalid option definition");
-    }
-
-    if (raw.seen()) {
-        for (const auto& value : raw.values) {
-            if (auto error = assign_text_to_field(spec, field, value, "value")) {
-                return error;
-            }
-            notify_deprecated_option(spec, config);
-        }
-        supplied = true;
-        return {};
-    }
-
-    if (const auto envValue = read_env(spec.env_name); envValue) {
-        const auto source = spec.env_name.empty() ? std::string_view{"env value"} : std::string_view{spec.env_name};
-        if (auto error = assign_text_to_field(spec, field, *envValue, source)) {
-            return error;
-        }
-        supplied = true;
-        return {};
     }
 
     if (spec.has_default) {
@@ -428,8 +407,49 @@ std::error_code materialize_one_option(const ArgSpec& spec, const RawOptionValue
     return {};
 }
 
+template <typename FieldT, typename Tags>
+std::error_code materialize_one_option(const ArgSpec& spec, const RawOptionValues& raw, FieldT& field, const Tags& tags,
+                                       const ArgParserConfig& config, bool already_supplied, bool& supplied) {
+    static_cast<void>(tags);
+    if (auto error = validate_field_definition<std::remove_cvref_t<FieldT>>(spec)) {
+        return contextual_argparser_error(error, spec, "invalid option definition");
+    }
+
+    if (raw.seen()) {
+        if constexpr (is_vector_v<std::remove_cvref_t<FieldT>>) {
+            if (already_supplied) {
+                field.clear();
+            }
+        }
+        for (const auto& value : raw.values) {
+            if (auto error = assign_text_to_field(spec, field, value, "value")) {
+                return error;
+            }
+            notify_deprecated_option(spec, config);
+        }
+        supplied = true;
+        return {};
+    }
+
+    if (const auto envValue = read_env(spec.env_name); envValue) {
+        if constexpr (is_vector_v<std::remove_cvref_t<FieldT>>) {
+            if (already_supplied) {
+                field.clear();
+            }
+        }
+        const auto source = spec.env_name.empty() ? std::string_view{"env value"} : std::string_view{spec.env_name};
+        if (auto error = assign_text_to_field(spec, field, *envValue, source)) {
+            return error;
+        }
+        supplied = true;
+        return {};
+    }
+
+    return {};
+}
+
 inline std::error_code validate_required_options(const ArgSchema& schema, std::span<const unsigned char> supplied) {
-    for (std::size_t index = 0; index < schema.specs.size(); ++index) {
+    for (std::size_t index = 0; index < schema.user_spec_count; ++index) {
         if (schema.specs[index].required && (supplied[index] == 0U)) {
             return make_argparser_error(ArgParserError::MissingRequired,
                                         format_error_option_label(schema.specs[index]) + " is required");
@@ -440,7 +460,7 @@ inline std::error_code validate_required_options(const ArgSchema& schema, std::s
 
 inline std::error_code validate_cross_field_constraints(const ArgSchema& schema,
                                                         std::span<const unsigned char> supplied) {
-    for (std::size_t index = 0; index < schema.specs.size(); ++index) {
+    for (std::size_t index = 0; index < schema.user_spec_count; ++index) {
         if (supplied[index] == 0U) {
             continue;
         }
@@ -476,12 +496,55 @@ inline std::error_code validate_cross_field_constraints(const ArgSchema& schema,
 }
 
 template <typename T>
+std::error_code apply_default_fields(T& object, const ArgSchema& schema, std::size_t& spec_index,
+                                     PresenceList& supplied) {
+    std::error_code result;
+    Reflect<std::remove_cvref_t<T>>::forEach(
+        object, [&](auto& field, std::string_view reflectedName, const auto& tags) {
+            if (result) {
+                return;
+            }
+            if (should_ignore_arg_field(tags)) {
+                return;
+            }
+            static_cast<void>(reflectedName);
+            using FieldT = std::remove_cvref_t<decltype(field)>;
+
+            if constexpr (is_nested_option_v<FieldT>) {
+                if (auto error = apply_default_fields(field, schema, spec_index, supplied); error) {
+                    result = error;
+                }
+            } else {
+                if (spec_index >= schema.user_spec_count) {
+                    result = make_argparser_error(ArgParserError::InvalidDefinition,
+                                                  "schema index is out of range while applying default for field " +
+                                                      quote_arg_value(reflectedName));
+                    return;
+                }
+                bool defaultSupplied = false;
+                if (auto error = apply_default_option(schema.specs[spec_index], field, tags, defaultSupplied)) {
+                    result = error;
+                    return;
+                }
+                if (defaultSupplied) {
+                    supplied[spec_index] = 1U;
+                }
+                ++spec_index;
+            }
+        });
+    return result;
+}
+
+template <typename T>
 std::error_code materialize_fields(T& object, const ArgSchema& schema, const RawParseResult& raw,
                                    const ArgParserConfig& config, std::size_t& spec_index, PresenceList& supplied) {
     std::error_code result;
     Reflect<std::remove_cvref_t<T>>::forEach(
         object, [&](auto& field, std::string_view reflectedName, const auto& tags) {
             if (result) {
+                return;
+            }
+            if (should_ignore_arg_field(tags)) {
                 return;
             }
             static_cast<void>(reflectedName);
@@ -492,23 +555,122 @@ std::error_code materialize_fields(T& object, const ArgSchema& schema, const Raw
                     result = error;
                 }
             } else {
-                if (spec_index >= schema.specs.size() || spec_index >= raw.options.size()) {
+                if (spec_index >= schema.user_spec_count || spec_index >= raw.options.size()) {
                     result = make_argparser_error(ArgParserError::InvalidDefinition,
                                                   "schema index is out of range while materializing field " +
                                                       quote_arg_value(reflectedName));
                     return;
                 }
                 bool optionSupplied = false;
+                const auto alreadySupplied = supplied[spec_index] != 0U;
                 if (auto error = materialize_one_option(schema.specs[spec_index], raw.options[spec_index], field, tags,
-                                                        config, optionSupplied)) {
+                                                        config, alreadySupplied, optionSupplied)) {
                     result = error;
                     return;
                 }
-                supplied[spec_index] = optionSupplied ? 1U : 0U;
+                if (optionSupplied) {
+                    supplied[spec_index] = 1U;
+                }
                 ++spec_index;
             }
         });
     return result;
+}
+
+template <typename FieldT>
+bool imported_field_supplied(const FieldT& field) {
+    using RawT = std::remove_cvref_t<FieldT>;
+    if constexpr (std::is_same_v<RawT, bool>) {
+        return field;
+    } else if constexpr (is_arg_optional_v<RawT>) {
+        return field.has_value();
+    } else if constexpr (is_vector_v<RawT>) {
+        return !field.empty();
+    } else {
+        static_cast<void>(field);
+        return true;
+    }
+}
+
+template <typename T>
+std::error_code mark_imported_fields_supplied(const T& object, const ArgSchema& schema, std::size_t& spec_index,
+                                              PresenceList& supplied) {
+    std::error_code result;
+    Reflect<std::remove_cvref_t<T>>::forEach(
+        object, [&](const auto& field, std::string_view reflectedName, const auto& tags) {
+            if (result) {
+                return;
+            }
+            if (should_ignore_arg_field(tags)) {
+                return;
+            }
+            static_cast<void>(reflectedName);
+            using FieldT = std::remove_cvref_t<decltype(field)>;
+
+            if constexpr (is_nested_option_v<FieldT>) {
+                if (auto error = mark_imported_fields_supplied(field, schema, spec_index, supplied); error) {
+                    result = error;
+                }
+            } else {
+                if (spec_index >= schema.user_spec_count || spec_index >= supplied.size()) {
+                    result = make_argparser_error(ArgParserError::InvalidDefinition,
+                                                  "schema index is out of range while marking imported field " +
+                                                      quote_arg_value(reflectedName));
+                    return;
+                }
+                supplied[spec_index] = imported_field_supplied(field) ? 1U : 0U;
+                ++spec_index;
+            }
+        });
+    return result;
+}
+
+template <typename T>
+std::error_code mark_imported_options_supplied(const T& object, const ArgSchema& schema, PresenceList& supplied) {
+    const auto end = std::min(schema.user_spec_count, supplied.size());
+    std::fill(supplied.begin(), supplied.begin() + end, 0U);
+
+    std::size_t spec_index = 0;
+    if (auto error = mark_imported_fields_supplied(object, schema, spec_index, supplied)) {
+        return error;
+    }
+    if (spec_index != schema.user_spec_count) {
+        return make_argparser_error(ArgParserError::InvalidDefinition, "not all imported schema fields were marked");
+    }
+    return {};
+}
+
+inline std::error_code validate_materialized_options(const ArgSchema& schema, const PresenceList& supplied) {
+    if (auto error =
+            validate_required_options(schema, std::span<const unsigned char>{supplied.data(), supplied.size()})) {
+        return error;
+    }
+    return validate_cross_field_constraints(schema, std::span<const unsigned char>{supplied.data(), supplied.size()});
+}
+
+template <typename T>
+std::error_code apply_defaults_into(T& object, const ArgSchema& schema, PresenceList& supplied) {
+    std::size_t spec_index = 0;
+    if (auto error = apply_default_fields(object, schema, spec_index, supplied)) {
+        return error;
+    }
+    if (spec_index != schema.user_spec_count) {
+        return make_argparser_error(ArgParserError::InvalidDefinition, "not all schema fields received defaults");
+    }
+    return {};
+}
+
+template <typename T>
+std::error_code materialize_explicit_options_into(T& object, const ArgSchema& schema, const RawParseResult& raw,
+                                                  const ArgParserConfig& config, PresenceList& supplied) {
+    std::size_t spec_index = 0;
+    if (auto error = materialize_fields(object, schema, raw, config, spec_index, supplied)) {
+        return error;
+    }
+    if (spec_index != schema.user_spec_count) {
+        return make_argparser_error(ArgParserError::InvalidDefinition, "not all schema fields were materialized");
+    }
+    return {};
 }
 
 template <typename T>
@@ -519,18 +681,13 @@ std::error_code materialize_options_into(T& object, const ArgSchema& schema, con
     }
 
     PresenceList supplied(schema.specs.size(), 0);
-    std::size_t spec_index = 0;
-    if (auto error = materialize_fields(object, schema, raw, config, spec_index, supplied)) {
+    if (auto error = apply_defaults_into(object, schema, supplied)) {
         return error;
     }
-    if (spec_index != schema.specs.size()) {
-        return make_argparser_error(ArgParserError::InvalidDefinition, "not all schema fields were materialized");
-    }
-    if (auto error =
-            validate_required_options(schema, std::span<const unsigned char>{supplied.data(), supplied.size()})) {
+    if (auto error = materialize_explicit_options_into(object, schema, raw, config, supplied)) {
         return error;
     }
-    return validate_cross_field_constraints(schema, std::span<const unsigned char>{supplied.data(), supplied.size()});
+    return validate_materialized_options(schema, supplied);
 }
 
 } // namespace argparser::detail

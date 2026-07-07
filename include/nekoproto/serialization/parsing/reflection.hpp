@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 
 NEKO_BEGIN_NAMESPACE
 namespace detail {
@@ -51,6 +52,25 @@ ParserResult parser_write_reflect_fields(W& writer, typename W::OutputObjectType
 template <typename R, typename T>
 ParserResult parser_read_reflect_fields(typename R::InputValueType in, T& value);
 
+template <typename Tags>
+constexpr bool parser_should_ignore_reflect_field(const Tags& tags) {
+    return tag_query::get<tag_property::ignore>(tags);
+}
+
+template <typename T, std::size_t... Is>
+consteval std::size_t parser_reflect_field_count_impl(std::index_sequence<Is...> /*unused*/) {
+    return (std::size_t{0} + ... +
+            (tag_query::get<tag_property::ignore>(std::get<Is>(Reflect<std::decay_t<T>>::field_tags))
+                 ? std::size_t{0}
+                 : std::size_t{1}));
+}
+
+template <typename T>
+consteval std::size_t parser_reflect_field_count() {
+    return parser_reflect_field_count_impl<std::decay_t<T>>(
+        std::make_index_sequence<Reflect<std::decay_t<T>>::value_count>{});
+}
+
 inline void parser_schema_add_required(parsing::schema::Type::Object& object, std::string name) {
     if (std::find(object.required.begin(), object.required.end(), name) == object.required.end()) {
         object.required.push_back(std::move(name));
@@ -59,6 +79,9 @@ inline void parser_schema_add_required(parsing::schema::Type::Object& object, st
 
 template <typename FieldT, typename Tags>
 void parser_schema_add_reflect_field(parsing::schema::Type::Object& object, std::string_view name, const Tags& tags) {
+    if (parser_should_ignore_reflect_field(tags)) {
+        return;
+    }
     auto fieldSchema = parser_schema<std::decay_t<FieldT>>();
     if (tag_query::has<tag_property::fixed_length<void>>(tags)) {
         fieldSchema.fixed_length = tag_query::get<tag_property::fixed_length<std::decay_t<FieldT>>>(tags);
@@ -113,14 +136,17 @@ template <typename T>
 parsing::schema::Type parser_schema_positional_reflection() {
     parsing::schema::Type::Array array;
     Reflect<T>::forEachMeta([&]<typename Field>(std::type_identity<Field>, const auto& tags) {
+        if (parser_should_ignore_reflect_field(tags)) {
+            return;
+        }
         auto fieldSchema = parser_schema<Field>();
         if (tag_query::has<tag_property::fixed_length<void>>(tags)) {
             fieldSchema.fixed_length = tag_query::get<tag_property::fixed_length<std::decay_t<Field>>>(tags);
         }
         array.prefixItems.emplace_back(std::move(fieldSchema));
     });
-    array.minItems        = Reflect<T>::value_count;
-    array.maxItems        = Reflect<T>::value_count;
+    array.minItems        = parser_reflect_field_count<T>();
+    array.maxItems        = parser_reflect_field_count<T>();
     array.additionalItems = false;
     return array;
 }
@@ -129,6 +155,9 @@ template <typename W, typename T, typename Tags>
 ParserResult parser_write_reflect_field(W& writer, typename W::OutputObjectType& object, const T& field,
                                         std::string_view name, const Tags& tags) {
     using FieldType = std::decay_t<T>;
+    if (parser_should_ignore_reflect_field(tags)) {
+        return sa::success();
+    }
     if constexpr (has_values_meta<FieldType> && has_names_meta<FieldType> &&
                   !disable_reflect_parser<FieldType>::value) {
         if (tag_query::get<tag_property::flat<FieldType>>(tags)) {
@@ -167,6 +196,9 @@ template <typename R, typename T, typename Tags>
 ParserResult parser_read_reflect_field(typename R::InputValueType in, T& field, std::string_view name,
                                        const Tags& tags) {
     using FieldType = std::decay_t<T>;
+    if (parser_should_ignore_reflect_field(tags)) {
+        return sa::success();
+    }
     if constexpr (has_values_meta<FieldType> && has_names_meta<FieldType> &&
                   !disable_reflect_parser<FieldType>::value) {
         if (tag_query::get<tag_property::flat<FieldType>>(tags)) {
@@ -236,6 +268,9 @@ struct WriteParser<W, T,
                     Reflect<T>::forEach(
                         value, [&writer, &result](const auto& field, std::string_view name, const auto& tags) {
                             if (result) {
+                                if (parser_should_ignore_reflect_field(tags)) {
+                                    return;
+                                }
                                 result = parser_context(
                                     parser_write<W>(writer, field, typename parsing::Parent<W>::Root{}, tags),
                                     "Failed to write field '" + std::string(name) + "': ");
@@ -244,14 +279,18 @@ struct WriteParser<W, T,
                     return result;
                 }
             }
-            auto object = parsing::Parent<W>::addObject(writer, Reflect<T>::size(), parent, tags);
+            auto object = parsing::Parent<W>::addObject(writer, parser_reflect_field_count<T>(), parent, tags);
             return parser_write_reflect_fields<W>(writer, object, value);
         } else {
-            auto array = parsing::Parent<W>::addArray(writer, Reflect<T>::size(), parent, tags);
+            auto array = parsing::Parent<W>::addArray(writer, parser_reflect_field_count<T>(), parent, tags);
             ParserResult result;
             std::size_t index = 0;
             Reflect<T>::forEach(value, [&writer, &array, &result, &index](auto&& field, const auto& tags) {
                 if (result) {
+                    if (parser_should_ignore_reflect_field(tags)) {
+                        ++index;
+                        return;
+                    }
                     const auto parent = typename parsing::Parent<W>::Array{&array};
                     parser_write_leading_comment(writer, parent, tags);
                     result            = parser_context(parser_write<W>(writer, field, parent, tags),
@@ -281,6 +320,9 @@ struct ReadParser<R, T,
                     Reflect<T>::forEach(
                         value, [&current, &result](auto& field, std::string_view name, const auto& tags) {
                             if (result) {
+                                if (parser_should_ignore_reflect_field(tags)) {
+                                    return;
+                                }
                                 result  = parser_context(parser_read<R>(current, field, tags),
                                                          "Failed to parse field '" + std::string(name) + "': ");
                                 current = R::next(current);
@@ -296,7 +338,7 @@ struct ReadParser<R, T,
                 return array.error();
             }
             const auto actualSize   = R::arraySize(array.value());
-            const auto expectedSize = Reflect<T>::size();
+            const auto expectedSize = parser_reflect_field_count<T>();
             if (actualSize != expectedSize) {
                 return parser_error(sa::ErrorCode::InvalidLength, "Expected reflected array with " +
                                                                       std::to_string(expectedSize) + " elements, got " +
@@ -304,10 +346,16 @@ struct ReadParser<R, T,
             }
             ParserResult result;
             std::size_t index = 0;
-            Reflect<T>::forEach(value, [&array, &result, &index](auto&& field, const auto& tags) {
+            std::size_t elementIndex = 0;
+            Reflect<T>::forEach(value, [&array, &result, &index, &elementIndex](auto&& field, const auto& tags) {
                 if (result) {
-                    result = parser_context(parser_read<R>(R::arrayElement(array.value(), index), field, tags),
+                    if (parser_should_ignore_reflect_field(tags)) {
+                        ++index;
+                        return;
+                    }
+                    result = parser_context(parser_read<R>(R::arrayElement(array.value(), elementIndex), field, tags),
                                             "Failed to parse reflected element " + std::to_string(index) + ": ");
+                    ++elementIndex;
                 }
                 ++index;
             });
