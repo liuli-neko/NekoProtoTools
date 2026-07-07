@@ -44,6 +44,11 @@ function autofunc.auto_add_packages(target, options)
     if has_config("enable_libfyaml") then
         target:add("packages", "libfyaml", {public = true})
     end
+
+    if has_config("enable_tomlplusplus") then
+        target:add("packages", "toml++", {public = true})
+        target:add("defines", "TOML_EXCEPTIONS=0", {public = true})
+    end
     
     if has_config("enable_spdlog") then
         target:add("packages", "spdlog", {public = true})
