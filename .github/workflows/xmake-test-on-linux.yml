@@ -56,7 +56,7 @@ jobs:
     - name: Install lcov
       run: sudo apt install lcov -y
     - name: Configure
-      run: xmake f -m ${{ matrix.mode }} -k ${{ matrix.kind }} --stdcxx=${{ matrix.stdcxx }} --cc=${{ matrix.cc }} --cxx=${{ matrix.cxx }} --enable_simdjson=y --enable_protocol=y --enable_rapidjson=y --enable_communication=y --enable_jsonrpc=y --enable_fmt=y --enable_pugixml=y --enable_tests=y -vy
+      run: xmake f -m ${{ matrix.mode }} -k ${{ matrix.kind }} --stdcxx=${{ matrix.stdcxx }} --cc=${{ matrix.cc }} --cxx=${{ matrix.cxx }} --enable_simdjson=y --enable_protocol=y --enable_rapidjson=y --enable_communication=y --enable_jsonrpc=y --enable_fmt=y --enable_pugixml=y --enable_libfyaml=y --enable_tomlplusplus=y --enable_tests=y -vy
     - name: Update submodules
       run: git submodule update --init --recursive
     - name: Build
