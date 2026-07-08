@@ -1,6 +1,7 @@
 #pragma once
 
 #include "nekoproto/argparser/config.hpp"
+#include "nekoproto/argparser/detail/config_io_registry.hpp"
 #include "nekoproto/argparser/error.hpp"
 #include "nekoproto/argparser/tags.hpp"
 #include "nekoproto/global/global.hpp"
@@ -18,16 +19,6 @@
 
 NEKO_BEGIN_NAMESPACE
 namespace argparser::detail {
-enum class ArgBuiltinSpecKind {
-    None,
-    ImportJson,
-    ExportJson,
-    ImportYaml,
-    ExportYaml,
-    ImportBinary,
-    ExportBinary,
-};
-
 struct ArgSpec {
     std::string long_name;
     std::string short_name;
@@ -60,21 +51,21 @@ struct ArgSpec {
 struct ArgSchema {
     std::vector<ArgSpec> specs;
     std::vector<std::size_t> positional_specs;
-    std::vector<ArgBuiltinSpecKind> builtin_specs;
+    std::vector<std::optional<ConfigIoBuiltinSpec>> builtin_specs;
     std::size_t user_spec_count = 0;
 
     void push_user_spec(ArgSpec spec) {
         specs.push_back(std::move(spec));
-        builtin_specs.push_back(ArgBuiltinSpecKind::None);
+        builtin_specs.push_back(std::nullopt);
     }
 
-    void push_builtin_spec(ArgBuiltinSpecKind kind, ArgSpec spec) {
+    void push_builtin_spec(ConfigIoBuiltinSpec builtin, ArgSpec spec) {
         specs.push_back(std::move(spec));
-        builtin_specs.push_back(kind);
+        builtin_specs.push_back(builtin);
     }
 
-    [[nodiscard]] ArgBuiltinSpecKind builtin_kind(std::size_t index) const {
-        return index < builtin_specs.size() ? builtin_specs[index] : ArgBuiltinSpecKind::None;
+    [[nodiscard]] std::optional<ConfigIoBuiltinSpec> builtin_spec(std::size_t index) const {
+        return index < builtin_specs.size() ? builtin_specs[index] : std::nullopt;
     }
 
     [[nodiscard]] std::optional<std::size_t> find_long_index(std::string_view name) const {
@@ -295,26 +286,6 @@ constexpr bool should_ignore_arg_field(const Tags& tags) {
     return tag_query::get<tag_property::ignore>(tags);
 }
 
-inline constexpr bool argparser_json_config_io_available() {
-    return
-#if defined(NEKO_PROTO_ENABLE_RAPIDJSON) || defined(NEKO_PROTO_ENABLE_SIMDJSON)
-        true;
-#else
-        false;
-#endif
-}
-
-inline constexpr bool argparser_yaml_config_io_available() {
-    return
-#if defined(NEKO_PROTO_ENABLE_LIBFYAML)
-        true;
-#else
-        false;
-#endif
-}
-
-inline constexpr bool argparser_binary_config_io_available() { return true; }
-
 inline ArgSpec make_config_io_spec(std::string_view name, std::string help) {
     ArgSpec spec;
     spec.long_name  = std::string(name);
@@ -336,12 +307,74 @@ inline bool config_io_builtin_name_available(const ArgSchema& schema, std::strin
     return true;
 }
 
-inline void push_config_io_spec_if_available(ArgSchema& schema, ArgBuiltinSpecKind kind, std::string_view name,
+inline void push_config_io_spec_if_available(ArgSchema& schema, ConfigIoBuiltinSpec builtin, std::string_view name,
                                              std::string help) {
     if (!config_io_builtin_name_available(schema, name)) {
         return;
     }
-    schema.push_builtin_spec(kind, make_config_io_spec(name, std::move(help)));
+    schema.push_builtin_spec(builtin, make_config_io_spec(name, std::move(help)));
+}
+
+inline bool config_io_format_registered(std::string_view format) {
+    bool registered = false;
+    for_each_config_io_backend([&]<typename Backend>(std::type_identity<Backend>) {
+        registered = registered || config_io_format_matches<Backend>(format);
+    });
+    return registered;
+}
+
+inline void warn_unknown_config_io_formats(const std::vector<std::string_view>& formats,
+                                           ConfigIoDirection direction) {
+    for (const auto format : formats) {
+        if (!config_io_format_registered(format)) {
+            NEKO_LOG_WARN("argparser", "unknown argparser config {} format '{}' is ignored",
+                          config_io_direction_name(direction), format);
+        }
+    }
+}
+
+template <typename Backend>
+bool config_io_format_enabled(const std::vector<std::string_view>& formats) {
+    return std::any_of(formats.begin(), formats.end(),
+                       [](const auto format) { return config_io_format_matches<Backend>(format); });
+}
+
+template <typename Backend>
+std::string_view config_io_option_name(const ArgParserConfigIoOptions& io, ConfigIoDirection direction) {
+    for (const auto& option_names : io.optionNames) {
+        if (!config_io_format_matches<Backend>(option_names.format)) {
+            continue;
+        }
+        const auto& name = direction == ConfigIoDirection::Import ? option_names.importName : option_names.exportName;
+        if (name.has_value()) {
+            return *name;
+        }
+    }
+    return direction == ConfigIoDirection::Import ? Backend::defaultImportName : Backend::defaultExportName;
+}
+
+template <typename Backend>
+void append_config_io_backend_specs(const ArgParserConfigIoOptions& io, ArgSchema& schema) {
+    if (config_io_format_enabled<Backend>(io.importFormats)) {
+        if constexpr (Backend::available) {
+            push_config_io_spec_if_available(schema, {ConfigIoDirection::Import, Backend::format},
+                                             config_io_option_name<Backend>(io, ConfigIoDirection::Import),
+                                             std::string(Backend::importHelp));
+        } else {
+            NEKO_LOG_WARN("argparser", "{} config import is disabled because the backend is not available",
+                          Backend::label);
+        }
+    }
+    if (config_io_format_enabled<Backend>(io.exportFormats)) {
+        if constexpr (Backend::available) {
+            push_config_io_spec_if_available(schema, {ConfigIoDirection::Export, Backend::format},
+                                             config_io_option_name<Backend>(io, ConfigIoDirection::Export),
+                                             std::string(Backend::exportHelp));
+        } else {
+            NEKO_LOG_WARN("argparser", "{} config export is disabled because the backend is not available",
+                          Backend::label);
+        }
+    }
 }
 
 inline void append_config_io_specs(const ArgParserConfig& config, ArgSchema& schema) {
@@ -349,30 +382,11 @@ inline void append_config_io_specs(const ArgParserConfig& config, ArgSchema& sch
         return;
     }
     const auto& io = *config.configIo;
-    if (io.importJson && argparser_json_config_io_available()) {
-        push_config_io_spec_if_available(schema, ArgBuiltinSpecKind::ImportJson, io.importJsonName,
-                                         "import options from a JSON file");
-    }
-    if (io.exportJson && argparser_json_config_io_available()) {
-        push_config_io_spec_if_available(schema, ArgBuiltinSpecKind::ExportJson, io.exportJsonName,
-                                         "export resolved options to a JSON file");
-    }
-    if (io.importYaml && argparser_yaml_config_io_available()) {
-        push_config_io_spec_if_available(schema, ArgBuiltinSpecKind::ImportYaml, io.importYamlName,
-                                         "import options from a YAML file");
-    }
-    if (io.exportYaml && argparser_yaml_config_io_available()) {
-        push_config_io_spec_if_available(schema, ArgBuiltinSpecKind::ExportYaml, io.exportYamlName,
-                                         "export resolved options to a YAML file");
-    }
-    if (io.importBinary && argparser_binary_config_io_available()) {
-        push_config_io_spec_if_available(schema, ArgBuiltinSpecKind::ImportBinary, io.importBinaryName,
-                                         "import options from a binary file");
-    }
-    if (io.exportBinary && argparser_binary_config_io_available()) {
-        push_config_io_spec_if_available(schema, ArgBuiltinSpecKind::ExportBinary, io.exportBinaryName,
-                                         "export resolved options to a binary file");
-    }
+    warn_unknown_config_io_formats(io.importFormats, ConfigIoDirection::Import);
+    warn_unknown_config_io_formats(io.exportFormats, ConfigIoDirection::Export);
+    for_each_config_io_backend([&]<typename Backend>(std::type_identity<Backend>) {
+        append_config_io_backend_specs<Backend>(io, schema);
+    });
 }
 
 template <typename T>

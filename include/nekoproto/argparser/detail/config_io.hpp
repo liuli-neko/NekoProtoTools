@@ -1,9 +1,11 @@
 #pragma once
 
+#include "nekoproto/argparser/detail/config_io_registry.hpp"
 #include "nekoproto/argparser/detail/raw_parser.hpp"
 #include "nekoproto/argparser/error.hpp"
 #include "nekoproto/serialization/binary_serializer.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
+#include "nekoproto/serialization/toml_serializer.hpp"
 #include "nekoproto/serialization/yaml_serializer.hpp"
 
 #include <fstream>
@@ -19,14 +21,8 @@
 NEKO_BEGIN_NAMESPACE
 namespace argparser::detail {
 
-enum class ConfigIoFormat {
-    Json,
-    Yaml,
-    Binary,
-};
-
 struct ConfigIoFile {
-    ConfigIoFormat format = ConfigIoFormat::Json;
+    std::string_view format = JsonConfigIoBackend::format;
     std::string path;
 };
 
@@ -54,18 +50,6 @@ struct CommandConfig<ArgCommand<Value>> {
         static constexpr auto value = Object("command", &CommandConfig::command); // NOLINT
     };
 };
-
-inline std::string config_io_format_name(ConfigIoFormat format) {
-    switch (format) {
-    case ConfigIoFormat::Json:
-        return "JSON";
-    case ConfigIoFormat::Yaml:
-        return "YAML";
-    case ConfigIoFormat::Binary:
-        return "binary";
-    }
-    return "unknown";
-}
 
 inline std::error_code read_config_file(std::string_view path, std::vector<char>& buffer) {
     std::ifstream file{std::string(path), std::ios::binary};
@@ -135,71 +119,90 @@ std::error_code export_serialized_config(std::string_view path, const T& value, 
 }
 
 template <typename T>
-std::error_code import_config_file(const ConfigIoFile& file, T& value) {
-    switch (file.format) {
-    case ConfigIoFormat::Json:
+struct ConfigIoBackendSerializer;
+
 #if !defined(NEKO_PROTO_NO_JSON_SERIALIZER)
-        return import_serialized_config<JsonSerializer>(file.path, value, "JSON");
-#else
-        return make_argparser_error(ArgParserError::InvalidDefinition, "JSON config import is not available");
+template <>
+struct ConfigIoBackendSerializer<JsonConfigIoBackend> {
+    using type = JsonSerializer;
+};
 #endif
-    case ConfigIoFormat::Yaml:
+
 #if !defined(NEKO_PROTO_NO_YAML_SERIALIZER)
-        return import_serialized_config<YamlSerializer>(file.path, value, "YAML");
-#else
-        return make_argparser_error(ArgParserError::InvalidDefinition, "YAML config import is not available");
+template <>
+struct ConfigIoBackendSerializer<YamlConfigIoBackend> {
+    using type = YamlSerializer;
+};
 #endif
-    case ConfigIoFormat::Binary:
-        return import_serialized_config<BinarySerializer>(file.path, value, "binary");
+
+template <>
+struct ConfigIoBackendSerializer<BinaryConfigIoBackend> {
+    using type = BinarySerializer;
+};
+
+#if !defined(NEKO_PROTO_NO_TOML_SERIALIZER)
+template <>
+struct ConfigIoBackendSerializer<TomlConfigIoBackend> {
+    using type = TomlSerializer;
+};
+#endif
+
+template <typename Backend, typename T>
+std::error_code import_config_file_with_backend(const ConfigIoFile& file, T& value) {
+    if constexpr (Backend::available) {
+        using Serializer = typename ConfigIoBackendSerializer<Backend>::type;
+        return import_serialized_config<Serializer>(file.path, value, Backend::label);
+    } else {
+        return make_argparser_error(ArgParserError::InvalidDefinition,
+                                    std::string(Backend::label) + " config import is not available");
     }
-    return make_argparser_error(ArgParserError::InvalidDefinition, "unknown config import format");
+}
+
+template <typename Backend, typename T>
+std::error_code export_config_file_with_backend(const ConfigIoFile& file, const T& value) {
+    if constexpr (Backend::available) {
+        using Serializer = typename ConfigIoBackendSerializer<Backend>::type;
+        return export_serialized_config<Serializer>(file.path, value, Backend::label);
+    } else {
+        return make_argparser_error(ArgParserError::InvalidDefinition,
+                                    std::string(Backend::label) + " config export is not available");
+    }
+}
+
+template <typename T>
+std::error_code import_config_file(const ConfigIoFile& file, T& value) {
+    std::error_code result;
+    bool matched = false;
+    for_each_config_io_backend([&]<typename Backend>(std::type_identity<Backend>) {
+        if (matched || file.format != Backend::format) {
+            return;
+        }
+        matched = true;
+        result  = import_config_file_with_backend<Backend>(file, value);
+    });
+    if (matched) {
+        return result;
+    }
+    return make_argparser_error(ArgParserError::InvalidDefinition,
+                                "unknown config import format " + std::string(file.format));
 }
 
 template <typename T>
 std::error_code export_config_file(const ConfigIoFile& file, const T& value) {
-    switch (file.format) {
-    case ConfigIoFormat::Json:
-#if !defined(NEKO_PROTO_NO_JSON_SERIALIZER)
-        return export_serialized_config<JsonSerializer>(file.path, value, "JSON");
-#else
-        return make_argparser_error(ArgParserError::InvalidDefinition, "JSON config export is not available");
-#endif
-    case ConfigIoFormat::Yaml:
-#if !defined(NEKO_PROTO_NO_YAML_SERIALIZER)
-        return export_serialized_config<YamlSerializer>(file.path, value, "YAML");
-#else
-        return make_argparser_error(ArgParserError::InvalidDefinition, "YAML config export is not available");
-#endif
-    case ConfigIoFormat::Binary:
-        return export_serialized_config<BinarySerializer>(file.path, value, "binary");
+    std::error_code result;
+    bool matched = false;
+    for_each_config_io_backend([&]<typename Backend>(std::type_identity<Backend>) {
+        if (matched || file.format != Backend::format) {
+            return;
+        }
+        matched = true;
+        result  = export_config_file_with_backend<Backend>(file, value);
+    });
+    if (matched) {
+        return result;
     }
-    return make_argparser_error(ArgParserError::InvalidDefinition, "unknown config export format");
-}
-
-inline std::optional<ConfigIoFormat> import_format_for_builtin(ArgBuiltinSpecKind kind) {
-    switch (kind) {
-    case ArgBuiltinSpecKind::ImportJson:
-        return ConfigIoFormat::Json;
-    case ArgBuiltinSpecKind::ImportYaml:
-        return ConfigIoFormat::Yaml;
-    case ArgBuiltinSpecKind::ImportBinary:
-        return ConfigIoFormat::Binary;
-    default:
-        return std::nullopt;
-    }
-}
-
-inline std::optional<ConfigIoFormat> export_format_for_builtin(ArgBuiltinSpecKind kind) {
-    switch (kind) {
-    case ArgBuiltinSpecKind::ExportJson:
-        return ConfigIoFormat::Json;
-    case ArgBuiltinSpecKind::ExportYaml:
-        return ConfigIoFormat::Yaml;
-    case ArgBuiltinSpecKind::ExportBinary:
-        return ConfigIoFormat::Binary;
-    default:
-        return std::nullopt;
-    }
+    return make_argparser_error(ArgParserError::InvalidDefinition,
+                                "unknown config export format " + std::string(file.format));
 }
 
 inline std::error_code collect_config_io_selection(const ArgSchema& schema, const RawParseResult& raw,
@@ -213,15 +216,18 @@ inline std::error_code collect_config_io_selection(const ArgSchema& schema, cons
             return make_argparser_error(ArgParserError::InvalidValue,
                                         format_error_option_label(schema.specs[index]) + " expects exactly one path");
         }
-        const auto kind = schema.builtin_kind(index);
-        if (auto format = import_format_for_builtin(kind); format.has_value()) {
+        const auto builtin = schema.builtin_spec(index);
+        if (!builtin.has_value()) {
+            continue;
+        }
+        if (builtin->direction == ConfigIoDirection::Import) {
             if (selection.import_file.has_value()) {
                 return make_argparser_error(ArgParserError::InvalidValue,
                                             "only one config import option can be used at a time");
             }
-            selection.import_file = ConfigIoFile{*format, std::string(values.front())};
-        } else if (auto export_format = export_format_for_builtin(kind); export_format.has_value()) {
-            selection.export_files.push_back(ConfigIoFile{*export_format, std::string(values.front())});
+            selection.import_file = ConfigIoFile{builtin->format, std::string(values.front())};
+        } else {
+            selection.export_files.push_back(ConfigIoFile{builtin->format, std::string(values.front())});
         }
     }
     return {};
