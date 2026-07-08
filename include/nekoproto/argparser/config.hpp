@@ -5,24 +5,29 @@
 #include <functional>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 NEKO_BEGIN_NAMESPACE
 namespace argparser {
 
-struct ArgParserConfigIoOptions {
-    bool importJson   = false;
-    bool exportJson   = false;
-    bool importYaml   = false;
-    bool exportYaml   = false;
-    bool importBinary = false;
-    bool exportBinary = false;
+struct ArgParserConfigIoOptionNames {
+    std::string_view format;
+    std::optional<std::string_view> importName;
+    std::optional<std::string_view> exportName;
+};
 
-    std::string_view importJsonName   = "import-json";
-    std::string_view exportJsonName   = "export-json";
-    std::string_view importYamlName   = "import-yaml";
-    std::string_view exportYamlName   = "export-yaml";
-    std::string_view importBinaryName = "import-binary";
-    std::string_view exportBinaryName = "export-binary";
+struct ArgParserConfigIoOptions {
+    std::vector<std::string_view> importFormats;
+    std::vector<std::string_view> exportFormats;
+    std::vector<ArgParserConfigIoOptionNames> optionNames;
+
+    void enableImportFormat(std::string_view format) { importFormats.push_back(format); }
+    void enableExportFormat(std::string_view format) { exportFormats.push_back(format); }
+
+    void enableFormat(std::string_view format) {
+        enableImportFormat(format);
+        enableExportFormat(format);
+    }
 };
 
 struct ArgParserConfig {

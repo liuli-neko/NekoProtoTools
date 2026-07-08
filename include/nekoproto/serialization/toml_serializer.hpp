@@ -47,7 +47,64 @@ inline std::string toml_parse_error_message(const toml::parse_error& error) {
     stream << error;
     return stream.str();
 }
+
+inline std::string remove_blank_toml_lines(std::string_view toml) {
+    std::string result;
+    result.reserve(toml.size());
+
+    std::size_t lineBegin = 0;
+    while (lineBegin < toml.size()) {
+        auto lineEnd = toml.find('\n', lineBegin);
+        if (lineEnd == std::string_view::npos) {
+            lineEnd = toml.size();
+        }
+
+        bool hasContent = false;
+        for (std::size_t index = lineBegin; index < lineEnd; ++index) {
+            if (toml[index] != ' ' && toml[index] != '\t' && toml[index] != '\r') {
+                hasContent = true;
+                break;
+            }
+        }
+
+        if (hasContent) {
+            result.append(toml.substr(lineBegin, lineEnd - lineBegin));
+            if (lineEnd < toml.size()) {
+                result.push_back('\n');
+            }
+        }
+
+        lineBegin = lineEnd + 1;
+    }
+
+    return result;
+}
 } // namespace detail
+
+struct TomlOutputFormatOptions {
+    using FormatOptions = toml::format_flags;
+
+    static constexpr FormatOptions CompactFlags() noexcept { // NOLINT(readability-identifier-naming)
+        return toml::format_flags::allow_literal_strings | toml::format_flags::allow_unicode_strings |
+               toml::format_flags::allow_real_tabs_in_strings | toml::format_flags::allow_binary_integers |
+               toml::format_flags::allow_octal_integers | toml::format_flags::allow_hexadecimal_integers |
+               toml::format_flags::terse_key_value_pairs;
+    }
+
+    static TomlOutputFormatOptions Compact() { // NOLINT(readability-identifier-naming)
+        return TomlOutputFormatOptions(CompactFlags(), true);
+    }
+
+    static TomlOutputFormatOptions Pretty() { // NOLINT(readability-identifier-naming)
+        return TomlOutputFormatOptions(toml::toml_formatter::default_flags, false);
+    }
+
+    explicit TomlOutputFormatOptions(FormatOptions flags = CompactFlags(), bool stripBlankLines = true) noexcept
+        : flags(flags), stripBlankLines(stripBlankLines) {}
+
+    FormatOptions flags = CompactFlags();
+    bool stripBlankLines = true;
+};
 
 struct TomlplusplusBackend {
     using Reader              = tomlplusplus::Reader;
@@ -59,9 +116,13 @@ struct TomlplusplusBackend {
     struct OutputState {
         explicit OutputState(BufferT& outputBuffer) : buffer(outputBuffer), writer(&document) {}
 
+        OutputState(BufferT& outputBuffer, const TomlOutputFormatOptions& formatOptions)
+            : buffer(outputBuffer), writer(&document), options(formatOptions) {}
+
         BufferT& buffer;
         toml::table document;
         tomlplusplus::Writer writer;
+        TomlOutputFormatOptions options;
         bool hasRoot = false;
         bool flushed = false;
     };
@@ -124,8 +185,11 @@ struct TomlplusplusBackend {
         }
         if (!state.flushed) {
             std::ostringstream stream;
-            stream << state.document;
-            const auto output = stream.str();
+            stream << toml::toml_formatter{state.document, state.options.flags};
+            auto output = stream.str();
+            if (state.options.stripBlankLines) {
+                output = detail::remove_blank_toml_lines(output);
+            }
             detail::append_toml(state.buffer, output);
             state.flushed = true;
         }

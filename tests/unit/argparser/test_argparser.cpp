@@ -872,8 +872,7 @@ TEST(ArgParser, JsonConfigImportUsesExpectedPriorityAndExportsResolvedOptions) {
     set_test_env("NEKO_ARGPARSER_CONFIG_IO_OUTPUT", "from-env");
 
     auto config = config_io_parser_config();
-    config.configIo->importJson = true;
-    config.configIo->exportJson = true;
+    config.configIo->enableFormat("json");
     const auto import_arg       = import_path.string();
     const auto export_arg       = export_path.string();
     const char* argv[]          = {"demo", "--import-json", import_arg.c_str(), "--count", "5",
@@ -908,8 +907,7 @@ TEST(ArgParser, CommandConfigJsonImportExportsCommandWrapper) {
     write_serialized_config<JsonSerializer>(import_path, imported);
 
     auto config = config_io_parser_config();
-    config.configIo->importJson = true;
-    config.configIo->exportJson = true;
+    config.configIo->enableFormat("json");
     const auto import_arg       = import_path.string();
     const auto export_arg       = export_path.string();
     const char* argv[]          = {"tool", "--import-json", import_arg.c_str(), "--export-json", export_arg.c_str(),
@@ -943,7 +941,7 @@ TEST(ArgParser, PlaceholderCommandJsonExportOmitsParams) {
     auto export_path = argparser_config_io_path("neko_argparser_clean_command_export.json");
 
     auto config = config_io_parser_config();
-    config.configIo->exportJson = true;
+    config.configIo->enableExportFormat("json");
     const auto export_arg       = export_path.string();
     const char* argv[]          = {"tool", "--export-json", export_arg.c_str(), "clean"};
 
@@ -974,8 +972,7 @@ TEST(ArgParser, YamlConfigImportAndExport) {
     write_serialized_config<YamlSerializer>(import_path, imported);
 
     auto config = config_io_parser_config();
-    config.configIo->importYaml = true;
-    config.configIo->exportYaml = true;
+    config.configIo->enableFormat("yaml");
     const auto import_arg       = import_path.string();
     const auto export_arg       = export_path.string();
     const char* argv[]          = {"demo", "--import-yaml", import_arg.c_str(), "--export-yaml", export_arg.c_str()};
@@ -997,6 +994,43 @@ TEST(ArgParser, YamlConfigImportAndExport) {
 }
 #endif
 
+#if !defined(NEKO_PROTO_NO_TOML_SERIALIZER)
+TEST(ArgParser, TomlConfigImportAndExport) {
+    set_test_env("NEKO_ARGPARSER_CONFIG_IO_OUTPUT", nullptr);
+    auto import_path = argparser_config_io_path("neko_argparser_import.toml");
+    auto export_path = argparser_config_io_path("neko_argparser_export.toml");
+
+    ConfigIoOptions imported;
+    imported.count  = 7;
+    imported.output = "toml-file";
+    imported.token  = "toml-token";
+    imported.mode   = BuildMode::Release;
+    write_serialized_config<TomlSerializer>(import_path, imported);
+
+    auto config = config_io_parser_config();
+    config.configIo->enableFormat("toml");
+    const auto import_arg = import_path.string();
+    const auto export_arg = export_path.string();
+    const char* argv[]    = {"demo", "--import-toml", import_arg.c_str(), "--export-toml", export_arg.c_str()};
+
+    auto result = parser<ConfigIoOptions>(static_cast<int>(std::size(argv)), argv, config);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    EXPECT_EQ(result->count, 7);
+    EXPECT_EQ(result->output, "toml-file");
+    ASSERT_TRUE(result->token.has_value());
+    EXPECT_EQ(*result->token, "toml-token");
+    EXPECT_EQ(result->mode, BuildMode::Release);
+
+    auto exported = read_serialized_config<TomlSerializer, ConfigIoOptions>(export_path);
+    EXPECT_EQ(exported.count, 7);
+    EXPECT_EQ(exported.output, "toml-file");
+    ASSERT_TRUE(exported.token.has_value());
+    EXPECT_EQ(*exported.token, "toml-token");
+    EXPECT_EQ(exported.mode, BuildMode::Release);
+}
+#endif
+
 TEST(ArgParser, BinaryConfigImportAndExport) {
     set_test_env("NEKO_ARGPARSER_CONFIG_IO_OUTPUT", nullptr);
     auto import_path = argparser_config_io_path("neko_argparser_import.bin");
@@ -1010,8 +1044,7 @@ TEST(ArgParser, BinaryConfigImportAndExport) {
     write_serialized_config<BinarySerializer>(import_path, imported);
 
     auto config = config_io_parser_config();
-    config.configIo->importBinary = true;
-    config.configIo->exportBinary = true;
+    config.configIo->enableFormat("bin");
     const auto import_arg         = import_path.string();
     const auto export_arg         = export_path.string();
     const char* argv[]            = {"demo", "--import-binary", import_arg.c_str(), "--export-binary",
@@ -1061,7 +1094,7 @@ TEST(ArgParser, CommandConfigExportCanAppearAfterCommandOptionsAndPositionals) {
     auto export_path = argparser_config_io_path("neko_argparser_command_after_options_export.bin");
 
     auto config = config_io_parser_config();
-    config.configIo->exportBinary = true;
+    config.configIo->enableExportFormat("binary");
     const auto export_arg         = export_path.string();
     const char* argv[]            = {"tool", "serve", "--count", "8", "app", "--export-binary",
                                      export_arg.c_str()};
@@ -1093,7 +1126,7 @@ TEST(ArgParser, ImportedFalseBooleanDoesNotTriggerConflicts) {
     write_serialized_config<BinarySerializer>(import_path, imported);
 
     auto config = config_io_parser_config();
-    config.configIo->importBinary = true;
+    config.configIo->enableImportFormat("binary");
     const auto import_arg         = import_path.string();
     const char* argv[]            = {"demo", "--import-binary", import_arg.c_str()};
 
@@ -1120,9 +1153,9 @@ struct BuiltinConflictOptions {
 
 TEST(ArgParser, BuiltinConfigOptionNamesYieldToUserOptions) {
     auto config = config_io_parser_config();
-    config.configIo->importJson = true;
-    config.configIo->importBinary = true;
-    config.configIo->importBinaryName = "import-json";
+    config.configIo->enableImportFormat("json");
+    config.configIo->enableImportFormat("binary");
+    config.configIo->optionNames.push_back({"binary", "import-json", std::nullopt});
 
     const char* argv[] = {"demo", "--import-json", "user-value"};
     auto result        = parser<BuiltinConflictOptions>(static_cast<int>(std::size(argv)), argv, config);
