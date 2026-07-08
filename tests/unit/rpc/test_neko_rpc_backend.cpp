@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -69,6 +70,20 @@ static_assert(!BackendSerializable<BinaryRpcBackend, UnsupportedBinaryRpcValue>)
 auto contains(const std::vector<std::string>& values, std::string_view expected) -> bool {
     return std::any_of(values.begin(), values.end(),
                        [expected](const std::string& value) { return value == expected; });
+}
+
+auto add_metadata(std::string signature) -> detail::RpcMethodMetadata {
+    return {.name = "add",
+            .signature = std::move(signature),
+            .description = {},
+            .rpcVersion = {},
+            .argNames = {"a", "b"},
+            .isNotification = false,
+            .isBind = true};
+}
+
+auto method_entries(const rpc::NekoRpcMethodIdTable& table) -> std::vector<rpc::NekoRpcMethodEntry> {
+    return {table.entries().begin(), table.entries().end()};
 }
 
 template <typename Server, typename Client>
@@ -303,6 +318,86 @@ TEST(NekoRpcBackend, MethodIdDeltaRoundTripsTableUpdates) {
     EXPECT_EQ(sinkResolved.status, rpc::NekoRpcMethodIdResolveStatus::MethodRemoved);
 }
 
+TEST(NekoRpcBackend, MethodIdErrorResponseCarriesRefreshTableWithinBudget) {
+    BinaryRpcBackend::Options options;
+    options.method_id = BinaryRpcBackend::MethodIdMode::Auto;
+
+    std::vector<detail::RpcMethodMetadata> methods{add_metadata("i32 add(i32 a, i32 b)")};
+    auto serverContext = BinaryRpcBackend::makeServerContext(options, methods);
+    auto serverSession = BinaryRpcBackend::makeServerPeerSession(serverContext);
+    serverSession.method_id_enabled = true;
+
+    auto clientContext = BinaryRpcBackend::makeClientContext(options);
+    auto clientSession = BinaryRpcBackend::makeClientPeerSession(clientContext);
+    clientSession.method_id_enabled = true;
+    clientSession.remote_method_table.reset(method_entries(serverContext.method_table),
+                                            serverContext.method_table.version());
+
+    BinaryRpcTestApi api;
+    api.add.setRemoteName("add");
+    auto request = BinaryRpcBackend::encodeRequest(clientContext, clientSession, api.add, false, 4, 2);
+    ASSERT_TRUE(request.has_value()) << request.error().message();
+
+    methods = {add_metadata("i32 add(i32 lhs, i32 rhs)")};
+    BinaryRpcBackend::refreshMethodCatalog(serverContext, methods);
+
+    auto decoded = BinaryRpcBackend::decodeIncoming(serverContext, serverSession, asBytes(request.value().message));
+    ASSERT_TRUE(decoded.ok);
+    ASSERT_TRUE(decoded.requests.empty());
+    ASSERT_EQ(decoded.responses.size(), 1U);
+
+    auto response = BinaryRpcBackend::encodeResponses(serverContext, serverSession, decoded.responses, false);
+    BinaryRpcBackend::Codec::FrameParts parts;
+    ASSERT_TRUE(BinaryRpcBackend::Codec::parseFrame(asBytes(response), 0, parts));
+    ASSERT_NE((parts.header.flags & BinaryRpcBackend::Flag::Error), 0);
+    EXPECT_TRUE(parts.extensions.contains(rpc::NekoRpcExtensionType::MethodTable));
+
+    auto failed =
+        BinaryRpcBackend::decodeResponse<decltype(api.add)>(clientContext, clientSession, asBytes(response),
+                                                            request.value().id);
+    ASSERT_FALSE(failed.has_value());
+    EXPECT_EQ(failed.error(), make_error_code(RpcError::MethodIdRemoved));
+    EXPECT_EQ(clientSession.remote_method_table.version(), serverContext.method_table.version());
+    const auto* refreshed = clientSession.remote_method_table.findByName("add");
+    ASSERT_NE(refreshed, nullptr);
+    EXPECT_EQ(refreshed->id, 1U);
+}
+
+TEST(NekoRpcBackend, MethodIdErrorResponseOmitsRefreshTableOverBudget) {
+    BinaryRpcBackend::Options options;
+    options.method_id                             = BinaryRpcBackend::MethodIdMode::Auto;
+    options.max_auto_method_table_extension_bytes = 60;
+
+    std::vector<detail::RpcMethodMetadata> methods{add_metadata("i32 add(i32 a, i32 b)")};
+    auto serverContext = BinaryRpcBackend::makeServerContext(options, methods);
+    auto serverSession = BinaryRpcBackend::makeServerPeerSession(serverContext);
+    serverSession.method_id_enabled = true;
+
+    auto clientContext = BinaryRpcBackend::makeClientContext(options);
+    auto clientSession = BinaryRpcBackend::makeClientPeerSession(clientContext);
+    clientSession.method_id_enabled = true;
+    clientSession.remote_method_table.reset(method_entries(serverContext.method_table),
+                                            serverContext.method_table.version());
+
+    BinaryRpcTestApi api;
+    api.add.setRemoteName("add");
+    auto request = BinaryRpcBackend::encodeRequest(clientContext, clientSession, api.add, false, 4, 2);
+    ASSERT_TRUE(request.has_value()) << request.error().message();
+
+    methods = {add_metadata("i32 add(i32 lhs, i32 rhs)")};
+    BinaryRpcBackend::refreshMethodCatalog(serverContext, methods);
+
+    auto decoded = BinaryRpcBackend::decodeIncoming(serverContext, serverSession, asBytes(request.value().message));
+    ASSERT_TRUE(decoded.ok);
+    ASSERT_EQ(decoded.responses.size(), 1U);
+
+    auto response = BinaryRpcBackend::encodeResponses(serverContext, serverSession, decoded.responses, false);
+    BinaryRpcBackend::Codec::FrameParts parts;
+    ASSERT_TRUE(BinaryRpcBackend::Codec::parseFrame(asBytes(response), 0, parts));
+    EXPECT_FALSE(parts.extensions.contains(rpc::NekoRpcExtensionType::MethodTable));
+    EXPECT_TRUE(parts.extensions.contains(rpc::NekoRpcExtensionType::MethodTableVersion));
+}
+
 TEST(NekoRpcBackend, CompressionExtensionsRoundTripNegotiationContext) {
     auto algorithmValue = rpc::NekoRpcExtensionCodec::enumValue(rpc::NekoRpcCompressionAlgorithm::RunLength);
     auto minSizeValue   = rpc::NekoRpcExtensionCodec::integerValue<std::uint32_t>(256);
@@ -429,11 +524,12 @@ TEST(NekoRpcBackend, MethodIdTableRefreshAddsMethodWithinConnection) {
     server.close();
 }
 
-TEST(NekoRpcBackend, MethodIdErrorIsReturnedWithoutTransparentRetry) {
+TEST(NekoRpcBackend, MethodIdErrorCanBeReturnedWhenClientRecoveryIsDisabled) {
     ilias::PlatformContext context;
     context.install();
     BinaryRpcBackend::Options options;
     options.method_id = BinaryRpcBackend::MethodIdMode::Auto;
+    options.retry_method_id_error_once = false;
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
 
@@ -457,6 +553,38 @@ TEST(NekoRpcBackend, MethodIdErrorIsReturnedWithoutTransparentRetry) {
     auto fallback = client->add(4, 2).wait();
     ASSERT_TRUE(fallback.has_value()) << fallback.error().message();
     EXPECT_EQ(fallback.value(), 42);
+
+    client.close();
+    server.close();
+}
+
+TEST(NekoRpcBackend, MethodIdErrorRefreshesTableAndRetriesOnceOnClient) {
+    ilias::PlatformContext context;
+    context.install();
+    BinaryRpcBackend::Options options;
+    options.method_id = BinaryRpcBackend::MethodIdMode::Auto;
+    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
+    RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
+
+    server->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; };
+
+    connect_endpoint(server, client);
+
+    auto first = client->add(1, 2).wait();
+    ASSERT_TRUE(first.has_value()) << first.error().message();
+    EXPECT_EQ(first.value(), 3);
+
+    int rebound_calls = 0;
+    server.bindMethod<"lhs", "rhs">("add", traits::FunctionT<ilias::IoTask<int>(int, int)>(
+                                               [&rebound_calls](int lhs, int rhs) -> ilias::IoTask<int> {
+                                                   ++rebound_calls;
+                                                   co_return lhs * 10 + rhs;
+                                               }));
+
+    auto recovered = client->add(4, 2).wait();
+    ASSERT_TRUE(recovered.has_value()) << recovered.error().message();
+    EXPECT_EQ(recovered.value(), 42);
+    EXPECT_EQ(rebound_calls, 1);
 
     client.close();
     server.close();

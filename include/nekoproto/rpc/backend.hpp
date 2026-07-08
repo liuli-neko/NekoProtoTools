@@ -54,6 +54,9 @@ struct NekoRpcBackend {
     using Header             = typename Codec::Header;
     using DecodedRequest     = typename Codec::DecodedRequest;
     using WireResponseValues = typename Codec::ResponseValuesType;
+    using Extension          = typename Codec::ExtensionType;
+    using ExtensionMap       = typename Codec::ExtensionMapType;
+    using ExtensionStore     = std::map<Extension, Message>;
 
     using MethodIdMode         = rpc::NekoRpcFeatureMode;
     using CompressionMode      = rpc::NekoRpcFeatureMode;
@@ -63,6 +66,9 @@ struct NekoRpcBackend {
         MethodIdMode method_id                     = MethodIdMode::Auto;
         CompressionMode compression                = CompressionMode::Disable;
         std::uint32_t compression_min_payload_size = 64;
+        bool retry_method_id_error_once            = true;
+        std::size_t max_auto_method_table_extension_bytes =
+            Codec::MaxExtensionBytes;
         std::shared_ptr<CompressionStats> compression_stats;
     };
 
@@ -74,6 +80,7 @@ struct NekoRpcBackend {
     struct ResponseValue {
         Header header;
         Message method;
+        ExtensionStore extensions;
         Message payload;
     };
 
@@ -208,7 +215,8 @@ public:
         auto method_name = rpc::NekoRpcIncomingMethodName<NekoRpcBackend>(context, session, parts);
         if (!method_name) {
             result.ok = true;
-            _appendFrameError(result.responses, parts, method_name.error());
+            _appendFrameError(result.responses, parts, method_name.error(),
+                              _methodIdErrorResponseExtensions(context, session, method_name.error()));
             return result;
         }
         if (method_name.value().empty()) {
@@ -429,10 +437,13 @@ public:
             }
             auto ec = std::error_code(error.code, RpcErrorCategory::instance());
             if (_isMethodIdError(ec)) {
-                NEKO_LOG_WARN("rpc", "rpc backend method-id response error: id={} error=\"{}\" disable_remote_table",
-                              parts.header.id, ec.message());
-                session.method_id_enabled = false;
-                session.remote_method_table.reset();
+                const bool updated = _applyMethodIdTableExtensions(session, parts.extensions);
+                NEKO_LOG_WARN("rpc", "rpc backend method-id response error: id={} error=\"{}\" table_updated={}",
+                              parts.header.id, ec.message(), updated);
+                if (!updated) {
+                    session.method_id_enabled = false;
+                    session.remote_method_table.reset();
+                }
             }
             return ilias::Err(ec);
         }
@@ -448,6 +459,29 @@ public:
                            payload_view.size());
             return value;
         }
+    }
+
+    template <typename Endpoint>
+    static auto recoverClientCall(ClientContext& context, PeerSession& session, Endpoint& endpoint,
+                                  std::error_code error, std::size_t retry_count) -> ilias::IoTask<bool> {
+        (void)endpoint;
+        if (!context.options.retry_method_id_error_once || retry_count != 0U ||
+            !feature_enabled(context.options.method_id) || !_isMethodIdError(error)) {
+            co_return false;
+        }
+
+        if (!session.method_id_enabled || session.remote_method_table.empty()) {
+            // No table arrived in the error response, usually because the table
+            // exceeded the automatic extension budget. The next loop actively
+            // sends Hello to refresh the peer session before replaying once.
+            session.handshake_done = false;
+            NEKO_LOG_INFO("rpc", "rpc backend method-id recovery: error=\"{}\" active_refresh retry=1",
+                          error.message());
+        } else {
+            NEKO_LOG_INFO("rpc", "rpc backend method-id recovery: error=\"{}\" response_table retry=1",
+                          error.message());
+        }
+        co_return true;
     }
 
     static std::error_code clientNotInitError() { return RpcError::ClientNotInit; }
@@ -551,10 +585,7 @@ public:
     }
 
 private:
-    using FrameParts     = typename Codec::FrameParts;
-    using Extension      = typename Codec::ExtensionType;
-    using ExtensionMap   = typename Codec::ExtensionMapType;
-    using ExtensionStore = std::map<Extension, Message>;
+    using FrameParts = typename Codec::FrameParts;
 
     static auto _extensionViews(const ExtensionStore& extensions) -> ExtensionMap {
         ExtensionMap views;
@@ -578,12 +609,132 @@ private:
 
     static constexpr bool feature_enabled(MethodIdMode mode) noexcept { return mode != MethodIdMode::Disable; }
 
-    static auto _makeResponse(Id id, Message payload, std::uint8_t flags) -> ResponseValue {
-        Header header{.kind = Kind::Response, .flags = flags, .codec = CodecId, .id = id};
-        return ResponseValue{.header = header, .method = {}, .payload = std::move(payload)};
+    static auto _extensionWireSize(const ExtensionStore& extensions) -> std::optional<std::size_t> {
+        std::size_t size = 0;
+        for (const auto& [type, value] : extensions) {
+            (void)type;
+            if (value.size() > std::numeric_limits<std::uint16_t>::max() ||
+                size > Codec::MaxExtensionBytes - 4U ||
+                size + 4U > Codec::MaxExtensionBytes - value.size()) {
+                return std::nullopt;
+            }
+            size += 4U + value.size();
+        }
+        return size;
     }
 
-    static auto _makeErrorResponse(Id id, std::error_code error) -> ResponseValue {
+    static bool _extensionsFitAutoBudget(const Options& options, const ExtensionStore& extensions) {
+        const auto size = _extensionWireSize(extensions);
+        return size && *size <= std::min(options.max_auto_method_table_extension_bytes, Codec::MaxExtensionBytes);
+    }
+
+    static auto _methodIdTableExtensions(const ServerContext& context, bool include_table) -> ExtensionStore {
+        ExtensionStore extensions;
+        extensions[Extension::MethodId] = {};
+        extensions[Extension::MethodTableVersion] =
+            rpc::NekoRpcExtensionCodec::integerValue(context.method_table.version());
+        extensions[Extension::MethodMinimumCompatibleVersion] =
+            rpc::NekoRpcExtensionCodec::integerValue(context.method_table.minimumCompatibleVersion());
+        if (include_table) {
+            extensions[Extension::MethodTable] =
+                rpc::NekoRpcMethodIdExtension::methodTableValue(context.method_table.entries());
+        }
+        return extensions;
+    }
+
+    static auto _methodIdErrorResponseExtensions(const ServerContext& context, const PeerSession& session,
+                                                 std::error_code error) -> ExtensionStore {
+        if (!session.method_id_enabled || !_isMethodIdError(error) || context.method_table.empty() ||
+            context.options.max_auto_method_table_extension_bytes == 0U) {
+            return {};
+        }
+
+        // Method-id resolution failed before dispatcher invocation, so this
+        // error response is allowed to carry recovery metadata. Keep it bounded:
+        // small tables ride the failed response, large tables force the client
+        // into an explicit refresh path instead of surprise multi-frame pushes.
+        auto extensions = _methodIdTableExtensions(context, true);
+        if (_extensionsFitAutoBudget(context.options, extensions)) {
+            NEKO_LOG_INFO("rpc", "rpc backend method-id error response carries table: version={} entries={}",
+                          context.method_table.version(), context.method_table.entries().size());
+            return extensions;
+        }
+
+        auto hint = _methodIdTableExtensions(context, false);
+        if (_extensionsFitAutoBudget(context.options, hint)) {
+            NEKO_LOG_INFO("rpc",
+                          "rpc backend method-id error response omits oversized table: version={} entries={}",
+                          context.method_table.version(), context.method_table.entries().size());
+            return hint;
+        }
+
+        NEKO_LOG_INFO("rpc", "rpc backend method-id error response omits table hint: version={} entries={}",
+                      context.method_table.version(), context.method_table.entries().size());
+        return {};
+    }
+
+    static auto _appendMethodIdHelloExtensions(const ServerContext& context, ExtensionStore& extensions) -> void {
+        // Client Hello is also an explicit request for negotiated extension
+        // state. Send the table immediately when it fits the same automatic
+        // budget; otherwise only acknowledge the feature/version and let a
+        // future explicit refresh transfer the larger data.
+        auto table = _methodIdTableExtensions(context, true);
+        if (_extensionsFitAutoBudget(context.options, table)) {
+            extensions.insert(table.begin(), table.end());
+            return;
+        }
+
+        auto hint = _methodIdTableExtensions(context, false);
+        if (_extensionsFitAutoBudget(context.options, hint)) {
+            NEKO_LOG_INFO("rpc", "rpc backend server hello omits oversized method table: version={} entries={}",
+                          context.method_table.version(), context.method_table.entries().size());
+            extensions.insert(hint.begin(), hint.end());
+        }
+    }
+
+    static bool _applyMethodIdTableExtensions(PeerSession& session, const ExtensionMap& extensions) {
+        if (!extensions.contains(Extension::MethodTable) && !extensions.contains(Extension::MethodTableDelta)) {
+            return false;
+        }
+
+        // The receiver treats method table TLVs as a peer-session update. The
+        // response error still propagates to policy code; this only refreshes
+        // the state a retry would use.
+        std::uint64_t version = 0;
+        if (!rpc::NekoRpcExtensionCodec::readIntegerTlv(extensions, Extension::MethodTableVersion, version)) {
+            return false;
+        }
+
+        std::vector<rpc::NekoRpcMethodEntry> entries;
+        bool applied = false;
+        if (rpc::NekoRpcMethodIdExtension::parseMethodTable(extensions, entries)) {
+            applied = session.remote_method_table.applyRemoteTable(std::move(entries), version);
+        } else if (rpc::NekoRpcMethodIdExtension::parseMethodTableDelta(extensions, entries)) {
+            applied = session.remote_method_table.applyRemoteDelta(entries, version);
+        }
+        if (!applied) {
+            return false;
+        }
+
+        std::uint64_t minimum_version = 0;
+        if (rpc::NekoRpcExtensionCodec::readIntegerTlv(extensions, Extension::MethodMinimumCompatibleVersion,
+                                                       minimum_version)) {
+            session.remote_method_table.setMinimumCompatibleVersion(minimum_version);
+        }
+        session.method_id_enabled = true;
+        return true;
+    }
+
+    static auto _makeResponse(Id id, Message payload, std::uint8_t flags, ExtensionStore extensions = {})
+        -> ResponseValue {
+        Header header{.kind = Kind::Response, .flags = flags, .codec = CodecId, .id = id};
+        return ResponseValue{.header = header,
+                             .method = {},
+                             .extensions = std::move(extensions),
+                             .payload = std::move(payload)};
+    }
+
+    static auto _makeErrorResponse(Id id, std::error_code error, ExtensionStore extensions = {}) -> ResponseValue {
         const rpc::NekoRpcError rpc_error{
             .code    = static_cast<std::int32_t>(error.value()),
             .message = error.message(),
@@ -591,16 +742,16 @@ private:
         };
         auto payload = _encodePayload(rpc_error);
         if (!payload) {
-            return _makeResponse(id, {}, Flag::Error);
+            return _makeResponse(id, {}, Flag::Error, std::move(extensions));
         }
-        return _makeResponse(id, std::move(payload.value()), Flag::Error);
+        return _makeResponse(id, std::move(payload.value()), Flag::Error, std::move(extensions));
     }
 
     static auto _encodeResponseFrame(const ResponseValue& response) -> Message {
         return Codec::encodeFrame({
             .header     = response.header,
             .method     = rpc::NekoRpcExtensionCodec::asBytes(response.method),
-            .extensions = {},
+            .extensions = _extensionViews(response.extensions),
             .payload    = rpc::NekoRpcExtensionCodec::asBytes(response.payload),
         });
     }
@@ -612,7 +763,7 @@ private:
             {
                 .header     = response.header,
                 .method     = rpc::NekoRpcExtensionCodec::asBytes(response.method),
-                .extensions = {},
+                .extensions = _extensionViews(response.extensions),
                 .payload    = rpc::NekoRpcExtensionCodec::asBytes(response.payload),
             });
     }
@@ -651,9 +802,10 @@ private:
         return in(value);
     }
 
-    static auto _appendFrameError(ResponseValues& responses, const FrameParts& parts, std::error_code error) -> void {
+    static auto _appendFrameError(ResponseValues& responses, const FrameParts& parts, std::error_code error,
+                                  ExtensionStore extensions = {}) -> void {
         if (parts.header.kind == Kind::Request) {
-            responses.emplace_back(_makeErrorResponse(parts.header.id, error));
+            responses.emplace_back(_makeErrorResponse(parts.header.id, error, std::move(extensions)));
         }
     }
 
@@ -702,13 +854,7 @@ private:
 
         ExtensionStore extensions;
         if (session.method_id_enabled) {
-            extensions[Extension::MethodId] = {};
-            extensions[Extension::MethodTableVersion] =
-                rpc::NekoRpcExtensionCodec::integerValue(context.method_table.version());
-            extensions[Extension::MethodMinimumCompatibleVersion] =
-                rpc::NekoRpcExtensionCodec::integerValue(context.method_table.minimumCompatibleVersion());
-            extensions[Extension::MethodTable] =
-                rpc::NekoRpcMethodIdExtension::methodTableValue(context.method_table.entries());
+            _appendMethodIdHelloExtensions(context, extensions);
         }
         if (session.compression_enabled) {
             extensions[Extension::Compression] = {};
@@ -728,30 +874,11 @@ private:
             return false;
         }
 
-        session.method_id_enabled = parts.extensions.contains(Extension::MethodId);
-        if (session.method_id_enabled) {
-            std::uint64_t version = 0;
-            if (!rpc::NekoRpcExtensionCodec::readIntegerTlv(parts.extensions, Extension::MethodTableVersion, version)) {
-                return false;
-            }
-
-            std::vector<rpc::NekoRpcMethodEntry> entries;
-            if (rpc::NekoRpcMethodIdExtension::parseMethodTable(parts.extensions, entries)) {
-                if (!session.remote_method_table.applyRemoteTable(std::move(entries), version)) {
-                    return false;
-                }
-            } else if (rpc::NekoRpcMethodIdExtension::parseMethodTableDelta(parts.extensions, entries)) {
-                if (!session.remote_method_table.applyRemoteDelta(entries, version)) {
-                    return false;
-                }
-            } else if (session.remote_method_table.empty()) {
-                return false;
-            }
-
-            std::uint64_t minimum_version = 0;
-            if (rpc::NekoRpcExtensionCodec::readIntegerTlv(parts.extensions, Extension::MethodMinimumCompatibleVersion,
-                                                           minimum_version)) {
-                session.remote_method_table.setMinimumCompatibleVersion(minimum_version);
+        session.method_id_enabled = false;
+        if (parts.extensions.contains(Extension::MethodId)) {
+            session.method_id_enabled = _applyMethodIdTableExtensions(session, parts.extensions);
+            if (!session.method_id_enabled && !session.remote_method_table.empty()) {
+                session.method_id_enabled = true;
             }
         }
 

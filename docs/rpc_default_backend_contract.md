@@ -36,9 +36,9 @@ RPC 默认后端的数据流拆成两条线：
 | 扩展 | 出现位置 | 影响 |
 | --- | --- | --- |
 | `MethodId` | Client Hello 表示支持；Server Hello 表示本连接启用 | 启用后请求/通知可设置 `NekoRpcFlag::MethodId`，`method` 段变成 8 字节 method id |
-| `MethodTableVersion` | Server Hello/table refresh；MethodId 请求 | Server 发布当前表版本；请求回传版本用于检测旧表 |
-| `MethodTable` | Server Hello | 下发完整 method-id 表 |
-| `MethodTableDelta` | Server table refresh | 下发 method-id 表增量 |
+| `MethodTableVersion` | Server Hello；MethodId 请求；MethodId 错误 response | Server 发布当前表版本；请求回传版本用于检测旧表 |
+| `MethodTable` | Server Hello；MethodId 错误 response；显式刷新 response | 在预算内下发完整 method-id 表 |
+| `MethodTableDelta` | Server Hello；MethodId 错误 response；显式刷新 response | 在预算内下发 method-id 表增量 |
 | `MethodSignatureHash` | MethodId 请求 | 校验客户端 method 元数据是否和服务端一致 |
 | `MethodMinimumCompatibleVersion` | Server Hello/table refresh | 告诉客户端服务端还能接受的最低 method table 版本 |
 | `Compression` | Client Hello 表示支持；Server Hello 表示本连接启用 | 启用后非 Hello 帧可设置 `NekoRpcFlag::Compressed`，payload 按协商算法压缩 |
@@ -54,6 +54,7 @@ Hello 只做能力声明和启用确认：
 3. 服务端 Hello 只返回实际启用的扩展和 context 数据。
 4. `Auto`/`Require` 不再作为远端协商模式传播；它们只表示本端除 `Disable` 外愿意启用该能力。
 5. 服务端不能因为客户端没有启用某个扩展而拒绝整个 Hello；未启用就走基础字符串 method / 未压缩 payload 路径。
+6. 服务端 Hello 和 method-id 错误 response 只有在 method table 数据落入 `max_auto_method_table_extension_bytes` 预算内时才自动附表；默认预算是一帧 extension 区。
 
 ## 实现约束
 
@@ -62,5 +63,5 @@ Hello 只做能力声明和启用确认：
 - 扩展处理沿 `ExtensionMap` 线性读取和写回，避免先拼 TLV 再拆 TLV。
 - 日志可以说明启用了什么，但不引入额外协商状态机。
 - 不给 endpoint 增加 backend 专属方法；用户自定义 endpoint 不需要接入任何扩展能力。
-- 不在服务端自动处理 method-id 失败后的刷新、重试或字符串 method 回退；服务端只返回明确 backend error。
+- 不在服务端自动处理 method-id 失败后的刷新、重试或字符串 method 回退；服务端只返回明确 backend error，并可在预算内附带恢复用 TLV。
 - 测试覆盖应跑 RPC 单测；Windows CI 已能直接开启全部自动测试，新增测试不需要绕开 RPC。

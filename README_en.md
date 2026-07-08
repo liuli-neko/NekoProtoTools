@@ -18,12 +18,12 @@
 
 NekoProtoTools is a pure C++ protocol helper library designed to **simplify the definition, serialization/deserialization, and RPC communication of messages (protocols) in C++**.
 
-Current version: **0.3.1**. This release adds a reflection-driven command-line argument parser and consolidates the tag infrastructure into the shared reflection metadata layer. On the serialization side, `sa::Result<T>` aliases `std::expected<T, sa::Error>` when `<expected>` is available, with the built-in compatibility implementation kept for older environments.
+Current version: **0.3.1**. Compared with v0.3.0, this release adds the reflection-driven ArgParser, YAML/TOML serialization backends, unified tag/reflection metadata infrastructure, and `NekoRpcBackend` hello negotiation, dynamic method-id table updates, bounded method-id error recovery, and compression extensions. On the serialization side, `sa::Result<T>` aliases `std::expected<T, sa::Error>` when `<expected>` is available, with the built-in compatibility implementation kept for older environments.
 
 Core features of this library:
 
 *   **Simplified Message Definition**: Business types only need to define fields. The recommended manual metadata entry is a non-intrusive `template<> struct Meta<T>`, which makes custom C++ types usable as serializable objects or protocol messages.
-*   **Unified Parser Serialization Layer**: JSON, Binary, XML, and schema generation share one set of type rules; RapidJSON, simdjson, pugixml, and the binary format are thin backends.
+*   **Unified Parser Serialization Layer**: JSON, Binary, XML, YAML, TOML, and schema generation share one set of type rules; concrete formats provide only Reader/Writer implementations and small format-specific capabilities.
 *   **Field-Level Metadata Tags**: `make_tags<Tag>(field)` describes a field or call site instead of permanently annotating the type, so the same type can use different layouts in different contexts.
 *   **Reflection-Driven ArgParser**: Define CLI options with reflected objects and tags, including nested options, subcommands, defaults, environment variables, aliases, conflicts/requires rules, and help/version output.
 *   **Basic Static Reflection Capability**: Provides a simple static reflection mechanism for compile-time type checks and metadata extraction.
@@ -42,6 +42,8 @@ Core features of this library:
     *   JSON: [RapidJSON](https://rapidjson.org/) or [simdjson](https://simdjson.org/) (optional, enable via build options). When both are enabled, the default `JsonSerializer` alias selects RapidJSON first.
     *   XML: [pugixml](https://pugixml.org/) (optional, enable via build options)
     *   Binary: built-in binary Reader/Writer, no extra third-party dependency required.
+    *   YAML: [libfyaml](https://github.com/pantoniou/libfyaml) (optional, enable via build options)
+    *   TOML: [toml++](https://github.com/marzer/tomlplusplus) (optional, enable via build options)
     *   *Note: To keep the library lightweight, these serialization libraries are **not directly bundled**. You need to manage these dependencies yourself through options.*
 *   **Communication & RPC (Optional)**:
     *   [Ilias](https://github.com/BusyStudent/ilias) (Used for network communication and asynchronous tasks/coroutines)
@@ -72,7 +74,9 @@ add_requires("neko-proto-tools", {
          enable_fmt = true,          -- Set to true if fmtlib support is needed (e.g., for logging)
          enable_protocol = true,     -- Set to true to enable ProtoFactory/IProto
          enable_communication = true,-- Set to true to enable communication features
-         enable_jsonrpc = true       -- Set to true to enable JSON-RPC features
+         enable_jsonrpc = true,      -- Set to true to enable JSON-RPC features
+         enable_libfyaml = false,    -- Set to true to enable YAML support
+         enable_tomlplusplus = false -- Set to true to enable TOML support
     },
 })
 
@@ -257,6 +261,8 @@ Serializers are responsible for converting C++ objects into byte streams (serial
     *   `JsonSerializer`: Default JSON serializer alias. It uses `RapidJsonSerializer` when RapidJSON is enabled; otherwise it uses `SimdJsonSerializer` when simdjson is enabled.
     *   `BinarySerializer`: Provides a compact binary serialization format and supports binary layout tags such as `fixed_length` and `unframed`.
     *   `XmlSerializer`: Uses pugixml for XML serialization and deserialization.
+    *   `YamlSerializer`: Uses libfyaml for YAML serialization and deserialization.
+    *   `TomlSerializer`: Uses toml++ for TOML serialization and deserialization.
 *   **Choosing a Serializer**:
     *   For basic serialization, directly instantiate the required `OutputSerializer` / `InputSerializer`.
     *   For protocol messages (`NEKO_DECLARE_PROTOCOL`), specify the default serializer during declaration.
@@ -838,7 +844,7 @@ Core message semantics are fixed and do not use omitted fields:
 
 Extension TLV is recommended as `type: u16, size: u16, value: bytes`. The highest bit of `type` can mark a critical extension: unknown non-critical TLVs may be skipped, while unknown critical TLVs should reject the message or connection.
 
-`method_id` is an optional Neko-RPC backend wire-level extension. It is a backend-negotiated transport optimization and does not enter the generic RPC calling API; the first implementation syncs a connection-lifetime full table through hello, and the design lives in [`docs/rpc_method_id_design.md`](docs/rpc_method_id_design.md). The default built-in methods such as `rpc.get_method_list` and `rpc.get_method_info` are normal RPC introspection calls that return string method names and descriptions. They do not change the wire format and are not the negotiated method id table, although they can be used as input when building or validating one.
+`method_id` is an optional Neko-RPC backend wire-level extension. It is a backend-negotiated transport optimization and does not enter the generic RPC calling API. The default implementation can attach a method table to hello or method-id error responses when it fits the configured budget; the client-side backend policy decides whether to apply that table and retry. The design lives in [`docs/rpc_method_id_design.md`](docs/rpc_method_id_design.md). The default built-in methods such as `rpc.get_method_list` and `rpc.get_method_info` are normal RPC introspection calls that return string method names and descriptions. They do not change the wire format and are not the negotiated method id table, although they can be used as input when building or validating one.
 
 The error object stays minimal:
 
@@ -909,7 +915,7 @@ Design check:
 
 ## 6. Supported Types
 
-Serialization backends include the common Parser set, so standard containers and basic types no longer require separate `serialization/types/*.hpp` headers. Since 0.3.0, JSON, Binary, XML, and schema generation reuse the same type rules whenever possible; format-specific behavior is handled by backend capabilities or explicit specializations.
+Serialization backends include the common Parser set, so standard containers and basic types no longer require separate `serialization/types/*.hpp` headers. JSON, Binary, XML, YAML, TOML, and schema generation now reuse the same type rules whenever possible; format-specific behavior is handled by backend capabilities or explicit specializations.
 
 The common Parser set currently covers arithmetic types, strings, enums, `std::optional`, pointers, `std::variant`, `std::tuple`/`std::pair`, sequence containers, sets, maps, `std::array`, `std::bitset`, `std::atomic`, `std::byte`, `BinaryData<T>`, and reflected structs exposed through non-intrusive `Meta<T>` metadata. `NEKO_SERIALIZER` remains available as a convenience macro.
 
@@ -919,7 +925,7 @@ more details can be found in the [Supported Types Overview](https://github.com/l
 
 ## 7. Serialization Extensions
 
-To support a custom C++ type, specialize the public `CustomParser<T>`. The implementation can reuse existing parser entries, so the same extension can work across JSON, Binary, and XML backends.
+To support a custom C++ type, specialize the public `CustomParser<T>`. The implementation can reuse existing parser entries, so the same extension can work across JSON, Binary, XML, YAML, TOML, and other backends.
 
 ```cpp
 #include <nekoproto/serialization/parsing/parsers.hpp>
@@ -958,8 +964,10 @@ To add a new data format, implement a backend with responsibilities matching the
 
 *   [x] Support accessing protocol fields by string name (basic reflection)
 *   [x] Use simdjson as JSON input serializer backend (`simdjson::dom`)
-*   [x] Route RapidJSON, simdjson, Binary, XML, and schema generation through the generic Parser layer
+*   [x] Route RapidJSON, simdjson, Binary, XML, YAML, TOML, and schema generation through the generic Parser layer
 *   [x] Implement XML Reader/Writer backend with pugixml
+*   [x] Implement YAML Reader/Writer backend with libfyaml
+*   [x] Implement TOML Reader/Writer backend with toml++
 *   [x] Support Draft-07 style JSON Schema generation
 *   [x] Alias `sa::Result<T>` to `std::expected<T, sa::Error>` when C++23 `<expected>` is available, while keeping the C++20 compatibility implementation
 *   [ ] Support `simdjson::ondemand` interface (Explore performance and use case differences with `dom`)
@@ -985,7 +993,7 @@ To add a new data format, implement a backend with responsibilities matching the
 *   [x] Split the RPC frontend from the JSON-RPC backend. See [`docs/rpc_refactor_plan.md`](docs/rpc_refactor_plan.md).
 *   [ ] Add explicit framing adapters for external JSON-RPC interoperability, such as LSP `Content-Length`, newline-delimited JSON, WebSocket messages, and datagrams.
 *   [x] Add `NekoRpcBackend<Serializer>` / `BinaryRpcBackend` with a fixed binary frame header and replaceable payload serializer.
-*   [x] Add the first `NekoRpcBackend` hello negotiation and connection-lifetime full-table method id optimization. See [`docs/rpc_method_id_design.md`](docs/rpc_method_id_design.md).
+*   [x] Add `NekoRpcBackend` hello negotiation, budgeted method table delivery, and method-id error recovery. See [`docs/rpc_method_id_design.md`](docs/rpc_method_id_design.md).
 *   [x] Complete `NekoRpcBackend` dynamic method id table updates, delta/signature/compatibility error handling, compression TLVs, replaceable compression codec policy, and basic compression statistics.
 *   [x] Add explicit `RpcBackend` / `BackendSerializable` concepts for clearer custom-backend diagnostics.
 *   [ ] Support for JSON-RPC extensions.
@@ -996,17 +1004,26 @@ To add a new data format, implement a backend with responsibilities matching the
     - `rpc.get_method_info_list`: Get descriptions of all methods
 *   [x] Support named parameters, allowing method declarations or bindings to specify parameter names. Methods with specified names pass parameters as JSON objects; others pass them as JSON arrays by position.
 
+**Maintenance Direction (not tied to a specific next version yet)**
+
+*   [ ] Continue simplifying internal code, tightening long flows and duplicated implementation, and fixing issues as they are found.
+*   [ ] Improve ergonomics, diagnostics, and documentation examples so new projects are easier to integrate.
+*   [ ] Add stress tests and performance evaluation benchmarks, including comparisons with similar libraries.
+
 ---
 
 ## 9. Development History (Selected Milestones)
 
 *   **v0.3.1**
     *   Split serialization parser dispatch into `WriteParser<Writer, T>`, `ReadParser<Reader, T>`, and `SchemaParser<T>`; the user extension point is now the public `CustomParser<T>`.
+    *   Added YAML / TOML serialization backends: `YamlSerializer` is based on libfyaml, `TomlSerializer` is based on toml++, and both are wired into the unified Parser type rules.
     *   Recommended manual reflection metadata now uses non-intrusive `template<> struct Meta<T>`; `NEKO_SERIALIZER` remains as a convenience macro.
     *   Added `NekoArgParser` / `<nekoproto/argparser/argparser.hpp>`: CLI schemas can now be defined with static reflection and tags, returning `std::expected<..., std::error_code>`.
     *   ArgParser supports long/short options, positional arguments, flags, repeatable values, nested options, defaults, environment variables, choices/ranges, automatic help/version output, and subcommands.
     *   Expanded arg tags with `arg_aliases`, `arg_implicit`, `arg_group`, `arg_conflicts`, `arg_requires`, `arg_deprecated`, `arg_case_insensitive_choices`, and related metadata.
     *   Refactored the tag infrastructure so common reflection tags and tag queries live in `global/reflection_tags.hpp` and are shared by serialization, RPC, and argparser.
+    *   Completed the `NekoRpcBackend` connection-state model with hello negotiation, dynamic method-id table refresh, delta/signature/compatibility errors, budgeted method-table data on error responses, and one bounded client recovery retry.
+    *   Added `NekoRpcBackend` compression TLVs, a replaceable compression codec policy, and basic compression statistics while keeping compression state inside the backend context/session.
     *   Further separated the build boundary between `NekoProtoBase` and `NekoCommunication`; communication remains an optional module.
     *   `sa::Result<T>` now aliases `std::expected<T, sa::Error>` when the standard library provides `<expected>`, keeps the C++20 fallback, and adds the short `sa::Err(...)` helper for failed results.
 

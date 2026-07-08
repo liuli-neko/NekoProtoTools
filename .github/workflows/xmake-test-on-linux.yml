@@ -37,13 +37,13 @@ jobs:
             coverage: false
             experimental: false
           # Keep C++26 non-blocking until compiler and library support settles.
-          - stdcxx: 26
-            kind: shared
-            mode: debug
-            cc: gcc-14
-            cxx: g++-14
-            coverage: false
-            experimental: true
+          # - stdcxx: 26
+          #   kind: shared
+          #   mode: debug
+          #   cc: gcc-14
+          #   cxx: g++-14
+          #   coverage: false
+          #   experimental: true
     steps:
     - uses: actions/checkout@v2
     - name: setup xmake

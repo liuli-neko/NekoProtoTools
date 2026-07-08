@@ -153,48 +153,72 @@ private:
         NEKO_LOG_TRACE("rpc", "rpc client call begin: method={} notification={}", metadata.name(),
                        metadata.isNotification());
         auto guard = co_await mMutex.lock();
-        ILIAS_CO_TRYV(co_await Backend::ensureClientReady(mBackendContext, mPeerSession, *mEndpoint));
-        auto encoded = Backend::template encodeRequest<T>(mBackendContext, mPeerSession, metadata,
-                                                          metadata.isNotification(), std::forward<Args>(args)...);
-        if (!encoded) {
-            co_return ilias::Err(encoded.error());
-        }
-        auto& request = encoded.value();
-        ILIAS_CO_TRY(auto send_ret, co_await mEndpoint->send({reinterpret_cast<const std::byte*>(request.message.data()),
-                                                             request.message.size()}));
-        if (send_ret != request.message.size()) {
-            co_return ilias::Err(ilias::IoError::Other);
-        }
-        NEKO_LOG_TRACE("rpc", "rpc client request send: method={} bytes={}", metadata.name(),
-                       request.message.size());
-        if (!metadata.isNotification()) {
+        std::size_t retry_count = 0;
+        while (true) {
+            ILIAS_CO_TRYV(co_await Backend::ensureClientReady(mBackendContext, mPeerSession, *mEndpoint));
+            auto encoded = Backend::template encodeRequest<T>(mBackendContext, mPeerSession, metadata,
+                                                              metadata.isNotification(), args...);
+            if (!encoded) {
+                co_return ilias::Err(encoded.error());
+            }
+            auto& request = encoded.value();
+            ILIAS_CO_TRY(auto send_ret,
+                          co_await mEndpoint->send({reinterpret_cast<const std::byte*>(request.message.data()),
+                                                    request.message.size()}));
+            if (send_ret != request.message.size()) {
+                co_return ilias::Err(ilias::IoError::Other);
+            }
+            NEKO_LOG_TRACE("rpc", "rpc client request send: method={} bytes={}", metadata.name(),
+                           request.message.size());
+            if (metadata.isNotification()) {
+                NEKO_LOG_TRACE("rpc", "rpc client notification sent: method={}", metadata.name());
+                co_return ilias::Err(Backend::notificationOk());
+            }
+
             while (true) {
                 std::vector<std::byte> buffer;
-                if (auto ret = co_await mEndpoint->recv(buffer); ret) {
-                    if (Backend::handleClientControl(mBackendContext, mPeerSession, buffer)) {
-                        NEKO_LOG_INFO("rpc", "rpc client consumed control frame while waiting");
-                        continue;
-                    }
-                    // Response decoding is the backend boundary: client code only
-                    // supplies the expected id and receives the typed result.
-                    auto decoded = Backend::template decodeResponse<T>(mBackendContext, mPeerSession, buffer,
-                                                                       request.id);
-                    if (!decoded) {
-                        co_return ilias::Err(decoded.error());
-                    }
+                ILIAS_CO_TRY(auto received, co_await mEndpoint->recv(buffer));
+                (void)received;
+                if (Backend::handleClientControl(mBackendContext, mPeerSession, buffer)) {
+                    NEKO_LOG_INFO("rpc", "rpc client consumed control frame while waiting");
+                    continue;
+                }
+
+                // Response decoding is the backend boundary: client code only
+                // supplies the expected id and receives the typed result.
+                auto decoded = Backend::template decodeResponse<T>(mBackendContext, mPeerSession, buffer,
+                                                                   request.id);
+                if (decoded) {
                     NEKO_LOG_TRACE("rpc", "rpc client call end: method={}", metadata.name());
                     if constexpr (std::is_void_v<typename std::decay_t<T>::RawReturnType>) {
                         co_return {};
                     } else {
                         co_return decoded.value();
                     }
-                } else {
-                    co_return ilias::Err(ret.error());
                 }
+
+                // The generic client does not know which extension failed. It
+                // only asks the backend whether its session state was recovered
+                // well enough to replay this call once.
+                bool should_retry = false;
+                if constexpr (requires {
+                                  Backend::recoverClientCall(mBackendContext, mPeerSession, *mEndpoint,
+                                                             decoded.error(), retry_count);
+                              }) {
+                    ILIAS_CO_TRY(auto recovered,
+                                  co_await Backend::recoverClientCall(mBackendContext, mPeerSession, *mEndpoint,
+                                                                      decoded.error(), retry_count));
+                    should_retry = recovered;
+                }
+
+                if (!should_retry) {
+                    co_return ilias::Err(decoded.error());
+                }
+                ++retry_count;
+                NEKO_LOG_INFO("rpc", "rpc client retrying call after backend recovery: method={} retry={}",
+                              metadata.name(), retry_count);
+                break;
             }
-        } else {
-            NEKO_LOG_TRACE("rpc", "rpc client notification sent: method={}", metadata.name());
-            co_return ilias::Err(Backend::notificationOk());
         }
     }
 
