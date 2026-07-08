@@ -1,6 +1,6 @@
 # Neko-RPC method id 后端扩展设计
 
-状态：设计目标已调整。method-id 是 `NekoRpcBackend` 的 backend context/session 扩展，不由 endpoint 覆写协议，也不由 RPC API 暴露扩展字段。服务端遇到 method-id 失效只返回明确 backend error；客户端是否刷新 method table、下一次是否继续使用 method-id、是否降级 name 请求或重试，由客户端 backend 策略决定。完整职责模型见 [`rpc_backend_context_model.md`](rpc_backend_context_model.md)。
+状态：设计目标已调整。method-id 是 `NekoRpcBackend` 的 backend context/session 扩展，不由 endpoint 覆写协议，也不由 RPC API 暴露扩展字段。服务端遇到 method-id 失效只返回明确 backend error；客户端是否刷新 method table、下一次是否继续使用 method-id、是否降级 name 请求或重试，由客户端 backend 策略决定。默认客户端策略可以在确认请求未进入 dispatcher 时应用错误响应携带的小表并最多重试一次；响应未携带表时再进入主动刷新或降级路径。完整职责模型见 [`rpc_backend_context_model.md`](rpc_backend_context_model.md)。
 
 本文只讨论 `NekoRpcBackend` 的 wire-level 可选扩展。`method_id` 不属于 RPC frontend 的主要接口，也不应暴露到 `RpcMethod`、`RpcServer`、`RpcClient` 的调用语义中。调用方仍然按 method name 声明、绑定和调用；是否把 method name 压缩成 method id，是所选 backend 在封包/解包时做的优化。
 
@@ -128,7 +128,7 @@ flags.method_id = 1:
 
 ## 8. 表同步
 
-默认 `NekoRpcBackend` 可以在 hello 阶段同步必要数据：
+默认 `NekoRpcBackend` 可以在 hello 阶段同步必要数据，但同步是客户端 hello 的 bounded response，不是服务端随意推送：
 
 客户端 hello：
 
@@ -158,7 +158,7 @@ signature_hash: optional
 state: active | removed
 ```
 
-默认 hello 可以发送 full table。连接内 method 表变化时，服务端 backend context 更新 method-id 表状态，并决定后续以 hello、响应提示或显式刷新接口暴露新版本。客户端 backend context 收到表更新后更新自己的 peer session。若服务端收到过期或失配的 method-id 请求，只返回细分 method-id 错误；客户端策略决定后续是否刷新表、是否降级 name 请求、是否重试。
+默认 hello 可以在 `Options::max_auto_method_table_extension_bytes` 预算内发送 full table；默认预算是一帧 extension 区大小。连接内 method 表变化时，服务端 backend context 只更新 method-id 表状态；若服务端收到过期或失配的 method-id 请求，只返回细分 method-id 错误，并在预算内把当前表附到错误 response extensions。表超预算时只附版本提示或不附表，客户端后续显式刷新或降级 name 请求。
 
 ## 9. 请求处理
 
@@ -189,14 +189,14 @@ MethodIdRequiredButUnsupported
 CompressionRequiredButUnsupported
 ```
 
-错误 payload 建议包含：
+错误 payload 保持固定错误对象；恢复用数据放在 response extension TLV：
 
 ```text
 current_table_version
 optional full_table_or_delta_hint
 ```
 
-客户端收到这些错误后，由客户端 backend context 更新本地状态并把结果交给客户端策略。默认策略应保守：标记 method table stale，把当前调用错误报告给用户；只有显式配置了通用 retry policy 时才考虑重放。普通 RPC 调用接口不新增 method-id 参数。
+客户端收到这些错误后，由客户端 backend context 更新本地状态并把结果交给客户端策略。默认策略可以在首次 method-id 错误后应用 response extensions 中的 method table 并重放当前调用一次；如果错误响应没有携带表，则标记表 stale，进入主动刷新或 name 降级路径。刷新失败、第二次仍失败，或该错误不是服务端解码阶段错误时，把错误报告给用户。普通 RPC 调用接口不新增 method-id 参数。
 
 ## 11. 压缩与 method id
 
@@ -240,14 +240,14 @@ extension TLV 自身保持未压缩，方便路由和错误恢复。
 1. [x] 保持字符串 method 调用为基础路径。
 2. [x] 增加 `NekoRpcBackend::Options`，支持 method id `Disable/Auto/Require`。
 3. [x] 增加 hello TLV 协商 method id。
-4. [x] 第一版 method id 表只支持连接期 full table。
+4. [x] 连接期 hello 支持在预算内下发 full table；表更新支持 delta 编解码。
 5. [ ] 将 method name 与 method id 转换从 endpoint 包装迁移到 backend context/session 的 encode/decode 主线。
 6. [x] 增加 `table_version` TLV，并在请求侧校验当前连接表版本。
 7. [x] 把 frame/TLV/hello/method table 编解码下沉到非模板 base 层。
 8. [x] 增加动态更新测试：新增、删除、旧版本可兼容、旧版本不可兼容。
 9. [x] 增加 delta、签名 hash、兼容窗口和更细 method-id 错误模型。
 10. [x] 增加压缩 TLV 协商和压缩策略骨架。
-11. [ ] 移除 method-id 错误后的默认自动重试；服务端只返回错误，客户端策略决定下一步。
+11. [x] 将 method-id 错误恢复收敛为客户端策略；服务端只返回错误，并在预算内把恢复表放进错误 response extensions，默认客户端更新表后最多重试一次。
 12. [x] 增加真实 payload 压缩算法、压缩 flag 和阈值执行策略。
 13. [x] 增加可替换 compression codec policy 和基础压缩统计。
 14. [ ] 增加更强压缩算法和更完整调试观测。

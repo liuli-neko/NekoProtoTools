@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <map>
 #include <span>
 #include <string>
@@ -76,6 +77,7 @@ public:
 
     static constexpr std::uint16_t Magic  = 0x4E52U;
     static constexpr std::uint8_t Version = 1U;
+    static constexpr std::size_t MaxExtensionBytes = std::numeric_limits<std::uint16_t>::max();
 
     struct Header {
         // Protocol sentinel, encoded on the wire as "NR".
