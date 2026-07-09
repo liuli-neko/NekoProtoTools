@@ -219,6 +219,27 @@ struct ToolCommands {
                             ArgTags{.command = true}>(&ToolCommands::clean));
     };
 };
+
+struct ToolCommandsWithIgnoredField {
+    BuildCommand build;
+    int ignored = 7;
+    ArgCommand<2> clean;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("build",
+                   make_tags<arg_help<"build project">,
+                             ArgTags{.command = true}>(&ToolCommandsWithIgnoredField::build),
+
+                   "ignored",
+                   make_tags<arg_ignore_tag, arg_help<"internal root state">>(
+                       &ToolCommandsWithIgnoredField::ignored),
+
+                   "clean",
+                   make_tags<arg_help<"clean project">,
+                             ArgTags{.command = true}>(&ToolCommandsWithIgnoredField::clean));
+    };
+};
 // clang-format on
 TEST(ArgParser, CommandSetReturnsVariant) {
     const char* argv[] = {"tool", "build", "--jobs", "8", "--release", "--mode", "release"};
@@ -234,6 +255,24 @@ TEST(ArgParser, CommandSetReturnsVariant) {
     EXPECT_EQ(build.jobs, 8);
     EXPECT_TRUE(build.release);
     EXPECT_EQ(build.mode, BuildMode::Release);
+}
+
+TEST(ArgParser, IgnoredNormalFieldsDoNotBreakCommandSetDetection) {
+    static_assert(NEKO_NAMESPACE::argparser::detail::is_command_set_v<ToolCommandsWithIgnoredField>);
+
+    const char* argv[] = {"tool", "build", "--jobs", "3"};
+
+    auto result = parser<ToolCommandsWithIgnoredField>(static_cast<int>(std::size(argv)), argv);
+
+    using ExpectedType = expected::expected<std::variant<BuildCommand, ArgCommand<2>>, std::error_code>;
+    static_assert(std::is_same_v<decltype(result), ExpectedType>);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    ASSERT_TRUE(std::holds_alternative<BuildCommand>(*result));
+    EXPECT_EQ(std::get<BuildCommand>(*result).jobs, 3);
+
+    auto help = format_help<ToolCommandsWithIgnoredField>();
+    EXPECT_EQ(help.find("internal root state"), std::string::npos);
 }
 
 TEST(ArgParser, CommandShortValueWinsOverCluster) {
@@ -494,6 +533,42 @@ TEST(ArgParser, IgnoreTagRemovesFieldsFromSchemaHelpAndMaterialization) {
     auto ignoredResult        = parser<ArgIgnoredOptions>(static_cast<int>(std::size(ignoredArgv)), ignoredArgv);
     ASSERT_FALSE(ignoredResult.has_value());
     EXPECT_EQ(ignoredResult.error(), make_error_code(ArgParserError::UnknownOption));
+}
+
+struct IgnoredUnsupportedField {
+    std::string value;
+};
+
+struct NonIntrusiveIgnoredUnsupportedOptions {
+    bool enabled = false;
+    std::vector<IgnoredUnsupportedField> ignoredFields;
+};
+
+template <>
+struct NEKO_NAMESPACE::Meta<::NonIntrusiveIgnoredUnsupportedOptions, void> {
+    constexpr static auto value = // NOLINT
+        Object("enabled",
+               make_tags<arg_long_name<"enabled">, arg_help<"visible flag">, ArgTags{.flag = true}>(
+                   &::NonIntrusiveIgnoredUnsupportedOptions::enabled),
+               "ignoredFields",
+               make_tags<arg_ignore_tag, arg_help<"ignored unsupported field">>(
+                   &::NonIntrusiveIgnoredUnsupportedOptions::ignoredFields));
+};
+
+TEST(ArgParser, IgnoreTagSkipsUnsupportedFieldTypes) {
+    const char* argv[] = {"demo", "--enabled"};
+    auto result        = parser<NonIntrusiveIgnoredUnsupportedOptions>(static_cast<int>(std::size(argv)), argv);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    EXPECT_TRUE(result->enabled);
+    EXPECT_TRUE(result->ignoredFields.empty());
+
+    ArgParserConfig config;
+    config.programName = "demo";
+    auto help          = format_help<NonIntrusiveIgnoredUnsupportedOptions>(config);
+    EXPECT_NE(help.find("--enabled"), std::string::npos);
+    EXPECT_EQ(help.find("--ignoredFields"), std::string::npos);
+    EXPECT_EQ(help.find("ignored unsupported field"), std::string::npos);
 }
 
 struct TagListComposeOptions {
@@ -873,10 +948,10 @@ TEST(ArgParser, JsonConfigImportUsesExpectedPriorityAndExportsResolvedOptions) {
 
     auto config = config_io_parser_config();
     config.configIo->enableFormat("json");
-    const auto import_arg       = import_path.string();
-    const auto export_arg       = export_path.string();
-    const char* argv[]          = {"demo", "--import-json", import_arg.c_str(), "--count", "5",
-                                   "--export-json", export_arg.c_str()};
+    const auto import_arg = import_path.string();
+    const auto export_arg = export_path.string();
+    const char* argv[]    = {"demo", "--import-json", import_arg.c_str(), "--count",
+                             "5",    "--export-json", export_arg.c_str()};
 
     auto result = parser<ConfigIoOptions>(static_cast<int>(std::size(argv)), argv, config);
 
@@ -908,10 +983,10 @@ TEST(ArgParser, CommandConfigJsonImportExportsCommandWrapper) {
 
     auto config = config_io_parser_config();
     config.configIo->enableFormat("json");
-    const auto import_arg       = import_path.string();
-    const auto export_arg       = export_path.string();
-    const char* argv[]          = {"tool", "--import-json", import_arg.c_str(), "--export-json", export_arg.c_str(),
-                                   "build", "--jobs", "8"};
+    const auto import_arg = import_path.string();
+    const auto export_arg = export_path.string();
+    const char* argv[]    = {
+        "tool", "--import-json", import_arg.c_str(), "--export-json", export_arg.c_str(), "build", "--jobs", "8"};
 
     auto result = parser<ToolCommands>(static_cast<int>(std::size(argv)), argv, config);
 
@@ -942,8 +1017,8 @@ TEST(ArgParser, PlaceholderCommandJsonExportOmitsParams) {
 
     auto config = config_io_parser_config();
     config.configIo->enableExportFormat("json");
-    const auto export_arg       = export_path.string();
-    const char* argv[]          = {"tool", "--export-json", export_arg.c_str(), "clean"};
+    const auto export_arg = export_path.string();
+    const char* argv[]    = {"tool", "--export-json", export_arg.c_str(), "clean"};
 
     auto result = parser<ToolCommands>(static_cast<int>(std::size(argv)), argv, config);
 
@@ -973,9 +1048,9 @@ TEST(ArgParser, YamlConfigImportAndExport) {
 
     auto config = config_io_parser_config();
     config.configIo->enableFormat("yaml");
-    const auto import_arg       = import_path.string();
-    const auto export_arg       = export_path.string();
-    const char* argv[]          = {"demo", "--import-yaml", import_arg.c_str(), "--export-yaml", export_arg.c_str()};
+    const auto import_arg = import_path.string();
+    const auto export_arg = export_path.string();
+    const char* argv[]    = {"demo", "--import-yaml", import_arg.c_str(), "--export-yaml", export_arg.c_str()};
 
     auto result = parser<ConfigIoOptions>(static_cast<int>(std::size(argv)), argv, config);
 
@@ -1045,10 +1120,9 @@ TEST(ArgParser, BinaryConfigImportAndExport) {
 
     auto config = config_io_parser_config();
     config.configIo->enableFormat("bin");
-    const auto import_arg         = import_path.string();
-    const auto export_arg         = export_path.string();
-    const char* argv[]            = {"demo", "--import-binary", import_arg.c_str(), "--export-binary",
-                                     export_arg.c_str()};
+    const auto import_arg = import_path.string();
+    const auto export_arg = export_path.string();
+    const char* argv[]    = {"demo", "--import-binary", import_arg.c_str(), "--export-binary", export_arg.c_str()};
 
     auto result = parser<ConfigIoOptions>(static_cast<int>(std::size(argv)), argv, config);
 
@@ -1095,9 +1169,8 @@ TEST(ArgParser, CommandConfigExportCanAppearAfterCommandOptionsAndPositionals) {
 
     auto config = config_io_parser_config();
     config.configIo->enableExportFormat("binary");
-    const auto export_arg         = export_path.string();
-    const char* argv[]            = {"tool", "serve", "--count", "8", "app", "--export-binary",
-                                     export_arg.c_str()};
+    const auto export_arg = export_path.string();
+    const char* argv[]    = {"tool", "serve", "--count", "8", "app", "--export-binary", export_arg.c_str()};
 
     auto result = parser<ExportPositionalTool>(static_cast<int>(std::size(argv)), argv, config);
 
@@ -1109,8 +1182,7 @@ TEST(ArgParser, CommandConfigExportCanAppearAfterCommandOptionsAndPositionals) {
 
     auto exported =
         read_serialized_config<BinarySerializer,
-                               NEKO_NAMESPACE::argparser::detail::CommandConfig<ExportPositionalCommand>>(
-            export_path);
+                               NEKO_NAMESPACE::argparser::detail::CommandConfig<ExportPositionalCommand>>(export_path);
     EXPECT_EQ(exported.command, "serve");
     EXPECT_EQ(exported.params.count, 8);
     EXPECT_EQ(exported.params.root, "app");
@@ -1127,8 +1199,8 @@ TEST(ArgParser, ImportedFalseBooleanDoesNotTriggerConflicts) {
 
     auto config = config_io_parser_config();
     config.configIo->enableImportFormat("binary");
-    const auto import_arg         = import_path.string();
-    const char* argv[]            = {"demo", "--import-binary", import_arg.c_str()};
+    const auto import_arg = import_path.string();
+    const char* argv[]    = {"demo", "--import-binary", import_arg.c_str()};
 
     auto result = parser<RelationshipOptions>(static_cast<int>(std::size(argv)), argv, config);
 

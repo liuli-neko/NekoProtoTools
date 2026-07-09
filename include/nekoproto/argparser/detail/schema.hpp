@@ -323,8 +323,7 @@ inline bool config_io_format_registered(std::string_view format) {
     return registered;
 }
 
-inline void warn_unknown_config_io_formats(const std::vector<std::string_view>& formats,
-                                           ConfigIoDirection direction) {
+inline void warn_unknown_config_io_formats(const std::vector<std::string_view>& formats, ConfigIoDirection direction) {
     for (const auto format : formats) {
         if (!config_io_format_registered(format)) {
             NEKO_LOG_WARN("argparser", "unknown argparser config {} format '{}' is ignored",
@@ -384,9 +383,8 @@ inline void append_config_io_specs(const ArgParserConfig& config, ArgSchema& sch
     const auto& io = *config.configIo;
     warn_unknown_config_io_formats(io.importFormats, ConfigIoDirection::Import);
     warn_unknown_config_io_formats(io.exportFormats, ConfigIoDirection::Export);
-    for_each_config_io_backend([&]<typename Backend>(std::type_identity<Backend>) {
-        append_config_io_backend_specs<Backend>(io, schema);
-    });
+    for_each_config_io_backend(
+        [&]<typename Backend>(std::type_identity<Backend>) { append_config_io_backend_specs<Backend>(io, schema); });
 }
 
 template <typename T>
@@ -396,18 +394,19 @@ void collect_schema_into(std::string_view prefix, const ArgParserConfig& config,
 
     Reflect<std::remove_cvref_t<T>>::forEachMeta(
         [&]<typename FieldT>(std::type_identity<FieldT>, std::string_view reflected_name, const auto& tags) {
-            if (should_ignore_arg_field(tags)) {
+            if constexpr (should_ignore_arg_field(decltype(tags){})) {
                 return;
-            }
-            const auto explicit_long_name = tag_query::get<tag_property::long_name>(tags);
-            const auto name               = explicit_long_name.empty() ? reflected_name : explicit_long_name;
-
-            if constexpr (is_nested_option_v<FieldT>) {
-                collect_schema_into<FieldT>(join_arg_name(prefix, name, config.nestedSeparator), config, schema);
             } else {
-                schema.push_user_spec(make_arg_spec<FieldT>(prefix, reflected_name, tags, config));
-                if (schema.specs.back().positional) {
-                    schema.positional_specs.push_back(schema.specs.size() - 1);
+                const auto explicit_long_name = tag_query::get<tag_property::long_name>(tags);
+                const auto name               = explicit_long_name.empty() ? reflected_name : explicit_long_name;
+
+                if constexpr (is_nested_option_v<FieldT>) {
+                    collect_schema_into<FieldT>(join_arg_name(prefix, name, config.nestedSeparator), config, schema);
+                } else {
+                    schema.push_user_spec(make_arg_spec<FieldT>(prefix, reflected_name, tags, config));
+                    if (schema.specs.back().positional) {
+                        schema.positional_specs.push_back(schema.specs.size() - 1);
+                    }
                 }
             }
         });

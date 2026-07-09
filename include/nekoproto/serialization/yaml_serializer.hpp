@@ -2,10 +2,18 @@
 
 #include "nekoproto/global/global.hpp"
 
-#if defined(NEKO_PROTO_ENABLE_LIBFYAML)
+#if defined(NEKO_PROTO_ENABLE_LIBFYAML) || defined(NEKO_PROTO_ENABLE_YAMLCPP)
 
 #include "nekoproto/serialization/parsing/parsers.hpp"
 #include "nekoproto/serialization/serializer_adapter.hpp"
+
+#include <istream>
+#include <iterator>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#if defined(NEKO_PROTO_ENABLE_LIBFYAML)
 #include "nekoproto/serialization/yaml/libfyaml_reader.hpp"
 #include "nekoproto/serialization/yaml/libfyaml_writer.hpp"
 
@@ -13,12 +21,17 @@
 
 #include <cstdlib>
 #include <cstring>
-#include <istream>
-#include <iterator>
-#include <string>
-#include <string_view>
 #include <utility>
-#include <vector>
+#endif
+
+#if defined(NEKO_PROTO_ENABLE_YAMLCPP)
+#include "nekoproto/serialization/yaml/yamlcpp_reader.hpp"
+#include "nekoproto/serialization/yaml/yamlcpp_writer.hpp"
+
+#include <yaml-cpp/yaml.h>
+
+#include <sstream>
+#endif
 
 NEKO_BEGIN_NAMESPACE
 
@@ -33,7 +46,10 @@ void append_yaml(BufferT& buffer, std::string_view yaml) {
         static_assert(always_false_v<BufferT>, "Unsupported YAML output buffer");
     }
 }
+} // namespace detail
 
+#if defined(NEKO_PROTO_ENABLE_LIBFYAML)
+namespace detail {
 inline void quiet_yaml_diag_output(fy_diag* /*diag*/, void* /*user*/, const char* /*buf*/, size_t /*len*/) {}
 
 inline fy_diag* create_quiet_yaml_diag() {
@@ -261,8 +277,146 @@ struct LibfyamlSerializer {
     using Reader           = yaml::Reader;
     using Writer           = yaml::Writer;
 };
+#endif
 
+#if defined(NEKO_PROTO_ENABLE_YAMLCPP)
+struct YamlCppBackend {
+    using Reader              = yamlcpp::Reader;
+    using Writer              = yamlcpp::Writer;
+    using DefaultOutputBuffer = std::vector<char>;
+    using DefaultInputSource  = void;
+
+    template <typename BufferT>
+    struct OutputState {
+        explicit OutputState(BufferT& outputBuffer) : buffer(outputBuffer), writer(&document) {}
+
+        BufferT& buffer;
+        YAML::Node document;
+        yamlcpp::Writer writer;
+        bool hasRoot = false;
+        bool flushed = false;
+    };
+
+    template <typename SourceT>
+    struct InputState {
+        explicit InputState(const char* buffer, std::size_t size) { parse(buffer, size); }
+
+        explicit InputState(std::istream& stream) {
+            ownedInput.assign(std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{});
+            parse(ownedInput.data(), ownedInput.size(), false);
+        }
+
+        void parse(const char* buffer, std::size_t size, bool copy = true) {
+            while (size > 0 && buffer[size - 1] == '\0') {
+                --size;
+            }
+            if (copy) {
+                ownedInput.assign(buffer, size);
+                buffer = ownedInput.data();
+            }
+            try {
+                document = YAML::Load(std::string{buffer, size});
+            } catch (const YAML::Exception& error) {
+                result = sa::error(sa::ErrorCode::ParseError, error.what());
+                return;
+            }
+            if (!document || !document.IsDefined()) {
+                result = sa::error(sa::ErrorCode::ParseError, "YAML document has no root node");
+                return;
+            }
+            result = sa::success();
+        }
+
+        std::string ownedInput;
+        YAML::Node document;
+        sa::Result<void> result;
+    };
+
+    template <typename BufferT, typename T>
+    static sa::Result<void> write(OutputState<BufferT>& state, const T& value) {
+        state.document = YAML::Node{};
+        state.writer.reset(&state.document);
+        auto result = parser_write<yamlcpp::Writer>(state.writer, value, parsing::Parent<yamlcpp::Writer>::Root{});
+        state.hasRoot = static_cast<bool>(result) && static_cast<bool>(state.writer.result());
+        state.flushed = false;
+        if (!state.writer.result()) {
+            return state.writer.result();
+        }
+        return result;
+    }
+
+    template <typename BufferT>
+    static sa::Result<void> finish(OutputState<BufferT>& state, sa::Result<void> result) {
+        if (!result) {
+            return result;
+        }
+        if (!state.writer.result()) {
+            return state.writer.result();
+        }
+        if (!state.hasRoot) {
+            return result;
+        }
+        if (!state.flushed) {
+            YAML::Emitter emitter;
+            emitter << state.document;
+            if (!emitter.good()) {
+                return sa::error(sa::ErrorCode::Unknown, emitter.GetLastError());
+            }
+            detail::append_yaml(state.buffer, std::string_view{emitter.c_str(), emitter.size()});
+            state.flushed = true;
+        }
+        return result;
+    }
+
+    template <typename BufferT>
+    static bool outputReady(const OutputState<BufferT>& state, const sa::Result<void>& result) noexcept {
+        return state.hasRoot && static_cast<bool>(result) && static_cast<bool>(state.writer.result());
+    }
+
+    template <typename SourceT>
+    static sa::Result<void> inputResult(const InputState<SourceT>& state) {
+        return state.result;
+    }
+
+    template <typename SourceT, typename T>
+    static sa::Result<void> read(InputState<SourceT>& state, T& value) {
+        return parser_read<yamlcpp::Reader>(state.document, value);
+    }
+};
+
+template <typename BufferT = YamlCppBackend::DefaultOutputBuffer>
+class YamlCppOutputSerializer : public detail::OutputSerializerAdapter<YamlCppBackend, BufferT> {
+public:
+    using Base = detail::OutputSerializerAdapter<YamlCppBackend, BufferT>;
+    using Base::Base;
+};
+
+template <typename BufferT>
+YamlCppOutputSerializer(BufferT&) -> YamlCppOutputSerializer<BufferT>;
+
+template <typename SourceT = YamlCppBackend::DefaultInputSource>
+class YamlCppInputSerializer : public detail::InputSerializerAdapter<YamlCppBackend, SourceT> {
+public:
+    using Base = detail::InputSerializerAdapter<YamlCppBackend, SourceT>;
+    using Base::Base;
+};
+
+YamlCppInputSerializer(const char*, std::size_t) -> YamlCppInputSerializer<>;
+YamlCppInputSerializer(std::istream&) -> YamlCppInputSerializer<>;
+
+struct YamlCppSerializer {
+    using OutputSerializer = YamlCppOutputSerializer<>;
+    using InputSerializer  = YamlCppInputSerializer<>;
+    using Reader           = yamlcpp::Reader;
+    using Writer           = yamlcpp::Writer;
+};
+#endif
+
+#if defined(NEKO_PROTO_ENABLE_LIBFYAML)
 using YamlSerializer = LibfyamlSerializer;
+#elif defined(NEKO_PROTO_ENABLE_YAMLCPP)
+using YamlSerializer = YamlCppSerializer;
+#endif
 
 NEKO_END_NAMESPACE
 

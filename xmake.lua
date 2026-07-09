@@ -61,6 +61,14 @@ option("enable_libfyaml")
     set_configvar("NEKO_PROTO_ENABLE_LIBFYAML", true)
 option_end()
 
+option("enable_yamlcpp")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable yaml-cpp YAML support, should install yaml-cpp")
+    set_category("serializer provider")
+    set_configvar("NEKO_PROTO_ENABLE_YAMLCPP", true)
+option_end()
+
 option("enable_tomlplusplus")
     set_default(false)
     set_showmenu(true)
@@ -176,6 +184,13 @@ if has_config("enable_libfyaml") then
     add_requires("libfyaml", {configs = { shared = is_kind("shared")}})
 end
 
+if has_config("enable_yamlcpp") then
+    add_requires("yaml-cpp", {configs = { shared = is_kind("shared")}})
+    if not has_config("3rd_custom") then
+        add_requireconfs("**yaml-cpp", {version = "0.8.0"})
+    end
+end
+
 if has_config("enable_tomlplusplus") then
     add_requires("toml++", {configs = { header_only = true}})
     if not has_config("3rd_custom") then
@@ -240,6 +255,7 @@ target("NekoSerializer")
                 "enable_simdjson", 
                 "enable_pugixml",
                 "enable_libfyaml",
+                "enable_yamlcpp",
                 "enable_tomlplusplus",
                 "enable_protocol",
                 "enable_communication",
@@ -268,6 +284,7 @@ target("NekoArgParser")
                 "enable_rapidjson",
                 "enable_simdjson",
                 "enable_libfyaml",
+                "enable_yamlcpp",
                 "enable_tomlplusplus",
                 "custom_namespace")
 

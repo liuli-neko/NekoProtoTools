@@ -13,7 +13,7 @@
 
 NEKO_USE_NAMESPACE
 
-#if defined(NEKO_PROTO_ENABLE_LIBFYAML)
+#if !defined(NEKO_PROTO_NO_YAML_SERIALIZER)
 
 namespace {
 
@@ -41,13 +41,27 @@ struct YamlDocument {
                     (make_tags<ParserTag{.flat = true}>(nested)), configs)
 };
 
-template <typename T>
+static_assert(traits::is_scalar_like_v<std::string>);
+static_assert(traits::is_scalar_like_v<std::optional<int>>);
+static_assert(!traits::is_scalar_like_v<std::vector<int>>);
+static_assert(traits::is_collection_like_v<std::vector<int>>);
+static_assert(traits::is_collection_like_v<YamlDocument>);
+static_assert(!traits::is_collection_like_v<int>);
+static_assert(tag_detail::yaml_tag_impl<"tag:example.com,2000:app/title">::yaml_tag ==
+              std::string_view{"tag:example.com,2000:app/title"});
+
+template <typename Serializer, typename T>
 std::string writeYaml(const T& value) {
     std::vector<char> buffer;
-    YamlSerializer::OutputSerializer out(buffer);
+    typename Serializer::OutputSerializer out(buffer);
     EXPECT_TRUE(out(value)) << (out.error() == nullptr ? "" : out.error()->msg);
     EXPECT_TRUE(out.end()) << (out.error() == nullptr ? "" : out.error()->msg);
     return {buffer.begin(), buffer.end()};
+}
+
+template <typename T>
+std::string writeYaml(const T& value) {
+    return writeYaml<YamlSerializer>(value);
 }
 
 std::size_t countOccurrences(std::string_view text, std::string_view needle) {
@@ -113,6 +127,31 @@ TEST(YamlSerialization, WriterErrorsAreReportedAsSerializationErrors) {
     ASSERT_NE(output.error(), nullptr);
     EXPECT_EQ(output.error()->ec, sa::make_error_code(sa::ErrorCode::InvalidType));
 }
+
+#if defined(NEKO_PROTO_ENABLE_YAMLCPP)
+TEST(YamlSerialization, YamlCppBackendRoundTripsObjects) {
+    const YamlDocument source{.title   = "yaml-cpp",
+                              .values  = {4, 5, 6},
+                              .maybe   = "present",
+                              .nested  = {.code = 9, .label = "nine"},
+                              .configs = {{.key = "config", .values = 42}}};
+
+    const auto output = writeYaml<YamlCppSerializer>(
+        make_tags<yaml_tag<"!config">, yaml_collection_style_tag<YamlCollectionStyle::Block>>(source));
+    EXPECT_NE(output.find("!config"), std::string::npos) << output;
+    EXPECT_NE(output.find("values: ["), std::string::npos) << output;
+
+    YamlDocument decoded;
+    YamlCppSerializer::InputSerializer input(output.data(), output.size());
+    ASSERT_TRUE(input(decoded)) << (input.error() == nullptr ? "" : input.error()->msg);
+    EXPECT_EQ(decoded.title, source.title);
+    EXPECT_EQ(decoded.values, source.values);
+    ASSERT_TRUE(decoded.maybe.has_value());
+    EXPECT_EQ(*decoded.maybe, *source.maybe);
+    EXPECT_EQ(decoded.nested.code, source.nested.code);
+    EXPECT_EQ(decoded.nested.label, source.nested.label);
+}
+#endif
 
 #endif
 
