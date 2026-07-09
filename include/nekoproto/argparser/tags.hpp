@@ -3,6 +3,7 @@
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/global/reflection_tags.hpp"
 #include "nekoproto/global/string_literal.hpp"
+#include "nekoproto/global/traits.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
 #include <array>
@@ -66,10 +67,6 @@ template <typename T>
 using vector_value_t = typename is_vector<std::remove_cvref_t<T>>::value_type;
 
 template <typename T>
-inline constexpr bool is_string_like_v = // NOLINT
-    std::is_same_v<std::remove_cvref_t<T>, std::string> || std::is_same_v<std::remove_cvref_t<T>, std::string_view>;
-
-template <typename T>
 inline constexpr bool is_bool_value_v = std::is_same_v<std::remove_cvref_t<T>, bool>; // NOLINT
 
 template <typename T>
@@ -106,7 +103,8 @@ inline constexpr bool is_range_supported_v = []() consteval { // NOLINT
 
 template <typename T>
 inline constexpr bool is_nested_option_v = // NOLINT
-    std::is_class_v<std::remove_cvref_t<T>> && !is_string_like_v<T> && !is_arg_optional_v<T> && !is_vector_v<T> &&
+    std::is_class_v<std::remove_cvref_t<T>> && !traits::is_string_like_v<T> && !is_arg_optional_v<T> &&
+    !is_vector_v<T> &&
     NEKO_NAMESPACE::detail::has_values_meta<std::remove_cvref_t<T>>;
 } // namespace detail
 

@@ -6,9 +6,9 @@
 #include <span>
 #include <string>
 
+#include "nekoproto/global/traits.hpp"
 #include "nekoproto/rpc/traits.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
-#include "nekoproto/serialization/private/traits.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 

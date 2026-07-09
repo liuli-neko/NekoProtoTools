@@ -14,6 +14,7 @@
 #include "nekoproto/global/reflect.hpp"
 #include "nekoproto/global/reflection_tags.hpp"
 #include "nekoproto/global/string_literal.hpp"
+#include "nekoproto/global/traits.hpp"
 
 #include <cstddef>
 #include <optional>
@@ -90,6 +91,51 @@ struct fixed_length { // NOLINT
 } // namespace tag_property
 
 namespace tag_detail {
+template <ConstexprString Text>
+consteval bool yaml_tag_characters_valid() {
+    for (const auto ch : Text.view()) {
+        if (ch <= ' ') {
+            return false;
+        }
+    }
+    return true;
+}
+
+template <ConstexprString Text>
+consteval bool yaml_tag_prefix_valid() {
+    if constexpr (Text.size() == 0) {
+        return false;
+    }
+    const auto view = Text.view();
+    if (view[0] == '!') {
+        return true;
+    }
+    if (!((view[0] >= 'a' && view[0] <= 'z') || (view[0] >= 'A' && view[0] <= 'Z'))) {
+        return false;
+    }
+    for (std::size_t idx = 1; idx < view.size(); ++idx) {
+        const auto ch = view[idx];
+        if (ch == ':') {
+            return true;
+        }
+        if (!((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '+' ||
+              ch == '-' || ch == '.')) {
+            return false;
+        }
+    }
+    return false;
+}
+
+template <ConstexprString Text>
+consteval bool yaml_anchor_characters_valid() {
+    for (const auto ch : Text.view()) {
+        if (ch <= ' ' || ch == '[' || ch == ']' || ch == '{' || ch == '}' || ch == ',') {
+            return false;
+        }
+    }
+    return true;
+}
+
 struct serialization_ignore_tag_impl {
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
@@ -129,22 +175,28 @@ struct rename_tag_impl {
 
 template <ConstexprString Tag>
 struct yaml_tag_impl {
+    static_assert(Tag.size() > 0, "YAML tag must not be empty");
+    static_assert(yaml_tag_characters_valid<Tag>(), "YAML tag must not contain whitespace or control characters");
+    static_assert(yaml_tag_prefix_valid<Tag>(), "YAML tag must be a local tag starting with '!' or a global URI tag");
+
     constexpr static auto yaml_tag = Tag.view(); // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        static_assert(Tag.size() > 0, "YAML tag must not be empty");
         return true;
     }
 };
 
 template <ConstexprString Anchor>
 struct yaml_anchor_tag_impl {
+    static_assert(Anchor.size() > 0, "YAML anchor must not be empty");
+    static_assert(yaml_anchor_characters_valid<Anchor>(),
+                  "YAML anchor must not contain whitespace, control characters, or []{},");
+
     constexpr static auto yaml_anchor = Anchor.view(); // NOLINT
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
-        static_assert(Anchor.size() > 0, "YAML anchor must not be empty");
         return true;
     }
 };
@@ -155,6 +207,11 @@ struct yaml_scalar_style_tag_impl {
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
+        if constexpr (Style != YamlScalarStyle::Any) {
+            static_assert(traits::is_scalar_like_v<T>,
+                          "YAML scalar style tags require a scalar field such as string, arithmetic, enum, or "
+                          "optional scalar");
+        }
         return true;
     }
 };
@@ -165,6 +222,11 @@ struct yaml_collection_style_tag_impl {
 
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() { // NOLINT
+        if constexpr (Style != YamlCollectionStyle::Any) {
+            static_assert(traits::is_collection_like_v<T>,
+                          "YAML collection style tags require a sequence, map, tuple, pair, reflected/custom object, "
+                          "or optional collection/object");
+        }
         return true;
     }
 };

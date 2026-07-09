@@ -2,7 +2,7 @@
 
 [![中文](https://img.shields.io/badge/语言-中文-blue.svg)](./README.md)
 [![English](https://img.shields.io/badge/language-English-blue.svg)](./README_en.md)
-![Version](https://img.shields.io/badge/version-0.3.1-green.svg)
+![Version](https://img.shields.io/badge/version-0.3.2-green.svg)
 
 ### CI Status
 
@@ -18,7 +18,7 @@
 
 NekoProtoTools is a pure C++ protocol helper library designed to **simplify the definition, serialization/deserialization, and RPC communication of messages (protocols) in C++**.
 
-Current version: **0.3.1**. Compared with v0.3.0, this release adds the reflection-driven ArgParser, YAML/TOML serialization backends, unified tag/reflection metadata infrastructure, and `NekoRpcBackend` hello negotiation, dynamic method-id table updates, bounded method-id error recovery, and compression extensions. On the serialization side, `sa::Result<T>` aliases `std::expected<T, sa::Error>` when `<expected>` is available, with the built-in compatibility implementation kept for older environments.
+Current version: **0.3.2**. Compared with v0.3.1, this release adds the yaml-cpp YAML backend for environments where the libfyaml package is unavailable, such as Windows / clang-cl, while keeping the libfyaml backend. Windows CI now uses `--enable_yamlcpp`. YAML metadata static checks were also tightened, and shared type traits now live in the public `global/traits.hpp` header for reuse by serialization, ArgParser, and other modules.
 
 Core features of this library:
 
@@ -42,7 +42,7 @@ Core features of this library:
     *   JSON: [RapidJSON](https://rapidjson.org/) or [simdjson](https://simdjson.org/) (optional, enable via build options). When both are enabled, the default `JsonSerializer` alias selects RapidJSON first.
     *   XML: [pugixml](https://pugixml.org/) (optional, enable via build options)
     *   Binary: built-in binary Reader/Writer, no extra third-party dependency required.
-    *   YAML: [libfyaml](https://github.com/pantoniou/libfyaml) (optional, enable via build options)
+    *   YAML: [libfyaml](https://github.com/pantoniou/libfyaml) or [yaml-cpp](https://github.com/jbeder/yaml-cpp) (optional, enable via build options). When both are enabled, the default `YamlSerializer` alias selects libfyaml first; concrete backend types can also be used directly.
     *   TOML: [toml++](https://github.com/marzer/tomlplusplus) (optional, enable via build options)
     *   *Note: To keep the library lightweight, these serialization libraries are **not directly bundled**. You need to manage these dependencies yourself through options.*
 *   **Communication & RPC (Optional)**:
@@ -75,7 +75,8 @@ add_requires("neko-proto-tools", {
          enable_protocol = true,     -- Set to true to enable ProtoFactory/IProto
          enable_communication = true,-- Set to true to enable communication features
          enable_jsonrpc = true,      -- Set to true to enable JSON-RPC features
-         enable_libfyaml = false,    -- Set to true to enable YAML support
+         enable_libfyaml = false,    -- Set to true to enable libfyaml YAML support
+         enable_yamlcpp = false,     -- Set to true to enable yaml-cpp YAML support
          enable_tomlplusplus = false -- Set to true to enable TOML support
     },
 })
@@ -261,7 +262,7 @@ Serializers are responsible for converting C++ objects into byte streams (serial
     *   `JsonSerializer`: Default JSON serializer alias. It uses `RapidJsonSerializer` when RapidJSON is enabled; otherwise it uses `SimdJsonSerializer` when simdjson is enabled.
     *   `BinarySerializer`: Provides a compact binary serialization format and supports binary layout tags such as `fixed_length` and `unframed`.
     *   `XmlSerializer`: Uses pugixml for XML serialization and deserialization.
-    *   `YamlSerializer`: Uses libfyaml for YAML serialization and deserialization.
+    *   `YamlSerializer`: Uses libfyaml or yaml-cpp for YAML serialization and deserialization.
     *   `TomlSerializer`: Uses toml++ for TOML serialization and deserialization.
 *   **Choosing a Serializer**:
     *   For basic serialization, directly instantiate the required `OutputSerializer` / `InputSerializer`.
@@ -966,7 +967,7 @@ To add a new data format, implement a backend with responsibilities matching the
 *   [x] Use simdjson as JSON input serializer backend (`simdjson::dom`)
 *   [x] Route RapidJSON, simdjson, Binary, XML, YAML, TOML, and schema generation through the generic Parser layer
 *   [x] Implement XML Reader/Writer backend with pugixml
-*   [x] Implement YAML Reader/Writer backend with libfyaml
+*   [x] Implement YAML Reader/Writer backends with libfyaml / yaml-cpp
 *   [x] Implement TOML Reader/Writer backend with toml++
 *   [x] Support Draft-07 style JSON Schema generation
 *   [x] Alias `sa::Result<T>` to `std::expected<T, sa::Error>` when C++23 `<expected>` is available, while keeping the C++20 compatibility implementation
@@ -1014,9 +1015,17 @@ To add a new data format, implement a backend with responsibilities matching the
 
 ## 9. Development History (Selected Milestones)
 
+*   **v0.3.2**
+    *   Added a yaml-cpp YAML Reader/Writer backend. When both libfyaml and yaml-cpp are enabled, the default `YamlSerializer` still selects libfyaml first; concrete backend types can also be used directly.
+    *   Switched Windows / clang-cl CI to `enable_yamlcpp`, avoiding failures from the libfyaml xmake package being unavailable on Windows.
+    *   Strengthened YAML metadata static checks: `yaml_tag` accepts local tags starting with `!` and global URI tags, rejects whitespace/control characters, and `yaml_anchor` rejects whitespace plus YAML anchor separator characters.
+    *   `yaml_scalar_style_tag` and `yaml_collection_style_tag` now perform compile-time type checks on tagged read/write paths, preventing scalar styles on collections and collection styles on scalar fields.
+    *   Moved common type traits such as string-like, optional-like unwrapping, known collections, scalar-like, and collection-like into `global/traits.hpp`, so serialization and ArgParser share the same names and rules.
+    *   Tag `constexpr_check` now runs when tagged serializer fields enter Parser read/write dispatch, surfacing tag constraints at the actual use site.
+
 *   **v0.3.1**
     *   Split serialization parser dispatch into `WriteParser<Writer, T>`, `ReadParser<Reader, T>`, and `SchemaParser<T>`; the user extension point is now the public `CustomParser<T>`.
-    *   Added YAML / TOML serialization backends: `YamlSerializer` is based on libfyaml, `TomlSerializer` is based on toml++, and both are wired into the unified Parser type rules.
+    *   Added YAML / TOML serialization backends: `YamlSerializer` supports libfyaml, `TomlSerializer` is based on toml++, and both are wired into the unified Parser type rules.
     *   Recommended manual reflection metadata now uses non-intrusive `template<> struct Meta<T>`; `NEKO_SERIALIZER` remains as a convenience macro.
     *   Added `NekoArgParser` / `<nekoproto/argparser/argparser.hpp>`: CLI schemas can now be defined with static reflection and tags, returning `std::expected<..., std::error_code>`.
     *   ArgParser supports long/short options, positional arguments, flags, repeatable values, nested options, defaults, environment variables, choices/ranges, automatic help/version output, and subcommands.

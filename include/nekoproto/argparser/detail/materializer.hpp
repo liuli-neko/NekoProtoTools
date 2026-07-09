@@ -3,15 +3,16 @@
 #include "nekoproto/argparser/detail/raw_parser.hpp"
 #include "nekoproto/argparser/error.hpp"
 #include "nekoproto/global/global.hpp"
+#include "nekoproto/global/traits.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <charconv>
 #include <cstdlib>
-#include <sstream>
 #include <optional>
 #include <span>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -224,7 +225,7 @@ std::error_code assign_default_value(const T& default_value, auto& value, char s
 
 template <typename T>
 inline constexpr bool is_choice_value_v = // NOLINT
-    is_string_like_v<T> || std::is_enum_v<std::remove_cvref_t<T>>;
+    traits::is_string_like_v<T> || std::is_enum_v<std::remove_cvref_t<T>>;
 
 template <typename T>
 inline constexpr bool is_choices_supported_v = []() consteval { // NOLINT
@@ -282,7 +283,7 @@ inline bool choice_contains(std::span<const std::string_view> choices, std::stri
 template <typename T>
 bool choice_value_allowed(const T& value, std::span<const std::string_view> choices, bool case_insensitive_choices) {
     using RawT = std::remove_cvref_t<T>;
-    if constexpr (is_string_like_v<RawT>) {
+    if constexpr (traits::is_string_like_v<RawT>) {
         return choice_contains(choices, value, case_insensitive_choices);
     } else if constexpr (std::is_enum_v<RawT>) {
         constexpr auto EnumNames  = Reflect<RawT>::names();
@@ -370,8 +371,8 @@ template <typename FieldT, typename Tags>
 std::error_code assign_default_to_field(const ArgSpec& spec, FieldT& field, const Tags& tags) {
     if constexpr (tag_query::has<tag_property::default_value>(decltype(tags){})) {
         const auto case_insensitive_enum = spec.case_insensitive_choices && !spec.choices.empty();
-        if (auto error =
-                assign_default_value(tag_query::get<tag_property::default_value>(tags), field, spec.separator, case_insensitive_enum)) {
+        if (auto error = assign_default_value(tag_query::get<tag_property::default_value>(tags), field, spec.separator,
+                                              case_insensitive_enum)) {
             return contextual_argparser_error(error, spec,
                                               "failed to apply default " + quote_arg_value(spec.default_value));
         }
@@ -468,9 +469,9 @@ inline std::error_code validate_cross_field_constraints(const ArgSchema& schema,
         for (const auto requiredName : spec.requires_names) {
             const auto requiredIndex = schema.find_reference_index(requiredName);
             if (!requiredIndex.has_value() || *requiredIndex == index) {
-                return make_argparser_error(ArgParserError::InvalidDefinition,
-                                            format_error_option_label(spec) + " references unknown requirement " +
-                                                quote_arg_value(requiredName));
+                return make_argparser_error(ArgParserError::InvalidDefinition, format_error_option_label(spec) +
+                                                                                   " references unknown requirement " +
+                                                                                   quote_arg_value(requiredName));
             }
             if (supplied[*requiredIndex] == 0U) {
                 return make_argparser_error(ArgParserError::MissingRequired,
@@ -481,9 +482,9 @@ inline std::error_code validate_cross_field_constraints(const ArgSchema& schema,
         for (const auto conflictName : spec.conflicts) {
             const auto conflictIndex = schema.find_reference_index(conflictName);
             if (!conflictIndex.has_value() || *conflictIndex == index) {
-                return make_argparser_error(ArgParserError::InvalidDefinition,
-                                            format_error_option_label(spec) + " references unknown conflict " +
-                                                quote_arg_value(conflictName));
+                return make_argparser_error(ArgParserError::InvalidDefinition, format_error_option_label(spec) +
+                                                                                   " references unknown conflict " +
+                                                                                   quote_arg_value(conflictName));
             }
             if (supplied[*conflictIndex] != 0U) {
                 return make_argparser_error(ArgParserError::InvalidValue,
@@ -501,35 +502,36 @@ std::error_code apply_default_fields(T& object, const ArgSchema& schema, std::si
     std::error_code result;
     Reflect<std::remove_cvref_t<T>>::forEach(
         object, [&](auto& field, std::string_view reflectedName, const auto& tags) {
-            if (result) {
+            if constexpr (should_ignore_arg_field(decltype(tags){})) {
                 return;
-            }
-            if (should_ignore_arg_field(tags)) {
-                return;
-            }
-            static_cast<void>(reflectedName);
-            using FieldT = std::remove_cvref_t<decltype(field)>;
-
-            if constexpr (is_nested_option_v<FieldT>) {
-                if (auto error = apply_default_fields(field, schema, spec_index, supplied); error) {
-                    result = error;
-                }
             } else {
-                if (spec_index >= schema.user_spec_count) {
-                    result = make_argparser_error(ArgParserError::InvalidDefinition,
-                                                  "schema index is out of range while applying default for field " +
-                                                      quote_arg_value(reflectedName));
+                if (result) {
                     return;
                 }
-                bool defaultSupplied = false;
-                if (auto error = apply_default_option(schema.specs[spec_index], field, tags, defaultSupplied)) {
-                    result = error;
-                    return;
+                static_cast<void>(reflectedName);
+                using FieldT = std::remove_cvref_t<decltype(field)>;
+
+                if constexpr (is_nested_option_v<FieldT>) {
+                    if (auto error = apply_default_fields(field, schema, spec_index, supplied); error) {
+                        result = error;
+                    }
+                } else {
+                    if (spec_index >= schema.user_spec_count) {
+                        result = make_argparser_error(ArgParserError::InvalidDefinition,
+                                                      "schema index is out of range while applying default for field " +
+                                                          quote_arg_value(reflectedName));
+                        return;
+                    }
+                    bool defaultSupplied = false;
+                    if (auto error = apply_default_option(schema.specs[spec_index], field, tags, defaultSupplied)) {
+                        result = error;
+                        return;
+                    }
+                    if (defaultSupplied) {
+                        supplied[spec_index] = 1U;
+                    }
+                    ++spec_index;
                 }
-                if (defaultSupplied) {
-                    supplied[spec_index] = 1U;
-                }
-                ++spec_index;
             }
         });
     return result;
@@ -541,37 +543,38 @@ std::error_code materialize_fields(T& object, const ArgSchema& schema, const Raw
     std::error_code result;
     Reflect<std::remove_cvref_t<T>>::forEach(
         object, [&](auto& field, std::string_view reflectedName, const auto& tags) {
-            if (result) {
+            if constexpr (should_ignore_arg_field(decltype(tags){})) {
                 return;
-            }
-            if (should_ignore_arg_field(tags)) {
-                return;
-            }
-            static_cast<void>(reflectedName);
-            using FieldT = std::remove_cvref_t<decltype(field)>;
-
-            if constexpr (is_nested_option_v<FieldT>) {
-                if (auto error = materialize_fields(field, schema, raw, config, spec_index, supplied); error) {
-                    result = error;
-                }
             } else {
-                if (spec_index >= schema.user_spec_count || spec_index >= raw.options.size()) {
-                    result = make_argparser_error(ArgParserError::InvalidDefinition,
-                                                  "schema index is out of range while materializing field " +
-                                                      quote_arg_value(reflectedName));
+                if (result) {
                     return;
                 }
-                bool optionSupplied = false;
-                const auto alreadySupplied = supplied[spec_index] != 0U;
-                if (auto error = materialize_one_option(schema.specs[spec_index], raw.options[spec_index], field, tags,
-                                                        config, alreadySupplied, optionSupplied)) {
-                    result = error;
-                    return;
+                static_cast<void>(reflectedName);
+                using FieldT = std::remove_cvref_t<decltype(field)>;
+
+                if constexpr (is_nested_option_v<FieldT>) {
+                    if (auto error = materialize_fields(field, schema, raw, config, spec_index, supplied); error) {
+                        result = error;
+                    }
+                } else {
+                    if (spec_index >= schema.user_spec_count || spec_index >= raw.options.size()) {
+                        result = make_argparser_error(ArgParserError::InvalidDefinition,
+                                                      "schema index is out of range while materializing field " +
+                                                          quote_arg_value(reflectedName));
+                        return;
+                    }
+                    bool optionSupplied        = false;
+                    const auto alreadySupplied = supplied[spec_index] != 0U;
+                    if (auto error = materialize_one_option(schema.specs[spec_index], raw.options[spec_index], field,
+                                                            tags, config, alreadySupplied, optionSupplied)) {
+                        result = error;
+                        return;
+                    }
+                    if (optionSupplied) {
+                        supplied[spec_index] = 1U;
+                    }
+                    ++spec_index;
                 }
-                if (optionSupplied) {
-                    supplied[spec_index] = 1U;
-                }
-                ++spec_index;
             }
         });
     return result;
@@ -598,28 +601,29 @@ std::error_code mark_imported_fields_supplied(const T& object, const ArgSchema& 
     std::error_code result;
     Reflect<std::remove_cvref_t<T>>::forEach(
         object, [&](const auto& field, std::string_view reflectedName, const auto& tags) {
-            if (result) {
+            if constexpr (should_ignore_arg_field(decltype(tags){})) {
                 return;
-            }
-            if (should_ignore_arg_field(tags)) {
-                return;
-            }
-            static_cast<void>(reflectedName);
-            using FieldT = std::remove_cvref_t<decltype(field)>;
-
-            if constexpr (is_nested_option_v<FieldT>) {
-                if (auto error = mark_imported_fields_supplied(field, schema, spec_index, supplied); error) {
-                    result = error;
-                }
             } else {
-                if (spec_index >= schema.user_spec_count || spec_index >= supplied.size()) {
-                    result = make_argparser_error(ArgParserError::InvalidDefinition,
-                                                  "schema index is out of range while marking imported field " +
-                                                      quote_arg_value(reflectedName));
+                if (result) {
                     return;
                 }
-                supplied[spec_index] = imported_field_supplied(field) ? 1U : 0U;
-                ++spec_index;
+                static_cast<void>(reflectedName);
+                using FieldT = std::remove_cvref_t<decltype(field)>;
+
+                if constexpr (is_nested_option_v<FieldT>) {
+                    if (auto error = mark_imported_fields_supplied(field, schema, spec_index, supplied); error) {
+                        result = error;
+                    }
+                } else {
+                    if (spec_index >= schema.user_spec_count || spec_index >= supplied.size()) {
+                        result = make_argparser_error(ArgParserError::InvalidDefinition,
+                                                      "schema index is out of range while marking imported field " +
+                                                          quote_arg_value(reflectedName));
+                        return;
+                    }
+                    supplied[spec_index] = imported_field_supplied(field) ? 1U : 0U;
+                    ++spec_index;
+                }
             }
         });
     return result;

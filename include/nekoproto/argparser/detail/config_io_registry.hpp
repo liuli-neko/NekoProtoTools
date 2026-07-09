@@ -46,7 +46,7 @@ struct YamlConfigIoBackend {
     static constexpr std::string_view importHelp        = "import options from a YAML file";
     static constexpr std::string_view exportHelp        = "export resolved options to a YAML file";
     static constexpr bool available =
-#if defined(NEKO_PROTO_ENABLE_LIBFYAML)
+#if defined(NEKO_PROTO_ENABLE_LIBFYAML) || defined(NEKO_PROTO_ENABLE_YAMLCPP)
         true;
 #else
         false;

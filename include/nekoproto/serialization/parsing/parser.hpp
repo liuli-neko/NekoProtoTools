@@ -97,6 +97,8 @@ struct WriteParser<W, TaggedField<Tags, Accessor>, void> {
 
     template <typename ParentType, typename ParentTags>
     static ParserResult write(W& writer, const Field& field, const ParentType& parent, const ParentTags& /*tags*/) {
+        using ValueType = std::remove_cvref_t<typename Field::accessor_type>;
+        static_assert(perform_check<ValueType, Tags>(), "Tag check failed for tagged serializer value");
         return parser_write<W>(writer, field.accessor, parent, Tags);
     }
 };
@@ -107,6 +109,8 @@ struct ReadParser<R, TaggedField<Tags, Accessor>, void> {
 
     template <typename ParentTags>
     static ParserResult read(typename R::InputValueType in, Field& field, const ParentTags& /*tags*/) {
+        using ValueType = std::remove_cvref_t<typename Field::accessor_type>;
+        static_assert(perform_check<ValueType, Tags>(), "Tag check failed for tagged serializer value");
         return parser_read<R>(in, field.accessor, Tags);
     }
 };

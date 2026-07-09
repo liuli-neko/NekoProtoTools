@@ -45,6 +45,10 @@ function autofunc.auto_add_packages(target, options)
         target:add("packages", "libfyaml", {public = true})
     end
 
+    if has_config("enable_yamlcpp") then
+        target:add("packages", "yaml-cpp", {public = true})
+    end
+
     if has_config("enable_tomlplusplus") then
         target:add("packages", "toml++", {public = true})
         target:add("defines", "TOML_EXCEPTIONS=0", {public = true})

@@ -2,7 +2,7 @@
 
 #include "nekoproto/serialization/parsing/parser.hpp"
 #include "nekoproto/serialization/parsing/supports_unframed_objects.hpp"
-#include "nekoproto/serialization/private/traits.hpp"
+#include "nekoproto/global/traits.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
 #include <algorithm>
