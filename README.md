@@ -340,19 +340,19 @@ template <>
 struct Meta<::BuildOptions> {
     constexpr static auto value =
         Object("verbose",
-               make_tags<argparser::arg_name<"verbose", "v">,
+               make_tags<argparser::arg_name<"verbose", 'v'>,
                          argparser::arg_help<"enable verbose logs">,
                          argparser::ArgTags{.flag = true}>(&::BuildOptions::verbose),
                "jobs",
-               make_tags<argparser::arg_name<"jobs", "j">,
+               make_tags<argparser::arg_name<"jobs", 'j'>,
                          argparser::arg_default<4>,
                          argparser::arg_help<"parallel jobs">,
                          argparser::ArgTags{.range_min = 1, .range_max = 65}>(&::BuildOptions::jobs),
                "mode",
-               make_tags<argparser::arg_name<"mode", "m">,
+               make_tags<argparser::arg_name<"mode", 'm'>,
                          argparser::arg_choices<"debug", "release">>(&::BuildOptions::mode),
                "include",
-               make_tags<argparser::arg_name<"include", "I">,
+               make_tags<argparser::arg_name<"include", 'I'>,
                          argparser::arg_help<"include path">,
                          argparser::ArgTags{.repeatable = true}>(&::BuildOptions::include));
 };
@@ -361,6 +361,9 @@ struct Meta<::BuildOptions> {
 int main(int argc, char** argv) {
     auto result = parser<BuildOptions>(argc, argv);
     if (!result) {
+        const auto diagnostic = last_error();
+        // diagnostic.message 可用于面向用户的错误输出；error_code 只用于稳定的分支判断。
+        (void)diagnostic;
         return result.error() == make_error_code(ArgParserError::HelpRequested) ? 0 : 1;
     }
 
@@ -370,7 +373,19 @@ int main(int argc, char** argv) {
 }
 ```
 
-常用 arg tags 包括 `arg_name`、`arg_help`、`arg_default`、`arg_choices`、`arg_env`、`arg_separator`、`arg_aliases`、`arg_implicit`、`arg_group`、`arg_conflicts`、`arg_requires`、`arg_deprecated` 和 `arg_case_insensitive_choices`。字段可通过 `ArgTags{.positional = true}`、`.flag = true`、`.repeatable = true`、`.required = true` 等基础标记描述行为；子命令可通过 `ArgTags{.command = true}` 建模。
+常用 arg tags 包括 `arg_name`、`arg_absolute_name`、`arg_help`、`arg_default`、`arg_choices`、`arg_env`、`arg_separator`、`arg_aliases`、`arg_implicit`、`arg_group`、`arg_conflicts`、`arg_requires`、`arg_deprecated` 和 `arg_case_insensitive_choices`。字段可通过 `ArgTags{.positional = true}`、`.flag = true`、`.repeatable = true`、`.required = true` 等基础标记描述行为；子命令可通过 `ArgTags{.command = true}` 建模。
+
+ArgParser 的字段类型是拥有结果的值类型：文本请使用 `std::string`，不支持 `std::string_view`（包括 `optional` / `vector` 包装），因为环境变量、隐式值和配置文件缓冲区不保证在解析返回后继续存在。`std::vector<T>` 是唯一可重复的 option 类型；标量 option 重复出现会报错，repeatable positional 必须位于最后。
+
+嵌套字段默认自动增加父级前缀，例如 `network.host`；`arg_long_name` 只修改当前叶子名称，`arg_absolute_name<"listen-host">` 可直接指定不带父级前缀的完整名称。长名称由 ASCII 字母、数字、`-`、`_` 组成，路径使用 `ArgParserConfig::nestedSeparator`（默认 `.`）。用户 option 可以覆盖内建的 `-h` / `--help` 和 `-V` / `--version`；未被用户 schema 命中的对应 token 才触发内建行为。
+
+`arg_requires` 与 `arg_conflicts` 的引用规则为：`"token"` 表示同级字段，`"/database.host"` 表示根绝对路径，`"./tls.cert"` 表示相对当前层级，`"../token"` 表示相对父层级；不带 `/` 但包含路径分隔符的名称保留为兼容性的根绝对路径。引用的目标始终是最终公开的 CLI 名称：引用 `arg_absolute_name<"listen-port">` 时，跨层代码应写 `"/listen-port"`，而不是依赖 C++ 字段层次。help 会展示已展开的规范名称，如 `--auth.login (requires: --auth.token)`。CLI、环境变量、配置导入、`arg_default` 和结构体初始化值的优先级依次降低；`required` 判断是否由某个来源提供，关系约束判断是否激活，因此 `--json=false --yaml` 合法。
+
+`range_min` 和 `range_max` 必须同时声明，范围采用半开区间 `[min, max)`；`arg_separator` 只适用于 `std::vector<T>`。help 会显示 repeatable、separator、关系、默认值和环境变量来源。
+
+默认 Usage 会在 `[options]` 后按顺序列出位置参数：必填参数为 `<INPUT>`，可选参数为 `[<OUTPUT>]`，可重复参数为 `[<EXTRA>...]`。位置参数在 help 中单独显示在 `Arguments:`，不会与普通 option 混排；设置 `ArgParserConfig::usage` 后则由调用者完全控制 usage 文本。
+
+启用 `configIo` 时，配置文件沿用统一 serializer 的对象规则：所有非 `optional`、非 `skippable` 的字段都必须出现在输入中。完整的设计约定、迁移边界和验收项见 [`docs/argparser_hardening_plan.md`](docs/argparser_hardening_plan.md)。
 
 ### 5.4. 协议管理 (`ProtoFactory`, `IProto`)
 

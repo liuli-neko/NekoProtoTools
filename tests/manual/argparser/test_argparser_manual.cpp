@@ -43,12 +43,14 @@ struct ServeNetworkOptions {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("host",
-                   make_tags<arg_value_name<"HOST">, 
+                   make_tags<arg_absolute_name<"host">,
+                            arg_value_name<"HOST">, 
                             arg_env<"NEKO_ARGPARSER_MANUAL_HOST">,
                             arg_help<"listen host">, 
                             ArgTags{.required = true}>(&ServeNetworkOptions::host),
                    "port",
-                   make_tags<arg_value_name<"PORT">, 
+                   make_tags<arg_absolute_name<"port">,
+                            arg_value_name<"PORT">, 
                             arg_default<8080>, 
                             arg_help<"listen port">,
                             ArgTags{.range_min = 1, .range_max = 65536}>(&ServeNetworkOptions::port));

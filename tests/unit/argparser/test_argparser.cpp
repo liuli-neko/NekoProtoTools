@@ -146,21 +146,39 @@ TEST(ArgParser, ErrorMessagesIncludeArgumentContext) {
     const char* missingArgv[] = {"demo", "--database.host", "db.local"};
     auto missing              = parser<CliOptions>(static_cast<int>(std::size(missingArgv)), missingArgv);
     ASSERT_FALSE(missing.has_value());
-    auto message = missing.error().message();
+    auto message = last_error().message;
     EXPECT_NE(message.find("--output"), std::string::npos);
 
     const char* rangeArgv[] = {"demo", "--output", "out.txt", "--database.host", "db.local", "--count", "101"};
     auto range              = parser<CliOptions>(static_cast<int>(std::size(rangeArgv)), rangeArgv);
     ASSERT_FALSE(range.has_value());
-    message = range.error().message();
+    message = last_error().message;
     EXPECT_NE(message.find("--count"), std::string::npos);
     EXPECT_NE(message.find("101"), std::string::npos);
 
     const char* unknownArgv[] = {"demo", "--does-not-exist"};
     auto unknown              = parser<CliOptions>(static_cast<int>(std::size(unknownArgv)), unknownArgv);
     ASSERT_FALSE(unknown.has_value());
-    message = unknown.error().message();
+    message = last_error().message;
     EXPECT_NE(message.find("--does-not-exist"), std::string::npos);
+}
+
+TEST(ArgParser, LastErrorOwnsContextWhileErrorCodeMessageStaysStable) {
+    const char* missingArgv[] = {"demo", "--database.host", "db.local"};
+    auto missing              = parser<CliOptions>(static_cast<int>(std::size(missingArgv)), missingArgv);
+
+    ASSERT_FALSE(missing.has_value());
+    const auto first_diagnostic = last_error();
+    EXPECT_EQ(make_error_code(first_diagnostic.error), make_error_code(ArgParserError::MissingRequired));
+    EXPECT_NE(first_diagnostic.message.find("--output"), std::string::npos);
+    EXPECT_EQ(missing.error().message(), "missing required option");
+
+    const char* unknownArgv[] = {"demo", "--does-not-exist"};
+    auto unknown              = parser<CliOptions>(static_cast<int>(std::size(unknownArgv)), unknownArgv);
+    ASSERT_FALSE(unknown.has_value());
+
+    EXPECT_NE(first_diagnostic.message.find("--output"), std::string::npos);
+    EXPECT_NE(last_error().message.find("--does-not-exist"), std::string::npos);
 }
 
 TEST(ArgParser, HelpRequestedAndFormatHelp) {
@@ -178,6 +196,39 @@ TEST(ArgParser, HelpRequestedAndFormatHelp) {
     NEKO_LOG_INFO("test", "Help: \n{}", help);
     EXPECT_NE(help.find("--database.host"), std::string::npos);
     EXPECT_NE(help.find("--output <value> (required)"), std::string::npos);
+}
+
+struct UsagePositionalOptions {
+    std::string input;
+    std::optional<std::string> output;
+    std::vector<std::string> extras;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("input", make_tags<arg_value_name<"INPUT">, ArgTags{.required = true, .positional = true}>(
+                                &UsagePositionalOptions::input),
+                   "output", make_tags<arg_value_name<"OUTPUT">, ArgTags{.positional = true}>(
+                                 &UsagePositionalOptions::output),
+                   "extras", make_tags<arg_value_name<"EXTRA">, ArgTags{.positional = true}>(
+                                 &UsagePositionalOptions::extras));
+    };
+};
+
+TEST(ArgParser, HelpSeparatesPositionalsAndAddsThemToUsage) {
+    ArgParserConfig config;
+    config.programName = "demo";
+
+    const auto help = format_help<UsagePositionalOptions>(config);
+
+    EXPECT_NE(help.find("Usage: demo [options] <INPUT> [<OUTPUT>] [<EXTRA>...]"), std::string::npos);
+    const auto options = help.find("Options:\n");
+    const auto arguments = help.find("Arguments:\n");
+    ASSERT_NE(options, std::string::npos);
+    ASSERT_NE(arguments, std::string::npos);
+    EXPECT_EQ(help.substr(options, arguments - options).find("INPUT"), std::string::npos);
+    EXPECT_NE(help.find("Arguments:\n  INPUT (required)"), std::string::npos);
+    EXPECT_NE(help.find("  OUTPUT"), std::string::npos);
+    EXPECT_NE(help.find("  EXTRA... (repeatable)"), std::string::npos);
 }
 // clang-format off
 struct BuildCommand {
@@ -287,6 +338,19 @@ TEST(ArgParser, CommandShortValueWinsOverCluster) {
     const auto& build = std::get<BuildCommand>(*result);
     EXPECT_EQ(build.jobs, 8);
     EXPECT_TRUE(build.release);
+}
+
+TEST(ArgParser, ShortClusterAllowsTheLastValueOptionToConsumeTheSuffix) {
+    const char* argv[] = {"tool", "build", "-rj8"};
+    ArgParserConfig config;
+    config.allowShortCluster = true;
+
+    auto result = parser<ToolCommands>(static_cast<int>(std::size(argv)), argv, config);
+
+    ASSERT_TRUE(result.has_value()) << last_error().message;
+    const auto& build = std::get<BuildCommand>(*result);
+    EXPECT_TRUE(build.release);
+    EXPECT_EQ(build.jobs, 8);
 }
 
 TEST(ArgParser, ChoicesConstraint) {
@@ -487,22 +551,20 @@ struct ArgIgnoredNestedOptions {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("visible", &ArgIgnoredNestedOptions::visible, "ignored",
-                   make_tags<arg_ignore_tag, arg_help<"ignored nested value">>(
-                       &ArgIgnoredNestedOptions::ignored));
+                   make_tags<arg_ignore_tag, arg_help<"ignored nested value">>(&ArgIgnoredNestedOptions::ignored));
     };
 };
 
 struct ArgIgnoredOptions {
-    bool verbose       = false;
+    bool verbose        = false;
     std::string ignored = "keep";
     ArgIgnoredNestedOptions nested;
 
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("verbose", make_tags<arg_help<"visible flag">, ArgTags{.flag = true}>(&ArgIgnoredOptions::verbose),
-                   "ignored",
-                   make_tags<arg_ignore_tag, arg_help<"ignored root value">>(&ArgIgnoredOptions::ignored), "nested",
-                   &ArgIgnoredOptions::nested);
+                   "ignored", make_tags<arg_ignore_tag, arg_help<"ignored root value">>(&ArgIgnoredOptions::ignored),
+                   "nested", &ArgIgnoredOptions::nested);
     };
 };
 
@@ -782,6 +844,172 @@ TEST(ArgParser, ConflictsValidationRunsAfterParsing) {
     EXPECT_EQ(result.error(), make_error_code(ArgParserError::InvalidValue));
 }
 
+TEST(ArgParser, FalseBooleanValuesDoNotActivateRelationships) {
+    const char* argv[] = {"demo", "--json=false", "--yaml"};
+
+    auto result = parser<RelationshipOptions>(static_cast<int>(std::size(argv)), argv);
+
+    ASSERT_TRUE(result.has_value()) << last_error().message;
+    EXPECT_FALSE(result->json);
+    EXPECT_TRUE(result->yaml);
+}
+
+struct ScopedRelationshipOptions {
+    bool login   = false;
+    bool publish = false;
+    std::string token;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object(
+                "login", make_tags<arg_requires<"./token">, ArgTags{.flag = true}>(&ScopedRelationshipOptions::login),
+                "publish",
+                make_tags<arg_requires<"../global-token">, ArgTags{.flag = true}>(&ScopedRelationshipOptions::publish),
+                "token", &ScopedRelationshipOptions::token);
+    };
+};
+
+struct ScopedRelationshipRoot {
+    ScopedRelationshipOptions auth;
+    std::string globalToken;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("auth", &ScopedRelationshipRoot::auth, "globalToken",
+                   make_tags<arg_long_name<"global-token">>(&ScopedRelationshipRoot::globalToken));
+    };
+};
+
+struct AbsoluteNameOptions {
+    struct Network {
+        int port = 0;
+
+        struct Neko {
+            constexpr static auto value = // NOLINT
+                Object("port", make_tags<arg_absolute_name<"listen-port">>(&Network::port));
+        };
+    };
+
+    Network network;
+
+    struct Neko {
+        constexpr static auto value = Object("network", &AbsoluteNameOptions::network); // NOLINT
+    };
+};
+
+struct DuplicateNameOptions {
+    bool first  = false;
+    bool second = false;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("first", make_tags<arg_long_name<"same">, ArgTags{.flag = true}>(&DuplicateNameOptions::first),
+                   "second", make_tags<arg_long_name<"same">, ArgTags{.flag = true}>(&DuplicateNameOptions::second));
+    };
+};
+
+struct NonRepeatableOptions {
+    int count = 0;
+
+    struct Neko {
+        constexpr static auto value = Object("count", &NonRepeatableOptions::count); // NOLINT
+    };
+};
+
+struct InvalidPositionalOrderOptions {
+    std::vector<std::string> rest;
+    std::string output;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("rest", make_tags<ArgTags{.positional = true}>(&InvalidPositionalOrderOptions::rest), "output",
+                   make_tags<ArgTags{.positional = true}>(&InvalidPositionalOrderOptions::output));
+    };
+};
+
+TEST(ArgParser, NestedReferencesAndAbsoluteNamesAreResolvedDeterministically) {
+    const auto relationshipHelp = format_help<ScopedRelationshipRoot>();
+    EXPECT_NE(relationshipHelp.find("--auth.login (requires: --auth.token)"), std::string::npos);
+    EXPECT_NE(relationshipHelp.find("--auth.publish (requires: --global-token)"), std::string::npos);
+    EXPECT_EQ(relationshipHelp.find("requires: ./token"), std::string::npos);
+    EXPECT_EQ(relationshipHelp.find("requires: ../global-token"), std::string::npos);
+
+    const char* missingArgv[] = {"demo", "--auth.login"};
+    auto missing              = parser<ScopedRelationshipRoot>(static_cast<int>(std::size(missingArgv)), missingArgv);
+    ASSERT_FALSE(missing.has_value());
+    EXPECT_EQ(missing.error(), make_error_code(ArgParserError::MissingRequired));
+    EXPECT_NE(last_error().message.find("--auth.token"), std::string::npos);
+
+    const char* argv[] = {"demo",           "--auth.login",   "--auth.token", "secret",
+                          "--auth.publish", "--global-token", "release"};
+    auto result        = parser<ScopedRelationshipRoot>(static_cast<int>(std::size(argv)), argv);
+    ASSERT_TRUE(result.has_value()) << last_error().message;
+    EXPECT_TRUE(result->auth.login);
+    EXPECT_TRUE(result->auth.publish);
+    EXPECT_EQ(result->auth.token, "secret");
+    EXPECT_EQ(result->globalToken, "release");
+
+    const char* absoluteArgv[] = {"demo", "--listen-port", "8080"};
+    auto absolute              = parser<AbsoluteNameOptions>(static_cast<int>(std::size(absoluteArgv)), absoluteArgv);
+    ASSERT_TRUE(absolute.has_value()) << last_error().message;
+    EXPECT_EQ(absolute->network.port, 8080);
+
+    auto help = format_help<ScopedRelationshipRoot>();
+    NEKO_LOG_INFO("test", "{}", help);
+}
+
+TEST(ArgParser, SchemaAndRepeatedValueErrorsAreReportedBeforeMaterialization) {
+    const char* duplicateNameArgv[] = {"demo"};
+    auto duplicateName =
+        parser<DuplicateNameOptions>(static_cast<int>(std::size(duplicateNameArgv)), duplicateNameArgv);
+    ASSERT_FALSE(duplicateName.has_value());
+    EXPECT_EQ(duplicateName.error(), make_error_code(ArgParserError::InvalidDefinition));
+
+    const char* duplicateValueArgv[] = {"demo", "--count", "1", "--count", "2"};
+    auto duplicateValue =
+        parser<NonRepeatableOptions>(static_cast<int>(std::size(duplicateValueArgv)), duplicateValueArgv);
+    ASSERT_FALSE(duplicateValue.has_value());
+    EXPECT_EQ(duplicateValue.error(), make_error_code(ArgParserError::InvalidValue));
+
+    const char* positionalArgv[] = {"demo"};
+    auto positional =
+        parser<InvalidPositionalOrderOptions>(static_cast<int>(std::size(positionalArgv)), positionalArgv);
+    ASSERT_FALSE(positional.has_value());
+    EXPECT_EQ(positional.error(), make_error_code(ArgParserError::InvalidDefinition));
+}
+
+struct UserHelpOverrideOptions {
+    bool help    = false;
+    bool version = false;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("help",
+                   make_tags<arg_name<"help", 'h'>, arg_help<"application help flag">, ArgTags{.flag = true}>(
+                       &UserHelpOverrideOptions::help),
+                   "version",
+                   make_tags<arg_name<"version", 'V'>, arg_help<"application version flag">, ArgTags{.flag = true}>(
+                       &UserHelpOverrideOptions::version));
+    };
+};
+
+TEST(ArgParser, UserHelpAndVersionOptionsOverrideBuiltins) {
+    const char* argv[] = {"demo", "--help", "--version"};
+    ArgParserConfig config;
+    config.version = "1.0";
+
+    auto result = parser<UserHelpOverrideOptions>(static_cast<int>(std::size(argv)), argv, config);
+    ASSERT_TRUE(result.has_value()) << last_error().message;
+    EXPECT_TRUE(result->help);
+    EXPECT_TRUE(result->version);
+
+    const auto help = format_help<UserHelpOverrideOptions>(config);
+    EXPECT_NE(help.find("application help flag"), std::string::npos);
+    const auto help_name = help.find("--help");
+    ASSERT_NE(help_name, std::string::npos);
+    EXPECT_EQ(help.find("--help", help_name + 1U), std::string::npos);
+}
+
 struct RelaxedChoiceOptions {
     BuildMode mode = BuildMode::Debug;
     std::string color;
@@ -856,6 +1084,25 @@ TEST(ArgParser, UnknownCommand) {
 
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), make_error_code(ArgParserError::UnknownCommand));
+}
+
+TEST(ArgParser, CommandRootHandlesUnknownOptionsConsistently) {
+    const char* strictArgv[] = {"tool", "--unknown", "build"};
+    auto strict              = parser<ToolCommands>(static_cast<int>(std::size(strictArgv)), strictArgv);
+    ASSERT_FALSE(strict.has_value());
+    EXPECT_EQ(strict.error(), make_error_code(ArgParserError::UnknownOption));
+
+    ArgParserConfig config;
+    config.allowUnknown = true;
+    auto relaxed        = parser<ToolCommands>(static_cast<int>(std::size(strictArgv)), strictArgv, config);
+    ASSERT_TRUE(relaxed.has_value()) << last_error().message;
+    EXPECT_TRUE(std::holds_alternative<BuildCommand>(*relaxed));
+}
+
+TEST(ArgParser, InvalidArgumentVectorIsRejectedWithoutDereferencingNull) {
+    auto result = parser<NonRepeatableOptions>(2, static_cast<const char* const*>(nullptr));
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), make_error_code(ArgParserError::InvalidValue));
 }
 
 std::filesystem::path argparser_config_io_path(std::string_view file_name) {
@@ -968,6 +1215,22 @@ TEST(ArgParser, JsonConfigImportUsesExpectedPriorityAndExportsResolvedOptions) {
     EXPECT_EQ(exported.mode, BuildMode::Debug);
 
     set_test_env("NEKO_ARGPARSER_CONFIG_IO_OUTPUT", nullptr);
+}
+
+TEST(ArgParser, JsonConfigImportRejectsMissingNonOptionalFields) {
+    auto import_path = argparser_config_io_path("neko_argparser_missing_required_import.json");
+    write_file_bytes(import_path, {'{', '}'});
+
+    auto config = config_io_parser_config();
+    config.configIo->enableImportFormat("json");
+    const auto import_arg = import_path.string();
+    const char* argv[]    = {"demo", "--import-json", import_arg.c_str()};
+
+    auto result = parser<ConfigIoOptions>(static_cast<int>(std::size(argv)), argv, config);
+
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), make_error_code(ArgParserError::InvalidValue));
+    EXPECT_NE(last_error().message.find("Required field 'count' is missing"), std::string::npos);
 }
 
 TEST(ArgParser, CommandConfigJsonImportExportsCommandWrapper) {

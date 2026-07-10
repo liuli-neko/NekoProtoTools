@@ -21,6 +21,7 @@ NEKO_BEGIN_NAMESPACE
 namespace argparser::detail {
 struct ArgSpec {
     std::string long_name;
+    std::string scope;
     std::string short_name;
     std::vector<std::string_view> aliases;
     std::string help;
@@ -46,6 +47,8 @@ struct ArgSpec {
     std::vector<std::string_view> choices;
     std::vector<std::string_view> conflicts;
     std::vector<std::string_view> requires_names;
+    std::vector<std::size_t> conflict_indices;
+    std::vector<std::size_t> require_indices;
 };
 
 struct ArgSchema {
@@ -53,6 +56,7 @@ struct ArgSchema {
     std::vector<std::size_t> positional_specs;
     std::vector<std::optional<ConfigIoBuiltinSpec>> builtin_specs;
     std::size_t user_spec_count = 0;
+    char nested_separator       = '.';
 
     void push_user_spec(ArgSpec spec) {
         specs.push_back(std::move(spec));
@@ -71,12 +75,14 @@ struct ArgSchema {
     [[nodiscard]] std::optional<std::size_t> find_long_index(std::string_view name) const {
         for (std::size_t index = 0; index < specs.size(); ++index) {
             const auto& spec = specs[index];
-            if (!spec.positional && spec.long_name == name) {
-                return index;
-            }
-            for (const auto alias : spec.aliases) {
-                if (alias.size() > 1 && alias == name) {
+            if (!spec.positional) {
+                if (spec.long_name == name) {
                     return index;
+                }
+                for (const auto alias : spec.aliases) {
+                    if (alias.size() > 1 && alias == name) {
+                        return index;
+                    }
                 }
             }
         }
@@ -86,47 +92,95 @@ struct ArgSchema {
     [[nodiscard]] std::optional<std::size_t> find_short_index(std::string_view name) const {
         for (std::size_t index = 0; index < specs.size(); ++index) {
             const auto& spec = specs[index];
-            if (!spec.positional && !spec.short_name.empty() && spec.short_name == name) {
-                return index;
-            }
-            for (const auto alias : spec.aliases) {
-                if (alias.size() == 1 && alias == name) {
+            if (!spec.positional) {
+                if (!spec.short_name.empty() && spec.short_name == name) {
                     return index;
+                }
+                for (const auto alias : spec.aliases) {
+                    if (alias.size() == 1 && alias == name) {
+                        return index;
+                    }
                 }
             }
         }
         return std::nullopt;
     }
 
-    [[nodiscard]] std::optional<std::size_t> find_reference_index(std::string_view name) const {
-        const auto normalized = trim_option_prefix(name);
+    [[nodiscard]] std::optional<std::size_t> find_reference_index(const ArgSpec& source,
+                                                                  std::string_view reference) const {
+        if (reference.starts_with("--")) {
+            return find_long_index(reference.substr(2));
+        }
+        if (reference.starts_with("-") && reference.size() == 2U) {
+            return find_short_index(reference.substr(1));
+        }
+
+        const auto normalized = resolve_reference_name(source, reference);
         if (normalized.empty()) {
             return std::nullopt;
         }
+        if (const auto result = find_exact_reference_index(normalized); result.has_value()) {
+            return result;
+        }
+
+        // A single unprefixed character may still denote a short option.
+        if (reference.size() == 1U) {
+            return find_short_index(reference);
+        }
+        return std::nullopt;
+    }
+
+private:
+    [[nodiscard]] std::optional<std::size_t> find_exact_reference_index(std::string_view name) const {
         for (std::size_t index = 0; index < specs.size(); ++index) {
-            if (spec_matches_reference(specs[index], normalized)) {
+            if (spec_matches_reference(specs[index], name)) {
                 return index;
             }
         }
         return std::nullopt;
     }
 
-private:
-    static std::string_view trim_option_prefix(std::string_view name) {
-        if (name.starts_with("--")) {
-            return name.substr(2);
+    [[nodiscard]] std::string resolve_reference_name(const ArgSpec& source, std::string_view reference) const {
+        if (reference.empty()) {
+            return {};
         }
-        if (name.starts_with("-")) {
-            return name.substr(1);
+        if (reference.starts_with('/')) {
+            return std::string(reference.substr(1));
         }
-        return name;
+
+        auto scope = std::string_view(source.scope);
+        while (reference.starts_with("../")) {
+            const auto parent = scope.rfind(nested_separator);
+            scope             = parent == std::string_view::npos ? std::string_view{} : scope.substr(0, parent);
+            reference.remove_prefix(3);
+        }
+        if (reference.starts_with("./")) {
+            reference.remove_prefix(2);
+            return join_reference_scope(scope, reference);
+        }
+
+        // Dotted (or otherwise nested) names retain the old root-absolute meaning.
+        if (reference.find(nested_separator) != std::string_view::npos) {
+            return std::string(reference);
+        }
+        return join_reference_scope(scope, reference);
+    }
+
+    [[nodiscard]] std::string join_reference_scope(std::string_view scope, std::string_view name) const {
+        if (name.empty()) {
+            return {};
+        }
+        if (scope.empty()) {
+            return std::string(name);
+        }
+        std::string result(scope);
+        result.push_back(nested_separator);
+        result.append(name);
+        return result;
     }
 
     static bool spec_matches_reference(const ArgSpec& spec, std::string_view normalized) {
-        if (spec.long_name == normalized) {
-            return true;
-        }
-        if (!spec.short_name.empty() && spec.short_name == normalized) {
+        if (spec.long_name == normalized || spec.short_name == normalized) {
             return true;
         }
         return std::any_of(spec.aliases.begin(), spec.aliases.end(),
@@ -204,10 +258,18 @@ template <typename FieldT, typename Tags>
 ArgSpec make_arg_spec(std::string_view prefix, std::string_view reflected_name, const Tags& tags,
                       const argparser::ArgParserConfig& config) {
     const auto explicit_long_name = tag_query::get<tag_property::long_name>(tags);
+    const auto absolute_long_name = tag_query::get<tag_property::absolute_long_name>(tags);
     const auto name               = explicit_long_name.empty() ? reflected_name : explicit_long_name;
 
     ArgSpec spec;
-    spec.long_name = join_arg_name(prefix, name, config.nestedSeparator);
+    spec.scope = std::string(prefix);
+    if (absolute_long_name.empty()) {
+        spec.long_name = join_arg_name(prefix, name, config.nestedSeparator);
+    } else {
+        spec.long_name = std::string(absolute_long_name);
+        const auto end = spec.long_name.rfind(config.nestedSeparator);
+        spec.scope     = end == std::string::npos ? std::string{} : spec.long_name.substr(0, end);
+    }
     if constexpr (tag_query::has<tag_property::short_name>(Tags{})) {
         spec.short_name = "";
         spec.short_name.push_back(tag_query::get<tag_property::short_name>(tags));
@@ -286,6 +348,16 @@ constexpr bool should_ignore_arg_field(const Tags& tags) {
     return tag_query::get<tag_property::ignore>(tags);
 }
 
+template <typename FieldT, typename Tags>
+consteval void static_check_option_field() {
+    using raw_t = std::remove_cvref_t<FieldT>;
+    static_assert(!is_argparser_borrowed_text_v<raw_t>,
+                  "argparser option fields cannot contain std::string_view; use owning std::string storage");
+    if constexpr (tag_query::has<tag_property::separator>(Tags{})) {
+        static_assert(is_vector_v<raw_t>, "argparser separator tags require a std::vector field");
+    }
+}
+
 inline ArgSpec make_config_io_spec(std::string_view name, std::string help) {
     ArgSpec spec;
     spec.long_name  = std::string(name);
@@ -299,7 +371,7 @@ inline bool config_io_builtin_name_available(const ArgSchema& schema, std::strin
         NEKO_LOG_WARN("argparser", "built-in argparser config option with an empty name is disabled");
         return false;
     }
-    if (schema.find_reference_index(name).has_value()) {
+    if (schema.find_long_index(name).has_value()) {
         NEKO_LOG_WARN("argparser", "built-in argparser config option --{} is disabled because it is already used",
                       name);
         return false;
@@ -403,6 +475,7 @@ void collect_schema_into(std::string_view prefix, const ArgParserConfig& config,
                 if constexpr (is_nested_option_v<FieldT>) {
                     collect_schema_into<FieldT>(join_arg_name(prefix, name, config.nestedSeparator), config, schema);
                 } else {
+                    static_check_option_field<FieldT, std::remove_cvref_t<decltype(tags)>>();
                     schema.push_user_spec(make_arg_spec<FieldT>(prefix, reflected_name, tags, config));
                     if (schema.specs.back().positional) {
                         schema.positional_specs.push_back(schema.specs.size() - 1);
@@ -415,10 +488,145 @@ void collect_schema_into(std::string_view prefix, const ArgParserConfig& config,
 template <typename T>
 ArgSchema collect_schema(const ArgParserConfig& config) {
     ArgSchema schema;
+    schema.nested_separator = config.nestedSeparator;
     collect_schema_into<T>({}, config, schema);
     schema.user_spec_count = schema.specs.size();
     append_config_io_specs(config, schema);
     return schema;
+}
+
+inline bool is_valid_option_path(std::string_view path, char separator) {
+    if (path.empty()) {
+        return false;
+    }
+    bool previous_separator = true;
+    for (const char ch : path) {
+        if (ch == separator) {
+            if (previous_separator) {
+                return false;
+            }
+            previous_separator = true;
+            continue;
+        }
+        if (!is_option_name_character(ch)) {
+            return false;
+        }
+        previous_separator = false;
+    }
+    return !previous_separator;
+}
+
+inline std::error_code validate_schema_definition(ArgSchema& schema, const ArgParserConfig& /*config*/) {
+    if (schema.nested_separator == '\0' || schema.nested_separator == '/' || schema.nested_separator == '=' ||
+        is_option_name_character(schema.nested_separator) || schema.nested_separator <= ' ') {
+        return make_argparser_error(ArgParserError::InvalidDefinition,
+                                    "nestedSeparator must be a visible non-option-name character other than '/', '='");
+    }
+
+    struct NameEntry {
+        std::string_view name;
+        std::size_t index = 0;
+    };
+    std::vector<NameEntry> long_names;
+    std::vector<NameEntry> short_names;
+
+    const auto check_name = [&](std::vector<NameEntry>& entries, std::string_view name, std::size_t index,
+                                std::string_view kind) -> std::error_code {
+        for (const auto& entry : entries) {
+            if (entry.name == name) {
+                return make_argparser_error(ArgParserError::InvalidDefinition,
+                                            std::string(kind) + " option name " + quote_arg_value(name) +
+                                                " is used by both " +
+                                                format_error_option_label(schema.specs[entry.index]) + " and " +
+                                                format_error_option_label(schema.specs[index]));
+            }
+        }
+        entries.push_back({name, index});
+        return {};
+    };
+
+    for (std::size_t index = 0; index < schema.specs.size(); ++index) {
+        const auto& spec = schema.specs[index];
+        if (!is_valid_option_path(spec.long_name, schema.nested_separator)) {
+            return make_argparser_error(ArgParserError::InvalidDefinition,
+                                        format_error_option_label(spec) + " has an invalid long option path");
+        }
+        if (spec.positional && spec.flag) {
+            return make_argparser_error(ArgParserError::InvalidDefinition,
+                                        format_error_option_label(spec) + " cannot be both positional and a flag");
+        }
+        if (!spec.positional) {
+            if (auto error = check_name(long_names, spec.long_name, index, "long")) {
+                return error;
+            }
+            if (!spec.short_name.empty()) {
+                if (!is_short_option_character(spec.short_name.front())) {
+                    return make_argparser_error(ArgParserError::InvalidDefinition,
+                                                format_error_option_label(spec) + " has an invalid short option name");
+                }
+                if (auto error = check_name(short_names, spec.short_name, index, "short")) {
+                    return error;
+                }
+            }
+        }
+        for (const auto alias : spec.aliases) {
+            if (alias.empty()) {
+                return make_argparser_error(ArgParserError::InvalidDefinition,
+                                            format_error_option_label(spec) + " has an empty alias");
+            }
+            if (alias.size() == 1U) {
+                if (!is_short_option_character(alias.front())) {
+                    return make_argparser_error(ArgParserError::InvalidDefinition,
+                                                format_error_option_label(spec) + " has an invalid short alias");
+                }
+                if (auto error = check_name(short_names, alias, index, "short")) {
+                    return error;
+                }
+            } else {
+                if (!is_valid_option_path(alias, schema.nested_separator)) {
+                    return make_argparser_error(ArgParserError::InvalidDefinition,
+                                                format_error_option_label(spec) + " has an invalid long alias");
+                }
+                if (auto error = check_name(long_names, alias, index, "long")) {
+                    return error;
+                }
+            }
+        }
+    }
+
+    for (std::size_t position = 0; position < schema.positional_specs.size(); ++position) {
+        const auto index = schema.positional_specs[position];
+        if (schema.specs[index].repeatable && position + 1U != schema.positional_specs.size()) {
+            return make_argparser_error(ArgParserError::InvalidDefinition,
+                                        format_error_option_label(schema.specs[index]) +
+                                            " is repeatable and therefore must be the last positional option");
+        }
+    }
+
+    for (std::size_t index = 0; index < schema.user_spec_count; ++index) {
+        auto& spec = schema.specs[index];
+        spec.require_indices.clear();
+        spec.conflict_indices.clear();
+        for (const auto reference : spec.requires_names) {
+            const auto target = schema.find_reference_index(spec, reference);
+            if (!target.has_value() || *target == index) {
+                return make_argparser_error(ArgParserError::InvalidDefinition, format_error_option_label(spec) +
+                                                                                   " references unknown requirement " +
+                                                                                   quote_arg_value(reference));
+            }
+            spec.require_indices.push_back(*target);
+        }
+        for (const auto reference : spec.conflicts) {
+            const auto target = schema.find_reference_index(spec, reference);
+            if (!target.has_value() || *target == index) {
+                return make_argparser_error(ArgParserError::InvalidDefinition, format_error_option_label(spec) +
+                                                                                   " references unknown conflict " +
+                                                                                   quote_arg_value(reference));
+            }
+            spec.conflict_indices.push_back(*target);
+        }
+    }
+    return {};
 }
 
 } // namespace argparser::detail

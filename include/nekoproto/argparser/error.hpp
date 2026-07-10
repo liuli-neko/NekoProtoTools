@@ -23,12 +23,12 @@ enum class ArgParserError {
     VersionRequested,
 };
 
-namespace detail {
 struct ArgParserErrorDetail {
     ArgParserError error = ArgParserError::Success;
     std::string message;
 };
 
+namespace detail {
 inline ArgParserErrorDetail& current_argparser_error_detail() {
     static thread_local ArgParserErrorDetail detail;
     return detail;
@@ -67,13 +67,7 @@ public:
     [[nodiscard]] const char* name() const noexcept override { return "nekoproto.argparser"; }
     [[nodiscard]] std::string message(int condition) const override {
         const auto error = static_cast<ArgParserError>(condition);
-        auto message     = argparser_error_message(error);
-        const auto& detail = current_argparser_error_detail();
-        if (detail.error == error && !detail.message.empty()) {
-            message.append(": ");
-            message.append(detail.message);
-        }
-        return message;
+        return argparser_error_message(error);
     }
 };
 
@@ -95,6 +89,15 @@ inline std::error_code make_argparser_error(ArgParserError error, const char* de
     return make_argparser_error(error, std::string(detail == nullptr ? "" : detail));
 }
 } // namespace detail
+
+/**
+ * Returns the diagnostic produced by the most recent ArgParser operation on this thread.
+ *
+ * The returned value owns its message, so it remains valid after later parser calls. Use
+ * std::error_code for stable programmatic handling and this function for user-facing context.
+ */
+[[nodiscard]] inline ArgParserErrorDetail last_error() { return detail::current_argparser_error_detail(); }
+
 } // namespace argparser
 NEKO_END_NAMESPACE
 

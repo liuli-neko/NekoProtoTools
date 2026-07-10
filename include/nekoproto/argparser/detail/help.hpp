@@ -13,13 +13,38 @@
 NEKO_BEGIN_NAMESPACE
 namespace argparser::detail {
 
-inline std::string default_usage(std::string_view programName) {
+inline bool positional_is_required(const ArgSpec& spec) { return spec.required && !spec.has_default; }
+
+inline std::string format_positional_usage(const ArgSpec& spec) {
+    std::string result;
+    result.push_back('<');
+    result.append(spec.value_name.empty() ? spec.long_name : spec.value_name);
+    result.push_back('>');
+    if (spec.repeatable) {
+        result.append("...");
+    }
+    if (!positional_is_required(spec)) {
+        result.insert(result.begin(), '[');
+        result.push_back(']');
+    }
+    return result;
+}
+
+inline std::string default_usage(std::string_view programName, const ArgSchema& schema) {
     std::string usage = "Usage:";
     if (!programName.empty()) {
         usage.push_back(' ');
         usage.append(programName);
     }
     usage.append(" [options]");
+    for (const auto index : schema.positional_specs) {
+        const auto& spec = schema.specs[index];
+        if (spec.hidden) {
+            continue;
+        }
+        usage.push_back(' ');
+        usage.append(format_positional_usage(spec));
+    }
     return usage;
 }
 
@@ -63,7 +88,10 @@ inline std::string format_option_label(const ArgSpec& spec) {
 
     std::string result;
     if (spec.positional) {
-        result.append(spec.long_name);
+        result.append(spec.value_name.empty() ? spec.long_name : spec.value_name);
+        if (spec.repeatable) {
+            result.append("...");
+        }
     } else {
         if (!spec.short_name.empty()) {
             append_name(result, "-", spec.short_name);
@@ -88,7 +116,30 @@ inline std::string format_option_label(const ArgSpec& spec) {
     return result;
 }
 
-inline void append_option_details(std::string& result, const ArgSpec& spec) {
+inline void append_relation_details(std::string& result, const ArgSchema& schema,
+                                    const std::vector<std::size_t>& targets, std::string_view label) {
+    if (targets.empty()) {
+        return;
+    }
+
+    result.append(" (");
+    result.append(label);
+    result.append(": ");
+    for (std::size_t idx = 0; idx < targets.size(); ++idx) {
+        if (idx != 0) {
+            result.append(", ");
+        }
+        const auto target = targets[idx];
+        if (target < schema.specs.size()) {
+            result.append(format_error_option_label(schema.specs[target]));
+        } else {
+            result.append("<invalid>");
+        }
+    }
+    result.push_back(')');
+}
+
+inline void append_option_details(std::string& result, const ArgSchema& schema, const ArgSpec& spec) {
     if (spec.required) {
         result.append(" (required)");
     }
@@ -108,6 +159,14 @@ inline void append_option_details(std::string& result, const ArgSpec& spec) {
         result.append(" (implicit: ");
         result.append(spec.implicit_value);
         result.push_back(')');
+    }
+    if (spec.repeatable) {
+        result.append(" (repeatable)");
+    }
+    if (spec.separator != '\0') {
+        result.append(" (separator: '");
+        result.push_back(spec.separator);
+        result.append("')");
     }
     if (!spec.env_name.empty()) {
         result.append(" (env: ");
@@ -135,12 +194,14 @@ inline void append_option_details(std::string& result, const ArgSpec& spec) {
         }
         result.push_back(')');
     }
+    append_relation_details(result, schema, spec.require_indices, "requires");
+    append_relation_details(result, schema, spec.conflict_indices, "conflicts");
 }
 
-inline void append_option_entry(std::string& result, const ArgSpec& spec) {
+inline void append_option_entry(std::string& result, const ArgSchema& schema, const ArgSpec& spec) {
     result.append("  ");
     result.append(format_option_label(spec));
-    append_option_details(result, spec);
+    append_option_details(result, schema, spec);
     if (!spec.help.empty()) {
         result.append("\n      ");
         result.append(spec.help);
@@ -148,19 +209,45 @@ inline void append_option_entry(std::string& result, const ArgSpec& spec) {
     result.push_back('\n');
 }
 
+inline void append_builtin_option_entry(std::string& result, const ArgSchema& schema, bool enabled,
+                                        std::string_view short_name, std::string_view long_name) {
+    if (!enabled) {
+        return;
+    }
+    const bool has_short_override = schema.find_short_index(short_name).has_value();
+    const bool has_long_override  = schema.find_long_index(long_name).has_value();
+    if (has_short_override && has_long_override) {
+        return;
+    }
+
+    result.append("  ");
+    if (!has_short_override) {
+        result.push_back('-');
+        result.append(short_name);
+    }
+    if (!has_short_override && !has_long_override) {
+        result.append(", ");
+    }
+    if (!has_long_override) {
+        result.append("--");
+        result.append(long_name);
+    }
+    result.push_back('\n');
+}
+
 inline void append_ungrouped_options(std::string& result, const ArgSchema& schema) {
     for (const auto& spec : schema.specs) {
-        if (spec.hidden || !spec.group.empty()) {
+        if (spec.hidden || spec.positional || !spec.group.empty()) {
             continue;
         }
-        append_option_entry(result, spec);
+        append_option_entry(result, schema, spec);
     }
 }
 
 inline void append_grouped_options(std::string& result, const ArgSchema& schema) {
     std::vector<std::string_view> groups;
     for (const auto& spec : schema.specs) {
-        if (spec.hidden || spec.group.empty()) {
+        if (spec.hidden || spec.positional || spec.group.empty()) {
             continue;
         }
         if (std::find(groups.begin(), groups.end(), spec.group) == groups.end()) {
@@ -173,19 +260,41 @@ inline void append_grouped_options(std::string& result, const ArgSchema& schema)
         result.append(group);
         result.append(":\n");
         for (const auto& spec : schema.specs) {
-            if (!spec.hidden && spec.group == group) {
-                append_option_entry(result, spec);
+            if (!spec.hidden && !spec.positional && spec.group == group) {
+                append_option_entry(result, schema, spec);
             }
         }
     }
 }
 
-inline std::string format_help_from_schema(const ArgSchema& schema, const ArgParserConfig& config) {
+inline void append_positional_arguments(std::string& result, const ArgSchema& schema) {
+    bool has_arguments = false;
+    for (const auto index : schema.positional_specs) {
+        if (!schema.specs[index].hidden) {
+            has_arguments = true;
+            break;
+        }
+    }
+    if (!has_arguments) {
+        return;
+    }
+
+    result.append("\nArguments:\n");
+    for (const auto index : schema.positional_specs) {
+        const auto& spec = schema.specs[index];
+        if (!spec.hidden) {
+            append_option_entry(result, schema, spec);
+        }
+    }
+}
+
+inline std::string format_help_from_schema(ArgSchema schema, const ArgParserConfig& config) {
+    static_cast<void>(validate_schema_definition(schema, config));
     std::string result;
     if (!config.usage.empty()) {
         result.append(config.usage);
     } else {
-        result.append(default_usage(config.programName));
+        result.append(default_usage(config.programName, schema));
     }
     result.push_back('\n');
     if (!config.description.empty()) {
@@ -195,19 +304,17 @@ inline std::string format_help_from_schema(const ArgSchema& schema, const ArgPar
     }
 
     result.append("\nOptions:\n");
-    if (config.addHelp) {
-        result.append("  -h, --help\n");
-    }
-    if (config.addVersion && !config.version.empty()) {
-        result.append("  -V, --version\n");
-    }
+    append_builtin_option_entry(result, schema, config.addHelp, "h", "help");
+    append_builtin_option_entry(result, schema, config.addVersion && !config.version.empty(), "V", "version");
 
-    const bool hasGroups = std::any_of(schema.specs.begin(), schema.specs.end(),
-                                       [](const auto& spec) { return !spec.hidden && !spec.group.empty(); });
+    const bool hasGroups = std::any_of(schema.specs.begin(), schema.specs.end(), [](const auto& spec) {
+        return !spec.hidden && !spec.positional && !spec.group.empty();
+    });
     append_ungrouped_options(result, schema);
     if (hasGroups) {
         append_grouped_options(result, schema);
     }
+    append_positional_arguments(result, schema);
     return result;
 }
 
