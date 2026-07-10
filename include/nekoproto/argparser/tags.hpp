@@ -67,6 +67,20 @@ template <typename T>
 using vector_value_t = typename is_vector<std::remove_cvref_t<T>>::value_type;
 
 template <typename T>
+inline constexpr bool is_argparser_borrowed_text_v = []() consteval { // NOLINT
+    using raw_t = std::remove_cvref_t<T>;
+    if constexpr (std::is_same_v<raw_t, std::string_view>) {
+        return true;
+    } else if constexpr (is_arg_optional_v<raw_t>) {
+        return is_argparser_borrowed_text_v<optional_value_t<raw_t>>;
+    } else if constexpr (is_vector_v<raw_t>) {
+        return is_argparser_borrowed_text_v<vector_value_t<raw_t>>;
+    } else {
+        return false;
+    }
+}();
+
+template <typename T>
 inline constexpr bool is_bool_value_v = std::is_same_v<std::remove_cvref_t<T>, bool>; // NOLINT
 
 template <typename T>
@@ -104,8 +118,7 @@ inline constexpr bool is_range_supported_v = []() consteval { // NOLINT
 template <typename T>
 inline constexpr bool is_nested_option_v = // NOLINT
     std::is_class_v<std::remove_cvref_t<T>> && !traits::is_string_like_v<T> && !is_arg_optional_v<T> &&
-    !is_vector_v<T> &&
-    NEKO_NAMESPACE::detail::has_values_meta<std::remove_cvref_t<T>>;
+    !is_vector_v<T> && NEKO_NAMESPACE::detail::has_values_meta<std::remove_cvref_t<T>>;
 } // namespace detail
 
 struct ArgTags {
@@ -134,6 +147,8 @@ struct ArgTags {
             static_assert(detail::is_range_supported_v<raw_t>,
                           "argparser range tags require an arithmetic field, optional arithmetic field, or vector of "
                           "arithmetic values");
+            static_assert(Tags.range_min.declared && Tags.range_max.declared,
+                          "argparser ranges require both range_min and range_max; the upper bound is exclusive");
             static_assert(static_cast<double>(Tags.range_min) <= static_cast<double>(Tags.range_max),
                           "argparser range_min must be less than or equal to range_max");
         }
@@ -143,6 +158,10 @@ struct ArgTags {
         }
         if constexpr (is_flag && is_position) {
             static_assert(!is_flag, "argparser positional fields cannot also be flags");
+        }
+        if constexpr (has_repeat) {
+            static_assert(detail::is_vector_v<raw_t>,
+                          "argparser repeatable tags require a std::vector field; vectors are repeatable by default");
         }
         if constexpr (is_command) {
             static_assert(detail::is_command_type<raw_t>::value || NEKO_NAMESPACE::detail::has_values_meta<raw_t>,
@@ -154,17 +173,22 @@ struct ArgTags {
     }
 };
 namespace detail {
-inline constexpr bool is_character(char ch) { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'); }
-inline constexpr bool is_visible(char ch) { return (ch >= ' ' && ch <= '~'); }
+inline constexpr bool is_option_name_character(char ch) {
+    return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_';
+}
+
+inline constexpr bool is_short_option_character(char ch) { return ch >= '!' && ch <= '~' && ch != '-' && ch != '='; }
+
+inline constexpr bool is_absolute_name_character(char ch) { return ch >= '!' && ch <= '~' && ch != '=' && ch != '/'; }
 
 template <ConstexprString Long = "">
 struct arg_long_name_impl {
     static constexpr auto long_name = Long.view();
     template <typename T, auto Tags>
     constexpr static bool constexpr_check() {
-        static_assert(Tags.long_name.size() > 1 && Tags.long_name.size() <= 64 &&
-                          std::all_of(Tags.long_name.begin(), Tags.long_name.end(), is_visible),
-                      "argparser long names must be visible ASCII characters and 1-64 characters long");
+        static_assert(Tags.long_name.size() >= 1 && Tags.long_name.size() <= 64 &&
+                          std::all_of(Tags.long_name.begin(), Tags.long_name.end(), is_option_name_character),
+                      "argparser long names must contain 1-64 ASCII letters, digits, '-' or '_' characters");
         return true;
     }
 };
@@ -174,7 +198,8 @@ struct arg_short_name_impl {
     static constexpr auto short_name = Short;
     template <typename T, auto Tags>
     constexpr static bool constexpr_check() {
-        static_assert(is_character(Tags.short_name), "argparser short names must be a single visible ASCII character");
+        static_assert(is_short_option_character(Tags.short_name),
+                      "argparser short names must be one visible ASCII character other than '-' or '='");
         return true;
     }
 };
@@ -188,6 +213,20 @@ struct arg_name_impl {
     constexpr static bool constexpr_check() {
         arg_long_name_impl<Long>::template constexpr_check<T, Tags>();
         arg_short_name_impl<Short>::template constexpr_check<T, Tags>();
+        return true;
+    }
+};
+
+template <ConstexprString Absolute = "">
+struct arg_absolute_name_impl {
+    static constexpr auto absolute_long_name = Absolute.view();
+
+    template <typename T, auto Tags>
+    constexpr static bool constexpr_check() {
+        static_assert(
+            Tags.absolute_long_name.size() >= 1 && Tags.absolute_long_name.size() <= 64 &&
+                std::all_of(Tags.absolute_long_name.begin(), Tags.absolute_long_name.end(), is_absolute_name_character),
+            "argparser absolute names must contain 1-64 visible ASCII characters other than '=' or '/'");
         return true;
     }
 };
@@ -352,6 +391,10 @@ inline constexpr auto arg_short_name = detail::arg_short_name_impl<Short>{};
 template <ConstexprString Long = "", char Short = '\0'>
 inline constexpr auto arg_name = detail::arg_name_impl<Long, Short>{};
 
+/** Use a complete option path instead of the automatic enclosing-field prefix. */
+template <ConstexprString Absolute = "">
+inline constexpr auto arg_absolute_name = detail::arg_absolute_name_impl<Absolute>{};
+
 template <ConstexprString... Choices>
 inline constexpr auto arg_choices = detail::arg_choices_impl<Choices...>{};
 
@@ -396,6 +439,7 @@ inline constexpr auto arg_ignore_tag = detail::arg_ignore_tag_impl{}; // NOLINT
 
 namespace tag_property {
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, long_name, long_name)                        // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, absolute_long_name, absolute_long_name)      // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(char, short_name, short_name)                                  // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::vector<std::string_view>, choices, choices)               // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, help, help)                                  // NOLINT

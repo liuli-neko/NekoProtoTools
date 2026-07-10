@@ -31,11 +31,14 @@ struct ArgParserConfigIoOptions {
 };
 
 struct ArgParserConfig {
+    /** Non-owning display strings; keep their backing storage alive for the parser call. */
     std::string_view programName;
     std::string_view description;
     std::string_view usage;
     std::string_view version;
-    char nestedSeparator   = '.';
+    /** Separates nested option paths, for example '.' in --database.host. */
+    char nestedSeparator = '.';
+    /** Skip only an unknown option token; its following token is never guessed as its value. */
     bool allowUnknown      = false;
     bool addHelp           = true;
     bool addVersion        = true;

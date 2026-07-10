@@ -335,19 +335,19 @@ template <>
 struct Meta<::BuildOptions> {
     constexpr static auto value =
         Object("verbose",
-               make_tags<argparser::arg_name<"verbose", "v">,
+               make_tags<argparser::arg_name<"verbose", 'v'>,
                          argparser::arg_help<"enable verbose logs">,
                          argparser::ArgTags{.flag = true}>(&::BuildOptions::verbose),
                "jobs",
-               make_tags<argparser::arg_name<"jobs", "j">,
+               make_tags<argparser::arg_name<"jobs", 'j'>,
                          argparser::arg_default<4>,
                          argparser::arg_help<"parallel jobs">,
                          argparser::ArgTags{.range_min = 1, .range_max = 65}>(&::BuildOptions::jobs),
                "mode",
-               make_tags<argparser::arg_name<"mode", "m">,
+               make_tags<argparser::arg_name<"mode", 'm'>,
                          argparser::arg_choices<"debug", "release">>(&::BuildOptions::mode),
                "include",
-               make_tags<argparser::arg_name<"include", "I">,
+               make_tags<argparser::arg_name<"include", 'I'>,
                          argparser::arg_help<"include path">,
                          argparser::ArgTags{.repeatable = true}>(&::BuildOptions::include));
 };
@@ -356,6 +356,9 @@ struct Meta<::BuildOptions> {
 int main(int argc, char** argv) {
     auto result = parser<BuildOptions>(argc, argv);
     if (!result) {
+        const auto diagnostic = last_error();
+        // Use diagnostic.message for user-facing context; use error_code for stable branching.
+        (void)diagnostic;
         return result.error() == make_error_code(ArgParserError::HelpRequested) ? 0 : 1;
     }
 
@@ -365,7 +368,19 @@ int main(int argc, char** argv) {
 }
 ```
 
-Common arg tags include `arg_name`, `arg_help`, `arg_default`, `arg_choices`, `arg_env`, `arg_separator`, `arg_aliases`, `arg_implicit`, `arg_group`, `arg_conflicts`, `arg_requires`, `arg_deprecated`, and `arg_case_insensitive_choices`. Base behavior is described with `ArgTags{.positional = true}`, `.flag = true`, `.repeatable = true`, `.required = true`, and related fields; subcommands are modeled with `ArgTags{.command = true}`.
+Common arg tags include `arg_name`, `arg_absolute_name`, `arg_help`, `arg_default`, `arg_choices`, `arg_env`, `arg_separator`, `arg_aliases`, `arg_implicit`, `arg_group`, `arg_conflicts`, `arg_requires`, `arg_deprecated`, and `arg_case_insensitive_choices`. Base behavior is described with `ArgTags{.positional = true}`, `.flag = true`, `.repeatable = true`, `.required = true`, and related fields; subcommands are modeled with `ArgTags{.command = true}`.
+
+ArgParser result fields must own their values. Use `std::string` for text; `std::string_view`, including its `optional` and `vector` wrappers, is not supported because environment values, implicit values, and configuration buffers may not outlive parsing. `std::vector<T>` is the only repeatable option type. Repeating a scalar option is an error, and a repeatable positional must be the final positional.
+
+Nested fields receive their enclosing prefix automatically, such as `network.host`. `arg_long_name` changes only the current leaf; `arg_absolute_name<"listen-host">` declares a complete name without its enclosing prefix. Long names use ASCII letters, digits, `-`, and `_`; paths use `ArgParserConfig::nestedSeparator` (default `.`). User options may override built-in `-h` / `--help` and `-V` / `--version`; the built-in action is used only when the matching token is not declared by the user schema.
+
+`arg_requires` and `arg_conflicts` resolve `"token"` as a sibling, `"/database.host"` as an absolute root path, `"./tls.cert"` relative to the current level, and `"../token"` relative to the parent level. A path with the nesting separator but without a leading `/` keeps its compatibility meaning of an absolute root path. Relationships always target the final public CLI name: for an `arg_absolute_name<"listen-port">`, cross-level code should use `"/listen-port"` instead of relying on the C++ field hierarchy. The schema resolves these paths once during definition validation; help then prints canonical names such as `--auth.login (requires: --auth.token)`. Precedence is CLI > environment > config import > `arg_default` > the struct initializer. `required` means supplied by a source, whereas relationship constraints use active values, so `--json=false --yaml` is valid.
+
+`range_min` and `range_max` must be declared together; ranges are half-open `[min, max)`. `arg_separator` applies only to `std::vector<T>`. Help displays repeatability, separators, relationships, defaults, and environment sources.
+
+Default usage lists positionals after `[options]` in declaration order: required positionals use `<INPUT>`, optional ones use `[<OUTPUT>]`, and repeatable ones use `[<EXTRA>...]`. Positionals are shown separately under `Arguments:` rather than mixed into normal options. Setting `ArgParserConfig::usage` gives the caller complete control of the usage text.
+
+With `configIo`, configuration files follow the shared serializer contract: every non-`optional`, non-`skippable` reflected field must appear in input. The complete design rules, migration boundary, and acceptance criteria are in [`docs/argparser_hardening_plan.md`](docs/argparser_hardening_plan.md).
 
 ### 5.4. Protocol Management (`ProtoFactory`, `IProto`)
 
