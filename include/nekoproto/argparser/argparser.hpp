@@ -11,6 +11,7 @@
 #pragma once
 
 #include "nekoproto/argparser/config.hpp"
+#include "nekoproto/argparser/config_io.hpp"
 #include "nekoproto/argparser/detail/config_io.hpp"
 #include "nekoproto/argparser/detail/help.hpp"
 #include "nekoproto/argparser/detail/materializer.hpp"
