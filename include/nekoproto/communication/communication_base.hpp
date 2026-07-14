@@ -232,7 +232,7 @@ inline auto ProtoClientBase::_serializeMessageData(const IProto& message, bool r
 inline auto ProtoClientBase::_serializeHeader(const MessageHeader& header) const -> std::vector<char> {
     std::vector<char> headerData;
     BinarySerializer::OutputSerializer serializer(headerData);
-    if (!serializer(make_tags<BinaryTag{.unframed = true}>(header)) || !serializer.end()) {
+    if (!serializer(make_tags<BinaryTag{.raw_fixed_data = true}>(header)) || !serializer.end()) {
         headerData.clear();
     }
     return headerData;
@@ -497,7 +497,7 @@ inline auto ProtoStreamClient<T>::recv(StreamFlag flag) -> IoTask<IProto> {
         }
         BinarySerializer::InputSerializer serializer(reinterpret_cast<char*>(messageHeader.data()),
                                                      messageHeader.size());
-        auto taggedHeader = make_tags<BinaryTag{.unframed = true}>(mHeader);
+        auto taggedHeader = make_tags<BinaryTag{.raw_fixed_data = true}>(mHeader);
         if (!serializer(taggedHeader)) {
             co_return Err(Error(ErrorCode::InvalidMessageHeader));
         }
@@ -821,7 +821,7 @@ inline auto ProtoDatagramClient<T>::recv(StreamFlag flag) -> IoTask<std::pair<IP
 
         MessageHeader header;
         BinarySerializer::InputSerializer serializer(reinterpret_cast<char*>(mBuffer.data()), MessageHeader::size());
-        auto taggedHeader = make_tags<BinaryTag{.unframed = true}>(header);
+        auto taggedHeader = make_tags<BinaryTag{.raw_fixed_data = true}>(header);
         if (!serializer(taggedHeader)) {
             NEKO_LOG_ERROR("Communication", "Recv message header error: deserialize error");
             co_return Err(Error(ErrorCode::InvalidMessageHeader));

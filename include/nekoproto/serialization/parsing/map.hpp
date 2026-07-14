@@ -58,16 +58,16 @@ ParserResult parser_write_key_value_array(W& writer, const T& values, const Pare
     return sa::success();
 }
 
-template <typename R, typename T>
-ParserResult parser_read_key_value_array(typename R::InputValueType in, T& values) {
-    auto array = R::toArray(in);
+template <typename R, typename T, typename Tags>
+ParserResult parser_read_key_value_array(typename R::InputValueType in, T& values, const Tags& tags) {
+    auto array = parsing::reader_to_array<R>(in, tags);
     if (!array) {
         return array.error();
     }
-    values.clear();
+    T parsed = parser_empty_container_like(values);
     const auto size = R::arraySize(array.value());
     for (std::size_t i = 0; i < size; ++i) {
-        auto object = R::toObject(R::arrayElement(array.value(), i));
+        auto object = parsing::reader_to_object<R>(R::arrayElement(array.value(), i), NoTags{});
         if (!object) {
             return parser_context(object.error(), "Failed to parse map entry " + std::to_string(i) + ": ");
         }
@@ -75,7 +75,7 @@ ParserResult parser_read_key_value_array(typename R::InputValueType in, T& value
         using Value = typename T::mapped_type;
         Key key{};
         Value value{};
-        auto keyField = R::objectField(object.value(), "key");
+        auto keyField = parsing::reader_object_field<R>(object.value(), "key", NoTags{});
         if (!keyField) {
             return parser_error(sa::ErrorCode::InvalidField,
                                 "Map entry " + std::to_string(i) + " is missing required field 'key'");
@@ -84,7 +84,7 @@ ParserResult parser_read_key_value_array(typename R::InputValueType in, T& value
         if (!result) {
             return parser_context(std::move(result), "Failed to parse map entry " + std::to_string(i) + " key: ");
         }
-        auto valField = R::objectField(object.value(), "value");
+        auto valField = parsing::reader_object_field<R>(object.value(), "value", NoTags{});
         if (!valField) {
             return parser_error(sa::ErrorCode::InvalidField,
                                 "Map entry " + std::to_string(i) + " is missing required field 'value'");
@@ -93,8 +93,15 @@ ParserResult parser_read_key_value_array(typename R::InputValueType in, T& value
         if (!result) {
             return parser_context(std::move(result), "Failed to parse map entry " + std::to_string(i) + " value: ");
         }
-        values.emplace(std::move(key), std::move(value));
+        auto inserted = parsed.emplace(std::move(key), std::move(value));
+        if constexpr (requires { inserted.second; }) {
+            if (!inserted.second) {
+                return parser_error(sa::ErrorCode::InvalidField,
+                                    "Map entry " + std::to_string(i) + " contains a duplicate key");
+            }
+        }
     }
+    values = std::move(parsed);
     return sa::success();
 }
 
@@ -110,27 +117,40 @@ ParserResult parser_write_string_key_map(W& writer, const T& values, const Paren
     return sa::success();
 }
 
-template <typename R, typename T>
-ParserResult parser_read_string_key_map(typename R::InputValueType in, T& values) {
-    auto object = R::toObject(in);
+template <typename R, typename T, typename Tags>
+ParserResult parser_read_string_key_map(typename R::InputValueType in, T& values, const Tags& tags) {
+    auto object = parsing::reader_to_object<R>(in, tags);
     if (!object) {
         return object.error();
     }
-    values.clear();
+    T parsed = parser_empty_container_like(values);
     ParserResult result;
-    R::forEachObjectMember(object.value(), [&values, &result](std::string_view name, auto field) {
-        if (!result) {
-            return false;
-        }
-        typename T::mapped_type value{};
-        result =
-            parser_context(parser_read<R>(field, value), "Failed to parse map field '" + std::string(name) + "': ");
-        if (!result) {
-            return false;
-        }
-        values.emplace(typename T::key_type{name.data(), name.size()}, std::move(value));
-        return true;
-    });
+    parsing::reader_for_each_object_member<R>(
+        object.value(),
+        [&parsed, &result](std::string_view name, auto field) {
+            if (!result) {
+                return false;
+            }
+            typename T::mapped_type value{};
+            result =
+                parser_context(parser_read<R>(field, value), "Failed to parse map field '" + std::string(name) + "': ");
+            if (!result) {
+                return false;
+            }
+            auto inserted = parsed.emplace(typename T::key_type{name.data(), name.size()}, std::move(value));
+            if constexpr (requires { inserted.second; }) {
+                if (!inserted.second) {
+                    result = parser_error(sa::ErrorCode::InvalidField,
+                                          "Map contains duplicate key '" + std::string(name) + "'");
+                    return false;
+                }
+            }
+            return true;
+        },
+        tags);
+    if (result) {
+        values = std::move(parsed);
+    }
     return result;
 }
 
@@ -159,16 +179,16 @@ struct MapReadParser;
 template <typename R, typename Map>
 struct MapReadParser<R, Map, true> {
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Map& value, const Tags& /*tags*/) {
-        return parser_read_string_key_map<R>(in, value);
+    static ParserResult read(typename R::InputValueType in, Map& value, const Tags& tags) {
+        return parser_read_string_key_map<R>(in, value, tags);
     }
 };
 
 template <typename R, typename Map>
 struct MapReadParser<R, Map, false> {
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Map& value, const Tags& /*tags*/) {
-        return parser_read_key_value_array<R>(in, value);
+    static ParserResult read(typename R::InputValueType in, Map& value, const Tags& tags) {
+        return parser_read_key_value_array<R>(in, value, tags);
     }
 };
 

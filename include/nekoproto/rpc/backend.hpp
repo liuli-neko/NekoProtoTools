@@ -69,6 +69,12 @@ struct NekoRpcBackend {
         bool retry_method_id_error_once            = true;
         std::size_t max_auto_method_table_extension_bytes =
             Codec::MaxExtensionBytes;
+        rpc::NekoRpcFrameLimits frame_limits;
+        std::size_t max_decompressed_payload_bytes = 16U * 1024U * 1024U;
+        std::size_t max_compression_ratio = 130U;
+        std::size_t max_method_entries = 64U * 1024U;
+        std::size_t max_pending_calls = 1024U;
+        std::size_t max_inflight_requests_per_connection = 1024U;
         std::shared_ptr<CompressionStats> compression_stats;
     };
 
@@ -104,6 +110,9 @@ struct NekoRpcBackend {
     };
 
     struct PeerSession {
+        explicit PeerSession(std::size_t max_method_entries = rpc::NekoRpcMethodIdTable::DefaultMaxEntries)
+            : remote_method_table(max_method_entries) {}
+
         bool handshake_done                        = false;
         bool method_id_enabled                     = false;
         bool compression_enabled                   = false;
@@ -129,7 +138,9 @@ public:
 
     template <typename Methods>
     static auto makeServerContext(Options options, Methods&& methods) -> ServerContext {
-        ServerContext context{.options = std::move(options), .method_table = {}};
+        const auto max_method_entries = options.max_method_entries;
+        ServerContext context{.options = std::move(options),
+                              .method_table = rpc::NekoRpcMethodIdTable(max_method_entries)};
         context.method_table.reset(rpc::NekoRpcMethodEntries(std::forward<Methods>(methods)),
                                    rpc::NekoRpcMethodIdExtension::InitialTableVersion);
         return context;
@@ -141,15 +152,25 @@ public:
     }
 
     static auto makeClientPeerSession(const ClientContext& context) -> PeerSession {
-        PeerSession session;
+        PeerSession session(context.options.max_method_entries);
         session.compression_min_payload_size = context.options.compression_min_payload_size;
         return session;
     }
 
     static auto makeServerPeerSession(const ServerContext& context) -> PeerSession {
-        PeerSession session;
+        PeerSession session(context.options.max_method_entries);
         session.compression_min_payload_size = context.options.compression_min_payload_size;
         return session;
+    }
+
+    static auto validateMessage(const ClientContext& context, std::span<const std::byte> message)
+        -> ilias::Result<void, std::error_code> {
+        return _validateFrameSize(message, context.options.frame_limits);
+    }
+
+    static auto validateMessage(const ServerContext& context, std::span<const std::byte> message)
+        -> ilias::Result<void, std::error_code> {
+        return _validateFrameSize(message, context.options.frame_limits);
     }
 
     static auto refreshMethodCatalog(ServerContext& context, std::vector<detail::RpcMethodMetadata> methods) -> void {
@@ -165,6 +186,10 @@ public:
     static auto decodeIncoming(ServerContext& context, PeerSession& session, std::span<const std::byte> message)
         -> DecodeResult {
         DecodeResult result;
+        if (!_validFrameSize(message, context.options.frame_limits)) {
+            NEKO_LOG_WARN("rpc", "rpc backend incoming frame rejected: reason=size_limit bytes={}", message.size());
+            return result;
+        }
         typename Codec::FrameParts parts;
         if (!Codec::parseFrame(message, CodecId, parts)) {
             NEKO_LOG_WARN("rpc", "rpc backend incoming frame rejected: reason=parse_failed bytes={}", message.size());
@@ -309,7 +334,10 @@ public:
         WireResponseValues frames;
         frames.reserve(responses.size());
         for (const auto& response : responses) {
-            frames.emplace_back(_encodeResponseFrame(response));
+            auto frame = _encodeResponseFrame(response);
+            if (_validFrameSize(frame, rpc::NekoRpcFrameLimits{})) {
+                frames.emplace_back(std::move(frame));
+            }
         }
         return Codec::encodeResponses(frames, batch);
     }
@@ -322,7 +350,10 @@ public:
             if (auto encoded = _encodeResponseFrame(context.options, session, response)) {
                 frames.emplace_back(std::move(encoded.value()));
             } else {
-                frames.emplace_back(_encodeResponseFrame(response));
+                auto fallback = _encodeResponseFrame(response);
+                if (_validFrameSize(fallback, context.options.frame_limits)) {
+                    frames.emplace_back(std::move(fallback));
+                }
             }
         }
         return Codec::encodeResponses(frames, batch);
@@ -406,6 +437,7 @@ public:
         static_assert(BackendSerializable<NekoRpcBackend, typename Method::RawReturnType>,
                       "NekoRpcBackend: response type is not serializable by this Serializer");
 
+        ILIAS_TRYV(_validateFrameSize(buffer, context.options.frame_limits));
         FrameParts parts;
         if (!Codec::parseFrame(buffer, CodecId, parts)) {
             return ilias::Err(RpcError::InvalidRequest);
@@ -471,11 +503,15 @@ public:
         }
 
         if (!session.method_id_enabled || session.remote_method_table.empty()) {
-            // No table arrived in the error response, usually because the table
-            // exceeded the automatic extension budget. The next loop actively
-            // sends Hello to refresh the peer session before replaying once.
-            session.handshake_done = false;
-            NEKO_LOG_INFO("rpc", "rpc backend method-id recovery: error=\"{}\" active_refresh retry=1",
+            // A receiver task owns the stream after the initial handshake, so
+            // recovery cannot perform a competing recv. Auto mode safely falls
+            // back to a named request for the one permitted retry.
+            if (context.options.method_id == MethodIdMode::Require) {
+                co_return false;
+            }
+            session.method_id_enabled = false;
+            session.handshake_done    = true;
+            NEKO_LOG_INFO("rpc", "rpc backend method-id recovery: error=\"{}\" named_fallback retry=1",
                           error.message());
         } else {
             NEKO_LOG_INFO("rpc", "rpc backend method-id recovery: error=\"{}\" response_table retry=1",
@@ -550,6 +586,28 @@ public:
         return _handleServerHello(session, message);
     }
 
+    static auto encodeCancel(Id id) -> Message {
+        Header header{.kind = Kind::Cancel, .codec = CodecId, .id = id};
+        return Codec::encodeFrame({.header = header, .method = {}, .extensions = {}, .payload = {}});
+    }
+
+    static auto cancelId(std::span<const std::byte> message) -> std::optional<Id> {
+        FrameParts parts;
+        if (!Codec::parseFrame(message, CodecId, parts) || parts.header.kind != Kind::Cancel ||
+            !parts.method.empty() || !parts.extensions.empty() || !parts.payload.empty()) {
+            return std::nullopt;
+        }
+        return parts.header.id;
+    }
+
+    static auto responseId(std::span<const std::byte> message) -> std::optional<Id> {
+        FrameParts parts;
+        if (!Codec::parseFrame(message, CodecId, parts) || parts.header.kind != Kind::Response) {
+            return std::nullopt;
+        }
+        return parts.header.id;
+    }
+
     template <typename Endpoint>
     static auto handleServerControl(ServerContext& context, PeerSession& session, Endpoint& endpoint,
                                     std::span<const std::byte> message) -> ilias::IoTask<bool> {
@@ -569,6 +627,11 @@ public:
         return rpc::NekoRpcStreamEndpoint<StreamT, Codec, CodecId>{std::move(stream)};
     }
 
+    template <ilias::Stream StreamT>
+    static auto makeEndpoint(StreamT stream, const Options& options) {
+        return rpc::NekoRpcStreamEndpoint<StreamT, Codec, CodecId>{std::move(stream), options.frame_limits};
+    }
+
     template <MessageEndpoint EndpointT>
     static auto makeEndpoint(EndpointT endpoint) {
         return endpoint;
@@ -579,13 +642,40 @@ public:
         return makeEndpoint(std::move(stream));
     }
 
+    template <ilias::Stream StreamT>
+    static auto makeClientEndpoint(StreamT stream, const Options& options) {
+        return makeEndpoint(std::move(stream), options);
+    }
+
     template <ilias::Stream StreamT, typename Methods>
     static auto makeServerEndpoint(StreamT stream, Methods&& /*methods*/) {
         return makeEndpoint(std::move(stream));
     }
 
+    template <ilias::Stream StreamT, typename Methods>
+    static auto makeServerEndpoint(StreamT stream, Methods&& /*methods*/, const Options& options) {
+        return makeEndpoint(std::move(stream), options);
+    }
+
 private:
     using FrameParts = typename Codec::FrameParts;
+
+    static auto _validateFrameSize(std::span<const std::byte> frame, const rpc::NekoRpcFrameLimits& limits)
+        -> ilias::Result<void, std::error_code> {
+        const auto header_size = Codec::headerSize();
+        if (frame.size() < header_size) {
+            return ilias::Err(RpcError::InvalidRequest);
+        }
+        ILIAS_TRY(auto body_size, Codec::headerBodySize(frame.first(header_size), CodecId, limits));
+        if (body_size != frame.size() - header_size) {
+            return ilias::Err(RpcError::InvalidRequest);
+        }
+        return {};
+    }
+
+    static auto _validFrameSize(std::span<const std::byte> frame, const rpc::NekoRpcFrameLimits& limits) -> bool {
+        return static_cast<bool>(_validateFrameSize(frame, limits));
+    }
 
     static auto _extensionViews(const ExtensionStore& extensions) -> ExtensionMap {
         ExtensionMap views;

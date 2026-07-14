@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <span>
 #include <system_error>
 #include <type_traits>
@@ -18,6 +19,7 @@
 #include <ilias/io/method.hpp>
 #include <ilias/io/traits.hpp>
 #include <ilias/result.hpp>
+#include <ilias/sync/mutex.hpp>
 #include <ilias/task.hpp>
 
 #include "nekoproto/global/global.hpp"
@@ -63,7 +65,7 @@ concept MessageEndpoint =
 namespace detail {
 
 template <typename StreamT>
-auto close_stream(StreamT& stream) noexcept -> void {
+auto close_stream(StreamT& stream) -> void {
     if constexpr (requires(StreamT& value) { value.close(); }) {
         stream.close();
     }
@@ -178,11 +180,15 @@ public:
         requires std::default_initializable<StreamT>
     = default;
     explicit LengthPrefixedStreamMessageEndpoint(StreamT&& stream,
-                                                 std::error_code messageTooLarge = ilias::IoError::MessageTooLarge)
-        : mStream(std::move(stream)), mMessageTooLarge(messageTooLarge) {}
+                                                 std::error_code messageTooLarge = ilias::IoError::MessageTooLarge,
+                                                 std::size_t maxMessageBytes = 16U * 1024U * 1024U)
+        : mStream(std::move(stream)), mMessageTooLarge(messageTooLarge), mMaxMessageBytes(maxMessageBytes) {}
 
     auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t> {
         ILIAS_CO_TRY(auto size, co_await ilias::io::readU32Le(mStream));
+        if (size > mMaxMessageBytes) {
+            co_return ilias::Err(mMessageTooLarge);
+        }
         buffer.resize(size);
         if (size == 0U) {
             co_return buffer.size();
@@ -198,7 +204,8 @@ public:
     }
 
     auto send(std::span<const std::byte> buffer) -> ilias::IoTask<std::size_t> {
-        if (buffer.size() > std::numeric_limits<std::uint32_t>::max()) {
+        auto guard = co_await mWriteMutex->lock();
+        if (buffer.size() > std::numeric_limits<std::uint32_t>::max() || buffer.size() > mMaxMessageBytes) {
             co_return ilias::Err(mMessageTooLarge);
         }
         ILIAS_CO_TRYV(co_await ilias::io::writeU32Le(mStream, static_cast<std::uint32_t>(buffer.size())));
@@ -223,6 +230,8 @@ protected:
 private:
     StreamT mStream;
     std::error_code mMessageTooLarge = ilias::IoError::MessageTooLarge;
+    std::size_t mMaxMessageBytes = 16U * 1024U * 1024U;
+    std::unique_ptr<ilias::Mutex> mWriteMutex = std::make_unique<ilias::Mutex>();
 };
 
 template <typename DatagramT, typename EndpointT>

@@ -30,14 +30,23 @@ NEKO_END_NAMESPACE
 #if !defined(NEKO_PROTO_NO_JSON_SERIALIZER)
 NEKO_BEGIN_NAMESPACE
 template <typename T>
-JsonSerializer::JsonValue to_json_value(const T& obj) {
+auto to_json_value(const T& obj) -> sa::Result<typename JsonSerializer::JsonValue> {
     JsonSerializer::JsonValue json;
     std::vector<char> buffer;
     JsonSerializer::OutputSerializer out(buffer);
-    out(obj);
-    out.end();
+    if (!out(obj) || !out.end()) {
+        if (const auto* error = out.error()) {
+            return sa::Err(*error);
+        }
+        return sa::Err(sa::ErrorCode::ParseError, "Failed to serialize JSON value");
+    }
     JsonSerializer::InputSerializer in(buffer.data(), buffer.size());
-    in(json);
+    if (!in(json)) {
+        if (const auto* error = in.error()) {
+            return sa::Err(*error);
+        }
+        return sa::Err(sa::ErrorCode::ParseError, "Failed to parse serialized JSON value");
+    }
     return json;
 }
 NEKO_END_NAMESPACE

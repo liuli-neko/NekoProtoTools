@@ -54,8 +54,8 @@ struct ReadParser<R, std::tuple<Ts...>, void> {
     }
 
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Tuple& value, const Tags& /*tags*/) {
-        auto array = R::toArray(in);
+    static ParserResult read(typename R::InputValueType in, Tuple& value, const Tags& tags) {
+        auto array = parsing::reader_to_array<R>(in, tags);
         if (!array) {
             return array.error();
         }
@@ -102,12 +102,12 @@ struct ReadParser<R, std::pair<K, V>, void> {
     using Pair = std::pair<K, V>;
 
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Pair& value, const Tags& /*tags*/) {
-        auto object = R::toObject(in);
+    static ParserResult read(typename R::InputValueType in, Pair& value, const Tags& tags) {
+        auto object = parsing::reader_to_object<R>(in, tags);
         if (!object) {
             return object.error();
         }
-        auto first = R::objectField(object.value(), "first");
+        auto first = parsing::reader_object_field<R>(object.value(), "first", NoTags{});
         if (!first) {
             return parser_error(sa::ErrorCode::InvalidField, "Required pair field 'first' is missing");
         }
@@ -115,7 +115,7 @@ struct ReadParser<R, std::pair<K, V>, void> {
         if (!result) {
             return parser_context(std::move(result), "Failed to parse pair field 'first': ");
         }
-        auto second = R::objectField(object.value(), "second");
+        auto second = parsing::reader_object_field<R>(object.value(), "second", NoTags{});
         if (!second) {
             return parser_error(sa::ErrorCode::InvalidField, "Required pair field 'second' is missing");
         }

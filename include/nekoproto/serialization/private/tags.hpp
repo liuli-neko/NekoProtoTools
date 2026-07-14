@@ -44,12 +44,25 @@ enum class YamlCollectionStyle {
     Block,
 };
 
+/**
+ * @brief Selects the wire shape used by union-like parsers such as std::variant.
+ *
+ * TaggedArray is the unambiguous default: [alternative_index, alternative_value].
+ * Untagged writes only the active value and is intended for compatibility with
+ * formats that historically inferred the alternative from the payload.
+ */
+enum class UnionEncoding {
+    TaggedArray,
+    Untagged,
+};
+
 namespace tag_property {
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, leading_comment, leading_comment)   // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, trailing_comment, trailing_comment) // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, leading_comment, comment)           // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, name, name)                         // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, raw_string, raw_string)                         // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, raw_fixed_data, raw_fixed_data)                 // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, skippable, skippable)                           // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, yaml_tag, yaml_tag)                 // NOLINT
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, yaml_anchor, yaml_anchor)           // NOLINT
@@ -57,6 +70,7 @@ NEKO_DETAIL_DEFINE_TAG_PROPERTY(YamlScalarStyle, yaml_scalar_style, yaml_scalar_
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(YamlCollectionStyle, yaml_collection_style,            // NOLINT
                                 yaml_collection_style)
 NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, inline_table, inline_table)            // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(UnionEncoding, encoding, union_encoding)     // NOLINT
 
 NEKO_DETAIL_DEFINE_TYPE_TAG_PROPERTY(bool, flat, flat)         // NOLINT
 NEKO_DETAIL_DEFINE_TYPE_TAG_PROPERTY(bool, unframed, unframed) // NOLINT
@@ -277,6 +291,22 @@ struct ParserTag {
     }
 };
 
+/**
+ * @brief Parser-level policy for one union boundary.
+ *
+ * The variant parser consumes this tag instead of forwarding it to the active
+ * alternative. Consequently an outer untagged union does not implicitly make
+ * a nested union untagged as well; the nested field needs its own UnionTag.
+ */
+struct UnionTag {
+    tag_detail::tag_value<UnionEncoding> encoding{};
+
+    template <typename T, auto /*Tags*/>
+    constexpr static bool constexpr_check() { // NOLINT
+        return true;
+    }
+};
+
 struct JsonTag {
     ParserTag base{};
     // Compatibility shim: flat/skippable are parser-level tags. Prefer ParserTag
@@ -314,7 +344,7 @@ struct JsonTag {
 
 struct BinaryTag {
     tag_detail::tag_value<std::size_t> fixed_length{};
-    tag_detail::tag_value<bool> unframed{};
+    tag_detail::tag_value<bool> raw_fixed_data{};
 };
 
 namespace tag_property {

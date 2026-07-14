@@ -75,7 +75,7 @@ public:
     template <size_t N>
         requires(N == 0 || N == MethodTraits::NumParams)
     RpcMethodDynamic(const std::array<std::string_view, N>& argNames, std::string_view name,
-                     bool isNotification = false) noexcept
+                     bool isNotification = false)
         : mMetadata(argNames, name) {
         this->mIsNotification = isNotification;
         _updateSignature();
@@ -84,7 +84,7 @@ public:
     template <size_t N>
         requires(N == 0 || N == MethodTraits::NumParams)
     RpcMethodDynamic(const std::array<std::string_view, N>& argNames, std::string_view name, FunctionType func,
-                     bool isNotification = false) noexcept
+                     bool isNotification = false)
         : RpcMethodDynamic(argNames, name, isNotification) {
         set(std::move(func));
     }
@@ -92,14 +92,14 @@ public:
     template <size_t N>
         requires(N == 0 || N == MethodTraits::NumParams)
     RpcMethodDynamic(const std::array<std::string_view, N>& argNames, std::string_view name, CoroutinesFuncType func,
-                     bool isNotification = false) noexcept
+                     bool isNotification = false)
         : RpcMethodDynamic(argNames, name, isNotification) {
         set(std::move(func));
     }
 
     template <typename U>
         requires std::is_convertible_v<U, FunctionType> && (!std::is_convertible_v<U, CoroutinesFuncType>)
-    RpcMethodDynamic& operator=(U&& func) noexcept {
+    RpcMethodDynamic& operator=(U&& func) {
         if constexpr (std::is_bind_expression_v<U>) {
             return set(std::move(func));
         } else {
@@ -109,7 +109,7 @@ public:
 
     template <typename U>
         requires std::is_convertible_v<U, CoroutinesFuncType>
-    RpcMethodDynamic& operator=(U&& func) noexcept {
+    RpcMethodDynamic& operator=(U&& func) {
         if constexpr (std::is_bind_expression_v<U>) {
             return set(std::move(func));
         } else {
@@ -117,7 +117,7 @@ public:
         }
     }
 
-    RpcMethodDynamic& set(FunctionType&& func) noexcept {
+    RpcMethodDynamic& set(FunctionType&& func) {
         this->mCoFunction = [func = std::move(func)](auto... args) mutable -> ilias::IoTask<RawReturnType> {
             if constexpr (std::is_void_v<RawReturnType>) {
                 func(args...);
@@ -129,7 +129,7 @@ public:
         return *this;
     }
 
-    RpcMethodDynamic& set(CoroutinesFuncType&& func) noexcept {
+    RpcMethodDynamic& set(CoroutinesFuncType&& func) {
         this->mCoFunction = std::move(func);
         return *this;
     }

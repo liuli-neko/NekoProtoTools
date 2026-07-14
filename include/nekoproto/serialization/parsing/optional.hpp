@@ -25,7 +25,7 @@ template <typename R, typename T>
 struct ReadParser<R, std::optional<T>, void> {
     template <typename Tags>
     static ParserResult read(typename R::InputValueType in, std::optional<T>& value, const Tags& tags) {
-        if (R::isEmpty(in)) {
+        if (parsing::reader_is_empty<R>(in, tags)) {
             value.reset();
             return sa::success();
         }

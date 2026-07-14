@@ -66,6 +66,13 @@ struct NekoRpcCompressionStats {
     std::atomic<std::uint64_t> decompression_errors{0};
 };
 
+struct NekoRpcFrameLimits {
+    std::size_t max_frame_bytes = 16U * 1024U * 1024U;
+    std::size_t max_method_bytes = 64U * 1024U;
+    std::size_t max_payload_bytes = 16U * 1024U * 1024U;
+    std::size_t max_extension_bytes = 64U * 1024U;
+};
+
 class NEKO_PROTO_API NekoRpcFrameCodec {
 public:
     using IdType             = std::uint64_t;
@@ -161,6 +168,9 @@ public:
 
     static auto knownKind(NekoRpcKind kind) -> bool;
     static auto headerBodySize(std::span<const std::byte> header, std::uint8_t codec)
+        -> ilias::Result<std::size_t, std::error_code>;
+    static auto headerBodySize(std::span<const std::byte> header, std::uint8_t codec,
+                               const NekoRpcFrameLimits& limits)
         -> ilias::Result<std::size_t, std::error_code>;
     static auto parseFrame(std::span<const std::byte> data, std::uint8_t codec, FrameParts& parts) -> bool;
 };
@@ -287,12 +297,14 @@ public:
 
     static auto compress(std::span<const std::byte> payload, NekoRpcCompressionAlgorithm algorithm)
         -> ilias::Result<MessageType, std::error_code>;
-    static auto decompress(std::span<const std::byte> payload, NekoRpcCompressionAlgorithm algorithm)
+    static auto decompress(std::span<const std::byte> payload, NekoRpcCompressionAlgorithm algorithm,
+                           std::size_t max_output_bytes)
         -> ilias::Result<MessageType, std::error_code>;
 
 private:
     static auto _compressRunLength(std::span<const std::byte> payload) -> MessageType;
-    static auto _decompressRunLength(std::span<const std::byte> payload) -> ilias::Result<MessageType, std::error_code>;
+    static auto _decompressRunLength(std::span<const std::byte> payload, std::size_t max_output_bytes)
+        -> ilias::Result<MessageType, std::error_code>;
 };
 
 } // namespace rpc

@@ -33,14 +33,22 @@ template <typename T>
 bool parser_insert_sequence_value(T& values, typename T::value_type&& value) {
     if constexpr (requires { values.push_back(std::move(value)); }) {
         values.push_back(std::move(value));
+        return true;
     } else if constexpr (requires { values.emplace(std::move(value)); }) {
-        values.emplace(std::move(value));
+        auto result = values.emplace(std::move(value));
+        if constexpr (requires { result.second; }) {
+            return result.second;
+        }
+        return true;
     } else if constexpr (requires { values.insert(std::move(value)); }) {
-        values.insert(std::move(value));
+        auto result = values.insert(std::move(value));
+        if constexpr (requires { result.second; }) {
+            return result.second;
+        }
+        return true;
     } else {
         static_assert(ParserSequenceDependentFalseV<T>, "Unsupported sequence container insertion");
     }
-    return true;
 }
 
 template <typename W, typename T, typename ParentType, typename Tags>
@@ -58,13 +66,13 @@ ParserResult parser_write_sequence(W& writer, const T& values, const ParentType&
     return sa::success();
 }
 
-template <typename R, typename T>
-ParserResult parser_read_sequence(typename R::InputValueType in, T& values) {
-    auto array = R::toArray(in);
+template <typename R, typename T, typename Tags>
+ParserResult parser_read_sequence(typename R::InputValueType in, T& values, const Tags& tags) {
+    auto array = parsing::reader_to_array<R>(in, tags);
     if (!array) {
         return array.error();
     }
-    values.clear();
+    T parsed = parser_empty_container_like(values);
     const auto size = R::arraySize(array.value());
     for (std::size_t i = 0; i < size; ++i) {
         typename T::value_type item{};
@@ -72,8 +80,12 @@ ParserResult parser_read_sequence(typename R::InputValueType in, T& values) {
         if (!result) {
             return parser_context(std::move(result), "Failed to parse sequence element " + std::to_string(i) + ": ");
         }
-        parser_insert_sequence_value(values, std::move(item));
+        if (!parser_insert_sequence_value(parsed, std::move(item))) {
+            return parser_error(sa::ErrorCode::InvalidField,
+                                "Duplicate value at sequence element " + std::to_string(i));
+        }
     }
+    values = std::move(parsed);
     return sa::success();
 }
 
@@ -92,8 +104,8 @@ struct SequenceReadParser {
     using Container = Sequence;
 
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Container& value, const Tags& /*tags*/) {
-        return parser_read_sequence<R>(in, value);
+    static ParserResult read(typename R::InputValueType in, Container& value, const Tags& tags) {
+        return parser_read_sequence<R>(in, value, tags);
     }
 };
 
@@ -136,13 +148,13 @@ struct ReadParser<R, std::vector<bool, Alloc>, void> {
     using Vector = std::vector<bool, Alloc>;
 
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Vector& value, const Tags& /*tags*/) {
-        auto array = R::toArray(in);
+    static ParserResult read(typename R::InputValueType in, Vector& value, const Tags& tags) {
+        auto array = parsing::reader_to_array<R>(in, tags);
         if (!array) {
             return array.error();
         }
-        value.clear();
-        value.reserve(R::arraySize(array.value()));
+        Vector parsed = parser_empty_container_like(value);
+        parsed.reserve(R::arraySize(array.value()));
         const auto size = R::arraySize(array.value());
         for (std::size_t i = 0; i < size; ++i) {
             bool item   = false;
@@ -151,8 +163,9 @@ struct ReadParser<R, std::vector<bool, Alloc>, void> {
                 return parser_context(std::move(result),
                                       "Failed to parse vector<bool> element " + std::to_string(i) + ": ");
             }
-            value.push_back(item);
+            parsed.push_back(item);
         }
+        value = std::move(parsed);
         return sa::success();
     }
 };
@@ -203,8 +216,8 @@ struct ReadParser<R, std::array<T, N>, void> {
     using Array = std::array<T, N>;
 
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Array& value, const Tags& /*tags*/) {
-        auto array = R::toArray(in);
+    static ParserResult read(typename R::InputValueType in, Array& value, const Tags& tags) {
+        auto array = parsing::reader_to_array<R>(in, tags);
         if (!array) {
             return array.error();
         }

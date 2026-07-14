@@ -47,7 +47,11 @@ struct JsonRpcBackend {
         Id id;
     };
 
-    struct Options {};
+    struct Options {
+        std::size_t max_message_bytes = 16U * 1024U * 1024U;
+        std::size_t max_pending_calls = 1024U;
+        std::size_t max_inflight_requests_per_connection = 1024U;
+    };
 
     struct ClientContext {
         Options options;
@@ -70,9 +74,11 @@ public:
         }
     }
 
-    static auto makeClientContext(Options options = {}) -> ClientContext {
+    static auto makeClientContext(Options options) -> ClientContext {
         return ClientContext{.options = std::move(options), .next_id = 0};
     }
+
+    static auto makeClientContext() -> ClientContext { return makeClientContext(Options{}); }
 
     template <typename Methods>
     static auto makeServerContext(Options options, Methods&& /*methods*/) -> ServerContext {
@@ -87,29 +93,49 @@ public:
     static auto makeClientPeerSession(const ClientContext& /*context*/) -> PeerSession { return {}; }
     static auto makeServerPeerSession(const ServerContext& /*context*/) -> PeerSession { return {}; }
 
+    static auto validateMessage(const ClientContext& context, std::span<const std::byte> message)
+        -> ilias::Result<void, std::error_code> {
+        if (message.size() > context.options.max_message_bytes) {
+            return ilias::Err(JsonRpcError::MessageToolLarge);
+        }
+        return {};
+    }
+
+    static auto validateMessage(const ServerContext& context, std::span<const std::byte> message)
+        -> ilias::Result<void, std::error_code> {
+        if (message.size() > context.options.max_message_bytes) {
+            return ilias::Err(JsonRpcError::MessageToolLarge);
+        }
+        return {};
+    }
+
     static auto refreshMethodCatalog(ServerContext& /*context*/, std::vector<detail::RpcMethodMetadata> /*methods*/)
         -> void {}
 
-    static DecodeResult decodeIncoming(ServerContext& /*context*/, PeerSession& /*session*/,
+    static DecodeResult decodeIncoming(ServerContext& context, PeerSession& /*session*/,
                                        std::span<const std::byte> message) {
         DecodeResult result;
-        auto data = reinterpret_cast<const char*>(message.data());
-        auto size = message.size();
-        while (size > 0 && (*data == '\n' || *data == ' ')) {
-            ++data;
-            --size;
-        }
-
-        JsonSerializer::JsonValue root;
-        JsonSerializer::InputSerializer rootIn(data, size);
-        if (!rootIn(root)) {
+        result.ok = true;
+        if (message.size() > context.options.max_message_bytes) {
+            _appendProtocolError(result.responses, {}, JsonRpcError::MessageToolLarge);
             return result;
         }
 
-        result.ok    = true;
+        JsonSerializer::JsonValue root;
+        JsonSerializer::InputSerializer rootIn(reinterpret_cast<const char*>(message.data()), message.size());
+        if (!rootIn(root)) {
+            _appendProtocolError(result.responses, {}, JsonRpcError::ParseError);
+            return result;
+        }
+
         result.batch = root.isArray();
         std::vector<JsonSerializer::JsonValue> rawRequests;
         if (result.batch) {
+            if (root.size() == 0U) {
+                result.batch = false;
+                _appendProtocolError(result.responses, {}, JsonRpcError::InvalidRequest);
+                return result;
+            }
             rawRequests.reserve(root.size());
             for (std::size_t ix = 0; ix < root.size(); ++ix) {
                 rawRequests.emplace_back(root[ix]);
@@ -121,11 +147,9 @@ public:
         for (auto& requestValue : rawRequests) {
             JsonSerializer::InputSerializer methodIn(requestValue);
             detail::JsonRpcRequestMethod method;
-            if (!methodIn(method)) {
-                break;
-            }
-            if (method.jsonrpc.has_value() && method.jsonrpc.value() != "2.0") {
-                break;
+            if (!requestValue.isObject() || !methodIn(method) || method.jsonrpc != std::optional<std::string>{"2.0"}) {
+                _appendProtocolError(result.responses, {}, JsonRpcError::InvalidRequest);
+                continue;
             }
             result.requests.push_back({std::move(requestValue), std::move(method)});
         }
@@ -225,8 +249,11 @@ public:
             response.result = std::forward<RetT>(ret);
         }
         auto value = to_json_value(response);
-        if (value.hasValue()) {
-            responses.emplace_back(std::move(value));
+        if (value) {
+            responses.emplace_back(std::move(value.value()));
+        } else {
+            NEKO_LOG_ERROR("rpc", "serialize JSON-RPC success response failed: {}", value.error().msg);
+            _appendProtocolError(responses, request.method.id, JsonRpcError::InternalError);
         }
     }
 
@@ -234,14 +261,7 @@ public:
         if (!expectsResponse(request)) {
             return;
         }
-        using ErrorTraits = detail::RpcMethodTraits<void(void)>;
-        detail::JsonRpcResponse<ErrorTraits> response;
-        response.id    = request.method.id;
-        response.error = makeErrorResponse(error);
-        auto value     = to_json_value(response);
-        if (value.hasValue()) {
-            responses.emplace_back(std::move(value));
-        }
+        _appendProtocolError(responses, request.method.id, error);
     }
 
     static Message encodeResponses(const ResponseValues& responses, bool batch) {
@@ -250,18 +270,21 @@ public:
             return buffer;
         }
         JsonSerializer::OutputSerializer out(buffer);
-        if (batch) {
-            out(responses);
-        } else {
-            out(responses.front());
+        const bool written = batch ? out(responses) : out(responses.front());
+        if (!written || !out.end()) {
+            NEKO_LOG_ERROR("rpc", "serialize JSON-RPC response envelope failed");
+            buffer.clear();
         }
-        out.end();
         return buffer;
     }
 
-    static Message encodeResponses(ServerContext& /*context*/, PeerSession& /*session*/,
+    static Message encodeResponses(ServerContext& context, PeerSession& /*session*/,
                                    const ResponseValues& responses, bool batch) {
-        return encodeResponses(responses, batch);
+        auto buffer = encodeResponses(responses, batch);
+        if (buffer.size() > context.options.max_message_bytes) {
+            buffer.clear();
+        }
+        return buffer;
     }
 
     template <typename Method, typename... Args>
@@ -295,6 +318,9 @@ public:
         detail::JsonRpcMethodContext methodContext{.argNames = method.rpcArgNames()};
         detail::JsonRpcRequestWithContext<Request> requestWithContext{request, methodContext};
         if (out(requestWithContext) && out.end()) {
+            if (buffer.size() > context.options.max_message_bytes) {
+                return ilias::Err(JsonRpcError::MessageToolLarge);
+            }
             return EncodedRequest{.message = std::move(buffer), .id = request.id};
         }
         return ilias::Err(JsonRpcError::InvalidRequest);
@@ -309,20 +335,29 @@ public:
     }
 
     template <typename Method>
-    static auto decodeResponse(ClientContext& /*context*/, PeerSession& /*session*/, std::span<const std::byte> buffer,
+    static auto decodeResponse(ClientContext& context, PeerSession& /*session*/, std::span<const std::byte> buffer,
                                const Id& expectedId) -> ilias::Result<typename Method::RawReturnType, std::error_code> {
         using Response = detail::JsonRpcResponse<typename Method::MethodTraits>;
         static_assert(BackendSerializable<JsonRpcBackend, Response>,
                       "JsonRpcBackend: response type is not serializable by JsonSerializer");
+        if (buffer.size() > context.options.max_message_bytes) {
+            return ilias::Err(JsonRpcError::MessageToolLarge);
+        }
         Response response;
         JsonSerializer::InputSerializer in(reinterpret_cast<const char*>(buffer.data()), buffer.size());
         if (!in(response)) {
             return ilias::Err(JsonRpcError::ParseError);
         }
+        if (response.jsonrpc != "2.0") {
+            return ilias::Err(JsonRpcError::InvalidRequest);
+        }
         if (response.id != expectedId) {
             return ilias::Err(JsonRpcError::ResponseIdNotMatch);
         }
         if (response.error.has_value()) {
+            if (response.result.has_value()) {
+                return ilias::Err(JsonRpcError::InvalidRequest);
+            }
             auto err = response.error.value();
             return ilias::Err(err.code > 0 ? std::error_code(ilias::IoError::Code(err.code))
                                            : std::error_code(JsonRpcError(err.code)));
@@ -330,6 +365,9 @@ public:
         if constexpr (std::is_void_v<typename Method::RawReturnType>) {
             return {};
         } else {
+            if (!response.result.has_value()) {
+                return ilias::Err(JsonRpcError::InvalidRequest);
+            }
             return response.result.value();
         }
     }
@@ -348,6 +386,24 @@ public:
         return false;
     }
 
+    static auto responseId(std::span<const std::byte> message) -> std::optional<Id> {
+        JsonSerializer::JsonValue root;
+        JsonSerializer::InputSerializer rootIn(reinterpret_cast<const char*>(message.data()), message.size());
+        if (!rootIn(root) || !root.isObject()) {
+            return std::nullopt;
+        }
+        const auto idValue = root["id"];
+        if (!idValue.hasValue()) {
+            return std::nullopt;
+        }
+        Id id;
+        JsonSerializer::InputSerializer idIn(idValue);
+        if (!idIn(id)) {
+            return std::nullopt;
+        }
+        return id;
+    }
+
     template <typename Endpoint>
     static auto handleServerControl(ServerContext& /*context*/, PeerSession& /*session*/, Endpoint& /*endpoint*/,
                                     std::span<const std::byte> /*message*/) -> ilias::IoTask<bool> {
@@ -359,12 +415,32 @@ public:
         return detail::LengthPrefixedStreamMessageEndpoint<StreamT>{std::move(stream), JsonRpcError::InvalidRequest};
     }
 
+    template <ilias::Stream StreamT>
+    static auto makeEndpoint(StreamT stream, const Options& options) {
+        return detail::LengthPrefixedStreamMessageEndpoint<StreamT>{
+            std::move(stream), JsonRpcError::InvalidRequest, options.max_message_bytes};
+    }
+
     template <MessageEndpoint EndpointT>
     static auto makeEndpoint(EndpointT endpoint) {
         return endpoint;
     }
 
 private:
+    static auto _appendProtocolError(ResponseValues& responses, Id id, std::error_code error) -> bool {
+        using ErrorTraits = detail::RpcMethodTraits<void(void)>;
+        detail::JsonRpcResponse<ErrorTraits> response;
+        response.id    = std::move(id);
+        response.error = makeErrorResponse(error);
+        auto value     = to_json_value(response);
+        if (!value) {
+            NEKO_LOG_ERROR("rpc", "serialize JSON-RPC error response failed: {}", value.error().msg);
+            return false;
+        }
+        responses.emplace_back(std::move(value.value()));
+        return true;
+    }
+
     static auto makeErrorResponse(std::error_code error) -> detail::JsonRpcErrorResponse {
         return detail::JsonRpcErrorResponse{jsonRpcErrorCode(error), error.message()};
     }

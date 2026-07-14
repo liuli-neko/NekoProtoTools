@@ -4,6 +4,7 @@
 #include "nekoproto/rpc/private/global.hpp"
 
 #include <map>
+#include <cstddef>
 #include <vector>
 
 NEKO_BEGIN_NAMESPACE
@@ -37,6 +38,11 @@ struct NekoRpcMethodIdResolution {
 
 class NEKO_PROTO_API NekoRpcMethodIdTable {
 public:
+    static constexpr std::size_t DefaultMaxEntries = 64U * 1024U;
+
+    explicit NekoRpcMethodIdTable(std::size_t max_entries = DefaultMaxEntries) noexcept
+        : mMaxEntries(max_entries) {}
+
     static auto signatureHash(std::string_view name, std::string_view signature = {}) -> std::uint64_t;
     static auto entriesFromNames(const std::vector<std::string>& names) -> std::vector<NekoRpcMethodEntry>;
 
@@ -55,20 +61,25 @@ public:
     auto minimumCompatibleVersion() const noexcept -> std::uint64_t { return mMinimumCompatibleVersion; }
     auto setMinimumCompatibleVersion(std::uint64_t version) noexcept -> void;
     auto empty() const noexcept -> bool { return mEntries.empty(); }
+    auto maxEntries() const noexcept -> std::size_t { return mMaxEntries; }
     auto entries() const noexcept -> const std::vector<NekoRpcMethodEntry>& { return mEntries; }
     auto findByName(std::string_view name) const -> const NekoRpcMethodEntry*;
     auto findById(std::uint64_t id) const -> const NekoRpcMethodEntry*;
 
 private:
+    auto _resetValidated(std::vector<NekoRpcMethodEntry> entries, std::uint64_t version) -> void;
     auto _bumpVersion() -> void;
     auto _rebuildIndex() -> void;
     auto _installEntry(NekoRpcMethodEntry entry) -> bool;
+    auto _validTable(const std::vector<NekoRpcMethodEntry>& entries, std::uint64_t version,
+                     bool require_contiguous_ids) const -> bool;
 
     std::uint64_t mVersion                  = 0;
     std::uint64_t mMinimumCompatibleVersion = 0;
     std::uint64_t mNextId                   = 0;
     std::vector<NekoRpcMethodEntry> mEntries;
     std::map<std::string, std::uint64_t, std::less<>> mNameToId;
+    std::size_t mMaxEntries = DefaultMaxEntries;
 };
 
 } // namespace rpc

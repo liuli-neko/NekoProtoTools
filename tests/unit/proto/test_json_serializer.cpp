@@ -447,15 +447,15 @@ TEST(JsonSerializerTest, AggregateVariantAndOptionalRoundTrip) {
     EXPECT_EQ(decodedAggregate.c, aggregate.c);
 
     const std::variant<int, std::string> integerVariant{3};
-    EXPECT_EQ(write_named("value", integerVariant), R"({"value":3})");
+    EXPECT_EQ(write_named("value", integerVariant), R"({"value":[0,3]})");
     std::variant<int, std::string> decodedIntegerVariant;
-    ASSERT_TRUE(read_named(R"({"value":3})", "value", decodedIntegerVariant));
+    ASSERT_TRUE(read_named(R"({"value":[0,3]})", "value", decodedIntegerVariant));
     EXPECT_EQ(decodedIntegerVariant, integerVariant);
 
     const std::variant<int, std::string> stringVariant{"test"};
-    EXPECT_EQ(write_named("value", stringVariant), R"({"value":"test"})");
+    EXPECT_EQ(write_named("value", stringVariant), R"({"value":[1,"test"]})");
     std::variant<int, std::string> decodedStringVariant;
-    ASSERT_TRUE(read_named(R"({"value":"test"})", "value", decodedStringVariant));
+    ASSERT_TRUE(read_named(R"({"value":[1,"test"]})", "value", decodedStringVariant));
     EXPECT_EQ(decodedStringVariant, stringVariant);
 
     const std::optional<int> optional{3};
@@ -643,10 +643,19 @@ TEST(JsonSerializerTest, JsonSchemaFollowsGenericParserShapes) {
     EXPECT_EQ((*properties.at("optional").oneOf)[0].type, "integer");
     EXPECT_EQ((*properties.at("optional").oneOf)[1].type, "null");
 
-    ASSERT_TRUE(properties.at("choice").oneOf);
-    ASSERT_EQ(properties.at("choice").oneOf->size(), 2U);
-    EXPECT_EQ((*properties.at("choice").oneOf)[0].type, "null");
-    EXPECT_EQ((*properties.at("choice").oneOf)[1].type, "string");
+    const auto& choice = properties.at("choice");
+    EXPECT_EQ(choice.type, "array");
+    EXPECT_EQ(choice.minItems, 2U);
+    EXPECT_EQ(choice.maxItems, 2U);
+    EXPECT_EQ(choice.additionalItems, false);
+    ASSERT_TRUE(std::holds_alternative<std::vector<JsonSchema>>(choice.items));
+    const auto& choiceItems = std::get<std::vector<JsonSchema>>(choice.items);
+    ASSERT_EQ(choiceItems.size(), 2U);
+    EXPECT_EQ(choiceItems[0].type, "integer");
+    ASSERT_TRUE(choiceItems[1].oneOf);
+    ASSERT_EQ(choiceItems[1].oneOf->size(), 2U);
+    EXPECT_EQ((*choiceItems[1].oneOf)[0].type, "null");
+    EXPECT_EQ((*choiceItems[1].oneOf)[1].type, "string");
 
     const auto& named = properties.at("named");
     EXPECT_EQ(named.type, "object");
