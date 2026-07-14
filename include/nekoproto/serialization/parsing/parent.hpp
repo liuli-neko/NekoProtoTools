@@ -12,6 +12,18 @@
 NEKO_BEGIN_NAMESPACE
 
 namespace parsing {
+namespace detail {
+template <typename W, typename = void>
+struct OutputIdObjectType {
+    using type = typename W::OutputObjectType;
+};
+
+template <typename W>
+struct OutputIdObjectType<W, std::void_t<typename W::OutputIdObjectType>> {
+    using type = typename W::OutputIdObjectType;
+};
+} // namespace detail
+
 #define NEKO_RETURN_TAGGED(with_tags_call, without_tags_call)                                                          \
     if constexpr (requires { with_tags_call; }) {                                                                      \
         return with_tags_call;                                                                                         \
@@ -22,6 +34,7 @@ template <typename W>
 struct Parent {
     using OutputArrayType  = typename W::OutputArrayType;
     using OutputObjectType = typename W::OutputObjectType;
+    using OutputIdObjectType = typename detail::OutputIdObjectType<W>::type;
     using OutputValueType  = typename W::OutputValueType;
 
     struct Array {
@@ -39,6 +52,13 @@ struct Parent {
         OutputObjectType* object;
         bool isAttribute = false;
         Object asAttribute() { return {name, object, true}; }
+    };
+
+    struct IdObject {
+        std::string_view name;
+        OutputIdObjectType* object;
+        bool isAttribute = false;
+        IdObject asAttribute() { return {name, object, true}; }
     };
 
     template <typename T>
@@ -59,6 +79,9 @@ struct Parent {
         } else if constexpr (std::is_same<Type, Object>()) {
             NEKO_RETURN_TAGGED(writer.addArrayToObject(parent.name, size, parent.object, tags),
                                writer.addArrayToObject(parent.name, size, parent.object));
+        } else if constexpr (std::is_same<Type, IdObject>()) {
+            NEKO_RETURN_TAGGED(writer.addArrayToObject(parent.name, size, parent.object, tags),
+                               writer.addArrayToObject(parent.name, size, parent.object));
         } else if constexpr (std::is_same<Type, Root>()) {
             NEKO_RETURN_TAGGED(writer.arrayAsRoot(size, tags), writer.arrayAsRoot(size));
         } else if constexpr (schemaful::IsSchemafulWriter<W>) {
@@ -74,6 +97,25 @@ struct Parent {
 
         } else {
             static_assert(always_false_v<Type>, "Unsupported option.");
+        }
+    }
+
+    template <class ParentType, typename Tags = NoTags>
+    static OutputIdObjectType addIdObject(W& writer, const std::size_t size, const ParentType& parent,
+                                          const Tags& tags = Tags{})
+        requires requires { typename W::OutputIdObjectType; }
+    {
+        using Type = std::remove_cvref_t<ParentType>;
+        if constexpr (std::is_same<Type, Array>()) {
+            NEKO_RETURN_TAGGED(writer.addIdObjectToArray(size, parent.array, tags),
+                               writer.addIdObjectToArray(size, parent.array));
+        } else if constexpr (std::is_same<Type, Object>() || std::is_same<Type, IdObject>()) {
+            NEKO_RETURN_TAGGED(writer.addIdObjectToObject(parent.name, size, parent.object, tags),
+                               writer.addIdObjectToObject(parent.name, size, parent.object));
+        } else if constexpr (std::is_same<Type, Root>()) {
+            NEKO_RETURN_TAGGED(writer.idObjectAsRoot(size, tags), writer.idObjectAsRoot(size));
+        } else {
+            static_assert(always_false_v<Type>, "Unsupported id-object parent.");
         }
     }
 
@@ -100,6 +142,9 @@ struct Parent {
         } else if constexpr (std::is_same<Type, Object>()) {
             NEKO_RETURN_TAGGED(writer.addObjectToObject(parent.name, size, parent.object, tags),
                                writer.addObjectToObject(parent.name, size, parent.object));
+        } else if constexpr (std::is_same<Type, IdObject>()) {
+            NEKO_RETURN_TAGGED(writer.addObjectToObject(parent.name, size, parent.object, tags),
+                               writer.addObjectToObject(parent.name, size, parent.object));
         } else if constexpr (std::is_same<Type, Root>()) {
             NEKO_RETURN_TAGGED(writer.objectAsRoot(size, tags), writer.objectAsRoot(size));
         } else if constexpr (schemaful::IsSchemafulWriter<W>) {
@@ -115,6 +160,17 @@ struct Parent {
 
         } else {
             static_assert(always_false_v<Type>, "Unsupported option.");
+        }
+    }
+
+    template <class ParentType>
+    static void beginRawFixedData(W& writer, const ParentType& parent) {
+        using Type = std::remove_cvref_t<ParentType>;
+        if constexpr (std::is_same_v<Type, Root>) {
+            static_cast<void>(parent);
+            writer.beginRawFixedDataAsRoot();
+        } else {
+            static_assert(always_false_v<Type>, "raw_fixed_data is only valid at the binary root");
         }
     }
 
@@ -145,6 +201,10 @@ struct Parent {
                 NEKO_RETURN_TAGGED(writer.addNullToObject(parent.name, parent.object, tags),
                                    writer.addNullToObject(parent.name, parent.object));
             }
+
+        } else if constexpr (std::is_same<Type, IdObject>()) {
+            NEKO_RETURN_TAGGED(writer.addNullToObject(parent.name, parent.object, tags),
+                               writer.addNullToObject(parent.name, parent.object));
 
         } else if constexpr (std::is_same<Type, Root>()) {
             NEKO_RETURN_TAGGED(writer.nullAsRoot(tags), writer.nullAsRoot());
@@ -181,6 +241,10 @@ struct Parent {
                                    writer.addValueToObject(parent.name, var, parent.object));
             }
 
+        } else if constexpr (std::is_same<Type, IdObject>()) {
+            NEKO_RETURN_TAGGED(writer.addValueToObject(parent.name, var, parent.object, tags),
+                               writer.addValueToObject(parent.name, var, parent.object));
+
         } else if constexpr (std::is_same<Type, Root>()) {
             NEKO_RETURN_TAGGED(writer.valueAsRoot(var, tags), writer.valueAsRoot(var));
 
@@ -209,6 +273,9 @@ struct Parent {
                                writer.addFixedValueToArray(var, size, parent.array));
 
         } else if constexpr (std::is_same<Type, Object>()) {
+            NEKO_RETURN_TAGGED(writer.addFixedValueToObject(parent.name, var, size, parent.object, tags),
+                               writer.addFixedValueToObject(parent.name, var, size, parent.object));
+        } else if constexpr (std::is_same<Type, IdObject>()) {
             NEKO_RETURN_TAGGED(writer.addFixedValueToObject(parent.name, var, size, parent.object, tags),
                                writer.addFixedValueToObject(parent.name, var, size, parent.object));
 

@@ -4,9 +4,11 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <chrono>
 #include <map>
 #include <memory>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -50,7 +52,8 @@ struct NoCompressionCodec {
         -> ilias::Result<Message, std::error_code> {
         return ilias::Err(RpcError::InvalidRequest);
     }
-    static auto decompress(std::span<const std::byte> /**/, rpc::NekoRpcCompressionAlgorithm /**/)
+    static auto decompress(std::span<const std::byte> /**/, rpc::NekoRpcCompressionAlgorithm /**/,
+                           std::size_t /**/)
         -> ilias::Result<Message, std::error_code> {
         return ilias::Err(RpcError::InvalidRequest);
     }
@@ -127,6 +130,25 @@ TEST(NekoRpcBackend, CallsRegisteredMethodThroughBinaryFrame) {
     EXPECT_EQ(decoded.value(), 42);
 }
 
+TEST(NekoRpcBackend, HandlerExceptionsBecomeInternalErrorResponses) {
+    ilias::PlatformContext context;
+    context.install();
+    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context};
+    server->add = [](int, int) -> ilias::IoTask<int> {
+        throw std::runtime_error("handler failure");
+        co_return 0;
+    };
+
+    std::uint64_t nextId = 0;
+    auto request = BinaryRpcBackend::encodeRequest(server->add, false, nextId, 1, 2);
+    ASSERT_TRUE(request.has_value());
+    auto response = server.processMessage(asBytes(request->message)).wait();
+    ASSERT_FALSE(response.empty());
+    auto decoded = BinaryRpcBackend::decodeResponse<decltype(server->add)>(asBytes(response), request->id);
+    ASSERT_FALSE(decoded.has_value());
+    EXPECT_EQ(decoded.error(), make_error_code(RpcError::InternalError));
+}
+
 TEST(NekoRpcBackend, JsonSerializedBackendCallsRegisteredMethodThroughFrame) {
     ilias::PlatformContext context;
     context.install();
@@ -168,6 +190,84 @@ TEST(NekoRpcBackend, CallsThroughIliasDuplexStreamEndpoint) {
     }
 
     client.close();
+    server.close();
+}
+
+TEST(NekoRpcBackend, MultiplexedClientAllowsFastCallToPassSlowCall) {
+    using namespace std::chrono_literals;
+    ilias::PlatformContext context;
+    context.install();
+    BinaryRpcBackend::Options options;
+    options.method_id = BinaryRpcBackend::MethodIdMode::Disable;
+    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
+    RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
+    connect_endpoint(server, client);
+
+    server->add = [](int delayMs, int value) -> ilias::IoTask<int> {
+        co_await ilias::sleep(std::chrono::milliseconds(delayMs));
+        co_return value;
+    };
+
+    std::vector<int> completionOrder;
+    auto call = [&](int delayMs, int value) -> ilias::IoTask<int> {
+        auto result = co_await client->add(delayMs, value);
+        if (result) {
+            completionOrder.push_back(result.value());
+        }
+        co_return result;
+    };
+    auto slow = ilias::spawn(call(50, 1));
+    auto fast = ilias::spawn(call(0, 2));
+    auto fastResult = fast.wait();
+    auto slowResult = slow.wait();
+
+    ASSERT_TRUE(fastResult.has_value());
+    ASSERT_TRUE(slowResult.has_value());
+    ASSERT_TRUE(fastResult->has_value());
+    ASSERT_TRUE(slowResult->has_value());
+    EXPECT_EQ(fastResult->value(), 2);
+    EXPECT_EQ(slowResult->value(), 1);
+    ASSERT_EQ(completionOrder.size(), 2U);
+    EXPECT_EQ(completionOrder.front(), 2);
+
+    client.close();
+    server.close();
+}
+
+TEST(NekoRpcBackend, RemoteCancellationIsIsolatedByConnection) {
+    using namespace std::chrono_literals;
+    ilias::PlatformContext context;
+    context.install();
+    BinaryRpcBackend::Options options;
+    options.method_id = BinaryRpcBackend::MethodIdMode::Disable;
+    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
+    RpcClient<BinaryRpcBackend, BinaryRpcTestApi> first{context, options};
+    RpcClient<BinaryRpcBackend, BinaryRpcTestApi> second{context, options};
+    connect_endpoint(server, first);
+    connect_endpoint(server, second);
+
+    server->add = [](int delayMs, int value) -> ilias::IoTask<int> {
+        co_await ilias::sleep(std::chrono::milliseconds(delayMs));
+        co_return value;
+    };
+
+    auto canceledCall = ilias::spawn(first->add(100, 1));
+    auto otherCall = ilias::spawn(second->add(30, 2));
+    ilias::sleep(10ms).wait();
+    auto canceled = first.cancelRemote(1U).wait();
+    ASSERT_TRUE(canceled.has_value()) << canceled.error().message();
+
+    auto canceledResult = canceledCall.wait();
+    auto otherResult = otherCall.wait();
+    ASSERT_TRUE(canceledResult.has_value());
+    ASSERT_TRUE(otherResult.has_value());
+    ASSERT_FALSE(canceledResult->has_value());
+    EXPECT_EQ(canceledResult->error(), make_error_code(ilias::IoError::Canceled));
+    ASSERT_TRUE(otherResult->has_value()) << otherResult->error().message();
+    EXPECT_EQ(otherResult->value(), 2);
+
+    first.close();
+    second.close();
     server.close();
 }
 
@@ -318,6 +418,41 @@ TEST(NekoRpcBackend, MethodIdDeltaRoundTripsTableUpdates) {
     EXPECT_EQ(sinkResolved.status, rpc::NekoRpcMethodIdResolveStatus::MethodRemoved);
 }
 
+TEST(NekoRpcBackend, MethodIdTableRejectsSparseOversizedAndDuplicateRemoteStateAtomically) {
+    rpc::NekoRpcMethodIdTable table(4U);
+    ASSERT_TRUE(table.applyRemoteTable(
+        {{.id = 0, .name = "add", .signature_hash = 1, .state = rpc::NekoRpcMethodState::Active}}, 1U));
+    const auto originalEntries = table.entries();
+    const auto originalVersion = table.version();
+
+    EXPECT_FALSE(table.applyRemoteTable(
+        {{.id = 3, .name = "sparse", .signature_hash = 2, .state = rpc::NekoRpcMethodState::Active}}, 2U));
+    EXPECT_FALSE(table.applyRemoteTable(
+        {{.id = 0, .name = "same", .signature_hash = 1, .state = rpc::NekoRpcMethodState::Active},
+         {.id = 1, .name = "same", .signature_hash = 2, .state = rpc::NekoRpcMethodState::Active}},
+        2U));
+    EXPECT_FALSE(table.applyRemoteDelta(
+        {{.id = 1, .name = "one", .signature_hash = 2, .state = rpc::NekoRpcMethodState::Active},
+         {.id = 1, .name = "duplicate", .signature_hash = 3, .state = rpc::NekoRpcMethodState::Active}},
+        2U));
+    EXPECT_FALSE(table.applyRemoteDelta(
+        {{.id = 1000000U, .name = "huge", .signature_hash = 4, .state = rpc::NekoRpcMethodState::Active}},
+        2U));
+
+    EXPECT_EQ(table.version(), originalVersion);
+    ASSERT_EQ(table.entries().size(), originalEntries.size());
+    EXPECT_EQ(table.entries().front().name, originalEntries.front().name);
+
+    auto invalidWireState = rpc::NekoRpcMethodIdExtension::methodTableValue(
+        {{.id = 0, .name = "add", .signature_hash = 1, .state = rpc::NekoRpcMethodState::Active}});
+    ASSERT_GT(invalidWireState.size(), 13U);
+    invalidWireState[13] = std::byte{2};
+    rpc::NekoRpcFrameCodec::ExtensionMapType extensions;
+    extensions[rpc::NekoRpcExtensionType::MethodTable] = rpc::NekoRpcExtensionCodec::asBytes(invalidWireState);
+    std::vector<rpc::NekoRpcMethodEntry> parsed;
+    EXPECT_FALSE(rpc::NekoRpcMethodIdExtension::parseMethodTable(extensions, parsed));
+}
+
 TEST(NekoRpcBackend, MethodIdErrorResponseCarriesRefreshTableWithinBudget) {
     BinaryRpcBackend::Options options;
     options.method_id = BinaryRpcBackend::MethodIdMode::Auto;
@@ -433,9 +568,46 @@ TEST(NekoRpcBackend, CompressionCodecRunLengthShrinksAndRestoresPayload) {
     ASSERT_LT(compressed.value().size(), payload.size());
 
     auto restored = rpc::NekoRpcCompressionCodec::decompress(rpc::NekoRpcExtensionCodec::asBytes(compressed.value()),
-                                                             rpc::NekoRpcCompressionAlgorithm::RunLength);
+                                                             rpc::NekoRpcCompressionAlgorithm::RunLength,
+                                                             payload.size());
     ASSERT_TRUE(restored.has_value()) << restored.error().message();
     EXPECT_EQ(restored.value(), payload);
+}
+
+TEST(NekoRpcBackend, CompressionCodecRejectsOutputOverBudgetBeforeGrowth) {
+    const std::array compressed{std::byte{0xFF}, std::byte{'A'}};
+    auto restored = rpc::NekoRpcCompressionCodec::decompress(
+        compressed, rpc::NekoRpcCompressionAlgorithm::RunLength, 64U);
+    ASSERT_FALSE(restored.has_value());
+    EXPECT_EQ(restored.error(), make_error_code(ilias::IoError::MessageTooLarge));
+}
+
+TEST(NekoRpcBackend, FrameLimitsApplyToBackendOwnedEncodeAndDirectDecodePaths) {
+    BinaryRpcTestApi api;
+    api.add.setRemoteName("add");
+
+    auto defaultContext = BinaryRpcBackend::makeClientContext();
+    auto defaultSession = BinaryRpcBackend::makeClientPeerSession(defaultContext);
+    auto request = BinaryRpcBackend::encodeRequest(defaultContext, defaultSession, api.add, false, 20, 22);
+    ASSERT_TRUE(request.has_value()) << request.error().message();
+
+    BinaryRpcBackend::Options limitedOptions;
+    limitedOptions.method_id = BinaryRpcBackend::MethodIdMode::Disable;
+    limitedOptions.frame_limits.max_payload_bytes = 1U;
+    auto limitedClient = BinaryRpcBackend::makeClientContext(limitedOptions);
+    auto limitedClientSession = BinaryRpcBackend::makeClientPeerSession(limitedClient);
+    auto oversizedEncode =
+        BinaryRpcBackend::encodeRequest(limitedClient, limitedClientSession, api.add, false, 20, 22);
+    ASSERT_FALSE(oversizedEncode.has_value());
+    EXPECT_EQ(oversizedEncode.error(), make_error_code(ilias::IoError::MessageTooLarge));
+
+    std::vector<detail::RpcMethodMetadata> methods{add_metadata("i32 add(i32 a, i32 b)")};
+    auto limitedServer = BinaryRpcBackend::makeServerContext(limitedOptions, methods);
+    auto limitedServerSession = BinaryRpcBackend::makeServerPeerSession(limitedServer);
+    auto validated = BinaryRpcBackend::validateMessage(limitedServer, asBytes(request->message));
+    ASSERT_FALSE(validated.has_value());
+    EXPECT_EQ(validated.error(), make_error_code(ilias::IoError::MessageTooLarge));
+    EXPECT_FALSE(BinaryRpcBackend::decodeIncoming(limitedServer, limitedServerSession, asBytes(request->message)).ok);
 }
 
 TEST(NekoRpcBackend, RequireCompressionCallsThroughCompressedPayloads) {

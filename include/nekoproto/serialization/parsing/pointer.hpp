@@ -24,7 +24,7 @@ template <typename R, typename T>
 struct ReadParser<R, std::shared_ptr<T>, void> {
     template <typename Tags>
     static ParserResult read(typename R::InputValueType in, std::shared_ptr<T>& value, const Tags& tags) {
-        if (R::isEmpty(in)) {
+        if (parsing::reader_is_empty<R>(in, tags)) {
             value.reset();
             return sa::success();
         }
@@ -61,7 +61,7 @@ template <typename R, typename T>
 struct ReadParser<R, std::unique_ptr<T>, void> {
     template <typename Tags>
     static ParserResult read(typename R::InputValueType in, std::unique_ptr<T>& value, const Tags& tags) {
-        if (R::isEmpty(in)) {
+        if (parsing::reader_is_empty<R>(in, tags)) {
             value.reset();
             return sa::success();
         }

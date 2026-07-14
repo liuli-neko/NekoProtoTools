@@ -17,6 +17,39 @@ namespace detail {
 using JsonRpcIdType         = std::variant<std::monostate, uint64_t, std::string>;
 using JsonRpcResponseValues = std::vector<JsonSerializer::JsonValue>;
 
+// JSON-RPC IDs are protocol scalars, not the generic tagged representation
+// used for application variants.
+template <typename W>
+struct WriteParser<W, JsonRpcIdType, void> {
+    template <typename ParentType, typename Tags>
+    static ParserResult write(W& writer, const JsonRpcIdType& value, const ParentType& parent, const Tags& tags) {
+        return std::visit(
+            [&](const auto& active) -> ParserResult { return parser_write<W>(writer, active, parent, tags); }, value);
+    }
+};
+
+template <typename R>
+struct ReadParser<R, JsonRpcIdType, void> {
+    template <typename Tags>
+    static ParserResult read(typename R::InputValueType in, JsonRpcIdType& value, const Tags& tags) {
+        if (R::isEmpty(in)) {
+            value = std::monostate{};
+            return sa::success();
+        }
+        std::uint64_t integer = 0;
+        if (auto result = parser_read<R>(in, integer, tags); result) {
+            value = integer;
+            return result;
+        }
+        std::string string;
+        if (auto result = parser_read<R>(in, string, tags); result) {
+            value = std::move(string);
+            return result;
+        }
+        return parser_error(sa::ErrorCode::InvalidType, "JSON-RPC id must be null, an unsigned integer, or a string");
+    }
+};
+
 template <typename MethodTraits>
 struct JsonRpcRequest2 {
     using JsonTraits      = JsonRpcMethodTraits<MethodTraits>;

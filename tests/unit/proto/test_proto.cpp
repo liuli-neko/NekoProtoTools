@@ -147,7 +147,7 @@ TEST_F(ProtoTest, StructSerialize) {
         "{\"a\":3,\"b\":\"Struct "
         "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A\","
         "\"i\":{\"a\":1,\"b\":\"hello\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,"
-        "3,0,0],\"h\":\"TEnum_A\"},\"j\":[1,\"hello\"],\"l\":\"this a test for variant\"}");
+        "3,0,0],\"h\":\"TEnum_A\"},\"j\":[1,\"hello\"],\"l\":[1,\"this a test for variant\"]}");
 }
 
 TEST_F(ProtoTest, StructDeserialize) {
@@ -155,7 +155,7 @@ TEST_F(ProtoTest, StructDeserialize) {
                       "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
                       "\"h\":\"TEnum_A\",\"i\":{\"a\":1,\"b\":\"hello\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],"
                       "\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
-                      "\"h\":\"TEnum_A\"},\"j\":[1,\"hello\"],\"k\":1,\"l\":1.114514}";
+                      "\"h\":\"TEnum_A\"},\"j\":[1,\"hello\"],\"k\":1,\"l\":[2,1.114514]}";
     std::vector<char> data(str.begin(), str.end());
     TestP testp;
     JsonSerializer::InputSerializer input(data.data(), data.size());
@@ -253,7 +253,7 @@ TEST_F(ProtoTest, JsonProtoRef) {
                       "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],"
                       "\"h\":\"TEnum_A\",\"i\":{\"a\":1,\"b\":\"hello\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],"
                       "\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":"
-                      "\"TEnum_A\"},\"j\":[1,\"hello\"],\"l\":23}";
+                      "\"TEnum_A\"},\"j\":[1,\"hello\"],\"l\":[0,23]}";
     auto proto      = mFactory->create("TestP");
     proto.fromData(str.data(), str.length());
     auto* rawp = proto.cast<TestP>(); // success cast
@@ -390,7 +390,7 @@ static const char* gZTypeTestStr =
     "ptr\",\"p\":[{\"key\":1,\"value\":\"hello\"},{\"key\":1,\"value\":\"world\"},{\"key\":2,\"value\":\"world\"}],"
     "\"q\":[\"a\","
     "\"a\",\"b\",\"b\",\"c\"],\"t\":[[1,2,3],[4,5,6],[7,8,9]],\"v\":"
-    "\"0011111100111111\",\"w\":{\"first\":\"hello\",\"second\":\"world\"},\"x\":1,\"y\":\"hello\"}";
+    "\"0011111100111111\",\"w\":{\"first\":\"hello\",\"second\":\"world\"},\"x\":1,\"y\":[1,\"hello\"]}";
 #else
     "{\"a\":1,\"b\":\"field set "
     "test\",\"c\":false,\"d\":3.141592654,\"e\":[1,2,3],\"f\":[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"g\":["
@@ -399,7 +399,7 @@ static const char* gZTypeTestStr =
     "\"hello shared "
     "ptr\",\"p\":[{\"key\":1,\"value\":\"hello\"},{\"key\":1,\"value\":\"world\"},{\"key\":2,\"value\":\"world\"}],"
     "\"q\":[\"a\",\"a\",\"b\",\"b\",\"c\"],\"t\":[[1,2,3],[4,5,6],[7,8,9]],\"v\":"
-    "\"0011111100111111\",\"w\":{\"first\":\"hello\",\"second\":\"world\"},\"x\":1,\"y\":\"hello\"}";
+    "\"0011111100111111\",\"w\":{\"first\":\"hello\",\"second\":\"world\"},\"x\":1,\"y\":[1,\"hello\"]}";
 #endif
 
 TEST_F(ProtoTest, AllType) {

@@ -26,15 +26,16 @@ public:
 
     ~OutputSerializerAdapter() { end(); }
 
-    template <typename... Ts>
-    bool operator()(const Ts&... values) {
+    template <typename T>
+    bool operator()(const T& value) {
+        if (mDocumentAttempted) {
+            mLastResult = sa::error(sa::ErrorCode::InvalidLength,
+                                    "A document serializer cannot write a second root value");
+            return false;
+        }
+        mDocumentAttempted = true;
         mLastResult = sa::success();
-        const auto writeOne = [this](const auto& value) {
-            if (mLastResult) {
-                mLastResult = Backend::write(mState, value);
-            }
-        };
-        (writeOne(values), ...);
+        mLastResult = Backend::write(mState, value);
         return static_cast<bool>(mLastResult);
     }
 
@@ -70,6 +71,7 @@ public:
 private:
     StateType mState;
     sa::Result<void> mLastResult;
+    bool mDocumentAttempted = false;
 };
 
 template <typename Backend, typename SourceT>
@@ -89,19 +91,31 @@ public:
     InputSerializerAdapter& operator=(const InputSerializerAdapter&) = delete;
     InputSerializerAdapter& operator=(InputSerializerAdapter&&)      = delete;
 
-    template <typename... Ts>
-    bool operator()(Ts&... values) {
+    template <typename T>
+    bool operator()(T& value) {
         if (!mInitResult) {
             mLastResult = mInitResult;
             return false;
         }
+        if (mDocumentAttempted) {
+            mLastResult = sa::error(sa::ErrorCode::InvalidLength,
+                                    "A document deserializer cannot read the root value twice");
+            return false;
+        }
+        mDocumentAttempted = true;
         mLastResult = sa::success();
-        const auto readOne = [this](auto& value) {
+        mLastResult = Backend::read(mState, value);
+        if constexpr (requires(StateType& state, sa::Result<void> result) {
+                          { Backend::finish(state, result) } -> std::same_as<sa::Result<void>>;
+                      }) {
+            mLastResult = Backend::finish(mState, mLastResult);
+        } else if constexpr (requires(StateType& state) {
+                                 { Backend::finish(state) } -> std::same_as<sa::Result<void>>;
+                             }) {
             if (mLastResult) {
-                mLastResult = Backend::read(mState, value);
+                mLastResult = Backend::finish(mState);
             }
-        };
-        (readOne(values), ...);
+        }
         return static_cast<bool>(mLastResult);
     }
 
@@ -134,6 +148,7 @@ private:
     StateType mState;
     sa::Result<void> mInitResult;
     sa::Result<void> mLastResult;
+    bool mDocumentAttempted = false;
 };
 
 } // namespace detail

@@ -4,9 +4,12 @@
 #include <concepts>
 #include <functional>
 #include <ilias/platform.hpp>
+#include <ilias/sync/mutex.hpp>
+#include <ilias/task/group.hpp>
 #include <ilias/task/scope.hpp>
 #include <list>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -32,6 +35,8 @@ private:
     struct EndpointSlot {
         std::unique_ptr<detail::IMessageEndpoint> endpoint;
         typename Backend::PeerSession session;
+        std::unique_ptr<ilias::TaskScope> requests = std::make_unique<ilias::TaskScope>();
+        ilias::Mutex sendMutex;
     };
 
     RpcBuiltinMethods mRpc;
@@ -44,112 +49,99 @@ public:
         _init();
         mBackendContext = Backend::makeServerContext(std::move(options), methodDatas());
     }
-    ~RpcServer() { close(); }
+    ~RpcServer() {
+        try {
+            close();
+        } catch (...) {
+            // close() detaches and closes every endpoint before its synchronous
+            // wait. Destruction cannot propagate a wait failure.
+        }
+    }
 
     auto operator->() noexcept -> RpcServer* { return this; }
     auto operator->() const noexcept -> const RpcServer* { return this; }
 
-    auto close() noexcept -> void {
+    auto close() -> void {
+        auto endpoints = _beginClose();
+        for (auto& slot : endpoints) {
+            slot->endpoint->close();
+        }
         mScope.stop();
         wait().wait();
-        for (auto& endpoint : mEndpoints) {
-            endpoint.endpoint->close();
-        }
     }
 
-    auto flush() noexcept -> ilias::IoTask<void> {
-        for (auto& endpoint : mEndpoints) {
-            if (auto ret = co_await endpoint.endpoint->flush(); !ret) {
+    auto flush() -> ilias::IoTask<void> {
+        auto endpoints = _snapshotEndpoints();
+        for (auto& slot : endpoints) {
+            auto guard = co_await slot->sendMutex.lock();
+            if (auto ret = co_await slot->endpoint->flush(); !ret) {
                 co_return ilias::Err(ret.error());
             }
         }
         co_return {};
     }
 
-    auto shutdown() noexcept -> ilias::Task<void> {
-        for (auto& endpoint : mEndpoints) {
-            if (auto ret = co_await endpoint.endpoint->flush(); !ret) {
+    auto shutdown() -> ilias::Task<void> {
+        auto endpoints = _beginClose();
+        for (auto& slot : endpoints) {
+            auto guard = co_await slot->sendMutex.lock();
+            if (auto ret = co_await slot->endpoint->flush(); !ret) {
                 NEKO_LOG_WARN("rpc", "flush rpc endpoint failed: {}", ret.error().message());
             }
         }
-        for (auto& endpoint : mEndpoints) {
-            if (auto ret = co_await endpoint.endpoint->shutdown(); !ret) {
+        for (auto& slot : endpoints) {
+            auto guard = co_await slot->sendMutex.lock();
+            if (auto ret = co_await slot->endpoint->shutdown(); !ret) {
                 NEKO_LOG_WARN("rpc", "shutdown rpc endpoint failed: {}", ret.error().message());
             }
         }
         co_await mScope.shutdown();
-        for (auto& endpoint : mEndpoints) {
-            endpoint.endpoint->close();
+        for (auto& slot : endpoints) {
+            // Closing will cause some internal resources to be released
+            // so we need close it after the scope is shutdown.
+            auto guard = co_await slot->sendMutex.lock();
+            slot->endpoint->close();
         }
     }
 
     auto wait() -> ilias::Task<void> { co_await mScope.waitAll(); }
-    auto cancel(typename Backend::Id id) noexcept -> void { mDispatcher.cancel(std::move(id)); }
-    auto cancelAll() noexcept -> void { mDispatcher.cancelAll(); }
-    auto getCurrentIds() const noexcept -> const std::vector<typename Backend::Id>& {
-        return mDispatcher.getCurrentIds();
-    }
+    auto cancel(const typename Backend::Id& id) -> void { mDispatcher.cancel(id); }
+    auto cancelAll() -> void { mDispatcher.cancelAll(); }
+    auto getCurrentIds() const -> std::vector<typename Backend::Id> { return mDispatcher.getCurrentIds(); }
 
     template <MessageEndpoint EndpointT>
-    auto addEndpoint(EndpointT endpoint) noexcept -> void {
-        EndpointSlot slot;
+    auto addEndpoint(EndpointT endpoint) -> void {
+        auto slot = std::make_shared<EndpointSlot>();
         if constexpr (detail::is_message_endpoint<EndpointT>::value) {
-            slot.endpoint = std::make_unique<EndpointT>(std::move(endpoint));
+            slot->endpoint = std::make_unique<EndpointT>(std::move(endpoint));
         } else {
-            using Wrapper = detail::MessageEndpointWrapper<EndpointT>;
-            slot.endpoint = std::make_unique<Wrapper>(std::move(endpoint));
+            using Wrapper  = detail::MessageEndpointWrapper<EndpointT>;
+            slot->endpoint = std::make_unique<Wrapper>(std::move(endpoint));
         }
-        slot.session = Backend::makeServerPeerSession(mBackendContext);
-        auto item    = mEndpoints.emplace(mEndpoints.end(), std::move(slot));
-        mScope.spawn([this, item]() -> ilias::Task<void> {
-            struct EraseGuard {
-                using type     = std::list<EndpointSlot>;
-                using iterator = typename type::iterator;
-                EraseGuard(type& endpoints, iterator it) : mEndpoints(endpoints), mIt(it) { mIt = it; }
-                ~EraseGuard() { mEndpoints.erase(mIt); }
-                type& mEndpoints;
-                iterator mIt;
-            };
-            EraseGuard guard(mEndpoints, item);
-            NEKO_LOG_INFO("rpc", "rpc server endpoint loop start");
-            while (item->endpoint != nullptr) {
-                std::vector<std::byte> buffer;
-                if (auto ret = co_await item->endpoint->recv(buffer); !ret) {
-                    NEKO_LOG_INFO("rpc", "rpc server endpoint loop stop: recv={}", ret.error().message());
-                    break;
-                }
-                if (buffer.empty()) {
-                    NEKO_LOG_INFO("rpc", "rpc server endpoint loop stop: reason=empty_frame");
-                    break;
-                }
-
-                // Control frames update backend session state and must not enter
-                // the dispatcher as user-call requests.
-                auto control =
-                    co_await Backend::handleServerControl(mBackendContext, item->session, *item->endpoint, buffer);
-                if (!control) {
-                    NEKO_LOG_ERROR("rpc", "handle rpc control frame failed: {}", control.error().message());
-                    break;
-                }
-                if (control.value()) {
-                    NEKO_LOG_INFO("rpc", "rpc server handled control frame");
-                    NEKO_LOG_TRACE("rpc", "rpc server control frame bytes={}", buffer.size());
-                    continue;
-                }
-
-                co_await mDispatcher.processMessage(buffer, mBackendContext, item->session, item->endpoint.get());
-            }
-            NEKO_LOG_INFO("rpc", "rpc server endpoint loop end");
-        });
+        _handleEndpoint(slot);
     }
 
     template <typename StreamT>
         requires detail::RpcStreamBackend<Backend, StreamT>
-    auto addEndpoint(StreamT stream) noexcept -> void {
+    auto addEndpoint(StreamT stream) -> void {
         if constexpr (requires(StreamT value, std::vector<MethodData> methods) {
-                          { Backend::makeServerEndpoint(std::move(value), std::move(methods)) } -> MessageEndpoint;
+                          {
+                              Backend::makeServerEndpoint(std::move(value), std::move(methods), mBackendContext.options)
+                          } -> MessageEndpoint;
                       }) {
+            addEndpoint(Backend::makeServerEndpoint(std::move(stream), methodDatas(), mBackendContext.options));
+        } else if constexpr (requires(StreamT value, std::vector<MethodData> methods) {
+                                 {
+                                     Backend::makeServerEndpoint(std::move(value), std::move(methods))
+                                 } -> MessageEndpoint;
+                             }) {
             addEndpoint(Backend::makeServerEndpoint(std::move(stream), methodDatas()));
+        } else if constexpr (requires(StreamT value) {
+                                 {
+                                     Backend::makeEndpoint(std::move(value), mBackendContext.options)
+                                 } -> MessageEndpoint;
+                             }) {
+            addEndpoint(Backend::makeEndpoint(std::move(stream), mBackendContext.options));
         } else {
             addEndpoint(Backend::makeEndpoint(std::move(stream)));
         }
@@ -160,7 +152,7 @@ public:
     // Use this when the protocol surface is not expressed as a reflected
     // RpcMethod field, or when a method is added after construction.
     template <ConstexprString... ArgNames, typename RetT, typename... Args>
-    auto bindMethod(std::string_view name, traits::FunctionT<RetT(Args...)> func) noexcept -> void {
+    auto bindMethod(std::string_view name, traits::FunctionT<RetT(Args...)> func) -> void {
         static_assert(sizeof...(ArgNames) == 0 || sizeof...(ArgNames) == sizeof...(Args),
                       "bindMethod: The number of parameters and names do not match.");
         mDispatcher.bindRpcMethod(name, std::move(func),
@@ -174,7 +166,7 @@ public:
     // static RpcMethodF declaration form used inside protocol structs.
     template <auto Ptr, ConstexprString... ArgNames>
         requires detail::RpcMethodFuncT<Ptr>
-    auto bindMethod() noexcept -> void {
+    auto bindMethod() -> void {
         mDispatcher.bindRpcMethod(detail::func_nameof<Ptr>,
                                   traits::FunctionT<std::remove_pointer_t<decltype(Ptr)>>(Ptr),
                                   std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...});
@@ -184,7 +176,7 @@ public:
     // Coroutine overload for runtime-name binding. It shares the same metadata
     // shape as the synchronous overload; only the stored callable differs.
     template <ConstexprString... ArgNames, typename RetT, typename... Args>
-    auto bindMethod(std::string_view name, traits::FunctionT<ilias::IoTask<RetT>(Args...)> func) noexcept -> void {
+    auto bindMethod(std::string_view name, traits::FunctionT<ilias::IoTask<RetT>(Args...)> func) -> void {
         static_assert(sizeof...(ArgNames) == 0 || sizeof...(ArgNames) == sizeof...(Args),
                       "bindMethod: The number of parameters and names do not match.");
         mDispatcher.bindRpcMethod(name, std::move(func),
@@ -192,30 +184,37 @@ public:
         _refreshBackendMethodCatalog();
     }
 
-    auto processMessage(std::span<const std::byte> message) noexcept -> ilias::Task<typename Backend::Message> {
+    auto processMessage(std::span<const std::byte> message) -> ilias::Task<typename Backend::Message> {
         auto session = Backend::makeServerPeerSession(mBackendContext);
         co_return co_await mDispatcher.processMessage(message, mBackendContext, session, nullptr);
     }
 
-    auto callMethod(std::string_view message) noexcept -> ilias::Task<typename Backend::Message> {
+    auto callMethod(std::string_view message) -> ilias::Task<typename Backend::Message> {
         auto session = Backend::makeServerPeerSession(mBackendContext);
         co_return co_await mDispatcher.processMessage(
             {reinterpret_cast<const std::byte*>(message.data()), message.size()}, mBackendContext, session, nullptr);
     }
 
-    auto methodDatas() noexcept -> std::vector<MethodData> { return mDispatcher.methodDatas(); }
-    auto methodDatas(std::string_view name) noexcept -> MethodData { return mDispatcher.methodDatas(name); }
+    auto methodDatas() -> std::vector<MethodData> { return mDispatcher.methodDatas(); }
+    auto methodDatas(std::string_view name) -> MethodData { return mDispatcher.methodDatas(name); }
 
 public:
     static constexpr int BuiltinMethodsCount = Reflect<RpcBuiltinMethods>::value_count;
 
 private:
+    auto _maxInflightRequests() const noexcept -> std::size_t {
+        if constexpr (requires { mBackendContext.options.max_inflight_requests_per_connection; }) {
+            return mBackendContext.options.max_inflight_requests_per_connection;
+        }
+        return 1024U;
+    }
+
     template <typename Protocol>
     void _registerProtocol(Protocol& protocol, std::string_view prefix = {}) {
         detail::for_each_rpc_method(protocol, [this](auto& method) { mDispatcher.registerRpcMethod(method); }, prefix);
     }
 
-    auto _buildMethodInfo(const MethodData& methodData) noexcept -> std::string {
+    auto _buildMethodInfo(const MethodData& methodData) -> std::string {
         std::string method_info;
         method_info.reserve(256);
         method_info += "name: " + std::string(methodData.name) + "\n";
@@ -242,7 +241,102 @@ private:
         return method_info;
     }
 
-    auto _init() noexcept -> void {
+    auto _handleEndpoint(std::shared_ptr<EndpointSlot> slot) -> void {
+        slot->session = Backend::makeServerPeerSession(mBackendContext);
+        bool rejected = false;
+        {
+            std::scoped_lock lock(mEndpointMutex);
+            if (mClosing) {
+                rejected = true;
+            } else {
+                mEndpoints.emplace_back(slot);
+            }
+        }
+        if (rejected) {
+            slot->endpoint->close();
+            return;
+        }
+        try {
+            auto cleanup = [this, slot]() -> ilias::Task<void> {
+                _eraseEndpoint(slot);
+                slot->requests->stop();
+                co_await slot->requests->waitAll(); // wait for all requests to finish
+                NEKO_LOG_INFO("rpc", "rpc server endpoint loop end");
+                co_return;
+            };
+            mScope.spawn([this, slot, cleanup]() -> ilias::Task<void> {
+                NEKO_LOG_INFO("rpc", "rpc server endpoint loop start");
+                co_await ilias::finally(_handleClient(slot), cleanup);
+                // Don't do anything here; once the coroutine is canceled, the following code won't run. You can only
+                // use RAII to clean up.
+                co_return;
+            });
+        } catch (...) {
+            _eraseEndpoint(slot);
+            slot->endpoint->close();
+            throw;
+        }
+    }
+
+    auto _handleClient(std::shared_ptr<EndpointSlot> slot) -> ilias::Task<void> {
+        while (slot->endpoint != nullptr) {
+            std::vector<std::byte> buffer;
+            if (auto ret = co_await slot->endpoint->recv(buffer); !ret) {
+                NEKO_LOG_INFO("rpc", "rpc server endpoint loop stop: recv={}", ret.error().message());
+                break;
+            }
+            if (buffer.empty()) {
+                NEKO_LOG_INFO("rpc", "rpc server endpoint loop stop: reason=empty_frame");
+                break;
+            }
+
+            if constexpr (requires { Backend::validateMessage(mBackendContext, buffer); }) {
+                auto validated = Backend::validateMessage(mBackendContext, buffer);
+                if (!validated) {
+                    NEKO_LOG_WARN("rpc", "rpc server rejected oversized or malformed frame: {}",
+                                  validated.error().message());
+                    slot->endpoint->close();
+                    break;
+                }
+            }
+
+            if constexpr (requires { Backend::cancelId(buffer); }) {
+                if (auto cancel_id = Backend::cancelId(buffer); cancel_id.has_value()) {
+                    mDispatcher.cancel(std::addressof(slot->session), *cancel_id);
+                    continue;
+                }
+            }
+
+            // Control frames update backend session state and must not enter
+            // the dispatcher as user-call requests.
+            auto control =
+                co_await Backend::handleServerControl(mBackendContext, slot->session, *slot->endpoint, buffer);
+            if (!control) {
+                NEKO_LOG_ERROR("rpc", "handle rpc control frame failed: {}", control.error().message());
+                break;
+            }
+            if (control.value()) {
+                NEKO_LOG_INFO("rpc", "rpc server handled control frame");
+                NEKO_LOG_TRACE("rpc", "rpc server control frame bytes={}", buffer.size());
+                continue;
+            }
+
+            if (slot->requests->size() >= _maxInflightRequests()) {
+                NEKO_LOG_WARN("rpc", "rpc server connection exceeded in-flight request limit");
+                slot->endpoint->close();
+                break;
+            }
+            slot->requests->spawn([this, slot, message = std::move(buffer)]() mutable -> ilias::Task<void> {
+                (void)co_await mDispatcher.processMessage(message, mBackendContext, slot->session, slot->endpoint.get(),
+                                                          &slot->sendMutex);
+            });
+        }
+        // Don't do anything clean up here; once the coroutine is canceled, the following code won't run. You can only
+        // use RAII to clean up.
+        co_return;
+    }
+
+    auto _init() -> void {
         (_registerProtocol(static_cast<ProtocolSets&>(*this)), ...);
         _registerProtocol(mRpc, "rpc");
         mRpc.getMethodInfo = [this](std::string method_name) -> ilias::IoTask<std::string> {
@@ -276,7 +370,7 @@ private:
         };
     }
 
-    auto _methodMetadata() noexcept -> std::vector<detail::RpcMethodMetadata> {
+    auto _methodMetadata() -> std::vector<detail::RpcMethodMetadata> {
         std::vector<detail::RpcMethodMetadata> methods;
         for (const auto& item : methodDatas()) {
             methods.push_back({
@@ -292,13 +386,31 @@ private:
         return methods;
     }
 
-    auto _refreshBackendMethodCatalog() noexcept -> void {
-        Backend::refreshMethodCatalog(mBackendContext, _methodMetadata());
+    auto _refreshBackendMethodCatalog() -> void { Backend::refreshMethodCatalog(mBackendContext, _methodMetadata()); }
+
+    auto _snapshotEndpoints() const -> std::vector<std::shared_ptr<EndpointSlot>> {
+        std::scoped_lock lock(mEndpointMutex);
+        return {mEndpoints.begin(), mEndpoints.end()};
+    }
+
+    auto _beginClose() -> std::list<std::shared_ptr<EndpointSlot>> {
+        std::list<std::shared_ptr<EndpointSlot>> endpoints;
+        std::scoped_lock lock(mEndpointMutex);
+        mClosing = true;
+        endpoints.splice(endpoints.end(), mEndpoints);
+        return endpoints;
+    }
+
+    auto _eraseEndpoint(const std::shared_ptr<EndpointSlot>& slot) -> void {
+        std::scoped_lock lock(mEndpointMutex);
+        mEndpoints.remove(slot);
     }
 
     Dispatcher mDispatcher;
     typename Backend::ServerContext mBackendContext;
-    std::list<EndpointSlot> mEndpoints;
+    std::list<std::shared_ptr<EndpointSlot>> mEndpoints;
+    mutable std::mutex mEndpointMutex;
+    bool mClosing = false;
     ilias::TaskGroup<void> mScope;
 };
 

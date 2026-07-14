@@ -154,10 +154,12 @@ auto parse_method_entries_value(std::span<const std::byte> value, std::vector<Ne
             NekoRpcMethodEntry entry;
             entry.id = NekoRpcExtensionCodec::readInteger<std::uint64_t>(value, offset);
             offset += 8U;
-            entry.state = NekoRpcExtensionCodec::readInteger<std::uint8_t>(value, offset) ==
-                                  static_cast<std::uint8_t>(NekoRpcMethodState::Removed)
-                              ? NekoRpcMethodState::Removed
-                              : NekoRpcMethodState::Active;
+            const auto raw_state = NekoRpcExtensionCodec::readInteger<std::uint8_t>(value, offset);
+            if (raw_state != static_cast<std::uint8_t>(NekoRpcMethodState::Active) &&
+                raw_state != static_cast<std::uint8_t>(NekoRpcMethodState::Removed)) {
+                return false;
+            }
+            entry.state = static_cast<NekoRpcMethodState>(raw_state);
             offset += 1U;
             entry.signature_hash = NekoRpcExtensionCodec::readInteger<std::uint64_t>(value, offset);
             offset += 8U;
@@ -282,6 +284,12 @@ auto NekoRpcFrameCodec::knownKind(NekoRpcKind kind) -> bool {
 
 auto NekoRpcFrameCodec::headerBodySize(std::span<const std::byte> header, std::uint8_t codec)
     -> ilias::Result<std::size_t, std::error_code> {
+    return headerBodySize(header, codec, NekoRpcFrameLimits{});
+}
+
+auto NekoRpcFrameCodec::headerBodySize(std::span<const std::byte> header, std::uint8_t codec,
+                                       const NekoRpcFrameLimits& limits)
+    -> ilias::Result<std::size_t, std::error_code> {
     if (header.size() != headerSize()) {
         return ilias::Err(RpcError::InvalidRequest);
     }
@@ -290,7 +298,16 @@ auto NekoRpcFrameCodec::headerBodySize(std::span<const std::byte> header, std::u
     if (!valid_header(parsed) || parsed.codec != codec) {
         return ilias::Err(RpcError::InvalidRequest);
     }
-    return frame_body_size(parsed);
+    if (parsed.method_size > limits.max_method_bytes || parsed.payload_size > limits.max_payload_bytes ||
+        parsed.extension_size > limits.max_extension_bytes) {
+        return ilias::Err(ilias::IoError::MessageTooLarge);
+    }
+    auto bodySize = frame_body_size(parsed);
+    if (!bodySize || limits.max_frame_bytes < headerSize() ||
+        bodySize.value() > limits.max_frame_bytes - headerSize()) {
+        return ilias::Err(ilias::IoError::MessageTooLarge);
+    }
+    return bodySize;
 }
 
 auto NekoRpcFrameCodec::parseFrame(std::span<const std::byte> data, std::uint8_t codec, FrameParts& parts) -> bool {
@@ -402,6 +419,14 @@ auto NekoRpcMethodIdTable::reset() -> void {
 }
 
 auto NekoRpcMethodIdTable::reset(std::vector<NekoRpcMethodEntry> entries, std::uint64_t version) -> void {
+    if (!_validTable(entries, version, true)) {
+        reset();
+        return;
+    }
+    _resetValidated(std::move(entries), version);
+}
+
+auto NekoRpcMethodIdTable::_resetValidated(std::vector<NekoRpcMethodEntry> entries, std::uint64_t version) -> void {
     mEntries.clear();
     mNameToId.clear();
     mNextId                   = 0;
@@ -421,8 +446,13 @@ auto NekoRpcMethodIdTable::resetFromNames(const std::vector<std::string>& names,
 }
 
 auto NekoRpcMethodIdTable::applyRemoteTable(std::vector<NekoRpcMethodEntry> entries, std::uint64_t version) -> bool {
-    reset(std::move(entries), version);
-    return mVersion == version || (version == 0U && mEntries.empty());
+    if (!_validTable(entries, version, true)) {
+        return false;
+    }
+    NekoRpcMethodIdTable candidate(mMaxEntries);
+    candidate._resetValidated(std::move(entries), version);
+    *this = std::move(candidate);
+    return true;
 }
 
 auto NekoRpcMethodIdTable::applyRemoteDelta(const std::vector<NekoRpcMethodEntry>& entries, std::uint64_t version)
@@ -430,19 +460,31 @@ auto NekoRpcMethodIdTable::applyRemoteDelta(const std::vector<NekoRpcMethodEntry
     if (version == 0U || (mVersion != 0U && version < mVersion)) {
         return false;
     }
+    if (entries.size() > mMaxEntries) {
+        return false;
+    }
+    NekoRpcMethodIdTable candidate(*this);
+    std::map<std::uint64_t, bool> seen_ids;
     for (auto entry : entries) {
+        if (!seen_ids.emplace(entry.id, true).second) {
+            return false;
+        }
         if (entry.signature_hash == 0U && !entry.name.empty()) {
             entry.signature_hash = signatureHash(entry.name);
         }
-        if (!_installEntry(std::move(entry))) {
+        if (!candidate._installEntry(std::move(entry))) {
             return false;
         }
     }
-    mVersion = version;
-    if (mMinimumCompatibleVersion == 0U) {
-        mMinimumCompatibleVersion = version;
+    candidate.mVersion = version;
+    if (candidate.mMinimumCompatibleVersion == 0U) {
+        candidate.mMinimumCompatibleVersion = version;
     }
-    _rebuildIndex();
+    candidate._rebuildIndex();
+    if (!candidate._validTable(candidate.mEntries, version, true)) {
+        return false;
+    }
+    *this = std::move(candidate);
     return true;
 }
 
@@ -462,8 +504,11 @@ auto NekoRpcMethodIdTable::upsert(std::string name, std::uint64_t hash) -> const
         mNameToId.erase(item);
     }
 
+    if (mNextId >= mMaxEntries) {
+        return nullptr;
+    }
     NekoRpcMethodEntry entry{
-        .id             = mNextId++,
+        .id             = mNextId,
         .name           = std::move(name),
         .signature_hash = hash,
         .state          = NekoRpcMethodState::Active,
@@ -548,6 +593,7 @@ auto NekoRpcMethodIdTable::_bumpVersion() -> void {
 
 auto NekoRpcMethodIdTable::_rebuildIndex() -> void {
     mNameToId.clear();
+    mNextId = 0;
     for (const auto& entry : mEntries) {
         if (entry.state == NekoRpcMethodState::Active && !entry.name.empty()) {
             mNameToId[entry.name] = entry.id;
@@ -559,7 +605,7 @@ auto NekoRpcMethodIdTable::_rebuildIndex() -> void {
 }
 
 auto NekoRpcMethodIdTable::_installEntry(NekoRpcMethodEntry entry) -> bool {
-    if (entry.id > static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max() - 1U)) {
+    if (entry.id >= mMaxEntries) {
         return false;
     }
     if (entry.id >= mEntries.size()) {
@@ -569,6 +615,28 @@ auto NekoRpcMethodIdTable::_installEntry(NekoRpcMethodEntry entry) -> bool {
         mNextId = entry.id + 1U;
     }
     mEntries[static_cast<std::size_t>(entry.id)] = std::move(entry);
+    return true;
+}
+
+auto NekoRpcMethodIdTable::_validTable(const std::vector<NekoRpcMethodEntry>& entries, std::uint64_t version,
+                                       bool require_contiguous_ids) const -> bool {
+    if (entries.size() > mMaxEntries || (!entries.empty() && version == 0U)) {
+        return false;
+    }
+    std::map<std::string_view, std::uint64_t, std::less<>> active_names;
+    for (std::size_t index = 0; index < entries.size(); ++index) {
+        const auto& entry = entries[index];
+        if (entry.id >= mMaxEntries ||
+            (entry.state != NekoRpcMethodState::Active && entry.state != NekoRpcMethodState::Removed) ||
+            (require_contiguous_ids && entry.id != index)) {
+            return false;
+        }
+        if (entry.state == NekoRpcMethodState::Active) {
+            if (entry.name.empty() || !active_names.emplace(entry.name, entry.id).second) {
+                return false;
+            }
+        }
+    }
     return true;
 }
 
@@ -584,13 +652,17 @@ auto NekoRpcCompressionCodec::compress(std::span<const std::byte> payload, NekoR
     }
 }
 
-auto NekoRpcCompressionCodec::decompress(std::span<const std::byte> payload, NekoRpcCompressionAlgorithm algorithm)
+auto NekoRpcCompressionCodec::decompress(std::span<const std::byte> payload, NekoRpcCompressionAlgorithm algorithm,
+                                         std::size_t max_output_bytes)
     -> ilias::Result<MessageType, std::error_code> {
     switch (algorithm) {
     case NekoRpcCompressionAlgorithm::None:
+        if (payload.size() > max_output_bytes) {
+            return ilias::Err(ilias::IoError::MessageTooLarge);
+        }
         return NekoRpcExtensionCodec::copyBytes(payload);
     case NekoRpcCompressionAlgorithm::RunLength:
-        return _decompressRunLength(payload);
+        return _decompressRunLength(payload, max_output_bytes);
     default:
         return ilias::Err(RpcError::InvalidRequest);
     }
@@ -632,7 +704,8 @@ auto NekoRpcCompressionCodec::_compressRunLength(std::span<const std::byte> payl
     return out;
 }
 
-auto NekoRpcCompressionCodec::_decompressRunLength(std::span<const std::byte> payload)
+auto NekoRpcCompressionCodec::_decompressRunLength(std::span<const std::byte> payload,
+                                                   std::size_t max_output_bytes)
     -> ilias::Result<MessageType, std::error_code> {
     MessageType out;
     std::size_t offset = 0;
@@ -644,6 +717,9 @@ auto NekoRpcCompressionCodec::_decompressRunLength(std::span<const std::byte> pa
                 return ilias::Err(RpcError::InvalidRequest);
             }
             const auto count = static_cast<std::size_t>(control & 0x7FU) + 3U;
+            if (count > max_output_bytes - std::min(max_output_bytes, out.size())) {
+                return ilias::Err(ilias::IoError::MessageTooLarge);
+            }
             const auto value = payload[offset];
             ++offset;
             out.insert(out.end(), count, value);
@@ -653,6 +729,9 @@ auto NekoRpcCompressionCodec::_decompressRunLength(std::span<const std::byte> pa
         const auto count = static_cast<std::size_t>(control) + 1U;
         if (payload.size() - offset < count) {
             return ilias::Err(RpcError::InvalidRequest);
+        }
+        if (count > max_output_bytes - std::min(max_output_bytes, out.size())) {
+            return ilias::Err(ilias::IoError::MessageTooLarge);
         }
         append_bytes(out, payload.subspan(offset, count));
         offset += count;

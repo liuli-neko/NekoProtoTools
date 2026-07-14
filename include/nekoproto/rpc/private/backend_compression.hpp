@@ -1,7 +1,10 @@
 #pragma once
 
+#include <algorithm>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -47,17 +50,33 @@ auto neko_rpc_encode_outgoing_frame(const typename Backend::Options& options,
     using Kind             = typename Backend::Kind;
     using Flag             = typename Backend::Flag;
 
+    const auto encode_checked = [&options](typename Backend::Codec::FrameParts value)
+        -> ilias::Result<typename Backend::Message, std::error_code> {
+        auto encoded = Codec::encodeFrame(value);
+        const auto header_size = Codec::headerSize();
+        if (encoded.size() < header_size) {
+            return ilias::Err(RpcError::InvalidRequest);
+        }
+        ILIAS_TRY(auto body_size,
+                  Codec::headerBodySize(std::span<const std::byte>(encoded).first(header_size),
+                                        value.header.codec, options.frame_limits));
+        if (body_size != encoded.size() - header_size) {
+            return ilias::Err(RpcError::InvalidRequest);
+        }
+        return encoded;
+    };
+
     if (!session.compression_enabled || session.compression_algorithm == Backend::CompressionAlgorithm::None) {
-        return Codec::encodeFrame(frame);
+        return encode_checked(frame);
     }
 
     if (frame.header.kind == Kind::Hello || (frame.header.flags & Flag::Compressed) != 0U) {
-        return Codec::encodeFrame(frame);
+        return encode_checked(frame);
     }
 
     if (frame.payload.empty() || frame.payload.size() < session.compression_min_payload_size) {
         neko_rpc_add_compression_stat<Backend>(options, &CompressionStats::skipped_small_payloads);
-        return Codec::encodeFrame(frame);
+        return encode_checked(frame);
     }
 
     // Compression is a backend-owned extension transform. The endpoint only sees
@@ -79,7 +98,7 @@ auto neko_rpc_encode_outgoing_frame(const typename Backend::Options& options,
         neko_rpc_add_compression_stat<Backend>(options, &CompressionStats::skipped_ineffective_frames);
         NEKO_LOG_TRACE("rpc", "rpc backend compression skipped: reason=ineffective input={} output={}",
                        frame.payload.size(), compressed.value().size());
-        return Codec::encodeFrame(frame);
+        return encode_checked(frame);
     }
 
     neko_rpc_add_compression_stat<Backend>(options, &CompressionStats::compressed_frames);
@@ -91,7 +110,7 @@ auto neko_rpc_encode_outgoing_frame(const typename Backend::Options& options,
     frame.payload      = NekoRpcExtensionCodec::asBytes(compressed.value());
     NEKO_LOG_TRACE("rpc", "rpc backend compression end: input={} output={} algorithm={}", original_size,
                    compressed.value().size(), neko_rpc_compression_algorithm_name(session.compression_algorithm));
-    return Codec::encodeFrame(frame);
+    return encode_checked(frame);
 }
 
 template <typename Backend>
@@ -124,7 +143,12 @@ auto neko_rpc_decompress_incoming_payload(const typename Backend::Options& optio
                                            parts.payload.size());
     NEKO_LOG_TRACE("rpc", "rpc backend decompression begin: algorithm={} payload={}",
                    neko_rpc_compression_algorithm_name(session.compression_algorithm), parts.payload.size());
-    auto payload = CompressionCodec::decompress(parts.payload, session.compression_algorithm);
+    const auto ratio = std::max<std::size_t>(options.max_compression_ratio, 1U);
+    const auto ratio_budget = parts.payload.size() > std::numeric_limits<std::size_t>::max() / ratio
+                                  ? std::numeric_limits<std::size_t>::max()
+                                  : parts.payload.size() * ratio;
+    const auto output_budget = std::min(options.max_decompressed_payload_bytes, ratio_budget);
+    auto payload = CompressionCodec::decompress(parts.payload, session.compression_algorithm, output_budget);
     if (!payload) {
         neko_rpc_add_compression_stat<Backend>(options, &CompressionStats::decompression_errors);
         NEKO_LOG_WARN("rpc", "rpc backend decompression failed: algorithm={} payload={}",

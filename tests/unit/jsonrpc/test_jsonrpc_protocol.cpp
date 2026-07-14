@@ -8,6 +8,7 @@
 #include <variant>
 #include <vector>
 
+#include "nekoproto/jsonrpc/backend.hpp"
 #include "nekoproto/jsonrpc/protocol.hpp"
 #include "nekoproto/rpc/method.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
@@ -29,6 +30,7 @@ using OptionalTraits = detail::RpcMethodTraits<void(std::optional<int>)>;
 using ObjectTraits = detail::RpcMethodTraits<std::string(ProtocolObjectParam)>;
 using TupleTraits = detail::RpcMethodTraits<std::string(std::tuple<int, double, bool>)>;
 using PingTraits = detail::RpcMethodTraits<void()>;
+using AddMethod = RpcMethodSpec<int(int, int), rpc_args<"lhs", "rhs">>;
 
 static_assert(detail::JsonRpcMethodTraits<AddTraits>::ParamsSize == 2);
 static_assert(std::is_same_v<detail::JsonRpcMethodTraits<AddTraits>::ParamsTupleType, std::tuple<int, int>>);
@@ -236,6 +238,95 @@ TEST(JsonRpcProtocol, VoidResponseDoesNotExposeResultField) {
     ASSERT_TRUE(decoded.error.has_value());
     EXPECT_EQ(decoded.error->code, -32603);
     EXPECT_TRUE(std::holds_alternative<std::monostate>(decoded.id));
+}
+
+TEST(JsonRpcProtocol, DecodeIncomingReturnsErrorsAndContinuesMixedBatch) {
+    JsonRpcBackend::ServerContext context;
+    JsonRpcBackend::PeerSession session;
+
+    const auto parseError = JsonRpcBackend::decodeIncoming(
+        context, session, {reinterpret_cast<const std::byte*>("{"), 1U});
+    ASSERT_TRUE(parseError.ok);
+    ASSERT_EQ(parseError.responses.size(), 1U);
+    detail::JsonRpcResponse<detail::RpcMethodTraits<void(void)>> errorResponse;
+    ASSERT_TRUE(readJson(writeJson(parseError.responses.front()), errorResponse));
+    ASSERT_TRUE(errorResponse.error.has_value());
+    EXPECT_EQ(errorResponse.error->code, static_cast<int>(JsonRpcError::ParseError));
+    EXPECT_TRUE(std::holds_alternative<std::monostate>(errorResponse.id));
+
+    constexpr std::string_view emptyBatch = "[]";
+    const auto empty = JsonRpcBackend::decodeIncoming(
+        context, session,
+        {reinterpret_cast<const std::byte*>(emptyBatch.data()), emptyBatch.size()});
+    ASSERT_TRUE(empty.ok);
+    EXPECT_FALSE(empty.batch);
+    ASSERT_EQ(empty.responses.size(), 1U);
+    errorResponse = {};
+    ASSERT_TRUE(readJson(writeJson(empty.responses.front()), errorResponse));
+    ASSERT_TRUE(errorResponse.error.has_value());
+    EXPECT_EQ(errorResponse.error->code, static_cast<int>(JsonRpcError::InvalidRequest));
+
+    constexpr std::string_view mixed =
+        R"([{"jsonrpc":"2.0","method":"a","id":1},1,{"jsonrpc":"2.0","method":"b","id":2}])";
+    const auto decoded = JsonRpcBackend::decodeIncoming(
+        context, session, {reinterpret_cast<const std::byte*>(mixed.data()), mixed.size()});
+    ASSERT_TRUE(decoded.ok);
+    EXPECT_TRUE(decoded.batch);
+    EXPECT_EQ(decoded.requests.size(), 2U);
+    EXPECT_EQ(decoded.responses.size(), 1U);
+}
+
+TEST(JsonRpcProtocol, DecodeIncomingRejectsWrongVersionAndHonorsMessageLimit) {
+    JsonRpcBackend::ServerContext context;
+    JsonRpcBackend::PeerSession session;
+    constexpr std::string_view wrongVersion = R"({"jsonrpc":"1.0","method":"a","id":1})";
+    auto decoded = JsonRpcBackend::decodeIncoming(
+        context, session, {reinterpret_cast<const std::byte*>(wrongVersion.data()), wrongVersion.size()});
+    EXPECT_TRUE(decoded.ok);
+    EXPECT_TRUE(decoded.requests.empty());
+    EXPECT_EQ(decoded.responses.size(), 1U);
+
+    context.options.max_message_bytes = 1U;
+    constexpr std::string_view request = "{}";
+    decoded = JsonRpcBackend::decodeIncoming(
+        context, session, {reinterpret_cast<const std::byte*>(request.data()), request.size()});
+    ASSERT_EQ(decoded.responses.size(), 1U);
+    detail::JsonRpcResponse<detail::RpcMethodTraits<void(void)>> response;
+    ASSERT_TRUE(readJson(writeJson(decoded.responses.front()), response));
+    ASSERT_TRUE(response.error.has_value());
+    EXPECT_EQ(response.error->code, static_cast<int>(JsonRpcError::MessageToolLarge));
+}
+
+TEST(JsonRpcProtocol, DecodeResponseRequiresValidExclusiveEnvelope) {
+    JsonRpcBackend::ClientContext context;
+    JsonRpcBackend::PeerSession session;
+    const JsonRpcBackend::Id id = std::uint64_t{7};
+    const auto decode = [&](std::string_view json) {
+        return JsonRpcBackend::decodeResponse<AddMethod>(
+            context, session, {reinterpret_cast<const std::byte*>(json.data()), json.size()}, id);
+    };
+
+    auto valid = decode(R"({"jsonrpc":"2.0","result":42,"id":7})");
+    ASSERT_TRUE(valid.has_value());
+    EXPECT_EQ(valid.value(), 42);
+
+    auto missingBoth = decode(R"({"jsonrpc":"2.0","id":7})");
+    ASSERT_FALSE(missingBoth.has_value());
+    EXPECT_EQ(missingBoth.error(), make_error_code(JsonRpcError::InvalidRequest));
+
+    auto both = decode(
+        R"({"jsonrpc":"2.0","result":42,"error":{"code":-32603,"message":"bad"},"id":7})");
+    ASSERT_FALSE(both.has_value());
+    EXPECT_EQ(both.error(), make_error_code(JsonRpcError::InvalidRequest));
+
+    auto wrongVersion = decode(R"({"jsonrpc":"1.0","result":42,"id":7})");
+    ASSERT_FALSE(wrongVersion.has_value());
+    EXPECT_EQ(wrongVersion.error(), make_error_code(JsonRpcError::InvalidRequest));
+
+    context.options.max_message_bytes = 1U;
+    auto oversized = decode(R"({"jsonrpc":"2.0","result":42,"id":7})");
+    ASSERT_FALSE(oversized.has_value());
+    EXPECT_EQ(oversized.error(), make_error_code(JsonRpcError::MessageToolLarge));
 }
 
 #include "../common/common_main.cpp.in" // IWYU pragma: export

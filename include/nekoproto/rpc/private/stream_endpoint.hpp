@@ -15,6 +15,8 @@
 
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/rpc/endpoint.hpp"
+#include "nekoproto/rpc/error.hpp"
+#include "nekoproto/rpc/private/backend_base.hpp"
 
 NEKO_BEGIN_NAMESPACE
 namespace rpc {
@@ -24,7 +26,8 @@ class NekoRpcStreamEndpoint {
 public:
     using Message = typename Codec::MessageType;
 
-    explicit NekoRpcStreamEndpoint(StreamT stream) : mStream(std::move(stream)) {}
+    explicit NekoRpcStreamEndpoint(StreamT stream, NekoRpcFrameLimits limits = {})
+        : mStream(std::move(stream)), mLimits(limits) {}
 
     auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t> {
         ILIAS_CO_TRYV(co_await _readFrame(buffer));
@@ -51,7 +54,7 @@ private:
         }
 
         const auto header = std::span<const std::byte>{header_bytes.data(), header_bytes.size()};
-        ILIAS_CO_TRY(auto body_size, Codec::headerBodySize(header, CodecId));
+        ILIAS_CO_TRY(auto body_size, Codec::headerBodySize(header, CodecId, mLimits));
 
         buffer.clear();
         buffer.reserve(header_size + body_size);
@@ -72,6 +75,15 @@ private:
     }
 
     auto _writeFrame(std::span<const std::byte> frame) -> ilias::IoTask<void> {
+        const auto header_size = Codec::headerSize();
+        if (frame.size() < header_size || frame.size() > mLimits.max_frame_bytes) {
+            co_return ilias::Err(ilias::IoError::MessageTooLarge);
+        }
+        ILIAS_CO_TRY(auto body_size, Codec::headerBodySize(frame.first(header_size), CodecId, mLimits));
+        if (body_size != frame.size() - header_size) {
+            co_return ilias::Err(RpcError::InvalidRequest);
+        }
+
         auto guard = co_await mWriteMutex->lock();
         ILIAS_CO_TRY(auto ret, co_await ilias::io::writeAll(mStream, frame));
         if (ret != frame.size()) {
@@ -82,6 +94,7 @@ private:
     }
 
     StreamT mStream;
+    NekoRpcFrameLimits mLimits;
     std::unique_ptr<ilias::Mutex> mWriteMutex = std::make_unique<ilias::Mutex>();
 };
 

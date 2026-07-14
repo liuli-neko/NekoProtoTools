@@ -1,5 +1,6 @@
 #include <atomic>
 #include <array>
+#include <concepts>
 #include <cstddef>
 #include <list>
 #include <map>
@@ -84,13 +85,22 @@ struct FixedLengthJsonField {
     };
 };
 
-struct UnframedBinaryLayout {
+struct RawFixedBinaryLayout {
     int value = 0;
 
     struct Neko {
         static constexpr auto value =
-            Object("value", &UnframedBinaryLayout::value); // NOLINT
+            Object("value", &RawFixedBinaryLayout::value); // NOLINT
     };
+};
+
+struct StatefulDescending {
+    StatefulDescending() = delete;
+    explicit StatefulDescending(bool enabled) : enabled(enabled) {}
+
+    bool operator()(int lhs, int rhs) const noexcept { return enabled ? lhs > rhs : lhs < rhs; }
+
+    bool enabled;
 };
 
 template <typename T>
@@ -157,6 +167,26 @@ TEST(RapidJsonBackendParser, WritesByteOutputBuffer) {
 TEST(RapidJsonBackendParser, WritesNullRootThroughGenericParser) {
     const auto buffer = write_json(nullptr);
     EXPECT_EQ(as_string(buffer), "null");
+}
+
+TEST(RapidJsonBackendParser, DocumentAdapterHasSingleArgumentAndRejectsRepeatedRoot) {
+    static_assert(std::invocable<JsonSerializer::OutputSerializer&, const int&>);
+    static_assert(!std::invocable<JsonSerializer::OutputSerializer&, const int&, const int&>);
+    static_assert(std::invocable<JsonSerializer::InputSerializer&, int&>);
+    static_assert(!std::invocable<JsonSerializer::InputSerializer&, int&, int&>);
+
+    std::vector<char> buffer;
+    JsonSerializer::OutputSerializer repeatedOut(buffer);
+    ASSERT_TRUE(repeatedOut(1));
+    EXPECT_FALSE(repeatedOut(2));
+
+    constexpr std::string_view json = "1";
+    JsonSerializer::InputSerializer input(json.data(), json.size());
+    int first = 0;
+    int second = 0;
+    ASSERT_TRUE(input(first));
+    EXPECT_FALSE(input(second));
+    EXPECT_EQ(first, 1);
 }
 
 TEST(RapidJsonBackendParser, RoundTripsEnumRootThroughGenericParser) {
@@ -238,6 +268,29 @@ TEST(RapidJsonBackendParser, RoundTripsNonStringKeyMapRootThroughGenericMapParse
     EXPECT_EQ(decoded, source);
 }
 
+TEST(RapidJsonBackendParser, DuplicateUniqueEntriesFailWithoutMutatingDestination) {
+    const std::string duplicateSet = "[1,1]";
+    std::set<int> setValue{9};
+    JsonSerializer::InputSerializer setIn(duplicateSet.data(), duplicateSet.size());
+    EXPECT_FALSE(setIn(setValue));
+    EXPECT_EQ(setValue, (std::set<int>{9}));
+
+    const std::string duplicateMap =
+        R"([{"key":1,"value":"first"},{"key":1,"value":"second"}])";
+    std::map<int, std::string> mapValue{{9, "retained"}};
+    JsonSerializer::InputSerializer mapIn(duplicateMap.data(), duplicateMap.size());
+    EXPECT_FALSE(mapIn(mapValue));
+    EXPECT_EQ(mapValue, (std::map<int, std::string>{{9, "retained"}}));
+
+    const std::string orderedSet = "[1,3,2]";
+    std::set<int, StatefulDescending> statefulValue(StatefulDescending{true});
+    statefulValue.insert(9);
+    JsonSerializer::InputSerializer statefulIn(orderedSet.data(), orderedSet.size());
+    ASSERT_TRUE(statefulIn(statefulValue));
+    EXPECT_TRUE(statefulValue.key_comp().enabled);
+    EXPECT_EQ(std::vector<int>(statefulValue.begin(), statefulValue.end()), (std::vector<int>{3, 2, 1}));
+}
+
 TEST(RapidJsonBackendParser, RoundTripsPairRootThroughGenericTupleParser) {
     const std::pair<int, std::string> source{1, "one"};
     const auto buffer = write_json(source);
@@ -282,7 +335,7 @@ TEST(RapidJsonBackendParser, RoundTripsUniquePtrNullRootThroughGenericPointerPar
 TEST(RapidJsonBackendParser, RoundTripsVariantRootThroughGenericVariantParser) {
     const std::variant<int, std::string> source = std::string{"variant"};
     const auto buffer = write_json(source);
-    EXPECT_EQ(as_string(buffer), "\"variant\"");
+    EXPECT_EQ(as_string(buffer), "[1,\"variant\"]");
 
     std::variant<int, std::string> decoded;
     read_json(buffer, decoded);
@@ -293,11 +346,58 @@ TEST(RapidJsonBackendParser, RoundTripsVariantRootThroughGenericVariantParser) {
 TEST(RapidJsonBackendParser, RoundTripsMonostateVariantRootThroughGenericVariantParser) {
     const std::variant<std::monostate, int> source = std::monostate{};
     const auto buffer = write_json(source);
-    EXPECT_EQ(as_string(buffer), "null");
+    EXPECT_EQ(as_string(buffer), "[0,null]");
 
     std::variant<std::monostate, int> decoded = 7;
     read_json(buffer, decoded);
     EXPECT_TRUE(std::holds_alternative<std::monostate>(decoded));
+}
+
+TEST(RapidJsonBackendParser, SupportsExplicitUntaggedUnionCompatibility) {
+    constexpr auto Untagged = UnionTag{.encoding = UnionEncoding::Untagged};
+    const std::variant<int, std::string> source = std::string{"legacy"};
+    const auto buffer = write_json(make_tags<Untagged>(source));
+    EXPECT_EQ(as_string(buffer), "\"legacy\"");
+
+    std::variant<int, std::string> decoded = 7;
+    auto taggedDecoded = make_tags<Untagged>(decoded);
+    read_json(buffer, taggedDecoded);
+    ASSERT_TRUE(std::holds_alternative<std::string>(decoded));
+    EXPECT_EQ(std::get<std::string>(decoded), "legacy");
+}
+
+TEST(RapidJsonBackendParser, UntaggedUnionRejectsAmbiguousPayloadWithoutChangingTarget) {
+    constexpr auto Untagged = UnionTag{.encoding = UnionEncoding::Untagged};
+    const std::vector<char> buffer{'1'};
+    std::variant<int, double> decoded = 2.5;
+    auto taggedDecoded = make_tags<Untagged>(decoded);
+
+    JsonSerializer::InputSerializer input(buffer.data(), buffer.size());
+    EXPECT_FALSE(input(taggedDecoded));
+    ASSERT_NE(input.error(), nullptr);
+    EXPECT_NE(input.error()->msg.find("more than one alternative"), std::string::npos);
+    ASSERT_TRUE(std::holds_alternative<double>(decoded));
+    EXPECT_EQ(std::get<double>(decoded), 2.5);
+}
+
+TEST(RapidJsonBackendParser, UnionTagIsConsumedAtOneUnionBoundary) {
+    constexpr auto Untagged = UnionTag{.encoding = UnionEncoding::Untagged};
+    using Inner = std::variant<int, std::string>;
+    using Outer = std::variant<Inner, bool>;
+    const Outer source{std::in_place_index<0>, Inner{std::in_place_index<1>, "nested"}};
+
+    // The outer envelope is removed, while the nested variant keeps the
+    // default [index, value] representation.
+    const auto buffer = write_json(make_tags<Untagged>(source));
+    EXPECT_EQ(as_string(buffer), "[1,\"nested\"]");
+
+    Outer decoded{false};
+    auto taggedDecoded = make_tags<Untagged>(decoded);
+    read_json(buffer, taggedDecoded);
+    ASSERT_EQ(decoded.index(), 0U);
+    const auto& inner = std::get<0>(decoded);
+    ASSERT_EQ(inner.index(), 1U);
+    EXPECT_EQ(std::get<1>(inner), "nested");
 }
 
 TEST(RapidJsonBackendParser, RoundTripsAtomicRootThroughGenericParser) {
@@ -391,12 +491,12 @@ TEST(RapidJsonBackendParser, BinaryFixedLengthTagIsIgnoredByJsonParser) {
 }
 
 TEST(RapidJsonBackendParser, BinaryLayoutTagIsIgnoredByJsonParser) {
-    const UnframedBinaryLayout source{.value = 42};
-    const auto buffer = write_json(make_tags<BinaryTag{.unframed = true}>(source));
+    const RawFixedBinaryLayout source{.value = 42};
+    const auto buffer = write_json(make_tags<BinaryTag{.raw_fixed_data = true}>(source));
     EXPECT_EQ(as_string(buffer), R"({"value":42})");
 
-    UnframedBinaryLayout decoded;
-    auto taggedDecoded = make_tags<BinaryTag{.unframed = true}>(decoded);
+    RawFixedBinaryLayout decoded;
+    auto taggedDecoded = make_tags<BinaryTag{.raw_fixed_data = true}>(decoded);
     read_json(buffer, taggedDecoded);
     EXPECT_EQ(decoded.value, 42);
 }

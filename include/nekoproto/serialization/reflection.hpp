@@ -886,7 +886,7 @@ public:
     // Public reflection algorithm. It consumes only the provider/model surface:
     // no direct T::Neko or Meta<T> probing belongs below this line.
     template <typename U, typename CallAbleT>
-    static constexpr void forEach(U&& obj, CallAbleT&& func) noexcept {
+    static constexpr void forEach(U&& obj, CallAbleT&& func) {
         if constexpr (!Provider::has_values) {
             static_assert(Provider::has_values, "type has no values meta");
         }
@@ -997,7 +997,7 @@ public:
     static constexpr int value_count = Model::value_count; // NOLINT
 
     template <typename CallAbleT>
-    static constexpr void forEachMeta(CallAbleT&& func) noexcept {
+    static constexpr void forEachMeta(CallAbleT&& func) {
         if constexpr (!Provider::has_values) {
             static_assert(Provider::has_values, "type has no values meta");
         }
@@ -1071,7 +1071,7 @@ public:
             return values;
         }
     }
-    static const auto& nameMap() noexcept {
+    static const auto& nameMap() {
         static std::map<std::string_view, T> kNameMap = []() {
             auto map = std::map<std::string_view, T>{};
             auto ns  = names();
@@ -1083,7 +1083,7 @@ public:
         }();
         return kNameMap;
     }
-    static const auto& valueMap() noexcept {
+    static const auto& valueMap() {
         static std::map<T, std::string_view> kValueMap = []() {
             auto map = std::map<T, std::string_view>{};
             auto ns  = names();
@@ -1100,7 +1100,7 @@ public:
     static constexpr auto field_tags = _tags();                  // NOLINT
     static constexpr int value_count = static_cast<int>(size()); // NOLINT
 
-    static constexpr auto value(std::string_view name) noexcept {
+    static constexpr auto value(std::string_view name) {
         auto kEnums = values();
         auto kNames = names();
         for (int i = 0; i < (int)size(); ++i) {
@@ -1112,7 +1112,7 @@ public:
         return T{}; // FIXME: this is not a good way to handle this
     }
 
-    static constexpr auto name(T value) noexcept {
+    static constexpr auto name(T value) {
         const auto& k_names = names();
         const auto& k_enums = values();
         for (int i = 0; i < (int)size(); ++i) {
@@ -1126,7 +1126,7 @@ public:
 
     template <typename U>
         requires(std::is_same_v<T, U> || std::is_integral_v<U>)
-    static constexpr auto flagsToString(U value, std::string delimiter = "|") noexcept {
+    static constexpr auto flagsToString(U value, std::string delimiter = "|") {
         const auto& k_names = names();
         const auto& k_enums = values();
         std::string result;
@@ -1142,7 +1142,7 @@ public:
     }
 
     template <typename CallAbleT>
-    static constexpr void forEachMeta(CallAbleT&& func) noexcept {
+    static constexpr void forEachMeta(CallAbleT&& func) {
         constexpr auto enumNames  = names();
         constexpr auto enumValues = values();
         [&]<std::size_t... Is>(std::index_sequence<Is...>) {

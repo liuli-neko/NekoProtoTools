@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 NEKO_BEGIN_NAMESPACE
 namespace detail {
@@ -88,12 +89,13 @@ struct WriteParser<W, NameValuePair<T>, void> {
 template <typename R, typename T>
 struct ReadParser<R, NameValuePair<T>, void> {
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, NameValuePair<T>& value, const Tags& /*tags*/) {
-        auto object = R::toObject(in);
+    static ParserResult read(typename R::InputValueType in, NameValuePair<T>& value, const Tags& tags) {
+        auto object = parsing::reader_to_object<R>(in, tags);
         if (!object) {
             return object.error();
         }
-        auto field = R::objectField(object.value(), {value.name, value.nameLen});
+        auto field =
+            parsing::reader_object_field<R>(object.value(), std::string_view{value.name, value.nameLen}, NoTags{});
         if (!field) {
             return parser_error(sa::ErrorCode::InvalidField,
                                 "Required field '" + std::string(value.name, value.nameLen) + "' is missing");

@@ -3,6 +3,7 @@
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/serialization/error.hpp"
 #include "nekoproto/serialization/parsing/parent.hpp"
+#include "nekoproto/serialization/parsing/reader.hpp"
 #include "nekoproto/serialization/parsing/schema/type.hpp"
 #include "nekoproto/serialization/private/tags.hpp"
 
@@ -23,12 +24,34 @@ inline ParserResult parser_write(W& writer, const T& value, const ParentType& pa
 template <typename R, typename T, typename Tags = NoTags>
 inline ParserResult parser_read(typename R::InputValueType in, T& value, const Tags& tags = Tags{});
 
-template <typename T>
-inline parsing::schema::Type parser_schema();
+template <typename T, typename Tags = NoTags>
+inline parsing::schema::Type parser_schema(const Tags& tags = Tags{});
 
 namespace detail {
 
 inline ParserResult parser_error(sa::ErrorCode code, std::string message) { return sa::Err(code, std::move(message)); }
+
+// Build an empty transactional target without discarding stateful container
+// policy objects. This keeps parse-then-commit compatible with comparators,
+// hashes and allocators that are not default constructible.
+template <typename T>
+T parser_empty_container_like(const T& value) {
+    if constexpr (requires {
+                      T(0U, value.hash_function(), value.key_eq(), value.get_allocator());
+                  }) {
+        return T(0U, value.hash_function(), value.key_eq(), value.get_allocator());
+    } else if constexpr (requires {
+                             T(value.key_comp(), value.get_allocator());
+                         }) {
+        return T(value.key_comp(), value.get_allocator());
+    } else if constexpr (requires {
+                             T(value.get_allocator());
+                         }) {
+        return T(value.get_allocator());
+    } else {
+        return T{};
+    }
+}
 
 inline ParserResult parser_context(ParserResult result, std::string context) {
     if (result) {
@@ -120,7 +143,7 @@ struct SchemaParser<TaggedField<Tags, Accessor>, void> {
     using Field = TaggedField<Tags, Accessor>;
 
     static parsing::schema::Type toSchema() {
-        return parser_schema<std::remove_cvref_t<typename Field::accessor_type>>();
+        return parser_schema<std::remove_cvref_t<typename Field::accessor_type>>(Tags);
     }
 };
 
@@ -158,13 +181,19 @@ inline ParserResult parser_read(typename R::InputValueType in, T& value, const T
     }
 }
 
-template <typename T>
-inline parsing::schema::Type parser_schema() {
+template <typename T, typename Tags>
+inline parsing::schema::Type parser_schema(const Tags& tags) {
     using ValueType = std::decay_t<T>;
     if constexpr (requires {
+                      { CustomParser<ValueType>::toSchema(tags) } -> std::same_as<parsing::schema::Type>;
+                  }) {
+        return CustomParser<ValueType>::toSchema(tags);
+    } else if constexpr (requires {
                       { CustomParser<ValueType>::toSchema() } -> std::same_as<parsing::schema::Type>;
                   }) {
         return CustomParser<ValueType>::toSchema();
+    } else if constexpr (requires { detail::SchemaParser<ValueType>::toSchema(tags); }) {
+        return detail::SchemaParser<ValueType>::toSchema(tags);
     } else if constexpr (requires { detail::SchemaParser<ValueType>::toSchema(); }) {
         return detail::SchemaParser<ValueType>::toSchema();
     } else {
