@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  MIN_CLANG_VERSION: 19
+
 jobs:
   build-and-test:
     name: Build and test (C++${{ matrix.stdcxx }}, ${{ matrix.kind }}, ${{ matrix.mode }})
@@ -79,7 +82,7 @@ jobs:
         verbose: true
 
   sanitizers:
-    name: ${{ matrix.mode }} focused regression (Clang, C++23)
+    name: ${{ matrix.mode }} focused regression (supported Clang, C++23)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -93,8 +96,23 @@ jobs:
       uses: xmake-io/github-action-setup-xmake@3a1a5dddfc7fa625d9a698738334bf55655a861a # v1.2.5
       with:
         xmake-version: 3.0.9
+    - name: Select supported Clang
+      run: |
+        clang_major="$(clang++ -dumpversion)"
+        clang_major="${clang_major%%.*}"
+        if [ "${clang_major}" -ge "${MIN_CLANG_VERSION}" ]; then
+          echo "CC=clang" >> "${GITHUB_ENV}"
+          echo "CXX=clang++" >> "${GITHUB_ENV}"
+          clang++ --version
+        else
+          sudo apt-get update
+          sudo apt-get install -y "clang-${MIN_CLANG_VERSION}" "libclang-rt-${MIN_CLANG_VERSION}-dev"
+          echo "CC=clang-${MIN_CLANG_VERSION}" >> "${GITHUB_ENV}"
+          echo "CXX=clang++-${MIN_CLANG_VERSION}" >> "${GITHUB_ENV}"
+          "clang++-${MIN_CLANG_VERSION}" --version
+        fi
     - name: Configure
-      run: xmake f -m ${{ matrix.mode }} -k static --stdcxx=23 --toolchain=clang --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --ccache=n -vy
+      run: xmake f -m ${{ matrix.mode }} -k static --stdcxx=23 --cc=${CC} --cxx=${CXX} --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --ccache=n -vy
     - name: Build serializer regression
       if: ${{ matrix.mode != 'tsan' }}
       run: xmake build test_binary_serializer
@@ -107,7 +125,7 @@ jobs:
       run: xmake run test_neko_rpc_backend
 
   fuzz-smoke:
-    name: Fuzz smoke (Clang, ASan+UBSan)
+    name: Fuzz smoke (supported Clang, ASan+UBSan)
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -117,8 +135,23 @@ jobs:
       uses: xmake-io/github-action-setup-xmake@3a1a5dddfc7fa625d9a698738334bf55655a861a # v1.2.5
       with:
         xmake-version: 3.0.9
+    - name: Select supported Clang
+      run: |
+        clang_major="$(clang++ -dumpversion)"
+        clang_major="${clang_major%%.*}"
+        if [ "${clang_major}" -ge "${MIN_CLANG_VERSION}" ]; then
+          echo "CC=clang" >> "${GITHUB_ENV}"
+          echo "CXX=clang++" >> "${GITHUB_ENV}"
+          clang++ --version
+        else
+          sudo apt-get update
+          sudo apt-get install -y "clang-${MIN_CLANG_VERSION}" "libclang-rt-${MIN_CLANG_VERSION}-dev"
+          echo "CC=clang-${MIN_CLANG_VERSION}" >> "${GITHUB_ENV}"
+          echo "CXX=clang++-${MIN_CLANG_VERSION}" >> "${GITHUB_ENV}"
+          "clang++-${MIN_CLANG_VERSION}" --version
+        fi
     - name: Configure
-      run: xmake f -m debug -k static --stdcxx=23 --toolchain=clang --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --fuzzer_test=y --ccache=n -vy
+      run: xmake f -m debug -k static --stdcxx=23 --cc=${CC} --cxx=${CXX} --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --fuzzer_test=y --ccache=n -vy
     - name: Build fuzz targets
       run: |
         xmake build test_json_proto

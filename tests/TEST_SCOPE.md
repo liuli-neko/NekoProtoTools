@@ -83,7 +83,7 @@
 
 - `test_json_proto`：JSON proto parser 的 libFuzzer 入口。
 - `test_rpc_wire_fuzz`：统一覆盖 Binary Reader 的成功重编码不变量、Neko RPC frame、method-table TLV 和压缩解码；输入在 target 内先限长。
-- Linux CI 分别提供 ASan、UBSan、TSan 的聚焦回归和两个 fuzz target 的 smoke run。普通单测仍是首要回归门槛，专项工具不替代 API 断言。
+- Linux CI 分别提供 ASan、UBSan、TSan 的聚焦回归和两个 fuzz target 的 smoke run。Clang 要求 19 或更新版本：优先使用 runner 当前默认的新版本，默认版本低于 19 时才安装 19 兜底。普通单测仍是首要回归门槛，专项工具不替代 API 断言。
 
 2026-07-15 最终复验：Debug 与 coverage 配置下的普通测试全集均为 25/25；coverage 为 lines 84.0%
 （6087/7243）、functions 70.8%（27956/39465）。ASan 的 Binary 30/30、RPC 40/40，UBSan 的 Binary
