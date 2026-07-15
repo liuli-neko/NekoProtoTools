@@ -1677,7 +1677,9 @@ permissions:
 覆盖率 job 目前配置为 coverage，但生成报告步骤被注释，应确认是否确实产出可用覆盖率数据。
 
 **2026-07-15 实施结果：**coverage 生成、ASan/UBSan/TSan、fuzz smoke 和 Binary golden 已恢复并通过本地
-专项复验；旧版本数据兼容作业尚未新增，继续由 CI-002 跟踪。
+专项复验。Clang 专项作业声明最低版本 19：优先使用 runner 默认的 19 或更新版本，仅在默认版本过旧时安装
+19 作为兼容下限；这是因为 Ilias 使用的 alias-template CTAD 从 Clang 19 才开始支持。旧版本数据兼容作业
+尚未新增，继续由 CI-002 跟踪。
 
 ---
 
