@@ -1,36 +1,8 @@
 if has_config("enable_tests") then
 
-option("fuzzer_test")
-    set_default(false)
-    set_showmenu(true)
-    set_description("Enable fuzzer test, should install libfuzzer")
-    set_category("enable test")
-option_end()
-
-option("ui_test")
-    set_default(false)
-    set_showmenu(true)
-    set_description("Enable ui test, should install qt")
-    set_category("enable test")
-option_end()
-
-option("cereal_test")
-    set_default(false)
-    set_showmenu(true)
-    set_category("enable test")
-    set_description("Enable cereal test, should install cereal, to contrast with this")
-option_end()
-
 if has_config("ui_test") then 
     add_requires("qtbase")
 end
-
-if is_plat("linux") then 
-    option("memcheck")
-        set_default(false)
-        set_showmenu(true)
-    option_end()
-end 
 
 add_defines("ILIAS_ENABLE_LOG")
 

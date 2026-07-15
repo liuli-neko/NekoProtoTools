@@ -28,6 +28,8 @@ enum class JsonRpcError {
     ClientNotInit      = -32001,
     ResponseIdNotMatch = -32002,
     MessageToolLarge   = -32003, // Request too large The JSON sent is too big.
+    Overloaded         = -32004,
+    DeadlineExceeded   = -32005,
     ServerErrorEnd     = -32099, // Server error end
 
     ParseError = -32700, // Parse error Invalid JSON was received by the server. An error
@@ -65,6 +67,10 @@ public:
             return "Client Not Init";
         case JsonRpcError::ResponseIdNotMatch:
             return "Response Id Not Match";
+        case JsonRpcError::Overloaded:
+            return "RPC Server Overloaded";
+        case JsonRpcError::DeadlineExceeded:
+            return "RPC Deadline Exceeded";
         default:
             return "Unknow Error";
         }

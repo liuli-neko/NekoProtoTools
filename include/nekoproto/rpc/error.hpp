@@ -24,6 +24,8 @@ enum class RpcError {
     MethodSignatureMismatch           = 12,
     MethodIdRequiredButUnsupported    = 13,
     CompressionRequiredButUnsupported = 14,
+    Overloaded                        = 15,
+    DeadlineExceeded                  = 16,
 };
 
 class RpcErrorCategory : public std::error_category {
@@ -65,6 +67,10 @@ public:
             return "Method Id Required But Unsupported";
         case RpcError::CompressionRequiredButUnsupported:
             return "Compression Required But Unsupported";
+        case RpcError::Overloaded:
+            return "RPC Server Overloaded";
+        case RpcError::DeadlineExceeded:
+            return "RPC Deadline Exceeded";
         default:
             return "Unknown RPC Error";
         }

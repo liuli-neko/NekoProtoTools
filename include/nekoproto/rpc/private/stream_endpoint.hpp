@@ -66,7 +66,10 @@ private:
 
         buffer.resize(header_size + body_size);
         auto body_span = std::span<std::byte>{buffer.data() + header_size, body_size};
-        ILIAS_CO_TRY(auto body_ret, co_await (ilias::io::readAll(mStream, body_span) | ilias::unstoppable()));
+        // A partial peer frame must not make endpoint shutdown unbounded. If
+        // this receive is cancelled, the stream is no longer frame-aligned and
+        // the owning client/server closes it rather than reusing it.
+        ILIAS_CO_TRY(auto body_ret, co_await ilias::io::readAll(mStream, body_span));
         if (body_ret != body_size) {
             co_return ilias::Err(ilias::IoError::UnexpectedEOF);
         }

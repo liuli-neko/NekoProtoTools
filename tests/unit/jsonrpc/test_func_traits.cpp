@@ -1,5 +1,7 @@
 #include <cstddef>
+#include <cstdint>
 #include <gtest/gtest.h>
+#include <map>
 #include <string>
 
 #include "nekoproto/global/reflect.hpp"
@@ -277,6 +279,11 @@ TEST(RpcMethodTraitsTest, FunctionType) {
         static_assert(!Traits::IsAutomaticExpansionAble);
         static_assert(Traits::IsTopTuple);
     }
+}
+
+TEST(RpcMethodTraitsTest, MapTypeNameIsCompleteAndUserReadable) {
+    EXPECT_EQ((traits::TypeName<std::map<std::string, std::uint64_t>>::name()), "map<string, u64>");
+    EXPECT_EQ((traits::TypeName<std::map<std::string, std::string>>::name()), "map<string, string>");
 }
 
 TEST(RpcMethodTraitsTest, FreeFunctions) {

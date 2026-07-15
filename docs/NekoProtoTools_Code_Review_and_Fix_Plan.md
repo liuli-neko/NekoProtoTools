@@ -1589,6 +1589,8 @@ Server options 增加每连接和全局限制。超过限制时返回 Busy/Overl
 - handler 抛异常；
 - TSan 多线程 IoContext。
 
+**2026-07-15 实施结果：**上述可观察行为已纳入 RPC 40 个普通用例，TSan 下同一目标 40/40 通过。
+
 ---
 
 <a id="test-003"></a>
@@ -1613,6 +1615,10 @@ fuzz_length_prefixed_endpoint_header
 ```
 
 每个 target 应设置输入上限、timeout 和内存限制，并在 ASan/UBSan 下运行。对于 parser，增加“不崩溃、不超预算、成功时完整消费、重新编码满足 canonical”不变量。
+
+**2026-07-15 实施结果：**保留一个 JSON proto target，并用一个有界 RPC/wire target 合并覆盖 Binary Reader、
+Neko RPC frame、method-table TLV 与压缩解码，避免为每个解码器复制 target；两者在 ASan+UBSan 下各完成
+1000 次 smoke。
 
 ---
 
@@ -1669,6 +1675,9 @@ permissions:
 8. 使用 qemu 或字节级 golden 测试验证 endian 独立性。
 
 覆盖率 job 目前配置为 coverage，但生成报告步骤被注释，应确认是否确实产出可用覆盖率数据。
+
+**2026-07-15 实施结果：**coverage 生成、ASan/UBSan/TSan、fuzz smoke 和 Binary golden 已恢复并通过本地
+专项复验；旧版本数据兼容作业尚未新增，继续由 CI-002 跟踪。
 
 ---
 
@@ -2179,7 +2188,7 @@ TEST(Variant, ReorderedAlternativesBreakGoldenVectorByDesign);
 
 长期应从“位置 index”升级为 schema 中显式、稳定的 alternative ID；在此之前，variant alternative 的顺序必须纳入协议兼容审查。
 
-## 7.5 RPC dispatcher 的建议边界
+## 7.5 RPC dispatcher 的当前边界与公开调用上下文
 
 ```text
 RpcServer
@@ -2194,26 +2203,58 @@ RpcServer
   └── GlobalLimits/Metrics
 ```
 
-每个请求建议拥有：
+当前每个进入 handler 的请求拥有：
 
 ```text
 RequestContext
-  session_id
+  method
   request_id
   deadline
-  stop_source
-  response_slot
-  trace_id
+  cancellation_token
+  peer
 ```
 
-这样可以自然解决取消隔离、超时、响应汇总、指标和 shutdown 问题。
+`RpcServer::bindMethodWithContext()` 把公共 `RpcRequestContext` 作为仅服务端可见的第一个参数；它不进入
+RPC 方法的 wire 签名和参数序列化。wrapper 基类使用统一的 context 指针接口并声明 `usesContext()`：普通
+handler 不构造 context；只有 context-aware handler 真正取得 active slot 后才惰性构造。`method` 使用调用期
+只读 view，`peer` 引用 `addEndpoint(endpoint, RpcPeerInfo)` 中由服务提供方认证后给出的信息，不再为每个请求
+复制 attributes map。context 不可复制、只在 handler 调用期有效，也不暴露 backend session、server 指针、
+notification、全局负载或其他连接的数据。
+
+客户端单次 `RpcCallOptions.deadline/timeout` 仍是本地契约：到期后删除 pending，并 best-effort 发送取消。
+为了让服务端在入队时就知道调用者通常需要的时效，新增普通内建方法
+`rpc.set_connection_timeout(timeout_ns)`，设置“本连接后续请求的默认相对 timeout”。`0` 清除；正值必须能用
+`std::chrono::nanoseconds` 表示，且服务端配置 `request_timeout` 时必须严格小于该上限。设置成功后的新请求使用
+`min(connection timeout, server request_timeout)`，覆盖 queue + handler；已经 admission 的请求不被追溯修改。
+该连接状态在断开时删除，不形成任务历史。
+
+这种连接级默认值不需要把客户端 deadline 偷渡进 Neko backend 私有 extension/TLV，也适用于其他 backend。
+如果未来必须为每次调用传播不同 deadline，仍需先设计公开、backend-neutral、可版本协商的 request metadata
+envelope，不能由通用 client 探测某个 backend 的私有编码能力。策略查询会如实返回
+`deadline.propagation=connection_timeout_builtin_and_client_cancel`、当前连接值和可接受边界。
+
+当前新增四个普通内建方法：
+
+| 方法 | 返回范围 | 隐私与调度规则 |
+| --- | --- | --- |
+| `rpc.get_execution_policy` | 本连接适用的公开 frame、解压、per-connection 限制及 deadline 语义 | 不公开全局 active/queue 容量、全局指标或其他 peer 数据 |
+| `rpc.set_connection_timeout` | 设置本连接未来请求的默认 timeout；`0` 清除，正值严格小于 server timeout | 设置调用本身也走普通 admission/timeout；不修改已经入队的请求 |
+| `rpc.get_connection_status` | 调用者当前连接的 `active`、`queued`、`in_flight` 数量 | 排除查询调用自身，不跨连接 |
+| `rpc.get_connection_tasks` | 调用者当前连接仍在 `queued`/`running` 的 response-bearing request id | 不保留已完成/失败/取消任务历史；连接清理时同步删除 |
+
+这些查询与业务方法共用相同的 per-connection 上限、全局 admission、FIFO 排队、deadline 和 overload 反馈。
+查询本身可能排队、超时或被拒绝，不提供 control-plane 特权或容量旁路。notification 没有可供调用者关联的
+request id，因此不进入任务明细；它仍受相同执行容量约束。
+
+本轮到此冻结范围：不增加任务历史、优先级、逐任务设置、后台特权查询或更多 context 元数据。当前四个内建
+方法只回答连接当前状态和公开约束，避免把 RPC-015 扩张成任务管理系统。
 
 ---
 
 # 8. 总任务 Checklist
 
 > 下列列表只保留简要任务描述；标题链接到上面的详细分析。
-> 状态更新于 2026-07-14：`[x]` 表示已实现并通过回归；`[ ]` 表示未完成或仅完成一部分。
+> 状态更新于 2026-07-15：`[x]` 表示已实现并通过对应回归；`[ ]` 表示未完成、仅完成一部分或专项验证仍在进行。
 
 ## 8.0 本轮最终执行的修复方案
 
@@ -2230,8 +2271,8 @@ RequestContext
 | 序列化根值语义（SER-015） | 所有 document backend 统一为单 root，第二次读写会明确失败；多值必须由用户包装为 tuple、array 或反射对象。本轮没有为 Binary 保留语义含糊的隐式 streaming API。 | 已完成 |
 | RPC 隔离、并发与生命周期（RPC-001～006/009/010/014） | active request 和取消键改为 `(session, request-id)`；每批次使用独立 TaskGroup 和响应槽；client 使用单 receiver coroutine 与 pending-ID demux；server 的 recv loop 与 handler 执行解耦；endpoint 列表、发送、flush 和 shutdown 路径统一同步；用户 handler 异常转换为 InternalError。 | 已完成 |
 | RPC 输入预算与协议校验（RPC-007/008/011/012/013） | 在分配前限制 frame、method/extensions、JSON message 和传输消息；限制解压输出和压缩比；method table 限制数量、ID 范围和稀疏度，并以临时表原子应用更新；`applyRemoteTable()` 只做一次 O(n) full-table 校验；JSON-RPC 返回正确的 ParseError/InvalidRequest，并严格验证 `result`/`error` 互斥性。 | 已完成 |
-| deadline 与全局背压（RPC-015） | 已增加每连接 in-flight 上限和 client pending 上限。尚未实施公共 `RpcCallOptions`、deadline/timeout、全局 active/queued 预算、overload 错误及指标。 | 部分完成 |
-| 测试与工程化 | 相关单元与端到端回归通过，包括 Binary、JSON、Neko RPC、JSON-RPC、Reflection 和 Proto；union 新增默认形态、untagged、歧义拒绝、单层 tag 消费、schema 和 Binary checkpoint 用例；Reader probe 覆盖 tag-aware 优先级、容器元素隔离、optional 透传和 reflection 字段分派。尚未新增 fuzz target、sanitizer/TSan CI 作业或固定 GitHub Actions SHA。 | 部分完成 |
+| deadline 与全局背压（RPC-015） | 新增公共 `RpcCallOptions`（absolute deadline、relative timeout、`stop_token`）；客户端超时/取消会删除 pending 并 best-effort 发送远程取消，late response 不会匹配后续调用。Server 增加跨连接的全局 active/queued 有界预算、每连接 in-flight 与 client pending 预算、FIFO admission 和 `Overloaded`/`DeadlineExceeded` 错误；server/connection timeout 覆盖排队与 handler 总时长；client/server 暴露 active、queued、completed、timed_out、canceled、rejected 指标。新增惰性公共 `RpcRequestContext`、connection-timeout 设置和 execution-policy/current-task builtins，不使用 backend 私有扩展传播客户端 deadline。 | 已完成；逐调用跨端 deadline metadata 作为显式后续协议设计 |
+| 测试与工程化 | Binary 普通单测补齐独立预算、重复唯一值、golden vectors、固定种子随机值、随机错误 tag/截断前缀和异常合法值；RPC 普通单测补齐 deadline、timeout、取消、late response、跨连接背压、精确容量边界、指标、公开上下文、连接 timeout、当前任务查询及 close/partial-frame。聚焦回归分别为 Binary 30/30、RPC 40/40，JSON-RPC 端到端 11/11、协议 16/16、RPC traits 7/7；Debug 与 coverage 配置下的普通测试全集均为 25/25。Linux coverage 生成、ASan/UBSan/TSan 和 fuzz smoke workflow 已恢复，Actions/xmake 已固定版本与 SHA。 | 已完成并通过全量、sanitizer、fuzz 与 coverage 复验 |
 
 ## 8.1 序列化
 
@@ -2271,15 +2312,42 @@ RequestContext
 - [x] [RPC-012：补全 JSON-RPC parse error、空 batch 和非法 item 响应](#rpc-012)
 - [x] [RPC-013：严格验证 JSON-RPC response 的 result/error envelope](#rpc-013)
 - [x] [RPC-014：移除不真实的 `noexcept` 并建立异常边界](#rpc-014)
-- [ ] [RPC-015：增加 deadline、timeout、全局并发限制和背压](#rpc-015)（部分完成：已限制每连接 in-flight 和 client pending；其余见 8.0）
+- [x] [RPC-015：增加 deadline、timeout、全局并发限制和背压](#rpc-015)
 
 ## 8.3 测试与 CI
 
-- [ ] [TEST-001：补齐 Binary serializer 关键回归矩阵](#test-001)（部分完成：已覆盖 null/`"null"`、variant、optional/flat、unknown enum、尾随/非规范编码、浮点大端、未知字段和部分预算；尚缺独立的容器/深度预算及 Binary 重复 key/element 用例）
-- [ ] [TEST-002：增加 RPC 多连接、取消、关闭和 TSan 测试](#test-002)（部分完成：已覆盖同 ID 取消隔离、多 in-flight、帧/解压限制、稀疏 method table 和 handler 异常；尚缺 close/partial-frame 竞态与 TSan）
-- [ ] [TEST-003：为 Binary、RPC frame、method table 和压缩增加 fuzz target](#test-003)
-- [ ] [CI-001：固定 xmake 和 GitHub Actions 版本并最小化权限](#ci-001)
-- [ ] [CI-002：增加 ASan、UBSan、TSan、golden vector 和兼容性作业](#ci-002)
+- [x] [TEST-001：补齐 Binary serializer 关键回归矩阵](#test-001)
+- [x] [TEST-002：增加 RPC 多连接、取消、关闭和 TSan 测试](#test-002)（普通 RPC 40/40 与 TSan RPC 40/40 均已通过）
+- [x] [TEST-003：为 Binary、RPC frame、method table 和压缩增加 fuzz target](#test-003)（JSON 与统一 RPC/wire target 各完成 1000 次有界 smoke）
+- [x] [CI-001：固定 xmake 和 GitHub Actions 版本并最小化权限](#ci-001)
+- [ ] [CI-002：增加 ASan、UBSan、TSan、golden vector 和兼容性作业](#ci-002)（sanitizer、fuzz smoke、coverage 和 Binary golden 已建立且通过本地专项复验；仅旧版本兼容作业尚未新增）
+
+## 8.4 2026-07-15 收尾进度与测试依据
+
+本轮测试从公开 API、wire 数据和用户可观察反馈出发，不断言 dispatcher 的私有容器或调度步骤。普通自动测试使用同一套五点矩阵：
+
+| 输入类别 | Binary serializer | RPC-015 |
+| --- | --- | --- |
+| 左边界 | 空容器允许 `max_container_elements=0`；预算为实际值减一时拒绝 | timeout 为 `0ns`/负值、active/queued/pending/in-flight 为 `0` 时立即拒绝；connection timeout 的 `0` 清除、`1ns` 为最小正值 |
+| 中间随机值 | 固定种子生成普通整数、字符串、容器并 round-trip | 固定种子生成普通调用参数并经 runtime-name API 校验结果；connection timeout 使用正常中间值并实际终止长调用 |
+| 右边界 | 输入、字符串、容器、对象、深度预算恰好等于数据时成功 | 1 active + 1 queued 恰好接纳；connection timeout 接受 server 上限减 `1ns`，等于上限即拒绝 |
+| 随机错误值与反馈 | 随机非法 tag、所有截断前缀明确失败，原目标值保持不变 | 过去 deadline、超时、取消、过载分别返回稳定公开错误；随机越界 timeout 和 `uint64_t` 极值返回 `InvalidParams`，旧设置不被污染 |
+| 非预期但合法值 | 整数极值、±inf、NaN、含 NUL/`0xff` 的字节串 | deadline 与 timeout 同时提供时较早者生效；无 server 上限时 24 小时 connection timeout 合法；迟到响应不污染下一调用 |
+
+截至本次记录：
+
+- `test_binary_serializer`：30/30 通过；
+- `test_neko_rpc_backend`：40/40 通过；
+- `test_jsonrpc`：11/11 通过；`test_jsonrpc_protocol`：16/16 通过；`test_func_traits`：7/7 通过；
+- partial-frame 测试实际发现 body read 的不可取消等待，现已修复为 close 可在有界时间完成；
+- 零 pending 容量测试实际发现刚启动 endpoint 后立即关闭的生命周期竞态，现通过“容量预检”和 server 先取消任务、再关闭 stream 的顺序修复；
+- 当前任务查询测试覆盖：查询在普通全局队列中等待、只返回本连接 queued/running 项、跨连接不可见、调用全部收尾后结果为空；没有历史表和查询旁路；
+- server deadline 测试覆盖“先排队、后执行”的总预算，排队消耗 deadline 后即使 handler 已开始也会按总时长返回 `DeadlineExceeded`；
+- connection timeout 测试覆盖 `0`、`1ns`、中间值、server 上限减 `1ns`、等于/随机超过上限、`uint64_t` 极值、24 小时合法值、只影响未来请求和跨连接隔离；
+- Debug 普通测试全集 25/25 通过；coverage 配置下同一全集 25/25 通过；
+- 最终普通测试 coverage 为 lines 84.0%（6087/7243）、functions 70.8%（27956/39465）；RPC 核心文件分别为 dispatcher 252/265、client 132/144、server 180/190、options 24/25 行；
+- ASan：Binary 30/30、RPC 40/40；UBSan：Binary 30/30、RPC 40/40；TSan：RPC 40/40。由于本地受 ptrace 约束，ASan/libFuzzer 运行使用 `detect_leaks=0`，地址与未定义行为插桩仍启用；
+- libFuzzer：JSON proto 与统一 RPC/wire target 各完成 1000 次有界输入，无 crash 或 sanitizer 报告。
 
 ---
 
@@ -2296,6 +2364,6 @@ RequestContext
 - JSON-RPC 对非法 JSON、空 batch 和混合 batch 返回正确错误；
 - 全部新增路径通过 ASan/UBSan，RPC 并发测试通过 TSan。
 
-**2026-07-14 实施状态：**上述功能目标已实现并通过普通 Debug 回归；ASan/UBSan/TSan 专项作业尚未建立，仍由 TEST-002 和 CI-002 跟踪。
+**2026-07-15 实施状态：**功能目标、普通 Debug/coverage 回归、ASan/UBSan/TSan 与 libFuzzer smoke 均已完成；仅旧版本数据兼容作业继续由 CI-002 跟踪。
 
 完成该里程碑后，再考虑性能微优化、更多 serializer backend 和更复杂的 streaming RPC，会更稳妥。

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -51,6 +52,9 @@ struct JsonRpcBackend {
         std::size_t max_message_bytes = 16U * 1024U * 1024U;
         std::size_t max_pending_calls = 1024U;
         std::size_t max_inflight_requests_per_connection = 1024U;
+        std::size_t max_active_requests_global = 4096U;
+        std::size_t max_queued_requests_global = 4096U;
+        std::optional<std::chrono::nanoseconds> request_timeout;
     };
 
     struct ClientContext {
@@ -462,6 +466,10 @@ private:
         case RpcError::MethodIdRequiredButUnsupported:
         case RpcError::CompressionRequiredButUnsupported:
             return static_cast<std::int64_t>(JsonRpcError::InvalidRequest);
+        case RpcError::Overloaded:
+            return static_cast<std::int64_t>(JsonRpcError::Overloaded);
+        case RpcError::DeadlineExceeded:
+            return static_cast<std::int64_t>(JsonRpcError::DeadlineExceeded);
         case RpcError::MethodNotFound:
             return static_cast<std::int64_t>(JsonRpcError::MethodNotFound);
         case RpcError::InvalidParams:

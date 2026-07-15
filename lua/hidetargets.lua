@@ -3,10 +3,15 @@ if is_plat("linux") then
         set_kind("phony")
 
         on_run(function (target)
+            import("core.project.config")
+
             print("Generating coverage report...")
 
             local projectdir = os.projectdir()
-            local builddir = path.join(projectdir, "build")
+            -- Respect `xmake f --buildir=...` so coverage can be collected in
+            -- a clean directory instead of merging stale objects from other
+            -- compilers, modes, or targets left in the default build tree.
+            local builddir = path.absolute(config.builddir(), projectdir)
             local objdir = path.join(builddir, ".objs")
             local infofile = path.join(builddir, "coverage.info")
             local reportdir = path.join(builddir, "coverage-report")
@@ -27,7 +32,17 @@ if is_plat("linux") then
                 "--no-external",
                 "--exclude", "*.xmake/packages/*",
                 "--exclude", "*modules/Ilias/*",
-                "--ignore-errors", "unused",
+                -- GCC 14 may emit constructor aliases with the same symbol
+                -- but different declaration lines. lcov 2.x classifies that
+                -- function metadata as inconsistent; line coverage remains
+                -- valid and is the report's primary contract.
+                -- Object directories from targets disabled in the current
+                -- configuration can survive `xmake clean -a`. gcov skips
+                -- incompatible compiler-version records and records whose
+                -- source was removed; they must not abort collection for the
+                -- current, valid targets.
+                "--ignore-errors", "unused,inconsistent,version,source",
+                "--filter", "range",
                 -- 你原来的 */tests/test_* 匹配不到 tests/unit/proto/test_proto.cpp
                 "--exclude", path.join(projectdir, "tests/*")
             })
@@ -35,6 +50,10 @@ if is_plat("linux") then
             os.execv("genhtml", {
                 "--output-directory", reportdir,
                 "--title", "Coverage Report",
+                -- GCC 14 constructor aliases and template instantiations can
+                -- share a symbol while carrying different declaration lines.
+                -- This does not invalidate line coverage.
+                "--ignore-errors", "inconsistent,corrupt",
                 infofile
             })
         end)

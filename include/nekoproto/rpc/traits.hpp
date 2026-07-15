@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <functional>
 #include <ilias/task.hpp>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -153,6 +154,17 @@ struct TypeName<std::pair<T, T2>, void> {
         result += TypeName<T>::name();
         result += ", ";
         result += TypeName<T2>::name();
+        result += ">";
+        return result;
+    }
+};
+template <typename Key, typename Value, typename Compare, typename Allocator>
+struct TypeName<std::map<Key, Value, Compare, Allocator>, void> {
+    static std::string name() {
+        std::string result = "map<";
+        result += TypeName<Key>::name();
+        result += ", ";
+        result += TypeName<Value>::name();
         result += ">";
         return result;
     }
