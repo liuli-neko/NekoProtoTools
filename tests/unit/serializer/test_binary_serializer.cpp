@@ -3,7 +3,12 @@
 
 #include <gtest/gtest.h>
 #include <bit>
+#include <cmath>
+#include <limits>
+#include <map>
 #include <optional>
+#include <random>
+#include <set>
 #include <string>
 #include <variant>
 #include <vector>
@@ -146,6 +151,24 @@ struct VersionTwoObject {
     std::optional<int> added;
 
     NEKO_SERIALIZER(second, first, added)
+};
+
+struct MapEntryWireValue {
+    int key = 0;
+    int value = 0;
+
+    NEKO_SERIALIZER(key, value)
+};
+
+struct ArbitraryBinaryValue {
+    std::int64_t minimum = std::numeric_limits<std::int64_t>::min();
+    std::int64_t maximum = std::numeric_limits<std::int64_t>::max();
+    std::uint64_t unsignedMaximum = std::numeric_limits<std::uint64_t>::max();
+    float negativeInfinity = -std::numeric_limits<float>::infinity();
+    double notANumber = std::numeric_limits<double>::quiet_NaN();
+    std::string opaque;
+
+    NEKO_SERIALIZER(minimum, maximum, unsignedMaximum, negativeInfinity, notANumber, opaque)
 };
 
 enum class BinaryEnum : int {
@@ -366,7 +389,7 @@ TEST(BinarySerializer, BinaryTagSelectsFixedLengthCapability) {
 TEST(BinarySerializer, FixedLengthTagPassesThroughOptionalPresentAndNull) {
     constexpr auto Fixed = BinaryTag{.fixed_length = true};
 
-    const auto roundTrip = []<typename Optional>(const Optional& source) {
+    const auto roundTrip = [Fixed]<typename Optional>(const Optional& source) {
         std::vector<char> buffer;
         BinarySerializer::OutputSerializer output(buffer);
         if (!output(make_tags<Fixed>(source))) {
@@ -548,6 +571,29 @@ TEST(BinarySerializer, FloatingPointUsesBigEndianGoldenBytes) {
     }
 }
 
+TEST(BinarySerializer, NullStringAndVariantGoldenVectorsRemainStable) {
+    auto bytesOf = [](const auto& value) {
+        std::vector<char> buffer;
+        BinarySerializer::OutputSerializer output(buffer);
+        EXPECT_TRUE(output(value));
+        return std::vector<std::uint8_t>(buffer.begin(), buffer.end());
+    };
+
+    const std::vector<std::uint8_t> nullGolden{0x4eU, 0x50U, 0x02U, 0x00U};
+    EXPECT_EQ(bytesOf(std::optional<std::string>{}), nullGolden);
+
+    const std::vector<std::uint8_t> stringGolden{
+        0x4eU, 0x50U, 0x02U, 0x07U, 0x04U,
+        static_cast<std::uint8_t>('n'), static_cast<std::uint8_t>('u'),
+        static_cast<std::uint8_t>('l'), static_cast<std::uint8_t>('l')};
+    EXPECT_EQ(bytesOf(std::string{"null"}), stringGolden);
+
+    const std::vector<std::uint8_t> variantGolden{
+        0x4eU, 0x50U, 0x02U, 0x08U, 0x02U, 0x04U, 0x01U, 0x07U, 0x01U,
+        static_cast<std::uint8_t>('A')};
+    EXPECT_EQ(bytesOf(std::variant<int, std::string>{std::in_place_index<1>, "A"}), variantGolden);
+}
+
 TEST(BinarySerializer, StrictModeRejectsTrailingAndNonCanonicalData) {
     std::vector<char> buffer;
     BinarySerializer::OutputSerializer output(buffer);
@@ -585,6 +631,254 @@ TEST(BinarySerializer, ParseLimitsAndNullHandlesFailBeforeAllocation) {
     const auto invalidResult = binary::Reader::toBasicType<int>(invalid);
     EXPECT_FALSE(invalidResult);
     EXPECT_NE(invalidResult.error().msg.find("handle is null"), std::string::npos);
+}
+
+TEST(BinarySerializer, ContainerDepthInputAndAllocationBudgetsAreIndependent) {
+    const std::vector<std::vector<int>> source{{1}, {2}, {3}};
+    std::vector<char> buffer;
+    BinarySerializer::OutputSerializer output(buffer);
+    ASSERT_TRUE(output(source));
+
+    auto expectRejectedWithoutMutation = [&](binary::ParseLimits limits) {
+        std::vector<std::vector<int>> target{{99}};
+        BinarySerializer::InputSerializer input(buffer.data(), buffer.size(), limits);
+        EXPECT_FALSE(input(target));
+        EXPECT_EQ(target, std::vector<std::vector<int>>{{99}});
+    };
+
+    binary::ParseLimits containerLimit;
+    containerLimit.max_container_elements = 2U;
+    expectRejectedWithoutMutation(containerLimit);
+
+    binary::ParseLimits depthLimit;
+    depthLimit.max_depth = 0U;
+    expectRejectedWithoutMutation(depthLimit);
+
+    binary::ParseLimits inputLimit;
+    inputLimit.max_input_bytes = buffer.size() - 1U;
+    expectRejectedWithoutMutation(inputLimit);
+
+    binary::ParseLimits allocationLimit;
+    allocationLimit.max_total_allocated_bytes = 0U;
+    expectRejectedWithoutMutation(allocationLimit);
+}
+
+TEST(BinarySerializer, DuplicateUniqueKeysElementsAndWireFieldsAreRejectedTransactionally) {
+    const std::vector<MapEntryWireValue> duplicateMapEntries{{.key = 7, .value = 1}, {.key = 7, .value = 2}};
+    std::vector<char> mapBuffer;
+    BinarySerializer::OutputSerializer mapOutput(mapBuffer);
+    ASSERT_TRUE(mapOutput(duplicateMapEntries));
+
+    std::map<int, int> mapTarget{{99, 99}};
+    BinarySerializer::InputSerializer mapInput(mapBuffer.data(), mapBuffer.size());
+    EXPECT_FALSE(mapInput(mapTarget));
+    EXPECT_EQ(mapTarget, (std::map<int, int>{{99, 99}}));
+
+    const std::vector<int> duplicateElements{5, 5};
+    std::vector<char> setBuffer;
+    BinarySerializer::OutputSerializer setOutput(setBuffer);
+    ASSERT_TRUE(setOutput(duplicateElements));
+
+    std::set<int> setTarget{99};
+    BinarySerializer::InputSerializer setInput(setBuffer.data(), setBuffer.size());
+    EXPECT_FALSE(setInput(setTarget));
+    EXPECT_EQ(setTarget, (std::set<int>{99}));
+
+    std::vector<char> duplicateFieldBuffer;
+    for (const auto byte : binary::BinaryMagic) {
+        duplicateFieldBuffer.push_back(static_cast<char>(byte));
+    }
+    const std::uint8_t duplicateFieldWire[] = {
+        static_cast<std::uint8_t>(binary::ValueTag::NamedObject), 0x02U,
+        0x01U, static_cast<std::uint8_t>('a'), static_cast<std::uint8_t>(binary::ValueTag::UnsignedInteger), 0x01U,
+        0x01U, static_cast<std::uint8_t>('a'), static_cast<std::uint8_t>(binary::ValueTag::UnsignedInteger), 0x02U,
+    };
+    for (const auto byte : duplicateFieldWire) {
+        duplicateFieldBuffer.push_back(static_cast<char>(byte));
+    }
+
+    std::map<std::string, int> fieldTarget{{"unchanged", 9}};
+    BinarySerializer::InputSerializer fieldInput(duplicateFieldBuffer.data(), duplicateFieldBuffer.size());
+    EXPECT_FALSE(fieldInput(fieldTarget));
+    EXPECT_EQ(fieldTarget, (std::map<std::string, int>{{"unchanged", 9}}));
+}
+
+TEST(BinarySerializer, ParseLimitBoundariesAcceptExactValuesAndRejectOnePastThem) {
+    auto serialize = [](const auto& value) {
+        std::vector<char> buffer;
+        BinarySerializer::OutputSerializer output(buffer);
+        EXPECT_TRUE(output(value));
+        return buffer;
+    };
+
+    const auto emptyBuffer = serialize(std::vector<int>{});
+    binary::ParseLimits zeroContainerLimit;
+    zeroContainerLimit.max_container_elements = 0U;
+    std::vector<int> emptyTarget{99};
+    BinarySerializer::InputSerializer emptyInput(emptyBuffer.data(), emptyBuffer.size(), zeroContainerLimit);
+    ASSERT_TRUE(emptyInput(emptyTarget));
+    EXPECT_TRUE(emptyTarget.empty());
+
+    const std::vector<int> threeValues{1, 2, 3};
+    const auto threeBuffer = serialize(threeValues);
+    binary::ParseLimits exactContainerLimit;
+    exactContainerLimit.max_container_elements = threeValues.size();
+    std::vector<int> exactTarget;
+    BinarySerializer::InputSerializer exactInput(threeBuffer.data(), threeBuffer.size(), exactContainerLimit);
+    ASSERT_TRUE(exactInput(exactTarget));
+    EXPECT_EQ(exactTarget, threeValues);
+
+    binary::ParseLimits onePastContainerLimit;
+    onePastContainerLimit.max_container_elements = threeValues.size() - 1U;
+    std::vector<int> rejectedTarget{99};
+    BinarySerializer::InputSerializer rejectedInput(threeBuffer.data(), threeBuffer.size(), onePastContainerLimit);
+    EXPECT_FALSE(rejectedInput(rejectedTarget));
+    EXPECT_EQ(rejectedTarget, std::vector<int>{99});
+
+    const std::string eightBytes("a\0b\0c\0d\0", 8U);
+    const auto stringBuffer = serialize(eightBytes);
+    binary::ParseLimits exactStringLimit;
+    exactStringLimit.max_string_bytes = eightBytes.size();
+    std::string stringTarget;
+    BinarySerializer::InputSerializer stringInput(stringBuffer.data(), stringBuffer.size(), exactStringLimit);
+    ASSERT_TRUE(stringInput(stringTarget));
+    EXPECT_EQ(stringTarget, eightBytes);
+
+    binary::ParseLimits shortStringLimit;
+    shortStringLimit.max_string_bytes = eightBytes.size() - 1U;
+    std::string unchanged = "unchanged";
+    BinarySerializer::InputSerializer shortStringInput(stringBuffer.data(), stringBuffer.size(), shortStringLimit);
+    EXPECT_FALSE(shortStringInput(unchanged));
+    EXPECT_EQ(unchanged, "unchanged");
+
+    const VersionOneObject object{.first = 1, .second = 2, .extra = "three"};
+    const auto objectBuffer = serialize(object);
+    binary::ParseLimits exactObjectLimit;
+    exactObjectLimit.max_object_fields = 3U;
+    VersionOneObject objectTarget;
+    BinarySerializer::InputSerializer objectInput(objectBuffer.data(), objectBuffer.size(), exactObjectLimit);
+    ASSERT_TRUE(objectInput(objectTarget));
+    EXPECT_EQ(objectTarget.first, 1);
+    EXPECT_EQ(objectTarget.second, 2);
+    EXPECT_EQ(objectTarget.extra, "three");
+
+    binary::ParseLimits shortObjectLimit;
+    shortObjectLimit.max_object_fields = 2U;
+    objectTarget = {.first = 99, .second = 99, .extra = "unchanged"};
+    BinarySerializer::InputSerializer shortObjectInput(objectBuffer.data(), objectBuffer.size(), shortObjectLimit);
+    EXPECT_FALSE(shortObjectInput(objectTarget));
+    EXPECT_EQ(objectTarget.first, 99);
+    EXPECT_EQ(objectTarget.second, 99);
+    EXPECT_EQ(objectTarget.extra, "unchanged");
+
+    const std::vector<std::vector<int>> nested{{1}};
+    const auto nestedBuffer = serialize(nested);
+    binary::ParseLimits exactDepth;
+    exactDepth.max_depth = 2U;
+    std::vector<std::vector<int>> nestedTarget;
+    BinarySerializer::InputSerializer exactDepthInput(nestedBuffer.data(), nestedBuffer.size(), exactDepth);
+    ASSERT_TRUE(exactDepthInput(nestedTarget));
+    EXPECT_EQ(nestedTarget, nested);
+
+    binary::ParseLimits shallowDepth;
+    shallowDepth.max_depth = 1U;
+    nestedTarget = {{99}};
+    BinarySerializer::InputSerializer shallowInput(nestedBuffer.data(), nestedBuffer.size(), shallowDepth);
+    EXPECT_FALSE(shallowInput(nestedTarget));
+    EXPECT_EQ(nestedTarget, std::vector<std::vector<int>>{{99}});
+
+    binary::ParseLimits exactInputSize;
+    exactInputSize.max_input_bytes = nestedBuffer.size();
+    nestedTarget.clear();
+    BinarySerializer::InputSerializer exactSizeInput(nestedBuffer.data(), nestedBuffer.size(), exactInputSize);
+    EXPECT_TRUE(exactSizeInput(nestedTarget));
+    exactInputSize.max_input_bytes = nestedBuffer.size() - 1U;
+    nestedTarget = {{99}};
+    BinarySerializer::InputSerializer shortSizeInput(nestedBuffer.data(), nestedBuffer.size(), exactInputSize);
+    EXPECT_FALSE(shortSizeInput(nestedTarget));
+    EXPECT_EQ(nestedTarget, std::vector<std::vector<int>>{{99}});
+}
+
+TEST(BinarySerializer, FixedSeedRandomMiddleValuesRoundTrip) {
+    std::mt19937_64 generator(0x4E505632ULL);
+    std::uniform_int_distribution<std::int64_t> integers(-1'000'000'000LL, 1'000'000'000LL);
+    std::uniform_int_distribution<unsigned> lengths(0U, 64U);
+    std::uniform_int_distribution<unsigned> bytes(0U, 255U);
+
+    for (unsigned sample = 0; sample < 64U; ++sample) {
+        std::vector<std::int64_t> source(lengths(generator));
+        for (auto& value : source) {
+            value = integers(generator);
+        }
+        std::string opaque(lengths(generator), '\0');
+        for (auto& value : opaque) {
+            value = static_cast<char>(bytes(generator));
+        }
+        auto aggregate = std::make_pair(source, opaque);
+
+        std::vector<char> buffer;
+        BinarySerializer::OutputSerializer output(buffer);
+        ASSERT_TRUE(output(aggregate)) << "sample=" << sample;
+        decltype(aggregate) decoded;
+        BinarySerializer::InputSerializer input(buffer.data(), buffer.size());
+        ASSERT_TRUE(input(decoded)) << "sample=" << sample
+                                    << " error=" << (input.error() == nullptr ? "" : input.error()->msg);
+        EXPECT_EQ(decoded, aggregate) << "sample=" << sample;
+    }
+}
+
+TEST(BinarySerializer, RandomInvalidAndTruncatedWireAlwaysReportsAndPreservesTarget) {
+    std::mt19937 generator(0xBAD4E50U);
+    std::uniform_int_distribution<unsigned> invalidTags(
+        static_cast<unsigned>(binary::ValueTag::FixedUnsigned64) + 1U, 0xffU);
+    for (unsigned sample = 0; sample < 64U; ++sample) {
+        std::vector<char> buffer;
+        for (const auto byte : binary::BinaryMagic) {
+            buffer.push_back(static_cast<char>(byte));
+        }
+        buffer.push_back(static_cast<char>(invalidTags(generator)));
+        int target = 99;
+        BinarySerializer::InputSerializer input(buffer.data(), buffer.size());
+        EXPECT_FALSE(input(target)) << "sample=" << sample;
+        EXPECT_EQ(target, 99) << "sample=" << sample;
+        ASSERT_NE(input.error(), nullptr) << "sample=" << sample;
+        EXPECT_EQ(input.error()->ec, sa::make_error_code(sa::ErrorCode::InvalidType)) << "sample=" << sample;
+    }
+
+    std::vector<char> valid;
+    BinarySerializer::OutputSerializer output(valid);
+    ASSERT_TRUE(output(std::vector<std::string>{"alpha", "beta", "gamma"}));
+    for (std::size_t length = 0; length < valid.size(); ++length) {
+        std::vector<std::string> target{"unchanged"};
+        BinarySerializer::InputSerializer input(valid.data(), length);
+        EXPECT_FALSE(input(target)) << "truncated_length=" << length;
+        EXPECT_EQ(target, std::vector<std::string>{"unchanged"}) << "truncated_length=" << length;
+        EXPECT_NE(input.error(), nullptr) << "truncated_length=" << length;
+    }
+}
+
+TEST(BinarySerializer, LegitimateUnusualScalarAndOpaqueValuesRoundTrip) {
+    ArbitraryBinaryValue source;
+    source.opaque = std::string{"\0\x01\x7f\x80\xff", 5U};
+    std::vector<char> buffer;
+    BinarySerializer::OutputSerializer output(buffer);
+    ASSERT_TRUE(output(source));
+
+    ArbitraryBinaryValue decoded;
+    decoded.minimum = 0;
+    decoded.maximum = 0;
+    decoded.unsignedMaximum = 0;
+    decoded.negativeInfinity = 0;
+    decoded.notANumber = 0;
+    BinarySerializer::InputSerializer input(buffer.data(), buffer.size());
+    ASSERT_TRUE(input(decoded)) << (input.error() == nullptr ? "" : input.error()->msg);
+    EXPECT_EQ(decoded.minimum, std::numeric_limits<std::int64_t>::min());
+    EXPECT_EQ(decoded.maximum, std::numeric_limits<std::int64_t>::max());
+    EXPECT_EQ(decoded.unsignedMaximum, std::numeric_limits<std::uint64_t>::max());
+    EXPECT_TRUE(std::isinf(decoded.negativeInfinity));
+    EXPECT_LT(decoded.negativeInfinity, 0.0F);
+    EXPECT_TRUE(std::isnan(decoded.notANumber));
+    EXPECT_EQ(decoded.opaque, source.opaque);
 }
 
 #include "../common/common_main.cpp.in" // IWYU pragma: export

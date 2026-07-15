@@ -1,5 +1,5 @@
 set_project("neko-proto-tools")
-add_rules("mode.debug", "mode.release", "mode.releasedbg", "mode.coverage", "mode.asan")
+add_rules("mode.debug", "mode.release", "mode.releasedbg", "mode.coverage", "mode.asan", "mode.ubsan", "mode.tsan")
 set_version("0.3.2", {build = "%Y%m%d%H%M"})
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 set_warnings("allextra")
@@ -109,6 +109,39 @@ option("enable_tests")
     set_description("Enable test")
     set_category("enable test")
 option_end()
+
+-- Test sub-options must be declared at project scope. Declaring them only in
+-- tests/xmake.lua makes them unavailable while `xmake f` is deciding whether
+-- that file should be included, so a clean checkout cannot enable them.
+option("fuzzer_test")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable libFuzzer targets (requires Clang/libFuzzer)")
+    set_category("enable test")
+option_end()
+
+option("ui_test")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable UI tests (requires Qt)")
+    set_category("enable test")
+option_end()
+
+option("cereal_test")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable cereal comparison tests")
+    set_category("enable test")
+option_end()
+
+if is_plat("linux") then
+    option("memcheck")
+        set_default(false)
+        set_showmenu(true)
+        set_description("Run unit targets through Valgrind")
+        set_category("enable test")
+    option_end()
+end
 
 option("enable_stdformat")
     set_showmenu(true)
@@ -226,7 +259,7 @@ if has_config("enable_tests") then
     includes("tests")
 end
 
-if is_mode("debug") or is_mode("asan") then
+if is_mode("debug") or is_mode("asan") or is_mode("ubsan") or is_mode("tsan") then
     add_defines("NEKO_PROTO_LOG_CONTEXT")
     if is_plat("linux") then
         add_cxxflags("-ftemplate-backtrace-limit=0")

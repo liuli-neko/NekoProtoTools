@@ -4,6 +4,8 @@ on:
     branches: [ "master", "main", "dev"]
   pull_request:
     branches: [ "master", "main", "dev"]
+permissions:
+  contents: read
 jobs:
   build:
     name: Build standard (C++${{ matrix.stdcxx }})
@@ -13,16 +15,15 @@ jobs:
       matrix:
         stdcxx: [20, 23]
     steps:
-    - uses: actions/checkout@v2
-    - name: setup xmake
-      uses: xmake-io/github-action-setup-xmake@v1
-      with:
-      # The version to use. Should be a semver range or 'latest'. Or use branch@{branch_name} to select a branch.
-        xmake-version: latest
-    - name: Configure
-      run: xmake f -m debug -k shared --stdcxx=${{ matrix.stdcxx }} --enable_simdjson=y --enable_protocol=y --enable_rapidjson=y --enable_fmt=y --enable_communication=y --enable_jsonrpc=y --enable_pugixml=y --enable_yamlcpp=y --enable_tomlplusplus=y --enable_tests=y -vy
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Update submodules
       run: git submodule update --init --recursive
+    - name: setup xmake
+      uses: xmake-io/github-action-setup-xmake@3a1a5dddfc7fa625d9a698738334bf55655a861a # v1.2.5
+      with:
+        xmake-version: 3.0.9
+    - name: Configure
+      run: xmake f -m debug -k shared --stdcxx=${{ matrix.stdcxx }} --enable_simdjson=y --enable_protocol=y --enable_rapidjson=y --enable_fmt=y --enable_communication=y --enable_jsonrpc=y --enable_pugixml=y --enable_yamlcpp=y --enable_tomlplusplus=y --enable_tests=y -vy
     - name: Build
       run: xmake -y
     - name: Run Test

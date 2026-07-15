@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <chrono>
 #include <limits>
 #include <map>
 #include <memory>
@@ -75,6 +76,9 @@ struct NekoRpcBackend {
         std::size_t max_method_entries = 64U * 1024U;
         std::size_t max_pending_calls = 1024U;
         std::size_t max_inflight_requests_per_connection = 1024U;
+        std::size_t max_active_requests_global = 4096U;
+        std::size_t max_queued_requests_global = 4096U;
+        std::optional<std::chrono::nanoseconds> request_timeout;
         std::shared_ptr<CompressionStats> compression_stats;
     };
 

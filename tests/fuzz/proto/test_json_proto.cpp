@@ -1,7 +1,6 @@
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/proto/proto_base.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
-#include <gtest/gtest.h>
 #include <string>
 
 NEKO_USE_NAMESPACE
