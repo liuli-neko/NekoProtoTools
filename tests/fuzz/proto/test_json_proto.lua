@@ -1,8 +1,7 @@
-if has_config("fuzzer_test") and has_config("enable_rapidjson") then
+if has_config("fuzzer_test") and has_config("has_fuzzer_toolchain") and has_config("enable_rapidjson") then
     target("test_json_proto")
         set_kind("binary")
         set_default(false)
-        set_toolchains("clang")
         set_languages(stdcxx())
         add_defines("NEKO_PROTO_STATIC")
         add_deps("NekoProtoBase", "NekoSerializer")

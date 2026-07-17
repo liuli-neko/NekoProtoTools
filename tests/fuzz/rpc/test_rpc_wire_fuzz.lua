@@ -1,8 +1,8 @@
-if has_config("fuzzer_test") then
+if has_config("fuzzer_test") and has_config("has_fuzzer_toolchain") and has_config("enable_jsonrpc") and
+   (has_config("enable_rapidjson") or has_config("enable_simdjson")) then
     target("test_rpc_wire_fuzz")
         set_kind("binary")
         set_default(false)
-        set_toolchains("clang")
         set_languages(stdcxx())
         add_defines("NEKO_PROTO_STATIC")
         add_deps("NekoJsonRpc", "NekoSerializer")

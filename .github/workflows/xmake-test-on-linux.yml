@@ -112,7 +112,7 @@ jobs:
           "clang++-${MIN_CLANG_VERSION}" --version
         fi
     - name: Configure
-      run: xmake f -m ${{ matrix.mode }} -k static --stdcxx=23 --cc=${CC} --cxx=${CXX} --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --ccache=n -vy
+      run: xmake f -m ${{ matrix.mode }} -k static --stdcxx=23 --cc=${CC} --cxx=${CXX} --ld=${CXX} --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --ccache=n -vy
     - name: Build serializer regression
       if: ${{ matrix.mode != 'tsan' }}
       run: xmake build test_binary_serializer
@@ -151,7 +151,7 @@ jobs:
           "clang++-${MIN_CLANG_VERSION}" --version
         fi
     - name: Configure
-      run: xmake f -m debug -k static --stdcxx=23 --cc=${CC} --cxx=${CXX} --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --fuzzer_test=y --ccache=n -vy
+      run: xmake f -m debug -k static --stdcxx=23 --cc=${CC} --cxx=${CXX} --ld=${CXX} --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --fuzzer_test=y --ccache=n -vy
     - name: Build fuzz targets
       run: |
         xmake build test_json_proto

@@ -1,4 +1,4 @@
-if has_config("ui_test") and has_config("enable_communication") then 
+if has_config("ui_test") and has_config("enable_communication") and json_serializer_enabled() then
     target("test_communication_ui")
         add_rules("qt.widgetapp")
         set_default(false)
