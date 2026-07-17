@@ -10,6 +10,9 @@ option("stdc",   {showmenu = true, default = 23, values = {23}})
 option("stdcxx", {showmenu = true, default = 23, values = {26, 23, 20}})
 function stdc()   return "c"   .. tostring(get_config("stdc"))   end
 function stdcxx() return "c++" .. tostring(get_config("stdcxx")) end
+function json_serializer_enabled()
+    return has_config("enable_rapidjson") or has_config("enable_simdjson")
+end
 
 set_languages(stdc(), stdcxx())
 
@@ -120,6 +123,16 @@ option("fuzzer_test")
     set_category("enable test")
 option_end()
 
+option("has_fuzzer_toolchain")
+    set_showmenu(false)
+    set_languages(stdcxx())
+    add_cxxsnippets("has_fuzzer_toolchain", [[
+        #if !defined(__clang__) || defined(_MSC_VER)
+        #   error libFuzzer targets require a Clang-compatible toolchain
+        #endif
+    ]])
+option_end()
+
 option("ui_test")
     set_default(false)
     set_showmenu(true)
@@ -184,6 +197,12 @@ option("enable_jsonrpc")
     set_showmenu(true)
     set_description("Enable jsonrpc support, need ilias module")
     set_category("modules")
+    after_check(function (option)
+        if option:enabled() and not (has_config("enable_rapidjson") or has_config("enable_simdjson")) then
+            cprint("${yellow}warning: enable_jsonrpc requires a JSON serializer; disabling it because neither rapidjson nor simdjson is enabled")
+            option:enable(false, {force = true})
+        end
+    end)
 option_end()
 
 option("custom_namespace")
@@ -246,7 +265,8 @@ if not has_config("has_std_expected") then
     end
 end
 
-if has_config("enable_communication") or has_config("enable_jsonrpc") then
+if has_config("enable_communication") or
+   (has_config("enable_jsonrpc") and json_serializer_enabled()) then
     add_requires("ilias")
     if not has_config("3rd_custom") then
         -- configurations of required libraries
@@ -328,7 +348,7 @@ target("NekoArgParser")
     end)
 target_end()
 
-if has_config("enable_jsonrpc") then
+if has_config("enable_jsonrpc") and json_serializer_enabled() then
     target("NekoJsonRpc")
         -- TODO: 考虑改为 shared 或 static 以进一步减少编译时间
         -- 当前保持 headeronly + 部分实现分离到 cpp 的方式

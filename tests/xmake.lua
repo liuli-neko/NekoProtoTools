@@ -1,6 +1,6 @@
 if has_config("enable_tests") then
 
-if has_config("ui_test") then 
+if has_config("ui_test") and has_config("enable_communication") and json_serializer_enabled() then
     add_requires("qtbase")
 end
 
@@ -36,20 +36,19 @@ local function default_test_config(file)
         config.deps = {"NekoSerializer"}
         config.run_timeout = 5000
     elseif group == "jsonrpc" then
-        config.enabled = has_config("enable_jsonrpc")
+        config.enabled = has_config("enable_jsonrpc") and json_serializer_enabled()
         config.deps = {"NekoJsonRpc", "NekoSerializer"}
         config.run_timeout = 5000
         -- table.insert(config.defines, "NEKO_VERBOSE_LOGS")
     elseif group == "rpc" then
-        config.enabled = has_config("enable_jsonrpc")
+        config.enabled = has_config("enable_jsonrpc") and json_serializer_enabled()
         config.deps = {"NekoJsonRpc", "NekoSerializer"}
     elseif group == "communication" then
-        config.enabled = has_config("enable_communication")
+        config.enabled = has_config("enable_communication") and json_serializer_enabled()
         config.deps = {"NekoCommunication"}
         config.run_timeout = 5000
     elseif group == "proto" then
-        config.enabled = has_config("enable_protocol") and
-                         (has_config("enable_rapidjson") or has_config("enable_simdjson"))
+        config.enabled = has_config("enable_protocol") and json_serializer_enabled()
         config.deps = {"NekoProtoBase", "NekoSerializer"}
     elseif group == "common" then
         config.deps = {"NekoSerializer"}
@@ -109,6 +108,13 @@ local function define_test_target(file, config)
     target_end()
 end
 
+function neko_define_test(file, enabled)
+    local config = default_test_config(file)
+    if enabled and config.enabled then
+        define_test_target(file, config)
+    end
+end
+
 -- Make all files in the directory into targets
 for _, file in ipairs(os.files("./**/test_*.cpp")) do
     local dir = path.directory(file)
@@ -121,10 +127,7 @@ for _, file in ipairs(os.files("./**/test_*.cpp")) do
         goto continue
     end
 
-    local config = default_test_config(file)
-    if config.enabled then
-        define_test_target(file, config)
-    end
+    neko_define_test(file, true)
 
     ::continue::
 end

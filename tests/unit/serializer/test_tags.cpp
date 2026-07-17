@@ -157,20 +157,37 @@ struct ReaderProbeNode {
     Kind kind = Kind::Null;
     int integer = 0;
     std::vector<ReaderProbeNode> elements;
-    std::vector<std::pair<std::string, ReaderProbeNode>> fields;
+    std::vector<std::string> fieldNames;
+    std::vector<ReaderProbeNode> fieldValues;
 
     static ReaderProbeNode integerValue(int value) {
-        return {.kind = Kind::Integer, .integer = value, .elements = {}, .fields = {}};
+        ReaderProbeNode node;
+        node.kind    = Kind::Integer;
+        node.integer = value;
+        return node;
     }
 
     static ReaderProbeNode array(std::initializer_list<ReaderProbeNode> values) {
-        return {.kind = Kind::Array, .integer = 0, .elements = values, .fields = {}};
+        ReaderProbeNode node;
+        node.kind     = Kind::Array;
+        node.elements = values;
+        return node;
     }
 
-    static ReaderProbeNode object(std::initializer_list<std::pair<std::string, ReaderProbeNode>> values) {
-        return {.kind = Kind::Object, .integer = 0, .elements = {}, .fields = values};
-    }
+    static ReaderProbeNode object(std::initializer_list<std::pair<std::string, ReaderProbeNode>> values);
 };
+
+ReaderProbeNode ReaderProbeNode::object(std::initializer_list<std::pair<std::string, ReaderProbeNode>> values) {
+    ReaderProbeNode node;
+    node.kind = Kind::Object;
+    node.fieldNames.reserve(values.size());
+    node.fieldValues.reserve(values.size());
+    for (const auto& [name, value] : values) {
+        node.fieldNames.push_back(name);
+        node.fieldValues.push_back(value);
+    }
+    return node;
+}
 
 struct TagAwareProbeReader {
     using InputValueType = const ReaderProbeNode*;
@@ -305,9 +322,9 @@ private:
     }
 
     static sa::Result<InputValueType> objectFieldImpl(const InputObjectType& object, std::string_view name) {
-        for (const auto& [fieldName, value] : object->fields) {
-            if (fieldName == name) {
-                return &value;
+        for (std::size_t i = 0; i < object->fieldNames.size(); ++i) {
+            if (object->fieldNames[i] == name) {
+                return &object->fieldValues[i];
             }
         }
         return sa::Err(sa::ErrorCode::InvalidField, "probe field is missing");
@@ -323,6 +340,7 @@ private:
     }
 };
 
+#if !defined(NEKO_PROTO_NO_JSON_SERIALIZER)
 template <typename T>
 std::string writeJson(const T& value) {
     std::vector<char> buffer;
@@ -338,6 +356,7 @@ bool readJson(std::string_view json, T& value) {
     const bool parsed = in(value);
     return parsed && static_cast<bool>(in);
 }
+#endif
 
 template <typename T>
 parsing::schema::Type::Object objectSchema() {
@@ -441,6 +460,7 @@ TEST(SerializationTags, SerializerMacroStripsMakeTagsWhenBuildingReflectionNames
     static_assert(innerNames[1] == "label");
 }
 
+#if !defined(NEKO_PROTO_NO_JSON_SERIALIZER)
 TEST(SerializationTagIntegration, JsonParserAppliesRawRenameSkippableAndFlatTags) {
     const MacroParsedTaggedObject source{
         .raw      = R"({"enabled":true})",
@@ -488,6 +508,7 @@ TEST(SerializationTagIntegration, TypeLevelFlatTagFlattensJsonObjectsAndSchema) 
     EXPECT_TRUE(contains(object.required, "wire_code"));
     EXPECT_TRUE(contains(object.required, "label"));
 }
+#endif
 
 TEST(SerializationTagIntegration, SchemaUsesFlatSkippableOptionalAndFixedLengthTags) {
     const auto object = objectSchema<SchemaTaggedObject>();
@@ -515,6 +536,7 @@ TEST(SerializationTagIntegration, SchemaUsesFlatSkippableOptionalAndFixedLengthT
     EXPECT_EQ(fixed.fixed_length.value(), sizeof(std::uint32_t));
 }
 
+#if !defined(NEKO_PROTO_NO_JSON_SERIALIZER)
 TEST(SerializationTagIntegration, SerializationIgnoreTagOmitsNamedFieldFromJsonReadAndSchema) {
     const SerializationIgnoredObject source{
         .id        = 1,
@@ -562,6 +584,7 @@ TEST(SerializationTagIntegration, SerializationIgnoreTagRemovesPositionalFieldFr
     EXPECT_EQ(array.maxItems.value(), 2U);
     EXPECT_EQ(array.prefixItems.size(), 2U);
 }
+#endif
 
 TEST(SerializationTagIntegration, TypeLevelUnframedTagRoundTripsBinaryLayout) {
     const TypeLevelUnframedEnvelope source{

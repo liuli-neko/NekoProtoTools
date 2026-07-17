@@ -25,6 +25,7 @@ TEST(TraitsTest, test) {
     EXPECT_TRUE(detail::can_unwrap_v<TestStruct>);
 }
 
+#if !defined(NEKO_PROTO_NO_JSON_SERIALIZER)
 TEST(TraitsTest, simdjson) {
     TestStruct ts;
     ts.a = 1;
@@ -54,5 +55,6 @@ TEST(TraitsTest, simdjson) {
     EXPECT_EQ(ts.c.has_value(), ts2.c.has_value());
     EXPECT_EQ(ts.d.value(), ts2.d.value());
 }
+#endif
 
 #include "../common/common_main.cpp.in" // IWYU pragma: export
