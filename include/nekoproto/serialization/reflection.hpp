@@ -183,6 +183,16 @@ using tuple_unwrap_t = typename tuple_unwrap<Tuple, Context>::type;
 
 template <typename Tuple, typename Context>
 static constexpr auto tuple_tags_unwrap_v = tuple_tags_unwrap<Tuple, Context>::value; // NOLINT
+
+template <typename F, typename... Ts>
+static constexpr decltype(auto) remove_void_to_monostate(F&& func, Ts&&... ts) {
+    if constexpr (std::is_void_v<decltype(func(std::forward<Ts>(ts)...))>) {
+        func(std::forward<Ts>(ts)...);
+        return std::monostate{};
+    } else {
+        return func(std::forward<Ts>(ts)...);
+    }
+}
 } // namespace detail
 
 template <typename T, std::size_t N, typename TagsT = detail::no_tags_tuple_t<N>>
@@ -886,35 +896,35 @@ public:
     // Public reflection algorithm. It consumes only the provider/model surface:
     // no direct T::Neko or Meta<T> probing belongs below this line.
     template <typename U, typename CallAbleT>
-    static constexpr void forEach(U&& obj, CallAbleT&& func) {
+    static constexpr auto forEach(U&& obj, CallAbleT&& func) {
         if constexpr (!Provider::has_values) {
             static_assert(Provider::has_values, "type has no values meta");
         }
-        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
             auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
                 auto&& val  = Provider::template get<I>(obj);
                 auto&& tags = std::get<I>(field_tags);
                 // 编译期根据回调函数的签名选择调用方式
                 if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view, decltype(tags)>) {
                     static_assert(Provider::has_names, "type has no names meta or names size mismatch");
-                    func(val, Provider::template name<I>(), tags);
+                    return detail::remove_void_to_monostate(func, val, Provider::template name<I>(), tags);
                 } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), decltype(tags)>) {
                     // func(val, tags)
-                    func(val, tags);
+                    return detail::remove_void_to_monostate(func, val, tags);
                 } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view>) {
                     // func(val, name)
                     static_assert(Provider::has_names, "type has no names meta or names size mismatch");
-                    func(val, Provider::template name<I>());
+                    return detail::remove_void_to_monostate(func, val, Provider::template name<I>());
                 } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val)>) {
                     // func(val)
-                    func(val);
+                    return detail::remove_void_to_monostate(func, val);
                 } else {
                     static_assert(!Provider::has_values, "Callback function signature not supported. "
                                                          "Supported: (val, name, tags), (val, tags), (val, "
                                                          "name), (val)");
                 }
             };
-            ((invoke(std::integral_constant<std::size_t, Is>{})), ...);
+            return std::tuple{invoke(std::integral_constant<std::size_t, Is>{})...};
         }(std::make_index_sequence<Provider::value_count>{});
     }
 
@@ -997,13 +1007,13 @@ public:
     static constexpr int value_count = Model::value_count; // NOLINT
 
     template <typename CallAbleT>
-    static constexpr void forEachMeta(CallAbleT&& func) {
+    static constexpr auto forEachMeta(CallAbleT&& func) {
         if constexpr (!Provider::has_values) {
             static_assert(Provider::has_values, "type has no values meta");
         }
         constexpr auto fieldNames = names();
         using names_type          = std::decay_t<decltype(fieldNames)>;
-        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
             auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
                 using Field    = std::tuple_element_t<I, value_types>;
                 using FieldTag = std::type_identity<Field>;
@@ -1011,22 +1021,22 @@ public:
                 if constexpr (std::is_invocable_v<CallAbleT&, FieldTag, std::string_view, decltype(tags)>) {
                     static_assert(detail::is_std_array<names_type>::size == value_count,
                                   "type has no names meta or names size mismatch");
-                    func(FieldTag{}, fieldNames[I], tags);
+                    return detail::remove_void_to_monostate(func, FieldTag{}, fieldNames[I], tags);
                 } else if constexpr (std::is_invocable_v<CallAbleT&, std::string_view, decltype(tags)>) {
                     static_assert(detail::is_std_array<names_type>::size == value_count,
                                   "type has no names meta or names size mismatch");
-                    func(fieldNames[I], tags);
+                    return detail::remove_void_to_monostate(func, fieldNames[I], tags);
                 } else if constexpr (std::is_invocable_v<CallAbleT&, FieldTag, decltype(tags)>) {
-                    func(FieldTag{}, tags);
+                    return detail::remove_void_to_monostate(func, FieldTag{}, tags);
                 } else if constexpr (std::is_invocable_v<CallAbleT&, decltype(tags)>) {
-                    func(tags);
+                    return detail::remove_void_to_monostate(func, tags);
                 } else {
                     static_assert(!Provider::has_values,
                                   "Callback function signature not supported. Supported: (type, name, tags), "
                                   "(name, tags), (type, tags), (tags)");
                 }
             };
-            ((invoke(std::integral_constant<std::size_t, Is>{})), ...);
+            return std::tuple{invoke(std::integral_constant<std::size_t, Is>{})...};
         }(std::make_index_sequence<value_count>{});
     }
 };
@@ -1142,34 +1152,35 @@ public:
     }
 
     template <typename CallAbleT>
-    static constexpr void forEachMeta(CallAbleT&& func) {
+    static constexpr auto forEachMeta(CallAbleT&& func) {
         constexpr auto enumNames  = names();
         constexpr auto enumValues = values();
-        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
             auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
                 constexpr auto value = enumValues[I];
                 auto&& tags          = std::get<I>(field_tags);
                 if constexpr (std::is_invocable_v<CallAbleT&, std::integral_constant<T, value>, std::string_view,
                                                   decltype(tags)>) {
-                    func(std::integral_constant<T, value>{}, enumNames[I], tags);
+                    return detail::remove_void_to_monostate(func, std::integral_constant<T, value>{}, enumNames[I],
+                                                            tags);
                 } else if constexpr (std::is_invocable_v<CallAbleT&, T, std::string_view, decltype(tags)>) {
-                    func(value, enumNames[I], tags);
+                    return detail::remove_void_to_monostate(func, value, enumNames[I], tags);
                 } else if constexpr (std::is_invocable_v<CallAbleT&, std::string_view, decltype(tags)>) {
-                    func(enumNames[I], tags);
+                    return detail::remove_void_to_monostate(func, enumNames[I], tags);
                 } else if constexpr (std::is_invocable_v<CallAbleT&, std::integral_constant<T, value>,
                                                          decltype(tags)>) {
-                    func(std::integral_constant<T, value>{}, tags);
+                    return detail::remove_void_to_monostate(func, std::integral_constant<T, value>{}, tags);
                 } else if constexpr (std::is_invocable_v<CallAbleT&, T, decltype(tags)>) {
-                    func(value, tags);
+                    return detail::remove_void_to_monostate(func, value, tags);
                 } else if constexpr (std::is_invocable_v<CallAbleT&, decltype(tags)>) {
-                    func(tags);
+                    return detail::remove_void_to_monostate(func, tags);
                 } else {
                     static_assert(!std::is_enum_v<T>,
                                   "Callback function signature not supported. Supported: (value, name, tags), "
                                   "(name, tags), (value, tags), (tags)");
                 }
             };
-            ((invoke(std::integral_constant<std::size_t, Is>{})), ...);
+            return std::tuple{invoke(std::integral_constant<std::size_t, Is>{})...};
         }(std::make_index_sequence<size()>{});
     }
 };

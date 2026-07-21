@@ -219,7 +219,7 @@ TEST(ArgParser, HelpSeparatesPositionalsAndAddsThemToUsage) {
     config.programName = "demo";
 
     const auto help = format_help<UsagePositionalOptions>(config);
-
+    NEKO_LOG_INFO("tests", "{}", help);
     EXPECT_NE(help.find("Usage: demo [options] <INPUT> [<OUTPUT>] [<EXTRA>...]"), std::string::npos);
     const auto options = help.find("Options:\n");
     const auto arguments = help.find("Arguments:\n");

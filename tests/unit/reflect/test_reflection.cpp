@@ -172,20 +172,29 @@ consteval bool test_named_for_each_meta() {
     bool hasCustomTag = false;
     bool hasJsonTag   = false;
     bool hasBinaryTag = false;
-    Reflect<Test2>::forEachMeta(
+    auto tuple        = Reflect<Test2>::forEachMeta(
         [&]<typename Field>(std::type_identity<Field>, std::string_view name, const auto& tags) {
             names[count++] = name;
             if constexpr (std::is_same_v<std::decay_t<decltype(tags)>,
                                          TagList<CustomTags{.tag1 = false, .tag2 = true, .tag3 = false}>>) {
                 hasCustomTag = true;
+                return "1";
             } else if constexpr (tag_query::has<tag_property::flat<int>>(decltype(tags){}) ||
                                  tag_query::has<tag_property::skippable>(decltype(tags){}) ||
                                  tag_query::has<tag_property::raw_string>(decltype(tags){})) {
                 hasJsonTag = true;
+                return 2;
             } else if constexpr (tag_query::has<tag_property::fixed_length<void>>(decltype(tags){})) {
                 hasBinaryTag = true;
+                return name;
             }
         });
+
+    static_assert(std::is_same_v<std::tuple_element_t<0, decltype(tuple)>, const char*>, "return type is wrong");
+    static_assert(std::is_same_v<std::tuple_element_t<1, decltype(tuple)>, int>, "return type is wrong");
+    static_assert(std::is_same_v<std::tuple_element_t<2, decltype(tuple)>, std::string_view>, "return type is wrong");
+    static_assert(std::is_same_v<std::tuple_element_t<3, decltype(tuple)>, std::monostate>, "return type is wrong");
+
     return count == Reflect<Test2>::value_count && names[0] == "member1" && names[1] == "member2" &&
            names[2] == "member3" && names[3] == "member4" && hasCustomTag && hasJsonTag && hasBinaryTag;
 }
