@@ -291,6 +291,56 @@ struct ToolCommandsWithIgnoredField {
                              ArgTags{.command = true}>(&ToolCommandsWithIgnoredField::clean));
     };
 };
+
+struct CompletionBuildCommand {
+    std::string source;
+    std::string output;
+    std::string mode = "debug";
+    BuildMode profile = BuildMode::Debug;
+    bool internal    = false;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("source",
+                   make_tags<arg_complete_file,
+                             arg_help<"source file">,
+                             ArgTags{.positional = true}>(&CompletionBuildCommand::source),
+
+                   "output",
+                   make_tags<arg_complete_directory,
+                             arg_value_name<"DEST">,
+                             arg_short_name<'o'>,
+                             arg_help<"output directory">>(&CompletionBuildCommand::output),
+
+                   "mode",
+                   make_tags<arg_choices<"debug", "release">,
+                             arg_short_name<'m'>,
+                             arg_help<"build mode">>(&CompletionBuildCommand::mode),
+
+                   "profile",
+                   make_tags<arg_help<"build profile">>(&CompletionBuildCommand::profile),
+
+                   "internal",
+                   make_tags<arg_help<"internal option">,
+                             ArgTags{.flag = true, .hidden = true}>(&CompletionBuildCommand::internal));
+    };
+};
+
+struct CompletionToolCommands {
+    CompletionBuildCommand build;
+    ArgCommand<3> clean;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("build",
+                   make_tags<arg_help<"build project">,
+                             ArgTags{.command = true}>(&CompletionToolCommands::build),
+
+                   "clean",
+                   make_tags<arg_help<"clean project">,
+                             ArgTags{.command = true}>(&CompletionToolCommands::clean));
+    };
+};
 // clang-format on
 TEST(ArgParser, CommandSetReturnsVariant) {
     const char* argv[] = {"tool", "build", "--jobs", "8", "--release", "--mode", "release"};
@@ -411,6 +461,46 @@ TEST(ArgParser, PlaceholderCommandContextHelp) {
     NEKO_LOG_INFO("test", "Help: \n{}", help);
     EXPECT_NE(help.find("Usage: tool clean"), std::string::npos);
     EXPECT_NE(help.find("clean project"), std::string::npos);
+}
+
+TEST(ArgParser, CompletionTagsProvideNonRedundantValueMetadata) {
+    ArgParserConfig config;
+    config.programName = "tool";
+
+    const auto help = format_help<CompletionBuildCommand>(config);
+
+    EXPECT_NE(help.find("FILE"), std::string::npos);
+    EXPECT_NE(help.find("--output <DEST>"), std::string::npos);
+    EXPECT_EQ(help.find("--output <DIR>"), std::string::npos);
+}
+
+TEST(ArgParser, BashCompletionUsesExistingChoicesAndFileKinds) {
+    const auto script = format_completion<CompletionToolCommands>(CompletionShell::Bash, "tool");
+
+    EXPECT_NE(script.find("complete -F"), std::string::npos);
+    EXPECT_NE(script.find("'build' 'clean'"), std::string::npos);
+    EXPECT_NE(script.find("'debug' 'release'"), std::string::npos);
+    EXPECT_NE(script.find("--profile='*"), std::string::npos);
+    EXPECT_NE(script.find("_paths d"), std::string::npos);
+    EXPECT_NE(script.find("_paths f"), std::string::npos);
+    EXPECT_EQ(script.find("--internal"), std::string::npos);
+}
+
+TEST(ArgParser, ZshCompletionUsesNativeValueActionsAndDescriptions) {
+    const auto script = format_completion<CompletionToolCommands>(CompletionShell::Zsh, "tool");
+
+    EXPECT_NE(script.find("#compdef tool"), std::string::npos);
+    EXPECT_NE(script.find("--output[output directory]:DEST:_directories"), std::string::npos);
+    EXPECT_NE(script.find("--mode[build mode]:VALUE:(debug release)"), std::string::npos);
+    EXPECT_NE(script.find("--profile[build profile]:VALUE:(debug release)"), std::string::npos);
+    EXPECT_NE(script.find("1:FILE:_files"), std::string::npos);
+    EXPECT_NE(script.find("build:build project"), std::string::npos);
+    EXPECT_EQ(script.find("--internal"), std::string::npos);
+}
+
+TEST(ArgParser, CompletionRejectsUnsafeCommandNames) {
+    EXPECT_TRUE(format_completion<CompletionToolCommands>(CompletionShell::Bash, "bad name").empty());
+    EXPECT_TRUE(format_completion<CompletionToolCommands>(CompletionShell::Zsh, "bad\nname").empty());
 }
 // clang-format off
 struct DefaultOptions {
@@ -595,6 +685,57 @@ TEST(ArgParser, IgnoreTagRemovesFieldsFromSchemaHelpAndMaterialization) {
     auto ignoredResult        = parser<ArgIgnoredOptions>(static_cast<int>(std::size(ignoredArgv)), ignoredArgv);
     ASSERT_FALSE(ignoredResult.has_value());
     EXPECT_EQ(ignoredResult.error(), make_error_code(ArgParserError::UnknownOption));
+}
+
+struct ParserTagFlatNestedOptions {
+    std::string host;
+    int port = 0;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("host", make_tags<arg_help<"server host">>(&ParserTagFlatNestedOptions::host), "port",
+                   make_tags<arg_help<"server port">>(&ParserTagFlatNestedOptions::port));
+    };
+};
+
+struct ParserTagFlatOptions {
+    ParserTagFlatNestedOptions server;
+    bool verbose = false;
+
+    struct Neko {
+        constexpr static auto value = // NOLINT
+            Object("server", make_tags<ParserTag{.flat = true}>(&ParserTagFlatOptions::server), "verbose",
+                   make_tags<ArgTags{.flag = true}>(&ParserTagFlatOptions::verbose));
+    };
+};
+
+TEST(ArgParser, ParserTagFlatRemovesNestedPrefixFromParsingHelpAndCompletion) {
+    const char* argv[] = {"demo", "--host", "example.test", "--port", "8443", "--verbose"};
+    auto result        = parser<ParserTagFlatOptions>(static_cast<int>(std::size(argv)), argv);
+
+    ASSERT_TRUE(result.has_value()) << result.error().message();
+    EXPECT_EQ(result->server.host, "example.test");
+    EXPECT_EQ(result->server.port, 8443);
+    EXPECT_TRUE(result->verbose);
+
+    const char* prefixedArgv[] = {"demo", "--server.host", "example.test"};
+    auto prefixedResult = parser<ParserTagFlatOptions>(static_cast<int>(std::size(prefixedArgv)), prefixedArgv);
+    ASSERT_FALSE(prefixedResult.has_value());
+    EXPECT_EQ(prefixedResult.error(), make_error_code(ArgParserError::UnknownOption));
+
+    ArgParserConfig config;
+    config.programName = "demo";
+    const auto help    = format_help<ParserTagFlatOptions>(config);
+    EXPECT_NE(help.find("--host <value>"), std::string::npos);
+    EXPECT_NE(help.find("--port <value>"), std::string::npos);
+    EXPECT_EQ(help.find("--server.host"), std::string::npos);
+    EXPECT_EQ(help.find("--server.port"), std::string::npos);
+
+    const auto bashCompletion = format_completion<ParserTagFlatOptions>(CompletionShell::Bash, "demo");
+    EXPECT_NE(bashCompletion.find("--host"), std::string::npos);
+    EXPECT_NE(bashCompletion.find("--port"), std::string::npos);
+    EXPECT_EQ(bashCompletion.find("--server.host"), std::string::npos);
+    EXPECT_EQ(bashCompletion.find("--server.port"), std::string::npos);
 }
 
 struct IgnoredUnsupportedField {

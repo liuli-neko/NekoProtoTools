@@ -81,6 +81,20 @@ inline constexpr bool is_argparser_borrowed_text_v = []() consteval { // NOLINT
 }();
 
 template <typename T>
+inline constexpr bool is_path_completion_supported_v = []() consteval { // NOLINT
+    using raw_t = std::remove_cvref_t<T>;
+    if constexpr (std::is_same_v<raw_t, std::string>) {
+        return true;
+    } else if constexpr (is_arg_optional_v<raw_t>) {
+        return is_path_completion_supported_v<optional_value_t<raw_t>>;
+    } else if constexpr (is_vector_v<raw_t>) {
+        return is_path_completion_supported_v<vector_value_t<raw_t>>;
+    } else {
+        return false;
+    }
+}();
+
+template <typename T>
 inline constexpr bool is_bool_value_v = std::is_same_v<std::remove_cvref_t<T>, bool>; // NOLINT
 
 template <typename T>
@@ -374,6 +388,44 @@ struct arg_case_insensitive_choices_impl {
     }
 };
 
+struct arg_complete_directory_impl;
+
+struct arg_complete_file_impl {
+    template <typename T, auto Tags>
+    constexpr static bool constexpr_check() {
+        constexpr auto arg_tags = tag_query::get_tag<ArgTags>(Tags);
+        static_assert(!tag_query::has_tag<arg_complete_directory_impl>(Tags),
+                      "argparser file and directory completion tags are mutually exclusive");
+        static_assert(!is_command_type<std::remove_cvref_t<T>>::value &&
+                          !(arg_tags.command.declared && static_cast<bool>(arg_tags.command)),
+                      "argparser value completion tags cannot be used with commands");
+        static_assert(!std::is_same_v<std::remove_cvref_t<T>, bool> &&
+                          !(arg_tags.flag.declared && static_cast<bool>(arg_tags.flag)),
+                      "argparser value completion tags cannot be used with flags");
+        static_assert(is_path_completion_supported_v<T>,
+                      "argparser file and directory completion tags require string storage");
+        return true;
+    }
+};
+
+struct arg_complete_directory_impl {
+    template <typename T, auto Tags>
+    constexpr static bool constexpr_check() {
+        constexpr auto arg_tags = tag_query::get_tag<ArgTags>(Tags);
+        static_assert(!tag_query::has_tag<arg_complete_file_impl>(Tags),
+                      "argparser file and directory completion tags are mutually exclusive");
+        static_assert(!is_command_type<std::remove_cvref_t<T>>::value &&
+                          !(arg_tags.command.declared && static_cast<bool>(arg_tags.command)),
+                      "argparser value completion tags cannot be used with commands");
+        static_assert(!std::is_same_v<std::remove_cvref_t<T>, bool> &&
+                          !(arg_tags.flag.declared && static_cast<bool>(arg_tags.flag)),
+                      "argparser value completion tags cannot be used with flags");
+        static_assert(is_path_completion_supported_v<T>,
+                      "argparser file and directory completion tags require string storage");
+        return true;
+    }
+};
+
 struct arg_ignore_tag_impl {
     template <typename T, auto /*tags*/>
     constexpr static bool constexpr_check() {
@@ -432,6 +484,10 @@ template <ConstexprString Message = "">
 inline constexpr auto arg_deprecated = detail::arg_deprecated_impl<Message>{};
 
 inline constexpr auto arg_case_insensitive_choices = detail::arg_case_insensitive_choices_impl{};
+
+inline constexpr auto arg_complete_file = detail::arg_complete_file_impl{};
+
+inline constexpr auto arg_complete_directory = detail::arg_complete_directory_impl{};
 
 inline constexpr auto arg_ignore_tag = detail::arg_ignore_tag_impl{}; // NOLINT
 

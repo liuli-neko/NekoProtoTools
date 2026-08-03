@@ -19,6 +19,12 @@
 
 NEKO_BEGIN_NAMESPACE
 namespace argparser::detail {
+enum class ArgValueCompletion {
+    None,
+    File,
+    Directory,
+};
+
 struct ArgSpec {
     std::string long_name;
     std::string scope;
@@ -45,10 +51,12 @@ struct ArgSpec {
     std::string default_value;
     std::string implicit_value;
     std::vector<std::string_view> choices;
+    std::vector<std::string_view> inferred_completion_choices;
     std::vector<std::string_view> conflicts;
     std::vector<std::string_view> requires_names;
     std::vector<std::size_t> conflict_indices;
     std::vector<std::size_t> require_indices;
+    ArgValueCompletion completion = ArgValueCompletion::None;
 };
 
 struct ArgSchema {
@@ -254,6 +262,24 @@ std::string default_value_to_string(const T& value) {
     }
 }
 
+template <typename T>
+struct arg_scalar_type {
+    using type = std::remove_cvref_t<T>;
+};
+
+template <typename T>
+struct arg_scalar_type<std::optional<T>> {
+    using type = T;
+};
+
+template <typename T, typename Alloc>
+struct arg_scalar_type<std::vector<T, Alloc>> {
+    using type = T;
+};
+
+template <typename T>
+using arg_scalar_type_t = typename arg_scalar_type<std::remove_cvref_t<T>>::type;
+
 template <typename FieldT, typename Tags>
 ArgSpec make_arg_spec(std::string_view prefix, std::string_view reflected_name, const Tags& tags,
                       const argparser::ArgParserConfig& config) {
@@ -283,6 +309,10 @@ ArgSpec make_arg_spec(std::string_view prefix, std::string_view reflected_name, 
     }
     if constexpr (tag_query::has<tag_property::value_name>(Tags{})) {
         spec.value_name = std::string(tag_query::get<tag_property::value_name>(tags));
+    } else if constexpr (tag_query::has_tag<arg_complete_file_impl>(Tags{})) {
+        spec.value_name = "FILE";
+    } else if constexpr (tag_query::has_tag<arg_complete_directory_impl>(Tags{})) {
+        spec.value_name = "DIR";
     }
     if constexpr (tag_query::has<tag_property::env_name>(Tags{})) {
         spec.env_name = std::string(tag_query::get<tag_property::env_name>(tags));
@@ -308,6 +338,11 @@ ArgSpec make_arg_spec(std::string_view prefix, std::string_view reflected_name, 
     if constexpr (tag_query::has<tag_property::case_insensitive_choices>(Tags{})) {
         spec.case_insensitive_choices = tag_query::get<tag_property::case_insensitive_choices>(tags);
     }
+    if constexpr (tag_query::has_tag<arg_complete_file_impl>(Tags{})) {
+        spec.completion = ArgValueCompletion::File;
+    } else if constexpr (tag_query::has_tag<arg_complete_directory_impl>(Tags{})) {
+        spec.completion = ArgValueCompletion::Directory;
+    }
     if constexpr (tag_query::has<tag_property::deprecated_message>(Tags{})) {
         spec.deprecated = tag_query::has<tag_property::deprecated_message>(tags);
     }
@@ -332,6 +367,10 @@ ArgSpec make_arg_spec(std::string_view prefix, std::string_view reflected_name, 
         auto choices = tag_query::get<tag_property::choices>(tags);
         spec.choices.assign(choices.begin(), choices.end());
     }
+    if constexpr (!tag_query::has<tag_property::choices>(Tags{}) && std::is_enum_v<arg_scalar_type_t<FieldT>>) {
+        constexpr auto enum_names = Reflect<arg_scalar_type_t<FieldT>>::names();
+        spec.inferred_completion_choices.assign(enum_names.begin(), enum_names.end());
+    }
     if constexpr (tag_query::has<tag_property::conflicts>(Tags{})) {
         auto conflicts = tag_query::get<tag_property::conflicts>(tags);
         spec.conflicts.assign(conflicts.begin(), conflicts.end());
@@ -351,8 +390,14 @@ constexpr bool should_ignore_arg_field(const Tags& tags) {
 template <typename FieldT, typename Tags>
 consteval void static_check_option_field() {
     using raw_t = std::remove_cvref_t<FieldT>;
+    constexpr bool has_value_completion =
+        tag_query::has_tag<arg_complete_file_impl>(Tags{}) || tag_query::has_tag<arg_complete_directory_impl>(Tags{});
     static_assert(!is_argparser_borrowed_text_v<raw_t>,
                   "argparser option fields cannot contain std::string_view; use owning std::string storage");
+    static_assert(!has_value_completion || !field_type_is_flag<FieldT>(tag_query::get<tag_property::flag>(Tags{})),
+                  "argparser value completion tags cannot be used with flags");
+    static_assert(!has_value_completion || !tag_query::has<tag_property::choices>(Tags{}),
+                  "argparser choices and file/directory completion tags cannot be combined");
     if constexpr (tag_query::has<tag_property::separator>(Tags{})) {
         static_assert(is_vector_v<raw_t>, "argparser separator tags require a std::vector field");
     }
@@ -363,6 +408,7 @@ inline ArgSpec make_config_io_spec(std::string_view name, std::string help) {
     spec.long_name  = std::string(name);
     spec.help       = std::move(help);
     spec.value_name = "PATH";
+    spec.completion = ArgValueCompletion::File;
     return spec;
 }
 
@@ -473,7 +519,11 @@ void collect_schema_into(std::string_view prefix, const ArgParserConfig& config,
                 const auto name               = explicit_long_name.empty() ? reflected_name : explicit_long_name;
 
                 if constexpr (is_nested_option_v<FieldT>) {
-                    collect_schema_into<FieldT>(join_arg_name(prefix, name, config.nestedSeparator), config, schema);
+                    if (tag_query::get<NEKO_NAMESPACE::tag_property::flat<std::remove_cvref_t<FieldT>>>(tags)) {
+                        collect_schema_into<FieldT>(prefix, config, schema);
+                    } else {
+                        collect_schema_into<FieldT>(join_arg_name(prefix, name, config.nestedSeparator), config, schema);
+                    }
                 } else {
                     static_check_option_field<FieldT, std::remove_cvref_t<decltype(tags)>>();
                     schema.push_user_spec(make_arg_spec<FieldT>(prefix, reflected_name, tags, config));

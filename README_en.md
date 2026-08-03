@@ -370,9 +370,18 @@ int main(int argc, char** argv) {
 
 Common arg tags include `arg_name`, `arg_absolute_name`, `arg_help`, `arg_default`, `arg_choices`, `arg_env`, `arg_separator`, `arg_aliases`, `arg_implicit`, `arg_group`, `arg_conflicts`, `arg_requires`, `arg_deprecated`, and `arg_case_insensitive_choices`. Base behavior is described with `ArgTags{.positional = true}`, `.flag = true`, `.repeatable = true`, `.required = true`, and related fields; subcommands are modeled with `ArgTags{.command = true}`.
 
+Static shell completion supports Bash and Zsh. Existing schema metadata supplies enum values, commands, flags, and `arg_choices` candidates. Only path semantics that cannot be inferred use `arg_complete_file` or `arg_complete_directory`. They default the value label to `FILE` or `DIR`; an explicit `arg_value_name` takes precedence. File and directory completion are mutually exclusive and cannot be combined with `arg_choices`, flags, or commands.
+
+```cpp
+auto bash = format_completion<BuildOptions>(CompletionShell::Bash, "my-tool");
+auto zsh  = format_completion<BuildOptions>(CompletionShell::Zsh, "my-tool");
+```
+
+Applications can write the generated text to standard output for installation or sourcing. Completion generation does not add a command-line option automatically.
+
 ArgParser result fields must own their values. Use `std::string` for text; `std::string_view`, including its `optional` and `vector` wrappers, is not supported because environment values, implicit values, and configuration buffers may not outlive parsing. `std::vector<T>` is the only repeatable option type. Repeating a scalar option is an error, and a repeatable positional must be the final positional.
 
-Nested fields receive their enclosing prefix automatically, such as `network.host`. `arg_long_name` changes only the current leaf; `arg_absolute_name<"listen-host">` declares a complete name without its enclosing prefix. Long names use ASCII letters, digits, `-`, and `_`; paths use `ArgParserConfig::nestedSeparator` (default `.`). User options may override built-in `-h` / `--help` and `-V` / `--version`; the built-in action is used only when the matching token is not declared by the user schema.
+Nested fields receive their enclosing prefix automatically, such as `network.host`. Applying `ParserTag{.flat = true}` to a nested object field removes that boundary, exposing child options such as `host` directly at the current level. `arg_long_name` changes only the current leaf; `arg_absolute_name<"listen-host">` declares a complete name without its enclosing prefix. Long names use ASCII letters, digits, `-`, and `_`; paths use `ArgParserConfig::nestedSeparator` (default `.`). User options may override built-in `-h` / `--help` and `-V` / `--version`; the built-in action is used only when the matching token is not declared by the user schema.
 
 `arg_requires` and `arg_conflicts` resolve `"token"` as a sibling, `"/database.host"` as an absolute root path, `"./tls.cert"` relative to the current level, and `"../token"` relative to the parent level. A path with the nesting separator but without a leading `/` keeps its compatibility meaning of an absolute root path. Relationships always target the final public CLI name: for an `arg_absolute_name<"listen-port">`, cross-level code should use `"/listen-port"` instead of relying on the C++ field hierarchy. The schema resolves these paths once during definition validation; help then prints canonical names such as `--auth.login (requires: --auth.token)`. Precedence is CLI > environment > config import > `arg_default` > the struct initializer. `required` means supplied by a source, whereas relationship constraints use active values, so `--json=false --yaml` is valid.
 

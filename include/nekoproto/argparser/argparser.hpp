@@ -12,6 +12,7 @@
 
 #include "nekoproto/argparser/config.hpp"
 #include "nekoproto/argparser/config_io.hpp"
+#include "nekoproto/argparser/detail/completion.hpp"
 #include "nekoproto/argparser/detail/config_io.hpp"
 #include "nekoproto/argparser/detail/help.hpp"
 #include "nekoproto/argparser/detail/materializer.hpp"
@@ -684,6 +685,34 @@ std::string format_context_help(int argc, const char* const* argv, ArgParserConf
     }
 }
 
+template <typename T>
+CompletionModel collect_completion_model(std::string_view command_name, const ArgParserConfig& config) {
+    CompletionModel model;
+    model.command_name = std::string(command_name);
+    if constexpr (is_command_set_v<T>) {
+        model.root = make_completion_node(collect_command_config_io_schema(config), config, model.valid);
+        Reflect<std::remove_cvref_t<T>>::forEachMeta(
+            [&]<typename U>(std::type_identity<U>, std::string_view name, const auto& tags) {
+                if (tag_query::get<tag_property::ignore>(tags) || tag_query::get<tag_property::hidden>(tags)) {
+                    return;
+                }
+                CompletionCommand command;
+                const auto explicit_name = tag_query::get<tag_property::long_name>(tags);
+                command.name             = std::string(explicit_name.empty() ? name : explicit_name);
+                command.help             = std::string(tag_query::get<tag_property::help>(tags));
+                if constexpr (is_command_placeholder_v<U>) {
+                    command.node = make_completion_node(collect_command_config_io_schema(config), config, model.valid);
+                } else {
+                    command.node = make_completion_node(collect_schema<U>(config), config, model.valid);
+                }
+                model.commands.push_back(std::move(command));
+            });
+    } else {
+        model.root = make_completion_node(collect_schema<T>(config), config, model.valid);
+    }
+    return model;
+}
+
 } // namespace argparser::detail
 
 namespace argparser {
@@ -710,6 +739,13 @@ std::string format_help(ArgParserConfig config = {}) {
 }
 
 inline std::string format_version(ArgParserConfig config = {}) { return detail::format_version_text(config); }
+
+template <typename T>
+std::string format_completion(CompletionShell shell, std::string_view command_name, ArgParserConfig config = {}) {
+    detail::static_check_parser_definition<T>();
+    config.programName = command_name;
+    return detail::format_completion_model(detail::collect_completion_model<T>(command_name, config), shell);
+}
 
 template <typename T>
 expected::expected<detail::parser_result_t<T>, std::error_code> parser(int argc, const char* const* argv,

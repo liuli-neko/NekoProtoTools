@@ -78,15 +78,17 @@ struct ServeCommand {
                         ArgTags{.flag = true}>(&ServeCommand::verbose),
                 
                 "config",
-                make_tags<arg_short_name<'c'>, 
+                make_tags<arg_complete_file,
+                        arg_short_name<'c'>,
                         arg_group<"General">, 
                         arg_env<"NEKO_ARGPARSER_MANUAL_CONFIG">,
                         arg_value_name<"FILE">, 
                         arg_help<"config file">>(&ServeCommand::config),
 
                 "include",
-                make_tags<arg_short_name<'I'>, 
-                        arg_group<"Paths">, 
+                make_tags<arg_complete_directory,
+                        arg_short_name<'I'>,
+                        arg_group<"Paths">,
                         arg_separator<','>, 
                         arg_value_name<"DIRS">,
                         arg_help<"extra include directories">, 
@@ -102,7 +104,8 @@ struct ServeCommand {
                         arg_help<"colorize output">>(&ServeCommand::color),
 
                 "root",
-                make_tags<arg_group<"Paths">, 
+                make_tags<arg_complete_directory,
+                        arg_group<"Paths">,
                         arg_help<"document root">, 
                         ArgTags{.positional = true}>(
                     &ServeCommand::root));
@@ -161,7 +164,8 @@ struct BuildCommand {
                         ArgTags{.flag = true, .hidden = true}>(&BuildCommand::traceParser),
 
                 "output",
-                make_tags<arg_short_name<'o'>, 
+                make_tags<arg_complete_directory,
+                        arg_short_name<'o'>,
                         arg_group<"Paths">, 
                         arg_env<"NEKO_ARGPARSER_MANUAL_OUTPUT">,
                         arg_value_name<"DIR">, 
@@ -266,7 +270,8 @@ struct StandaloneOptions {
                             ArgTags{.range_min = 1, .range_max = 10}>(&StandaloneOptions::count),
 
                    "output",
-                   make_tags<arg_short_name<'o'>, 
+                   make_tags<arg_complete_file,
+                            arg_short_name<'o'>,
                             arg_group<"Paths">, 
                             arg_env<"NEKO_ARGPARSER_MANUAL_OUTPUT">,
                             arg_value_name<"FILE">, 
@@ -274,7 +279,8 @@ struct StandaloneOptions {
                             ArgTags{.required = true}>(&StandaloneOptions::output),
 
                    "include",
-                   make_tags<arg_short_name<'I'>, 
+                   make_tags<arg_complete_directory,
+                            arg_short_name<'I'>,
                             arg_group<"Paths">, 
                             arg_separator<','>, 
                             arg_value_name<"DIRS">,
@@ -334,7 +340,8 @@ struct StandaloneOptions {
                    "network", &StandaloneOptions::network, 
                    
                    "input",
-                   make_tags<arg_help<"input file">, 
+                   make_tags<arg_complete_file,
+                            arg_help<"input file">,
                             ArgTags{.positional = true}>(&StandaloneOptions::input));
     };
 };
@@ -479,6 +486,20 @@ int main(int argc, char** argv) {
     config.configIo->enableFormat("json");
     config.configIo->enableFormat("binary");
     config.configIo->enableFormat("toml");
+
+    if (argc == 3 && std::string_view(argv[1]) == "--generate-completion") {
+        const auto shell_name = std::string_view(argv[2]);
+        if (shell_name == "bash") {
+            std::cout << format_completion<ToolCommands>(CompletionShell::Bash, "test_argparser_manual", config);
+            return 0;
+        }
+        if (shell_name == "zsh") {
+            std::cout << format_completion<ToolCommands>(CompletionShell::Zsh, "test_argparser_manual", config);
+            return 0;
+        }
+        std::cerr << "unsupported shell: " << shell_name << '\n';
+        return 1;
+    }
 
     if (argc == 1) {
         std::cout << format_help<ToolCommands>(config) << '\n';

@@ -375,9 +375,18 @@ int main(int argc, char** argv) {
 
 常用 arg tags 包括 `arg_name`、`arg_absolute_name`、`arg_help`、`arg_default`、`arg_choices`、`arg_env`、`arg_separator`、`arg_aliases`、`arg_implicit`、`arg_group`、`arg_conflicts`、`arg_requires`、`arg_deprecated` 和 `arg_case_insensitive_choices`。字段可通过 `ArgTags{.positional = true}`、`.flag = true`、`.repeatable = true`、`.required = true` 等基础标记描述行为；子命令可通过 `ArgTags{.command = true}` 建模。
 
+静态 shell 补全支持 Bash 和 Zsh。`arg_choices` 会直接成为值候选，枚举值、子命令和 flag 等也从现有 schema 推导；只有 schema 无法表达的路径类型需要额外使用 `arg_complete_file` 或 `arg_complete_directory`。未设置 `arg_value_name` 时二者分别使用 `FILE` 和 `DIR`，显式 `arg_value_name` 优先。文件/目录补全彼此互斥，也不能与 `arg_choices`、flag 或 command 组合。
+
+```cpp
+auto bash = format_completion<BuildOptions>(CompletionShell::Bash, "my-tool");
+auto zsh  = format_completion<BuildOptions>(CompletionShell::Zsh, "my-tool");
+```
+
+应用可将生成结果写入标准输出，再由安装脚本保存或加载；补全生成不会自动增加命令行 option。
+
 ArgParser 的字段类型是拥有结果的值类型：文本请使用 `std::string`，不支持 `std::string_view`（包括 `optional` / `vector` 包装），因为环境变量、隐式值和配置文件缓冲区不保证在解析返回后继续存在。`std::vector<T>` 是唯一可重复的 option 类型；标量 option 重复出现会报错，repeatable positional 必须位于最后。
 
-嵌套字段默认自动增加父级前缀，例如 `network.host`；`arg_long_name` 只修改当前叶子名称，`arg_absolute_name<"listen-host">` 可直接指定不带父级前缀的完整名称。长名称由 ASCII 字母、数字、`-`、`_` 组成，路径使用 `ArgParserConfig::nestedSeparator`（默认 `.`）。用户 option 可以覆盖内建的 `-h` / `--help` 和 `-V` / `--version`；未被用户 schema 命中的对应 token 才触发内建行为。
+嵌套字段默认自动增加父级前缀，例如 `network.host`；在嵌套对象字段上设置 `ParserTag{.flat = true}` 会去掉这一层前缀，使其子字段直接成为 `host` 等当前层 option。`arg_long_name` 只修改当前叶子名称，`arg_absolute_name<"listen-host">` 可直接指定不带父级前缀的完整名称。长名称由 ASCII 字母、数字、`-`、`_` 组成，路径使用 `ArgParserConfig::nestedSeparator`（默认 `.`）。用户 option 可以覆盖内建的 `-h` / `--help` 和 `-V` / `--version`；未被用户 schema 命中的对应 token 才触发内建行为。
 
 `arg_requires` 与 `arg_conflicts` 的引用规则为：`"token"` 表示同级字段，`"/database.host"` 表示根绝对路径，`"./tls.cert"` 表示相对当前层级，`"../token"` 表示相对父层级；不带 `/` 但包含路径分隔符的名称保留为兼容性的根绝对路径。引用的目标始终是最终公开的 CLI 名称：引用 `arg_absolute_name<"listen-port">` 时，跨层代码应写 `"/listen-port"`，而不是依赖 C++ 字段层次。help 会展示已展开的规范名称，如 `--auth.login (requires: --auth.token)`。CLI、环境变量、配置导入、`arg_default` 和结构体初始化值的优先级依次降低；`required` 判断是否由某个来源提供，关系约束判断是否激活，因此 `--json=false --yaml` 合法。
 
