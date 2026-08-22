@@ -16,7 +16,7 @@
 
 #include <ilias/io.hpp>
 #include <ilias/io/error.hpp>
-#include <ilias/io/method.hpp>
+#include <ilias/io/ext.hpp>
 #include <ilias/io/traits.hpp>
 #include <ilias/result.hpp>
 #include <ilias/sync/mutex.hpp>
@@ -185,7 +185,7 @@ public:
         : mStream(std::move(stream)), mMessageTooLarge(messageTooLarge), mMaxMessageBytes(maxMessageBytes) {}
 
     auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t> {
-        ILIAS_CO_TRY(auto size, co_await ilias::io::readU32Le(mStream));
+        ILIAS_CO_TRY(auto size, co_await ilias::io::readUint32LE(mStream));
         if (size > mMaxMessageBytes) {
             co_return ilias::Err(mMessageTooLarge);
         }
@@ -196,7 +196,7 @@ public:
 
         ILIAS_CO_TRY(auto bodySize,
                      co_await (ilias::io::readAll(mStream, std::span<std::byte>{buffer.data(), buffer.size()}) |
-                               ilias::unstoppable()));
+                               ilias::unstoppable));
         if (bodySize != buffer.size()) {
             co_return ilias::Err(ilias::IoError::UnexpectedEOF);
         }
@@ -208,8 +208,8 @@ public:
         if (buffer.size() > std::numeric_limits<std::uint32_t>::max() || buffer.size() > mMaxMessageBytes) {
             co_return ilias::Err(mMessageTooLarge);
         }
-        ILIAS_CO_TRYV(co_await ilias::io::writeU32Le(mStream, static_cast<std::uint32_t>(buffer.size())));
-        ILIAS_CO_TRY(auto writtenSize, co_await (ilias::io::writeAll(mStream, buffer) | ilias::unstoppable()));
+        ILIAS_CO_TRYV(co_await ilias::io::writeUint32LE(mStream, static_cast<std::uint32_t>(buffer.size())));
+        ILIAS_CO_TRY(auto writtenSize, co_await (ilias::io::writeAll(mStream, buffer) | ilias::unstoppable));
         if (writtenSize != buffer.size()) {
             co_return ilias::Err(ilias::IoError::WriteZero);
         }

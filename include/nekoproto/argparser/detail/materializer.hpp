@@ -498,7 +498,7 @@ template <typename T>
 std::error_code apply_default_fields(T& object, const ArgSchema& schema, std::size_t& spec_index,
                                      PresenceList& supplied) {
     std::error_code result;
-    Reflect<std::remove_cvref_t<T>>::forEach(
+    Reflect<std::remove_cvref_t<T>>::forEachFull(
         object, [&](auto& field, std::string_view reflectedName, const auto& tags) {
             if constexpr (should_ignore_arg_field(decltype(tags){})) {
                 return;
@@ -539,7 +539,7 @@ template <typename T>
 std::error_code materialize_fields(T& object, const ArgSchema& schema, const RawParseResult& raw,
                                    const ArgParserConfig& config, std::size_t& spec_index, PresenceList& supplied) {
     std::error_code result;
-    Reflect<std::remove_cvref_t<T>>::forEach(
+    Reflect<std::remove_cvref_t<T>>::forEachFull(
         object, [&](auto& field, std::string_view reflectedName, const auto& tags) {
             if constexpr (should_ignore_arg_field(decltype(tags){})) {
                 return;
@@ -593,7 +593,7 @@ template <typename T>
 std::error_code mark_imported_fields_supplied(const T& object, const ArgSchema& schema, std::size_t& spec_index,
                                               PresenceList& supplied) {
     std::error_code result;
-    Reflect<std::remove_cvref_t<T>>::forEach(
+    Reflect<std::remove_cvref_t<T>>::forEachFull(
         object, [&](const auto& field, std::string_view reflectedName, const auto& tags) {
             if constexpr (should_ignore_arg_field(decltype(tags){})) {
                 return;
@@ -671,7 +671,7 @@ template <typename T>
 std::error_code mark_active_fields(const T& object, const ArgSchema& schema, std::size_t& spec_index,
                                    const PresenceList& supplied, PresenceList& active) {
     std::error_code result;
-    Reflect<std::remove_cvref_t<T>>::forEach(
+    Reflect<std::remove_cvref_t<T>>::forEachFull(
         object, [&](const auto& field, std::string_view reflectedName, const auto& tags) {
             if constexpr (should_ignore_arg_field(decltype(tags){})) {
                 return;

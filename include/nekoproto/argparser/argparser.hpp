@@ -604,7 +604,7 @@ std::string format_command_help(const ArgParserConfig& config) {
         append_ungrouped_options(result, root_schema);
     }
     result.append("\nCommands:\n");
-    Reflect<std::remove_cvref_t<T>>::forEachMeta([&result](std::string_view name, const auto& tags) {
+    Reflect<std::remove_cvref_t<T>>::forEachMetaNamed([&result](std::string_view name, const auto& tags) {
         if (!tag_query::get<tag_property::ignore>(tags) && !tag_query::get<tag_property::hidden>(tags)) {
             result.append("  ");
             std::string_view cname = tag_query::get<tag_property::long_name>(tags).empty()
@@ -660,7 +660,7 @@ std::string format_context_help(int argc, const char* const* argv, ArgParserConf
             std::string result;
             std::string_view command = argv[1];
             bool matched             = false;
-            Reflect<std::remove_cvref_t<T>>::forEachMeta(
+            Reflect<std::remove_cvref_t<T>>::forEachMetaFull(
                 [&]<typename U>(std::type_identity<U>, std::string_view name, const auto& tags) {
                     if (tag_query::get<tag_property::ignore>(tags)) {
                         return;
@@ -691,7 +691,7 @@ CompletionModel collect_completion_model(std::string_view command_name, const Ar
     model.command_name = std::string(command_name);
     if constexpr (is_command_set_v<T>) {
         model.root = make_completion_node(collect_command_config_io_schema(config), config, model.valid);
-        Reflect<std::remove_cvref_t<T>>::forEachMeta(
+        Reflect<std::remove_cvref_t<T>>::forEachMetaFull(
             [&]<typename U>(std::type_identity<U>, std::string_view name, const auto& tags) {
                 if (tag_query::get<tag_property::ignore>(tags) || tag_query::get<tag_property::hidden>(tags)) {
                     return;

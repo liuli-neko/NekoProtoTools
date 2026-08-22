@@ -10,6 +10,7 @@
  */
 #pragma once
 
+#include "detail/unwrap_struct.hpp"
 #include "global.hpp"
 #include "string_literal.hpp"
 
@@ -33,23 +34,6 @@ namespace detail {
 #else
 #define NEKO_PRETTY_FUNCTION_NAME __func__
 #endif
-
-#define MAX_UNWRAP_STRUCT_SIZE 128
-
-template <std::size_t N, typename T>
-    requires(N <= MAX_UNWRAP_STRUCT_SIZE)
-constexpr auto unwrap_struct_impl(T& data) noexcept {
-#define GENERATE_UNPACK_CASE(i)                                                                                        \
-    else if constexpr (N == i) {                                                                                       \
-        auto& [NEKO_PP_LIST_PARAMS(m, i)] = data;                                                                      \
-        return std::forward_as_tuple(NEKO_PP_LIST_PARAMS(m, i));                                                       \
-    }
-    if constexpr (N == 0) {
-        return std::forward_as_tuple();
-    }
-    NEKO_PP_REPEAT_MACRO(GENERATE_UNPACK_CASE, MAX_UNWRAP_STRUCT_SIZE)
-#undef GENERATE_UNPACK_CASE
-}
 
 template <typename T, class enable = void>
 struct is_optional : std::false_type {}; // NOLINT(readability-identifier-naming)
@@ -122,7 +106,7 @@ template <typename T>
 constexpr auto unwrap_struct(T& data) noexcept {
     static_assert(can_unwrap_v<T>, "The struct must be aggregate");
     static_assert(member_count_v<T> > 0, "The struct must have at least one member");
-    static_assert(member_count_v<T> <= MAX_UNWRAP_STRUCT_SIZE, "The struct is too large");
+    static_assert(member_count_v<T> <= max_unwrap_struct_size, "The struct is too large");
     return unwrap_struct_impl<member_count_v<T>>(data);
 }
 
@@ -320,6 +304,32 @@ constexpr auto neko_get_valid_enum_names(std::index_sequence<N...> seq) noexcept
     }
     return arr;
 }
+
+// One canonical automatic-reflection result per enum. The expensive search is
+// shared by names(), values(), maps, and enum metadata traversal instead of
+// being reevaluated independently by every consumer.
+template <typename T>
+struct enum_reflection_table {
+    static_assert(std::is_enum_v<T>);
+
+    static constexpr auto entries =
+        neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>{}); // NOLINT
+    static constexpr std::size_t size = entries.size();                                   // NOLINT
+    static constexpr auto names       = [] {                                              // NOLINT
+        std::array<std::string_view, size> result{};
+        for (std::size_t i = 0; i < size; ++i) {
+            result[i] = entries[i].second;
+        }
+        return result;
+    }();
+    static constexpr auto values = [] { // NOLINT
+        std::array<T, size> result{};
+        for (std::size_t i = 0; i < size; ++i) {
+            result[i] = entries[i].first;
+        }
+        return result;
+    }();
+};
 
 // MARK: function traits
 template <typename T, class Enable = void>

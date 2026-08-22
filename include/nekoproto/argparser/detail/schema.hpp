@@ -510,7 +510,7 @@ void collect_schema_into(std::string_view prefix, const ArgParserConfig& config,
     static_assert(NEKO_NAMESPACE::detail::has_values_meta<std::remove_cvref_t<T>>,
                   "argparser requires a reflected options type");
 
-    Reflect<std::remove_cvref_t<T>>::forEachMeta(
+    Reflect<std::remove_cvref_t<T>>::forEachMetaFull(
         [&]<typename FieldT>(std::type_identity<FieldT>, std::string_view reflected_name, const auto& tags) {
             if constexpr (should_ignore_arg_field(decltype(tags){})) {
                 return;
@@ -522,7 +522,8 @@ void collect_schema_into(std::string_view prefix, const ArgParserConfig& config,
                     if (tag_query::get<NEKO_NAMESPACE::tag_property::flat<std::remove_cvref_t<FieldT>>>(tags)) {
                         collect_schema_into<FieldT>(prefix, config, schema);
                     } else {
-                        collect_schema_into<FieldT>(join_arg_name(prefix, name, config.nestedSeparator), config, schema);
+                        collect_schema_into<FieldT>(join_arg_name(prefix, name, config.nestedSeparator), config,
+                                                    schema);
                     }
                 } else {
                     static_check_option_field<FieldT, std::remove_cvref_t<decltype(tags)>>();

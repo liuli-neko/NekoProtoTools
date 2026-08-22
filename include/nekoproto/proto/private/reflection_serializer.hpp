@@ -171,10 +171,11 @@ public:
         requires detail::has_values_meta<std::remove_cvref_t<T>> && detail::has_names_meta<std::remove_cvref_t<T>>
     static ReflectionSerializer reflection(T& obj) {
         ReflectionSerializer rs;
-        Reflect<std::remove_cvref_t<T>>::forEach(obj, [&rs](auto& field, std::string_view name, const auto& /*tags*/) {
-            const auto* bound = rs.mObject.bindField(name, &field);
-            NEKO_ASSERT(bound != nullptr, "ReflectionSerializer", "failed to bind field {}", name);
-        });
+        Reflect<std::remove_cvref_t<T>>::forEachFull(
+            obj, [&rs](auto& field, std::string_view name, const auto& /*tags*/) {
+                const auto* bound = rs.mObject.bindField(name, &field);
+                NEKO_ASSERT(bound != nullptr, "ReflectionSerializer", "failed to bind field {}", name);
+            });
         return rs;
     }
 

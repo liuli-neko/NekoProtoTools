@@ -22,7 +22,7 @@
 #include <ilias/buffer.hpp>
 #include <ilias/io.hpp>
 #include <ilias/io/error.hpp>
-#include <ilias/io/method.hpp>
+#include <ilias/io/ext.hpp>
 #include <ilias/io/traits.hpp>
 #include <ilias/result.hpp>
 #include <ilias/sync/mutex.hpp>

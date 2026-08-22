@@ -229,8 +229,7 @@ struct Enumerate {
                 (detail::enum_field_values_same_at<1, 0, ValueTs...>())
     constexpr Enumerate(ValueTs&&... values) noexcept {
         auto enum_to_string = [](const T& value) constexpr -> std::string_view {
-            constexpr auto k_enum_arr =
-                detail::neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
+            constexpr auto& k_enum_arr = detail::enum_reflection_table<T>::entries;
             for (std::size_t idx = 0; idx < k_enum_arr.size(); ++idx) {
                 if (k_enum_arr[idx].first == value) {
                     return k_enum_arr[idx].second;
@@ -731,6 +730,11 @@ struct ReflectProvider {
     static constexpr decltype(auto) accessors(U&& obj) {
         if constexpr (provider_kind == ReflectProviderKind::NativeReflection) {
             return NativeReflectionProvider<T>::accessors(std::forward<U>(obj));
+        } else if constexpr (requires { std::forward<U>(obj)._neko_member_tuple(); }) {
+            // NEKO_SERIALIZER can bind all fields once. Traversals consume this
+            // tuple directly instead of invoking N accessors that each rebuild
+            // the complete argument tuple.
+            return std::forward<U>(obj)._neko_member_tuple();
         } else if constexpr (has_value_function_one<T>) {
             return MetaPrivate<T>::value(std::forward<U>(obj));
         } else {
@@ -774,7 +778,12 @@ struct ReflectProvider {
     template <std::size_t I, typename U>
     static constexpr decltype(auto) get(U&& obj) {
         decltype(auto) values = accessors(std::forward<U>(obj));
-        return value_ref(ReflectAccessorAt<I, std::decay_t<decltype(values)>>::get(values), obj);
+        return get_from<I>(values, obj);
+    }
+
+    template <std::size_t I, typename Values, typename U>
+    static constexpr decltype(auto) get_from(Values&& values, U&& obj) {
+        return value_ref(ReflectAccessorAt<I, std::decay_t<Values>>::get(std::forward<Values>(values)), obj);
     }
 
     static constexpr auto tags() {
@@ -892,31 +901,84 @@ private:
     using Provider = detail::ReflectProvider<T>;
     using Model    = detail::ReflectModel<T>;
 
-public:
-    // Public reflection algorithm. It consumes only the provider/model surface:
-    // no direct T::Neko or Meta<T> probing belongs below this line.
-    template <typename U, typename CallAbleT>
-    static constexpr auto forEach(U&& obj, CallAbleT&& func) {
-        if constexpr (!Provider::has_values) {
-            static_assert(Provider::has_values, "type has no values meta");
+    enum class CallbackKind { Full, Tagged, Named, Value, Adaptive };
+    enum class MetaCallbackKind { Full, Named, Typed, Tagged, Adaptive };
+
+    template <typename U>
+    using ObjectReference = std::remove_reference_t<U>&;
+
+    template <typename U>
+    using BoundAccessors = decltype(Provider::accessors(std::declval<ObjectReference<U>>()));
+
+    template <typename U>
+    using BoundAccessorsReference = std::remove_reference_t<BoundAccessors<U>>&;
+
+    template <std::size_t I, typename U>
+    using BoundAccessorReference = decltype(detail::ReflectAccessorAt<I, std::decay_t<BoundAccessors<U>>>::get(
+        std::declval<BoundAccessorsReference<U>>()));
+
+    template <std::size_t I, typename U>
+    using FieldReference =
+        decltype(detail::value_ref(std::declval<BoundAccessorReference<I, U>>(), std::declval<ObjectReference<U>>()));
+
+    template <typename U, typename CallAbleT, std::size_t... Is>
+    static consteval CallbackKind selectCallbackKind(std::index_sequence<Is...> /*unused*/) {
+        if constexpr ((std::is_invocable_v<CallAbleT&, FieldReference<Is, U>, std::string_view,
+                                           decltype(std::get<Is>(field_tags))> &&
+                       ...)) {
+            return CallbackKind::Full;
+        } else if constexpr ((std::is_invocable_v<CallAbleT&, FieldReference<Is, U>,
+                                                  decltype(std::get<Is>(field_tags))> &&
+                              ...)) {
+            return CallbackKind::Tagged;
+        } else if constexpr ((std::is_invocable_v<CallAbleT&, FieldReference<Is, U>, std::string_view> && ...)) {
+            return CallbackKind::Named;
+        } else if constexpr ((std::is_invocable_v<CallAbleT&, FieldReference<Is, U>> && ...)) {
+            return CallbackKind::Value;
+        } else {
+            // Overload sets may intentionally select a different ergonomic
+            // callback form for different field types. Preserve that behavior.
+            return CallbackKind::Adaptive;
         }
+    }
+
+    template <typename CallAbleT, std::size_t... Is>
+    static consteval MetaCallbackKind selectMetaCallbackKind(std::index_sequence<Is...> /*unused*/) {
+        if constexpr ((std::is_invocable_v<CallAbleT&, std::type_identity<std::tuple_element_t<Is, value_types>>,
+                                           std::string_view, decltype(std::get<Is>(field_tags))> &&
+                       ...)) {
+            return MetaCallbackKind::Full;
+        } else if constexpr ((std::is_invocable_v<CallAbleT&, std::string_view, decltype(std::get<Is>(field_tags))> &&
+                              ...)) {
+            return MetaCallbackKind::Named;
+        } else if constexpr ((std::is_invocable_v<CallAbleT&, std::type_identity<std::tuple_element_t<Is, value_types>>,
+                                                  decltype(std::get<Is>(field_tags))> &&
+                              ...)) {
+            return MetaCallbackKind::Typed;
+        } else if constexpr ((std::is_invocable_v<CallAbleT&, decltype(std::get<Is>(field_tags))> && ...)) {
+            return MetaCallbackKind::Tagged;
+        } else {
+            return MetaCallbackKind::Adaptive;
+        }
+    }
+
+    template <typename U, typename CallAbleT>
+    static constexpr auto forEachAdaptive(U&& obj, CallAbleT&& func) {
+        decltype(auto) accessors  = Provider::accessors(obj);
+        constexpr auto fieldNames = Provider::names();
         return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
             auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
-                auto&& val  = Provider::template get<I>(obj);
+                auto&& val  = Provider::template get_from<I>(accessors, obj);
                 auto&& tags = std::get<I>(field_tags);
-                // 编译期根据回调函数的签名选择调用方式
-                if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view, decltype(tags)>) {
+                if constexpr (std::is_invocable_v<CallAbleT&, decltype(val), std::string_view, decltype(tags)>) {
                     static_assert(Provider::has_names, "type has no names meta or names size mismatch");
-                    return detail::remove_void_to_monostate(func, val, Provider::template name<I>(), tags);
-                } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), decltype(tags)>) {
-                    // func(val, tags)
+                    return detail::remove_void_to_monostate(func, val, fieldNames[I], tags);
+                } else if constexpr (std::is_invocable_v<CallAbleT&, decltype(val), decltype(tags)>) {
                     return detail::remove_void_to_monostate(func, val, tags);
-                } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val), std::string_view>) {
-                    // func(val, name)
+                } else if constexpr (std::is_invocable_v<CallAbleT&, decltype(val), std::string_view>) {
                     static_assert(Provider::has_names, "type has no names meta or names size mismatch");
-                    return detail::remove_void_to_monostate(func, val, Provider::template name<I>());
-                } else if constexpr (std::is_invocable_v<CallAbleT, decltype(val)>) {
-                    // func(val)
+                    return detail::remove_void_to_monostate(func, val, fieldNames[I]);
+                } else if constexpr (std::is_invocable_v<CallAbleT&, decltype(val)>) {
                     return detail::remove_void_to_monostate(func, val);
                 } else {
                     static_assert(!Provider::has_values, "Callback function signature not supported. "
@@ -925,6 +987,104 @@ public:
                 }
             };
             return std::tuple{invoke(std::integral_constant<std::size_t, Is>{})...};
+        }(std::make_index_sequence<Provider::value_count>{});
+    }
+
+    template <typename CallAbleT>
+    static constexpr auto forEachMetaAdaptive(CallAbleT&& func) {
+        constexpr auto fieldNames = names();
+        using names_type          = std::decay_t<decltype(fieldNames)>;
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
+                using Field    = std::tuple_element_t<I, value_types>;
+                using FieldTag = std::type_identity<Field>;
+                auto&& tags    = std::get<I>(field_tags);
+                if constexpr (std::is_invocable_v<CallAbleT&, FieldTag, std::string_view, decltype(tags)>) {
+                    static_assert(detail::is_std_array<names_type>::size == value_count,
+                                  "type has no names meta or names size mismatch");
+                    return detail::remove_void_to_monostate(func, FieldTag{}, fieldNames[I], tags);
+                } else if constexpr (std::is_invocable_v<CallAbleT&, std::string_view, decltype(tags)>) {
+                    static_assert(detail::is_std_array<names_type>::size == value_count,
+                                  "type has no names meta or names size mismatch");
+                    return detail::remove_void_to_monostate(func, fieldNames[I], tags);
+                } else if constexpr (std::is_invocable_v<CallAbleT&, FieldTag, decltype(tags)>) {
+                    return detail::remove_void_to_monostate(func, FieldTag{}, tags);
+                } else if constexpr (std::is_invocable_v<CallAbleT&, decltype(tags)>) {
+                    return detail::remove_void_to_monostate(func, tags);
+                } else {
+                    static_assert(!Provider::has_values,
+                                  "Callback function signature not supported. Supported: (type, name, tags), "
+                                  "(name, tags), (type, tags), (tags)");
+                }
+            };
+            return std::tuple{invoke(std::integral_constant<std::size_t, Is>{})...};
+        }(std::make_index_sequence<value_count>{});
+    }
+
+public:
+    // Public reflection algorithm. It consumes only the provider/model surface:
+    // no direct T::Neko or Meta<T> probing belongs below this line.
+    template <typename U, typename CallAbleT>
+    static constexpr auto forEach(U&& obj, CallAbleT&& func) {
+        if constexpr (!Provider::has_values) {
+            static_assert(Provider::has_values, "type has no values meta");
+        }
+        constexpr auto callbackKind =
+            selectCallbackKind<U, CallAbleT>(std::make_index_sequence<Provider::value_count>{});
+        if constexpr (callbackKind == CallbackKind::Full) {
+            return forEachFull(std::forward<U>(obj), std::forward<CallAbleT>(func));
+        } else if constexpr (callbackKind == CallbackKind::Tagged) {
+            return forEachTagged(std::forward<U>(obj), std::forward<CallAbleT>(func));
+        } else if constexpr (callbackKind == CallbackKind::Named) {
+            return forEachNamed(std::forward<U>(obj), std::forward<CallAbleT>(func));
+        } else if constexpr (callbackKind == CallbackKind::Value) {
+            return forEachValue(std::forward<U>(obj), std::forward<CallAbleT>(func));
+        } else {
+            return forEachAdaptive(std::forward<U>(obj), std::forward<CallAbleT>(func));
+        }
+    }
+
+    template <typename U, typename CallAbleT>
+    static constexpr auto forEachFull(U&& obj, CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        static_assert(Provider::has_names, "type has no names meta or names size mismatch");
+        decltype(auto) accessors  = Provider::accessors(obj);
+        constexpr auto fieldNames = Provider::names();
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            return std::tuple{detail::remove_void_to_monostate(func, Provider::template get_from<Is>(accessors, obj),
+                                                               fieldNames[Is], std::get<Is>(field_tags))...};
+        }(std::make_index_sequence<Provider::value_count>{});
+    }
+
+    template <typename U, typename CallAbleT>
+    static constexpr auto forEachTagged(U&& obj, CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        decltype(auto) accessors = Provider::accessors(obj);
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            return std::tuple{detail::remove_void_to_monostate(func, Provider::template get_from<Is>(accessors, obj),
+                                                               std::get<Is>(field_tags))...};
+        }(std::make_index_sequence<Provider::value_count>{});
+    }
+
+    template <typename U, typename CallAbleT>
+    static constexpr auto forEachNamed(U&& obj, CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        static_assert(Provider::has_names, "type has no names meta or names size mismatch");
+        decltype(auto) accessors  = Provider::accessors(obj);
+        constexpr auto fieldNames = Provider::names();
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            return std::tuple{detail::remove_void_to_monostate(func, Provider::template get_from<Is>(accessors, obj),
+                                                               fieldNames[Is])...};
+        }(std::make_index_sequence<Provider::value_count>{});
+    }
+
+    template <typename U, typename CallAbleT>
+    static constexpr auto forEachValue(U&& obj, CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        decltype(auto) accessors = Provider::accessors(obj);
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            return std::tuple{
+                detail::remove_void_to_monostate(func, Provider::template get_from<Is>(accessors, obj))...};
         }(std::make_index_sequence<Provider::value_count>{});
     }
 
@@ -1011,32 +1171,56 @@ public:
         if constexpr (!Provider::has_values) {
             static_assert(Provider::has_values, "type has no values meta");
         }
+        constexpr auto callbackKind = selectMetaCallbackKind<CallAbleT>(std::make_index_sequence<value_count>{});
+        if constexpr (callbackKind == MetaCallbackKind::Full) {
+            return forEachMetaFull(std::forward<CallAbleT>(func));
+        } else if constexpr (callbackKind == MetaCallbackKind::Named) {
+            return forEachMetaNamed(std::forward<CallAbleT>(func));
+        } else if constexpr (callbackKind == MetaCallbackKind::Typed) {
+            return forEachMetaTyped(std::forward<CallAbleT>(func));
+        } else if constexpr (callbackKind == MetaCallbackKind::Tagged) {
+            return forEachMetaTagged(std::forward<CallAbleT>(func));
+        } else {
+            return forEachMetaAdaptive(std::forward<CallAbleT>(func));
+        }
+    }
+
+    template <typename CallAbleT>
+    static constexpr auto forEachMetaFull(CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        static_assert(Provider::has_names, "type has no names meta or names size mismatch");
         constexpr auto fieldNames = names();
-        using names_type          = std::decay_t<decltype(fieldNames)>;
         return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
-                using Field    = std::tuple_element_t<I, value_types>;
-                using FieldTag = std::type_identity<Field>;
-                auto&& tags    = std::get<I>(field_tags);
-                if constexpr (std::is_invocable_v<CallAbleT&, FieldTag, std::string_view, decltype(tags)>) {
-                    static_assert(detail::is_std_array<names_type>::size == value_count,
-                                  "type has no names meta or names size mismatch");
-                    return detail::remove_void_to_monostate(func, FieldTag{}, fieldNames[I], tags);
-                } else if constexpr (std::is_invocable_v<CallAbleT&, std::string_view, decltype(tags)>) {
-                    static_assert(detail::is_std_array<names_type>::size == value_count,
-                                  "type has no names meta or names size mismatch");
-                    return detail::remove_void_to_monostate(func, fieldNames[I], tags);
-                } else if constexpr (std::is_invocable_v<CallAbleT&, FieldTag, decltype(tags)>) {
-                    return detail::remove_void_to_monostate(func, FieldTag{}, tags);
-                } else if constexpr (std::is_invocable_v<CallAbleT&, decltype(tags)>) {
-                    return detail::remove_void_to_monostate(func, tags);
-                } else {
-                    static_assert(!Provider::has_values,
-                                  "Callback function signature not supported. Supported: (type, name, tags), "
-                                  "(name, tags), (type, tags), (tags)");
-                }
-            };
-            return std::tuple{invoke(std::integral_constant<std::size_t, Is>{})...};
+            return std::tuple{
+                detail::remove_void_to_monostate(func, std::type_identity<std::tuple_element_t<Is, value_types>>{},
+                                                 fieldNames[Is], std::get<Is>(field_tags))...};
+        }(std::make_index_sequence<value_count>{});
+    }
+
+    template <typename CallAbleT>
+    static constexpr auto forEachMetaNamed(CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        static_assert(Provider::has_names, "type has no names meta or names size mismatch");
+        constexpr auto fieldNames = names();
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            return std::tuple{detail::remove_void_to_monostate(func, fieldNames[Is], std::get<Is>(field_tags))...};
+        }(std::make_index_sequence<value_count>{});
+    }
+
+    template <typename CallAbleT>
+    static constexpr auto forEachMetaTyped(CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            return std::tuple{detail::remove_void_to_monostate(
+                func, std::type_identity<std::tuple_element_t<Is, value_types>>{}, std::get<Is>(field_tags))...};
+        }(std::make_index_sequence<value_count>{});
+    }
+
+    template <typename CallAbleT>
+    static constexpr auto forEachMetaTagged(CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            return std::tuple{detail::remove_void_to_monostate(func, std::get<Is>(field_tags))...};
         }(std::make_index_sequence<value_count>{});
     }
 };
@@ -1044,6 +1228,8 @@ public:
 template <typename T>
 struct Reflect<T, std::enable_if_t<std::is_enum_v<T>>> {
 private:
+    using AutoTable = detail::enum_reflection_table<T>;
+
     static constexpr auto _tags() noexcept {
         if constexpr (detail::is_meta_enumerate<T>) {
             return Meta<T>::value.tags;
@@ -1057,28 +1243,14 @@ public:
         if constexpr (detail::is_meta_enumerate<T>) {
             return Meta<T>::value.names;
         } else {
-            constexpr auto KEnumArr =
-                detail::neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
-            constexpr auto KEnumArrSize = KEnumArr.size();
-            std::array<std::string_view, KEnumArrSize> names{};
-            for (int i = 0; i < static_cast<int>(KEnumArrSize); ++i) {
-                names[i] = KEnumArr[i].second;
-            }
-            return names;
+            return AutoTable::names;
         }
     }
     static constexpr auto values() noexcept {
         if constexpr (detail::is_meta_enumerate<T>) {
             return Meta<T>::value.values;
         } else {
-            constexpr auto KEnumArr =
-                detail::neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>());
-            constexpr auto KEnumArrSize = KEnumArr.size();
-            std::array<T, KEnumArrSize> values{};
-            for (int i = 0; i < static_cast<int>(KEnumArrSize); ++i) {
-                values[i] = KEnumArr[i].first;
-            }
-            return values;
+            return AutoTable::values;
         }
     }
     static const auto& nameMap() {
@@ -1106,7 +1278,13 @@ public:
         return kValueMap;
     }
     static constexpr auto className() noexcept { return detail::class_nameof<T>; }
-    static constexpr auto size() noexcept { return names().size(); }
+    static constexpr auto size() noexcept {
+        if constexpr (detail::is_meta_enumerate<T>) {
+            return Meta<T>::value.names.size();
+        } else {
+            return AutoTable::size;
+        }
+    }
     static constexpr auto field_tags = _tags();                  // NOLINT
     static constexpr int value_count = static_cast<int>(size()); // NOLINT
 

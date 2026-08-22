@@ -322,11 +322,14 @@ constexpr decltype(auto) _serializer_unwrap_member_ref(T&& value) noexcept {
     return NEKO_NAMESPACE::field_accessor(std::forward<T>(value));
 }
 
+template <typename... Args>
+constexpr auto _serializer_member_tuple(Args&&... args) noexcept {
+    return std::forward_as_tuple(_serializer_unwrap_member_ref(std::forward<Args>(args))...);
+}
+
 template <std::size_t N, typename... Args>
 constexpr decltype(auto) _serializer_get_n_member_reference(Args&&... args) noexcept {
-    auto tuple = std::forward_as_tuple(
-        _serializer_unwrap_member_ref(std::forward<Args>(args))...
-    );
+    auto tuple = _serializer_member_tuple(std::forward<Args>(args)...);
     return std::get<N>(tuple);
 }
 
@@ -368,13 +371,21 @@ NEKO_END_NAMESPACE
  */
 #define NEKO_SERIALIZER(...)                                                                                           \
 public:                                                                                                                \
+    constexpr auto _neko_member_tuple() noexcept {                                                                     \
+        return NEKO_NAMESPACE::detail::_serializer_member_tuple(__VA_ARGS__);                                          \
+    }                                                                                                                  \
+    constexpr auto _neko_member_tuple() const noexcept {                                                               \
+        return NEKO_NAMESPACE::detail::_serializer_member_tuple(__VA_ARGS__);                                          \
+    }                                                                                                                  \
     template <int N>                                                                                                   \
     decltype(auto) _neko_get_n_member_reference() noexcept {                                                           \
-        return NEKO_NAMESPACE::detail::_serializer_get_n_member_reference<N>(__VA_ARGS__);                             \
+        auto members = _neko_member_tuple();                                                                           \
+        return std::get<N>(members);                                                                                   \
     }                                                                                                                  \
     template <int N>                                                                                                   \
     decltype(auto) _neko_get_n_member_reference() const noexcept {                                                     \
-        return NEKO_NAMESPACE::detail::_serializer_get_n_member_reference<N>(__VA_ARGS__);                             \
+        auto members = _neko_member_tuple();                                                                           \
+        return std::get<N>(members);                                                                                   \
     }                                                                                                                  \
     struct _neko_serializer_args_helper {                                                                              \
         using tuple = decltype(std::forward_as_tuple(__VA_ARGS__));                                                    \
