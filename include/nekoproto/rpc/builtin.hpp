@@ -8,7 +8,7 @@
 #include "nekoproto/rpc/method.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 // clang-format off
 struct RpcBuiltinMethods {
@@ -56,4 +56,4 @@ struct RpcBuiltinMethods {
 };
 // clang-format on
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

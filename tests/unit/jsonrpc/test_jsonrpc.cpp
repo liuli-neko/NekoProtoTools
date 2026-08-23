@@ -15,19 +15,19 @@
 #include "nekoproto/jsonrpc/message_stream_wrapper.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 struct Copytest {
     Copytest() { std::cout << "construct" << std::endl; }
     Copytest(int tt) : a(tt) { std::cout << "construct" << std::endl; }
     Copytest(const Copytest& other) : a(other.a) { std::cout << "copy construct" << std::endl; }
     Copytest(Copytest&& other) : a(other.a) { std::cout << "move construct" << std::endl; }
-    Copytest& operator=(const Copytest& other) {
+    auto operator=(const Copytest& other) -> Copytest& {
         a = other.a;
         std::cout << "copy assign" << std::endl;
         return *this;
     }
-    Copytest& operator=(Copytest&& other) {
+    auto operator=(Copytest&& other) -> Copytest& {
         a = other.a;
         std::cout << "move assign" << std::endl;
         return *this;
@@ -58,13 +58,13 @@ static_assert(traits::Serializable<MXXParams>);
 static_assert(!traits::Serializable<UnsupportedRpcValue>);
 static_assert(traits::IsSerializable<void>::value);
 
-int add(int aa, int bb) { return aa + bb; }
+auto add(int aa, int bb) -> int { return aa + bb; }
 
 struct MyFunc {
-    static int execute(int aa, int bb) { return aa + bb; }
+    static auto execute(int aa, int bb) -> int { return aa + bb; }
 };
 
-ilias::IoTask<std::string> testxx(MXXParams params) {
+auto testxx(MXXParams params) -> ilias::IoTask<std::string> {
     std::string ret = std::to_string(params.param1) + params.param2;
     for (auto& ii : params.param3) {
         ret += "," + std::to_string(ii);
@@ -72,7 +72,7 @@ ilias::IoTask<std::string> testxx(MXXParams params) {
     co_return ret;
 }
 
-ilias::Task<std::string> failed_testxx(MXXParams params) {
+auto failedTestxx(MXXParams params) -> ilias::Task<std::string> {
     std::string ret = std::to_string(params.param1) + params.param2;
     for (auto& ii : params.param3) {
         ret += "," + std::to_string(ii);
@@ -80,7 +80,7 @@ ilias::Task<std::string> failed_testxx(MXXParams params) {
     co_return ret;
 }
 
-ilias::IoTask<std::string> test_optional_params(std::optional<MXXParams> params) {
+auto testOptionalParams(std::optional<MXXParams> params) -> ilias::IoTask<std::string> {
     if (params) {
         std::string ret = std::to_string(params->param1) + params->param2;
         for (auto& ii : params->param3) {
@@ -91,12 +91,12 @@ ilias::IoTask<std::string> test_optional_params(std::optional<MXXParams> params)
     co_return "no params";
 };
 
-static_assert(NekoProto::detail::func_nameof<add> == "add");
-static_assert(NekoProto::detail::func_nameof<MyFunc::execute> == "execute");
-static_assert(NekoProto::detail::func_nameof<testxx> == "testxx");
-static_assert(NekoProto::detail::func_nameof<test_optional_params> == "test_optional_params");
+static_assert(nekoproto::detail::func_nameof<add> == "add");
+static_assert(nekoproto::detail::func_nameof<MyFunc::execute> == "execute");
+static_assert(nekoproto::detail::func_nameof<testxx> == "testxx");
+static_assert(nekoproto::detail::func_nameof<testOptionalParams> == "testOptionalParams");
 
-extern int test1(int, int);
+extern auto test1(int, int) -> int;
 struct Protocol {
     RpcMethod<int(int, int), "test1", "num1", "num2"> test1;
     RpcMethod<void(int, int), "test2", "num1", "num2"> test2;
@@ -136,7 +136,7 @@ struct CommonApi {
 
 struct NoPrefixApi {
     CommonApi common;
-    NEKO_SERIALIZER(make_tags<rpc_no_prefix>(common))
+    NEKO_SERIALIZER(makeTags<rpc_no_prefix>(common))
 };
 
 struct SpecApi {
@@ -147,7 +147,7 @@ struct SpecApi {
     RpcMethodSpec<int(int), rpc_desc<"reflected desc">, rpc_args<"value">> reflected;
 
     NEKO_SERIALIZER(
-        (make_tags<rpc_name<"tag.add">, rpc_desc<"tag desc">, rpc_version<"2.0.0">, rpc_args<"left", "right">>(add)),
+        (makeTags<rpc_name<"tag.add">, rpc_desc<"tag desc">, rpc_version<"2.0.0">, rpc_args<"left", "right">>(add)),
         notify, reflected)
 };
 
@@ -156,7 +156,7 @@ struct SpecPrefixApi {
     RpcMethodSpec<int(int), rpc_no_prefix, rpc_name<"rooted">, rpc_args<"value">> rooted;
     RpcMethodSpec<int(int), rpc_prefix<"spec">, rpc_name<"value">, rpc_args<"value">> tagPrefixed;
 
-    NEKO_SERIALIZER(prefixed, rooted, (make_tags<rpc_prefix<"tag">>(tagPrefixed)))
+    NEKO_SERIALIZER(prefixed, rooted, (makeTags<rpc_prefix<"tag">>(tagPrefixed)))
 };
 
 struct SpecNestedApi {
@@ -174,13 +174,13 @@ public:
 };
 
 template <typename Server, typename Client>
-static void connect_endpoint(Server& server, Client& client) {
+static void connectEndpoint(Server& server, Client& client) {
 #if 0
-    auto serverStream = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS) +
+    auto serverStream = (detail::makeUdpStreamClient("udp://127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS) +
                                                         "-127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS)))
                             .wait()
                             .value();
-    auto clientStream = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS) +
+    auto clientStream = (detail::makeUdpStreamClient("udp://127.0.0.1:" + std::to_string(12336 + NEKO_CPP_PLUS) +
                                                         "-127.0.0.1:" + std::to_string(12335 + NEKO_CPP_PLUS)))
                             .wait()
                             .value();
@@ -194,7 +194,7 @@ static void connect_endpoint(Server& server, Client& client) {
 TEST_F(JsonRpcTest, BindAndCall) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server->test2 = [](int a1, int b1) -> ilias::IoTask<void> {
@@ -226,9 +226,9 @@ TEST_F(JsonRpcTest, BindAndCall) {
     server.bindMethod<add>();
     server.bindMethod<MyFunc::execute>();
     server.bindMethod<testxx>();
-    server.bindMethod<test_optional_params>();
+    server.bindMethod<testOptionalParams>();
     // IoTask<T> can return with error, but Task<T> can not, so we can not bind it, if you want to bind coroutine
-    // method, please use IoTask<T>. server.bindMethod<failed_testxx>(); // this can not compile
+    // method, please use IoTask<T>. server.bindMethod<failedTestxx>(); // this can not compile
     {
         auto res = (client->test1(1, 2).wait());
         EXPECT_TRUE(res.has_value());
@@ -299,7 +299,7 @@ TEST_F(JsonRpcTest, BindAndCall) {
         EXPECT_EQ(res.value(), "114514hello,1,2,3,4,5");
     }
     {
-        auto res = (client.callRemote<test_optional_params>(std::optional<MXXParams>{}).wait());
+        auto res = (client.callRemote<testOptionalParams>(std::optional<MXXParams>{}).wait());
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), "no params");
     }
@@ -311,7 +311,7 @@ TEST_F(JsonRpcTest, BindAndCallDuplex) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server->test2 = [](int a1, int b1) -> ilias::IoTask<void> {
@@ -472,22 +472,22 @@ TEST_F(JsonRpcTest, NoPrefixTagKeepsCppPath) {
 }
 
 TEST_F(JsonRpcTest, InvalidStreamClientUrlsFailBeforeOpeningSockets) {
-    EXPECT_FALSE(detail::make_tcp_stream_client("tcp://not-an-endpoint").wait().has_value());
+    EXPECT_FALSE(detail::makeTcpStreamClient("tcp://not-an-endpoint").wait().has_value());
 
     const std::string tcpUrl = "not-an-endpoint";
-    EXPECT_FALSE(detail::make_tcp_stream_client(tcpUrl).wait().has_value());
+    EXPECT_FALSE(detail::makeTcpStreamClient(tcpUrl).wait().has_value());
 
-    EXPECT_FALSE(detail::make_udp_stream_client("udp://127.0.0.1:12345").wait().has_value());
+    EXPECT_FALSE(detail::makeUdpStreamClient("udp://127.0.0.1:12345").wait().has_value());
 
     const std::string udpUrl = "udp://not-an-endpoint-127.0.0.1:12346";
-    EXPECT_FALSE(detail::make_udp_stream_client(udpUrl).wait().has_value());
+    EXPECT_FALSE(detail::makeUdpStreamClient(udpUrl).wait().has_value());
 }
 
 TEST_F(JsonRpcTest, Notification) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server->test2 = [](int a1, int b1) -> ilias::IoTask<void> {
@@ -523,7 +523,7 @@ TEST_F(JsonRpcTest, RpcMethodSpecMergesFieldTagsWithPriority) {
     JsonRpcServer<SpecApi> server{*gContext};
     JsonRpcClient<SpecApi> client{*gContext};
 
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     server->add    = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs * 10 + rhs; };
     bool notified  = false;
@@ -572,7 +572,7 @@ TEST_F(JsonRpcTest, RpcMethodSpecPrefixRulesComposeWithReflectionPrefix) {
     JsonRpcServer<SpecNestedApi> server{*gContext};
     JsonRpcClient<SpecNestedApi> client{*gContext};
 
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     server->api.prefixed    = [](int value) -> ilias::IoTask<int> { co_return value + 1; };
     server->api.rooted      = [](int value) -> ilias::IoTask<int> { co_return value + 2; };
@@ -601,7 +601,7 @@ TEST_F(JsonRpcTest, Basic) {
     JsonRpcServer<Protocol> server{*gContext};
     JsonRpcClient<Protocol> client{*gContext};
 
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     server->test1 = [](int a1, int b1) -> ilias::IoTask<int> { co_return a1 + b1; };
     server.bindMethod<"aa", "bb">("test11",
@@ -716,7 +716,7 @@ TEST_F(JsonRpcTest, Basic) {
     server.close();
 }
 
-std::string double_string(std::string s) { return s + s; }
+auto doubleString(std::string s) -> std::string { return s + s; }
 // clang-format off
 struct TestApiV1 {
     RpcMethodSpec<int(int, int, int)> clamp;
@@ -731,7 +731,7 @@ struct TestApiV1 {
 
     RpcMethod<int(std::string), "test3", "str"> test3;
 
-    RpcMethodF<double_string, "str"> test4;
+    RpcMethodF<doubleString, "str"> test4;
 };
 // clang-format on
 
@@ -739,7 +739,7 @@ TEST_F(JsonRpcTest, TestApiV1) {
     RpcServer<JsonRpcBackend, TestApiV1> server{*gContext};
     RpcClient<JsonRpcBackend, TestApiV1> client{*gContext};
 
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     server->clamp = [](int lparam, int mparam, int rparam) { return std::max(lparam, std::min(mparam, rparam)); };
     server->test  = [](std::string lparam, std::string rparam) { return lparam + rparam; };

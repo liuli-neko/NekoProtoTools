@@ -17,14 +17,14 @@
 #include "nekoproto/serialization/reflection.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 struct TypeLevelFlatTagInner {
     int code = 0;
     std::string label;
 
     NEKO_SERIALIZER(
-        (make_tags<comment_tag<"doc keeps parser depth">, rename_tag<"wire_code">, ParserTag{.flat = true}>(code)),
+        (makeTags<comment_tag<"doc keeps parser depth">, rename_tag<"wire_code">, ParserTag{.flat = true}>(code)),
         label)
 };
 
@@ -63,12 +63,12 @@ struct MacroParsedTaggedObject {
 
 // clang-format off
 template <>
-struct NEKO_NAMESPACE::Meta<MacroParsedTaggedObject> {
+struct nekoproto::Meta<MacroParsedTaggedObject> {
     static constexpr auto value = Object(
-        "raw", make_tags<RawStringTag>(&MacroParsedTaggedObject::raw),
-        "renamed", make_tags<comment_tag<"doc keeps parser depth">, rename_tag<"wire(alias)">, JsonTag{.skippable = true}>(&MacroParsedTaggedObject::renamed),
-        "optional", make_tags<SkippableTag>(&MacroParsedTaggedObject::optional),
-        "nested", make_tags<FlattenedDocsTag>(&MacroParsedTaggedObject::nested)
+        "raw", makeTags<RawStringTag>(&MacroParsedTaggedObject::raw),
+        "renamed", makeTags<comment_tag<"doc keeps parser depth">, rename_tag<"wire(alias)">, JsonTag{.skippable = true}>(&MacroParsedTaggedObject::renamed),
+        "optional", makeTags<SkippableTag>(&MacroParsedTaggedObject::optional),
+        "nested", makeTags<FlattenedDocsTag>(&MacroParsedTaggedObject::nested)
     );
 };
 // clang-format on
@@ -84,10 +84,10 @@ struct SchemaTaggedObject {
     struct Neko {
         static constexpr auto value =
             Object("required", &SchemaTaggedObject::required, "renamed",
-                   make_tags<rename_tag<"wire_required">>(&SchemaTaggedObject::renamed), "retained",
-                   make_tags<ParserTag{.skippable = true}>(&SchemaTaggedObject::retained), "optional",
-                   &SchemaTaggedObject::optional, "flat", make_tags<ParserTag{.flat = true}>(&SchemaTaggedObject::flat),
-                   "fixed", make_tags<BinaryTag{.fixed_length = true}>(&SchemaTaggedObject::fixed)); // NOLINT
+                   makeTags<rename_tag<"wire_required">>(&SchemaTaggedObject::renamed), "retained",
+                   makeTags<ParserTag{.skippable = true}>(&SchemaTaggedObject::retained), "optional",
+                   &SchemaTaggedObject::optional, "flat", makeTags<ParserTag{.flat = true}>(&SchemaTaggedObject::flat),
+                   "fixed", makeTags<BinaryTag{.fixed_length = true}>(&SchemaTaggedObject::fixed)); // NOLINT
     };
 };
 
@@ -99,7 +99,7 @@ struct SerializationIgnoredObject {
     struct Neko {
         static constexpr auto value =
             Object("id", &SerializationIgnoredObject::id, "transient",
-                   make_tags<serialization_ignore_tag>(&SerializationIgnoredObject::transient), "value",
+                   makeTags<serialization_ignore_tag>(&SerializationIgnoredObject::transient), "value",
                    &SerializationIgnoredObject::value); // NOLINT
     };
 };
@@ -112,7 +112,7 @@ struct SerializationIgnoredArray {
     struct Neko {
         static constexpr auto value =
             Array(&SerializationIgnoredArray::first,
-                  make_tags<serialization_ignore_tag>(&SerializationIgnoredArray::transient),
+                  makeTags<serialization_ignore_tag>(&SerializationIgnoredArray::transient),
                   &SerializationIgnoredArray::last); // NOLINT
     };
 };
@@ -121,11 +121,11 @@ struct ReaderProbeTag {
     int marker = 0;
 
     template <typename T, auto /*Tags*/>
-    constexpr static bool constexpr_check() { // NOLINT
+    constexpr static bool constexprCheck() { // NOLINT
         return true;
     }
 
-    constexpr bool operator==(const ReaderProbeTag&) const = default;
+    constexpr auto operator==(const ReaderProbeTag&) const -> bool = default;
 };
 
 inline constexpr auto ReaderNodeTag = ReaderProbeTag{.marker = 7};
@@ -133,16 +133,16 @@ inline constexpr auto ReaderNodeTag = ReaderProbeTag{.marker = 7};
 struct ReaderProbeObject {
     int value = 0;
 
-    NEKO_SERIALIZER((make_tags<ReaderNodeTag>(value)))
+    NEKO_SERIALIZER((makeTags<ReaderNodeTag>(value)))
 };
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 template <>
-struct is_flat_tag<TypeLevelFlatTagInner> : std::true_type {};
+struct IsFlatTag<TypeLevelFlatTagInner> : std::true_type {};
 
 template <>
-struct is_unframed_tag<TypeLevelUnframedHeader> : std::true_type {};
-NEKO_END_NAMESPACE
+struct IsUnframedTag<TypeLevelUnframedHeader> : std::true_type {};
+} // namespace nekoproto
 
 namespace {
 
@@ -160,24 +160,24 @@ struct ReaderProbeNode {
     std::vector<std::string> fieldNames;
     std::vector<ReaderProbeNode> fieldValues;
 
-    static ReaderProbeNode integerValue(int value) {
+    static auto integerValue(int value) -> ReaderProbeNode {
         ReaderProbeNode node;
         node.kind    = Kind::Integer;
         node.integer = value;
         return node;
     }
 
-    static ReaderProbeNode array(std::initializer_list<ReaderProbeNode> values) {
+    static auto array(std::initializer_list<ReaderProbeNode> values) -> ReaderProbeNode {
         ReaderProbeNode node;
         node.kind     = Kind::Array;
         node.elements = values;
         return node;
     }
 
-    static ReaderProbeNode object(std::initializer_list<std::pair<std::string, ReaderProbeNode>> values);
+    static auto object(std::initializer_list<std::pair<std::string, ReaderProbeNode>> values) -> ReaderProbeNode;
 };
 
-ReaderProbeNode ReaderProbeNode::object(std::initializer_list<std::pair<std::string, ReaderProbeNode>> values) {
+auto ReaderProbeNode::object(std::initializer_list<std::pair<std::string, ReaderProbeNode>> values) -> ReaderProbeNode {
     ReaderProbeNode node;
     node.kind = Kind::Object;
     node.fieldNames.reserve(values.size());
@@ -229,112 +229,112 @@ struct TagAwareProbeReader {
     }
 
     template <typename Tags>
-    static sa::Result<InputArrayType> toArray(InputValueType input, const Tags& tags) {
+    static auto toArray(InputValueType input, const Tags& tags) -> sa::Result<InputArrayType> {
         ++taggedArrayCalls;
-        if (tag_query::has_tag<ReaderProbeTag>(tags)) {
+        if (tag_query::hasTag<ReaderProbeTag>(tags)) {
             ++arrayCallsWithProbe;
         }
         return toArrayImpl(input);
     }
 
-    static sa::Result<InputArrayType> toArray(InputValueType input) {
+    static auto toArray(InputValueType input) -> sa::Result<InputArrayType> {
         ++legacyArrayCalls;
         return toArrayImpl(input);
     }
 
-    static std::size_t arraySize(const InputArrayType& array) { return array->elements.size(); }
+    static auto arraySize(const InputArrayType& array) -> std::size_t { return array->elements.size(); }
 
-    static InputValueType arrayElement(const InputArrayType& array, std::size_t index) {
+    static auto arrayElement(const InputArrayType& array, std::size_t index) -> InputValueType {
         return &array->elements[index];
     }
 
     template <typename Tags>
-    static sa::Result<InputObjectType> toObject(InputValueType input, const Tags& tags) {
+    static auto toObject(InputValueType input, const Tags& tags) -> sa::Result<InputObjectType> {
         ++taggedObjectCalls;
-        if (tag_query::has_tag<ReaderProbeTag>(tags)) {
+        if (tag_query::hasTag<ReaderProbeTag>(tags)) {
             ++objectCallsWithProbe;
         }
         return toObjectImpl(input);
     }
 
-    static sa::Result<InputObjectType> toObject(InputValueType input) {
+    static auto toObject(InputValueType input) -> sa::Result<InputObjectType> {
         ++legacyObjectCalls;
         return toObjectImpl(input);
     }
 
     template <typename Tags>
-    static sa::Result<InputValueType> objectField(const InputObjectType& object, std::string_view name,
-                                                  const Tags& tags) {
+    static auto objectField(const InputObjectType& object, std::string_view name,
+                                                  const Tags& tags) -> sa::Result<InputValueType> {
         ++taggedFieldCalls;
-        if (tag_query::has_tag<ReaderProbeTag>(tags)) {
+        if (tag_query::hasTag<ReaderProbeTag>(tags)) {
             ++fieldCallsWithProbe;
         }
         return objectFieldImpl(object, name);
     }
 
-    static sa::Result<InputValueType> objectField(const InputObjectType& object, std::string_view name) {
+    static auto objectField(const InputObjectType& object, std::string_view name) -> sa::Result<InputValueType> {
         ++legacyFieldCalls;
         return objectFieldImpl(object, name);
     }
 
     template <typename Tags>
-    static bool isEmpty(InputValueType input, const Tags& tags) {
+    static auto isEmpty(InputValueType input, const Tags& tags) -> bool {
         ++taggedEmptyCalls;
-        if (tag_query::has_tag<ReaderProbeTag>(tags)) {
+        if (tag_query::hasTag<ReaderProbeTag>(tags)) {
             ++emptyCallsWithProbe;
         }
         return input->kind == ReaderProbeNode::Kind::Null;
     }
 
-    static bool isEmpty(InputValueType input) {
+    static auto isEmpty(InputValueType input) -> bool {
         ++legacyEmptyCalls;
         return input->kind == ReaderProbeNode::Kind::Null;
     }
 
     template <typename T, typename Tags>
-    static sa::Result<T> toBasicType(InputValueType input, const Tags& tags) {
+    static auto toBasicType(InputValueType input, const Tags& tags) -> sa::Result<T> {
         ++taggedBasicCalls;
-        if (tag_query::has_tag<ReaderProbeTag>(tags)) {
+        if (tag_query::hasTag<ReaderProbeTag>(tags)) {
             ++basicCallsWithProbe;
         }
         return toBasicTypeImpl<T>(input);
     }
 
     template <typename T>
-    static sa::Result<T> toBasicType(InputValueType input) {
+    static auto toBasicType(InputValueType input) -> sa::Result<T> {
         ++legacyBasicCalls;
         return toBasicTypeImpl<T>(input);
     }
 
 private:
-    static sa::Result<InputArrayType> toArrayImpl(InputValueType input) {
+    static auto toArrayImpl(InputValueType input) -> sa::Result<InputArrayType> {
         if (input->kind != ReaderProbeNode::Kind::Array) {
-            return sa::Err(sa::ErrorCode::InvalidType, "probe input is not an array");
+            return sa::err(sa::ErrorCode::InvalidType, "probe input is not an array");
         }
         return input;
     }
 
-    static sa::Result<InputObjectType> toObjectImpl(InputValueType input) {
+    static auto toObjectImpl(InputValueType input) -> sa::Result<InputObjectType> {
         if (input->kind != ReaderProbeNode::Kind::Object) {
-            return sa::Err(sa::ErrorCode::InvalidType, "probe input is not an object");
+            return sa::err(sa::ErrorCode::InvalidType, "probe input is not an object");
         }
         return input;
     }
 
-    static sa::Result<InputValueType> objectFieldImpl(const InputObjectType& object, std::string_view name) {
+    static auto objectFieldImpl(const InputObjectType& object, std::string_view name) -> sa::Result<InputValueType> {
         for (std::size_t i = 0; i < object->fieldNames.size(); ++i) {
             if (object->fieldNames[i] == name) {
                 return &object->fieldValues[i];
             }
         }
-        return sa::Err(sa::ErrorCode::InvalidField, "probe field is missing");
+        return sa::err(sa::ErrorCode::InvalidField, "probe field is missing");
     }
 
     template <typename T>
-    static sa::Result<T> toBasicTypeImpl(InputValueType input) {
+    static auto toBasicTypeImpl(InputValueType input) -> sa::Result<T> {
         static_assert(std::is_integral_v<T>, "probe reader only implements integral scalar conversion");
         if (input->kind != ReaderProbeNode::Kind::Integer) {
-            return sa::Err(sa::ErrorCode::InvalidType, "probe input is not an integer");
+            return sa::err(sa::ErrorCode::InvalidType, "probe input is not an integer");
         }
         return static_cast<T>(input->integer);
     }
@@ -342,7 +342,7 @@ private:
 
 #if !defined(NEKO_PROTO_NO_JSON_SERIALIZER)
 template <typename T>
-std::string writeJson(const T& value) {
+auto writeJson(const T& value) -> std::string {
     std::vector<char> buffer;
     JsonSerializer::OutputSerializer out(buffer);
     EXPECT_TRUE(out(value));
@@ -351,7 +351,7 @@ std::string writeJson(const T& value) {
 }
 
 template <typename T>
-bool readJson(std::string_view json, T& value) {
+auto readJson(std::string_view json, T& value) -> bool {
     JsonSerializer::InputSerializer in(json.data(), json.size());
     const bool parsed = in(value);
     return parsed && static_cast<bool>(in);
@@ -359,12 +359,12 @@ bool readJson(std::string_view json, T& value) {
 #endif
 
 template <typename T>
-parsing::schema::Type::Object objectSchema() {
-    const auto schema = parser_schema<T>();
+auto objectSchema() -> parsing::schema::Type::Object {
+    const auto schema = parserSchema<T>();
     return std::get<parsing::schema::Type::Object>(schema.value);
 }
 
-bool contains(const std::vector<std::string>& values, std::string_view expected) {
+auto contains(const std::vector<std::string>& values, std::string_view expected) -> bool {
     return std::find(values.begin(), values.end(), expected) != values.end();
 }
 
@@ -374,32 +374,32 @@ TEST(SerializationTags, AccessorsResolveDirectAndNestedTagFlags) {
     constexpr auto Tags =
         TagList<comment_tag<"outer comment">, rename_tag<"wire_name">, ParserTag{.flat = true, .skippable = true}>{};
 
-    static_assert(tag_query::has<tag_property::comment>(Tags));
-    static_assert(tag_query::get<tag_property::comment>(Tags) == "outer comment");
-    static_assert(tag_query::has<tag_property::name>(Tags));
-    static_assert(tag_query::get<tag_property::name>(Tags) == "wire_name");
-    static_assert(tag_query::get<tag_property::flat<TypeLevelFlatTagInner>>(Tags));
-    static_assert(tag_query::get<tag_property::skippable>(Tags));
-    static_assert(tag_query::get<tag_property::skippable>(JsonTag{.skippable = true}));
+    static_assert(tag_query::has<tag_property::Comment>(Tags));
+    static_assert(tag_query::get<tag_property::Comment>(Tags) == "outer comment");
+    static_assert(tag_query::has<tag_property::Name>(Tags));
+    static_assert(tag_query::get<tag_property::Name>(Tags) == "wire_name");
+    static_assert(tag_query::get<tag_property::Flat<TypeLevelFlatTagInner>>(Tags));
+    static_assert(tag_query::get<tag_property::Skippable>(Tags));
+    static_assert(tag_query::get<tag_property::Skippable>(JsonTag{.skippable = true}));
 }
 
 TEST(SerializationTags, TypeLevelTagsAreVisibleThroughNoTags) {
-    static_assert(tag_query::get<tag_property::flat<TypeLevelFlatTagInner>>(NoTags{}));
-    static_assert(!tag_query::get<tag_property::flat<int>>(NoTags{}));
-    static_assert(tag_query::get<tag_property::unframed<TypeLevelUnframedHeader>>(NoTags{}));
-    static_assert(!tag_query::get<tag_property::unframed<std::uint16_t>>(NoTags{}));
-    static_assert(tag_query::get<tag_property::fixed_length<std::uint32_t>>(BinaryTag{.fixed_length = true}) ==
+    static_assert(tag_query::get<tag_property::Flat<TypeLevelFlatTagInner>>(NoTags{}));
+    static_assert(!tag_query::get<tag_property::Flat<int>>(NoTags{}));
+    static_assert(tag_query::get<tag_property::Unframed<TypeLevelUnframedHeader>>(NoTags{}));
+    static_assert(!tag_query::get<tag_property::Unframed<std::uint16_t>>(NoTags{}));
+    static_assert(tag_query::get<tag_property::FixedLength<std::uint32_t>>(BinaryTag{.fixed_length = true}) ==
                   sizeof(std::uint32_t));
-    static_assert(tag_query::get<tag_property::fixed_length<std::uint32_t>>(BinaryTag{.fixed_length = 2}) == 2U);
-    static_assert(tag_query::get<tag_property::union_encoding>(NoTags{}) == UnionEncoding::TaggedArray);
-    static_assert(tag_query::get<tag_property::union_encoding>(
+    static_assert(tag_query::get<tag_property::FixedLength<std::uint32_t>>(BinaryTag{.fixed_length = 2}) == 2U);
+    static_assert(tag_query::get<tag_property::UnionEncodingProperty>(NoTags{}) == UnionEncoding::TaggedArray);
+    static_assert(tag_query::get<tag_property::UnionEncodingProperty>(
                       UnionTag{.encoding = UnionEncoding::Untagged}) == UnionEncoding::Untagged);
 }
 
 TEST(SerializationTags, VariantSchemaFollowsUnionEncoding) {
     using Variant = std::variant<int, std::string>;
 
-    const auto taggedSchema = parser_schema<Variant>();
+    const auto taggedSchema = parserSchema<Variant>();
     const auto* array = std::get_if<parsing::schema::Type::Array>(&taggedSchema.value);
     ASSERT_NE(array, nullptr);
     ASSERT_EQ(array->prefixItems.size(), 2U);
@@ -410,25 +410,25 @@ TEST(SerializationTags, VariantSchemaFollowsUnionEncoding) {
     EXPECT_TRUE(std::holds_alternative<parsing::schema::Type::AnyOf>(array->prefixItems[1].value));
 
     constexpr auto Untagged = UnionTag{.encoding = UnionEncoding::Untagged};
-    const auto untaggedSchema = parser_schema<Variant>(Untagged);
+    const auto untaggedSchema = parserSchema<Variant>(Untagged);
     const auto* alternatives = std::get_if<parsing::schema::Type::AnyOf>(&untaggedSchema.value);
     ASSERT_NE(alternatives, nullptr);
     EXPECT_EQ(alternatives->types.size(), 2U);
 
     Variant value;
-    auto taggedValue = make_tags<Untagged>(value);
-    const auto taggedFieldSchema = parser_schema<decltype(taggedValue)>();
+    auto taggedValue = makeTags<Untagged>(value);
+    const auto taggedFieldSchema = parserSchema<decltype(taggedValue)>();
     EXPECT_TRUE(std::holds_alternative<parsing::schema::Type::AnyOf>(taggedFieldSchema.value));
 }
 
 TEST(SerializationTags, MakeTagsExposeAccessorAndWrappedTag) {
-    auto spec = make_tags<rename_tag<"wire_code">, JsonTag{.skippable = true}>(&TypeLevelFlatTagInner::code);
+    auto spec = makeTags<rename_tag<"wire_code">, JsonTag{.skippable = true}>(&TypeLevelFlatTagInner::code);
 
     static_assert(is_tagged_field_v<decltype(spec)>);
     static_assert(std::is_same_v<detail::resolve_without_context_t<decltype(&TypeLevelFlatTagInner::code)>, int>);
     static_assert(std::is_same_v<resolve_member_type_t<field_accessor_t<decltype(spec)>, TypeLevelFlatTagInner>, int>);
-    static_assert(tag_query::get<tag_property::name>(field_tags_v<decltype(spec)>) == "wire_code");
-    static_assert(tag_query::get<tag_property::skippable>(field_tags_v<decltype(spec)>));
+    static_assert(tag_query::get<tag_property::Name>(field_tags_v<decltype(spec)>) == "wire_code");
+    static_assert(tag_query::get<tag_property::Skippable>(field_tags_v<decltype(spec)>));
 }
 
 TEST(SerializationTags, SerializerMacroStripsMakeTagsWhenBuildingReflectionNames) {
@@ -444,15 +444,15 @@ TEST(SerializationTags, SerializerMacroStripsMakeTagsWhenBuildingReflectionNames
     constexpr auto optionalTags = std::get<2>(Reflect<MacroParsedTaggedObject>::field_tags);
     constexpr auto nestedTags   = std::get<3>(Reflect<MacroParsedTaggedObject>::field_tags);
 
-    static_assert(tag_query::get<tag_property::raw_string>(rawTags));
-    static_assert(tag_query::get<tag_property::comment>(renamedTags) == "doc keeps parser depth");
-    static_assert(tag_query::get<tag_property::name>(renamedTags) == "wire(alias)");
-    static_assert(tag_query::get<tag_property::skippable>(renamedTags));
-    static_assert(tag_query::get<tag_property::skippable>(optionalTags));
-    static_assert(tag_query::get<tag_property::comment>(nestedTags) == "flattened docs");
-    static_assert(tag_query::get<tag_property::flat<TypeLevelFlatTagInner>>(nestedTags));
-    constexpr auto ignoredSpec = make_tags<serialization_ignore_tag>(&SerializationIgnoredObject::transient);
-    static_assert(tag_query::get<tag_property::ignore>(field_tags_v<decltype(ignoredSpec)>));
+    static_assert(tag_query::get<tag_property::RawString>(rawTags));
+    static_assert(tag_query::get<tag_property::Comment>(renamedTags) == "doc keeps parser depth");
+    static_assert(tag_query::get<tag_property::Name>(renamedTags) == "wire(alias)");
+    static_assert(tag_query::get<tag_property::Skippable>(renamedTags));
+    static_assert(tag_query::get<tag_property::Skippable>(optionalTags));
+    static_assert(tag_query::get<tag_property::Comment>(nestedTags) == "flattened docs");
+    static_assert(tag_query::get<tag_property::Flat<TypeLevelFlatTagInner>>(nestedTags));
+    constexpr auto ignoredSpec = makeTags<serialization_ignore_tag>(&SerializationIgnoredObject::transient);
+    static_assert(tag_query::get<tag_property::Ignore>(field_tags_v<decltype(ignoredSpec)>));
 
     constexpr auto innerNames = Reflect<TypeLevelFlatTagInner>::names();
     static_assert(innerNames.size() == 2);
@@ -576,7 +576,7 @@ TEST(SerializationTagIntegration, SerializationIgnoreTagRemovesPositionalFieldFr
     EXPECT_EQ(decoded.transient, 55);
     EXPECT_EQ(decoded.last, 4);
 
-    const auto schema = parser_schema<SerializationIgnoredArray>();
+    const auto schema = parserSchema<SerializationIgnoredArray>();
     const auto array  = std::get<parsing::schema::Type::Array>(schema.value);
     ASSERT_TRUE(array.minItems.has_value());
     ASSERT_TRUE(array.maxItems.has_value());
@@ -610,7 +610,7 @@ TEST(SerializationTagPropagation, TagAwareReaderGetsContainerTagButElementsDoNot
     std::vector<int> decoded;
 
     TagAwareProbeReader::reset();
-    ASSERT_TRUE(parser_read<TagAwareProbeReader>(&input, decoded, TagList<ReaderNodeTag>{}));
+    ASSERT_TRUE(parserRead<TagAwareProbeReader>(&input, decoded, TagList<ReaderNodeTag>{}));
     EXPECT_EQ(decoded, (std::vector<int>{10, 20}));
     EXPECT_EQ(TagAwareProbeReader::taggedArrayCalls, 1);
     EXPECT_EQ(TagAwareProbeReader::arrayCallsWithProbe, 1);
@@ -626,7 +626,7 @@ TEST(SerializationTagPropagation, OptionalPassesTagToItsNonNullPayloadNode) {
     std::optional<std::vector<int>> decoded;
 
     TagAwareProbeReader::reset();
-    ASSERT_TRUE(parser_read<TagAwareProbeReader>(&input, decoded, TagList<ReaderNodeTag>{}));
+    ASSERT_TRUE(parserRead<TagAwareProbeReader>(&input, decoded, TagList<ReaderNodeTag>{}));
     ASSERT_TRUE(decoded.has_value());
     EXPECT_EQ(decoded.value(), (std::vector<int>{30, 40}));
     EXPECT_EQ(TagAwareProbeReader::taggedEmptyCalls, 1);
@@ -643,7 +643,7 @@ TEST(SerializationTagPropagation, ReflectionDispatchesFieldTagToLookupAndValueNo
     ReaderProbeObject decoded;
 
     TagAwareProbeReader::reset();
-    ASSERT_TRUE(parser_read<TagAwareProbeReader>(&input, decoded));
+    ASSERT_TRUE(parserRead<TagAwareProbeReader>(&input, decoded));
     EXPECT_EQ(decoded.value, 55);
     EXPECT_EQ(TagAwareProbeReader::fieldCallsWithProbe, 1);
     EXPECT_EQ(TagAwareProbeReader::emptyCallsWithProbe, 1);

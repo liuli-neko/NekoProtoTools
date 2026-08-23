@@ -8,9 +8,9 @@
 #include <arpa/inet.h>
 #endif
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
-inline std::int16_t htobe(const std::int16_t value) noexcept {
+inline auto htobe(const std::int16_t value) noexcept -> std::int16_t {
 #ifdef _WIN32
     return static_cast<std::int16_t>(_byteswap_ushort(static_cast<std::uint16_t>(value)));
 #else
@@ -18,7 +18,7 @@ inline std::int16_t htobe(const std::int16_t value) noexcept {
 #endif
 }
 
-inline std::uint16_t htobe(const std::uint16_t value) noexcept {
+inline auto htobe(const std::uint16_t value) noexcept -> std::uint16_t {
 #ifdef _WIN32
     return _byteswap_ushort(value);
 #else
@@ -26,7 +26,7 @@ inline std::uint16_t htobe(const std::uint16_t value) noexcept {
 #endif
 }
 
-inline std::int32_t htobe(const std::int32_t value) noexcept {
+inline auto htobe(const std::int32_t value) noexcept -> std::int32_t {
 #ifdef _WIN32
     return static_cast<std::int32_t>(_byteswap_ulong(static_cast<std::uint32_t>(value)));
 #else
@@ -34,7 +34,7 @@ inline std::int32_t htobe(const std::int32_t value) noexcept {
 #endif
 }
 
-inline std::uint32_t htobe(const std::uint32_t value) noexcept {
+inline auto htobe(const std::uint32_t value) noexcept -> std::uint32_t {
 #ifdef _WIN32
     return _byteswap_ulong(value);
 #else
@@ -42,7 +42,7 @@ inline std::uint32_t htobe(const std::uint32_t value) noexcept {
 #endif
 }
 
-inline std::int64_t htobe(const std::int64_t value) noexcept {
+inline auto htobe(const std::int64_t value) noexcept -> std::int64_t {
 #ifdef _WIN32
     return static_cast<std::int64_t>(_byteswap_uint64(static_cast<std::uint64_t>(value)));
 #else
@@ -50,7 +50,7 @@ inline std::int64_t htobe(const std::int64_t value) noexcept {
 #endif
 }
 
-inline std::uint64_t htobe(const std::uint64_t value) noexcept {
+inline auto htobe(const std::uint64_t value) noexcept -> std::uint64_t {
 #ifdef _WIN32
     return _byteswap_uint64(value);
 #else
@@ -58,7 +58,7 @@ inline std::uint64_t htobe(const std::uint64_t value) noexcept {
 #endif
 }
 
-inline std::int16_t betoh(const std::int16_t value) noexcept {
+inline auto betoh(const std::int16_t value) noexcept -> std::int16_t {
 #ifdef _WIN32
     return static_cast<std::int16_t>(_byteswap_ushort(static_cast<std::uint16_t>(value)));
 #else
@@ -66,7 +66,7 @@ inline std::int16_t betoh(const std::int16_t value) noexcept {
 #endif
 }
 
-inline std::uint16_t betoh(const std::uint16_t value) noexcept {
+inline auto betoh(const std::uint16_t value) noexcept -> std::uint16_t {
 #ifdef _WIN32
     return _byteswap_ushort(value);
 #else
@@ -74,7 +74,7 @@ inline std::uint16_t betoh(const std::uint16_t value) noexcept {
 #endif
 }
 
-inline std::int32_t betoh(const std::int32_t value) noexcept {
+inline auto betoh(const std::int32_t value) noexcept -> std::int32_t {
 #ifdef _WIN32
     return static_cast<std::int32_t>(_byteswap_ulong(static_cast<std::uint32_t>(value)));
 #else
@@ -82,7 +82,7 @@ inline std::int32_t betoh(const std::int32_t value) noexcept {
 #endif
 }
 
-inline std::uint32_t betoh(const std::uint32_t value) noexcept {
+inline auto betoh(const std::uint32_t value) noexcept -> std::uint32_t {
 #ifdef _WIN32
     return _byteswap_ulong(value);
 #else
@@ -90,7 +90,7 @@ inline std::uint32_t betoh(const std::uint32_t value) noexcept {
 #endif
 }
 
-inline std::int64_t betoh(const std::int64_t value) noexcept {
+inline auto betoh(const std::int64_t value) noexcept -> std::int64_t {
 #ifdef _WIN32
     return static_cast<std::int64_t>(_byteswap_uint64(static_cast<std::uint64_t>(value)));
 #else
@@ -98,7 +98,7 @@ inline std::int64_t betoh(const std::int64_t value) noexcept {
 #endif
 }
 
-inline std::uint64_t betoh(const std::uint64_t value) noexcept {
+inline auto betoh(const std::uint64_t value) noexcept -> std::uint64_t {
 #ifdef _WIN32
     return _byteswap_uint64(value);
 #else
@@ -106,4 +106,4 @@ inline std::uint64_t betoh(const std::uint64_t value) noexcept {
 #endif
 }
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

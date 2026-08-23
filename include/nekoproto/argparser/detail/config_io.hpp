@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace argparser::detail {
 
 struct ConfigIoFile {
@@ -44,52 +44,52 @@ struct CommandConfig<ArgCommand<Value>> {
     };
 };
 
-inline std::error_code config_io_to_argparser_error(const config_io::ConfigIoError& error) {
-    const auto parser_error =
-        error.code == config_io::make_error_code(config_io::ConfigIoErrorCode::UnknownFormat) ||
-                error.code == config_io::make_error_code(config_io::ConfigIoErrorCode::BackendUnavailable)
+inline auto configIoToArgparserError(const config_io::ConfigIoError& error) -> std::error_code {
+    const auto parserError =
+        error.code == config_io::makeErrorCode(config_io::ConfigIoErrorCode::UnknownFormat) ||
+                error.code == config_io::makeErrorCode(config_io::ConfigIoErrorCode::BackendUnavailable)
             ? ArgParserError::InvalidDefinition
             : ArgParserError::InvalidValue;
-    return make_argparser_error(parser_error, error.message);
+    return makeArgparserError(parserError, error.message);
 }
 
 template <typename T>
-std::error_code import_config_file(const ConfigIoFile& file, T& value) {
+auto importConfigFile(const ConfigIoFile& file, T& value) -> std::error_code {
     auto result = config_io::load<T>(std::filesystem::path(file.path), file.format);
     if (!result) {
-        return config_io_to_argparser_error(result.error());
+        return configIoToArgparserError(result.error());
     }
     value = std::move(*result);
     return {};
 }
 
 template <typename T>
-std::error_code export_config_file(const ConfigIoFile& file, const T& value) {
+auto exportConfigFile(const ConfigIoFile& file, const T& value) -> std::error_code {
     auto result = config_io::save(value, std::filesystem::path(file.path), file.format);
     if (!result) {
-        return config_io_to_argparser_error(result.error());
+        return configIoToArgparserError(result.error());
     }
     return {};
 }
 
-inline std::error_code collect_config_io_selection(const ArgSchema& schema, const RawParseResult& raw,
-                                                   ConfigIoSelection& selection) {
+inline auto collectConfigIoSelection(const ArgSchema& schema, const RawParseResult& raw,
+                                                   ConfigIoSelection& selection) -> std::error_code {
     for (std::size_t index = schema.user_spec_count; index < schema.specs.size(); ++index) {
         if (index >= raw.options.size() || !raw.options[index].seen()) {
             continue;
         }
         const auto& values = raw.options[index].values;
         if (values.size() != 1U) {
-            return make_argparser_error(ArgParserError::InvalidValue,
-                                        format_error_option_label(schema.specs[index]) + " expects exactly one path");
+            return makeArgparserError(ArgParserError::InvalidValue,
+                                        formatErrorOptionLabel(schema.specs[index]) + " expects exactly one path");
         }
-        const auto builtin = schema.builtin_spec(index);
+        const auto builtin = schema.builtinSpec(index);
         if (!builtin.has_value()) {
             continue;
         }
         if (builtin->direction == ConfigIoDirection::Import) {
             if (selection.import_file.has_value()) {
-                return make_argparser_error(ArgParserError::InvalidValue,
+                return makeArgparserError(ArgParserError::InvalidValue,
                                             "only one config import option can be used at a time");
             }
             selection.import_file = ConfigIoFile{builtin->format, std::string(values.front())};
@@ -101,9 +101,9 @@ inline std::error_code collect_config_io_selection(const ArgSchema& schema, cons
 }
 
 template <typename T>
-std::error_code export_config_files(const ConfigIoSelection& selection, const T& value) {
+auto exportConfigFiles(const ConfigIoSelection& selection, const T& value) -> std::error_code {
     for (const auto& file : selection.export_files) {
-        if (auto error = export_config_file(file, value)) {
+        if (auto error = exportConfigFile(file, value)) {
             return error;
         }
     }
@@ -111,4 +111,4 @@ std::error_code export_config_files(const ConfigIoSelection& selection, const T&
 }
 
 } // namespace argparser::detail
-NEKO_END_NAMESPACE
+} // namespace nekoproto

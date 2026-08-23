@@ -15,7 +15,7 @@
 
 using namespace ilias;
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 auto ErrorCategory::instance() -> const ErrorCategory& {
     static ErrorCategory kInstance;
@@ -28,4 +28,4 @@ auto ErrorCategory::equivalent(int value, const std::error_condition& other) con
     return other.category().name() == name() && value == other.value();
 }
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

@@ -18,7 +18,7 @@
 #include "nekoproto/global/config.h"
 #include "nekoproto/global/global.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 enum class JsonRpcError {
     Ok = 0,
@@ -42,7 +42,7 @@ enum class JsonRpcError {
 
 class JsonRpcErrorCategory : public std::error_category {
 public:
-    static JsonRpcErrorCategory& instance() {
+    static auto instance() -> JsonRpcErrorCategory& {
         static JsonRpcErrorCategory kInstance;
         return kInstance;
     }
@@ -79,10 +79,15 @@ public:
     auto name() const noexcept -> const char* override { return "jsonrpc"; }
 };
 
-inline auto make_error_code(JsonRpcError value) noexcept -> std::error_code {
+inline auto makeErrorCode(JsonRpcError value) noexcept -> std::error_code {
     return std::error_code(static_cast<int>(value), JsonRpcErrorCategory::instance());
 }
-NEKO_END_NAMESPACE
+
+// Required by std::error_code's ADL customization protocol.
+inline auto make_error_code(JsonRpcError value) noexcept -> std::error_code { // NOLINT(readability-identifier-naming)
+    return makeErrorCode(value);
+}
+} // namespace nekoproto
 
 template <>
-struct std::is_error_code_enum<NEKO_NAMESPACE::JsonRpcError> : std::true_type {};
+struct std::is_error_code_enum<nekoproto::JsonRpcError> : std::true_type {};

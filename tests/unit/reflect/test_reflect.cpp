@@ -3,16 +3,16 @@
 
 #include <gtest/gtest.h>
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
-struct this_is_a_test_struct {
+struct ThisIsATestStruct {
     int a;
     float b;
     double c;
 };
 
 namespace {
-struct a_struct_in_inline_namespace {
+struct AStructInInlineNamespace {
     int a;
     float b;
     double c;
@@ -20,7 +20,7 @@ struct a_struct_in_inline_namespace {
 } // namespace
 
 namespace test_namespace {
-struct a_struct_in_namespace {
+struct AStructInNamespace {
     int a;
     float b;
     double c;
@@ -28,7 +28,7 @@ struct a_struct_in_namespace {
 } // namespace test_namespace
 
 namespace a::b::c::d::e::f {
-struct a_struct_in_nested_namespace {
+struct AStructInNestedNamespace {
     int a;
     float b;
     double c;
@@ -36,10 +36,10 @@ struct a_struct_in_nested_namespace {
 } // namespace a::b::c::d::e::f
 
 TEST(ReflectTest, TestReflect) {
-    EXPECT_STREQ(detail::class_nameof<this_is_a_test_struct>.data(), "this_is_a_test_struct");
-    EXPECT_STREQ(detail::class_nameof<test_namespace::a_struct_in_namespace>.data(), "a_struct_in_namespace");
-    EXPECT_STREQ(detail::class_nameof<a::b::c::d::e::f::a_struct_in_nested_namespace>.data(),
-                 "a_struct_in_nested_namespace");
+    EXPECT_STREQ(detail::class_nameof<ThisIsATestStruct>.data(), "ThisIsATestStruct");
+    EXPECT_STREQ(detail::class_nameof<test_namespace::AStructInNamespace>.data(), "AStructInNamespace");
+    EXPECT_STREQ(detail::class_nameof<a::b::c::d::e::f::AStructInNestedNamespace>.data(),
+                 "AStructInNestedNamespace");
 }
 
 #include "../common/common_main.cpp.in" // IWYU pragma: export

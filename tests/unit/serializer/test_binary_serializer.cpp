@@ -13,7 +13,7 @@
 #include <variant>
 #include <vector>
 
-using namespace NEKO_NAMESPACE;
+using namespace nekoproto;
 
 class TestP {
 public:
@@ -56,7 +56,7 @@ struct TaggedFixedLength {
 
     struct Neko {
         static constexpr auto value =
-            Object("value", make_tags<BinaryTag{.fixed_length = true}>(&TaggedFixedLength::value)); // NOLINT
+            Object("value", makeTags<BinaryTag{.fixed_length = true}>(&TaggedFixedLength::value)); // NOLINT
     };
 };
 
@@ -65,7 +65,7 @@ struct InvalidTaggedFixedLength {
 
     struct Neko {
         static constexpr auto value =
-            Object("value", make_tags<BinaryTag{.fixed_length = 2}>(&InvalidTaggedFixedLength::value)); // NOLINT
+            Object("value", makeTags<BinaryTag{.fixed_length = 2}>(&InvalidTaggedFixedLength::value)); // NOLINT
     };
 };
 
@@ -76,9 +76,9 @@ struct RawFixedHeader {
 
     struct Neko {
         static constexpr auto value = Object(
-            "length", make_tags<BinaryTag{.fixed_length = sizeof(std::uint32_t)}>(&RawFixedHeader::length),
-            "data", make_tags<BinaryTag{.fixed_length = sizeof(std::int32_t)}>(&RawFixedHeader::data), "type",
-            make_tags<BinaryTag{.fixed_length = sizeof(std::uint16_t)}>(&RawFixedHeader::type)); // NOLINT
+            "length", makeTags<BinaryTag{.fixed_length = sizeof(std::uint32_t)}>(&RawFixedHeader::length),
+            "data", makeTags<BinaryTag{.fixed_length = sizeof(std::int32_t)}>(&RawFixedHeader::data), "type",
+            makeTags<BinaryTag{.fixed_length = sizeof(std::uint16_t)}>(&RawFixedHeader::type)); // NOLINT
     };
 };
 
@@ -100,8 +100,8 @@ struct RawTypedHeader {
 
     struct Neko {
         static constexpr auto value = Object(
-            "enabled", make_tags<BinaryTag{.fixed_length = sizeof(bool)}>(&RawTypedHeader::enabled), "kind",
-            make_tags<BinaryTag{.fixed_length = sizeof(std::uint16_t)}>(&RawTypedHeader::kind)); // NOLINT
+            "enabled", makeTags<BinaryTag{.fixed_length = sizeof(bool)}>(&RawTypedHeader::enabled), "kind",
+            makeTags<BinaryTag{.fixed_length = sizeof(std::uint16_t)}>(&RawTypedHeader::kind)); // NOLINT
     };
 };
 
@@ -110,7 +110,7 @@ struct InvalidRawHeader {
 
     struct Neko {
         static constexpr auto value =
-            Object("text", make_tags<BinaryTag{.fixed_length = 4}>(&InvalidRawHeader::text)); // NOLINT
+            Object("text", makeTags<BinaryTag{.fixed_length = 4}>(&InvalidRawHeader::text)); // NOLINT
     };
 };
 
@@ -134,7 +134,7 @@ struct FlatOuter {
     FlatInner inner;
     int after = 0;
 
-    NEKO_SERIALIZER(before, make_tags<ParserTag{.flat = true}>(inner), after)
+    NEKO_SERIALIZER(before, makeTags<ParserTag{.flat = true}>(inner), after)
 };
 
 struct VersionOneObject {
@@ -179,7 +179,7 @@ struct PublicCustomParserId {
     std::uint64_t value = 0;
 };
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 template <>
 struct Meta<::BinaryEnum, void> {
     static constexpr auto value = Enumerate("Known", ::BinaryEnum::Known);
@@ -188,20 +188,20 @@ struct Meta<::BinaryEnum, void> {
 template <>
 struct CustomParser<::PublicCustomParserId> {
     template <typename W, typename Parent, typename Tags>
-    static ParserResult write(W& writer, const ::PublicCustomParserId& id, const Parent& parent, const Tags& tags) {
-        return parser_write<W>(writer, id.value, parent, tags);
+    static auto write(W& writer, const ::PublicCustomParserId& id, const Parent& parent, const Tags& tags) -> ParserResult {
+        return parserWrite<W>(writer, id.value, parent, tags);
     }
 
     template <typename R, typename Tags>
-    static ParserResult read(typename R::InputValueType in, ::PublicCustomParserId& id, const Tags& tags) {
-        return parser_read<R>(in, id.value, tags);
+    static auto read(typename R::InputValueType in, ::PublicCustomParserId& id, const Tags& tags) -> ParserResult {
+        return parserRead<R>(in, id.value, tags);
     }
 
-    static parsing::schema::Type toSchema() { return parser_schema<std::uint64_t>(); }
+    static auto toSchema() -> parsing::schema::Type { return parserSchema<std::uint64_t>(); }
 };
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
-TEST(BinarySerializer, Serialize) {
+TEST(BinarySerializer, serialize) {
     std::vector<char> buf;
     TestP p;
     p.a = -12;
@@ -308,7 +308,7 @@ TEST(BinarySerializer, RawFixedDataPreservesExactWireLayout) {
     };
 
     BinarySerializer::OutputSerializer output(buffer);
-    EXPECT_TRUE(output(make_tags<BinaryTag{.raw_fixed_data = true}>(source)));
+    EXPECT_TRUE(output(makeTags<BinaryTag{.raw_fixed_data = true}>(source)));
     ASSERT_EQ(buffer.size(), 10U);
     EXPECT_EQ(static_cast<unsigned char>(buffer[0]), 0x4EU);
     EXPECT_EQ(static_cast<unsigned char>(buffer[1]), 0x50U);
@@ -319,7 +319,7 @@ TEST(BinarySerializer, RawFixedDataPreservesExactWireLayout) {
 
     RawFixedHeader decoded;
     BinarySerializer::InputSerializer input(buffer.data(), buffer.size());
-    auto taggedDecoded = make_tags<BinaryTag{.raw_fixed_data = true}>(decoded);
+    auto taggedDecoded = makeTags<BinaryTag{.raw_fixed_data = true}>(decoded);
     EXPECT_TRUE(input(taggedDecoded));
     EXPECT_EQ(decoded.length, source.length);
     EXPECT_EQ(decoded.data, source.data);
@@ -330,7 +330,7 @@ TEST(BinarySerializer, RawFixedDataUsesCanonicalBoolAndEnumWidths) {
     const RawTypedHeader source{.enabled = true, .kind = RawHeaderKind::Data};
     std::vector<char> buffer;
     BinarySerializer::OutputSerializer output(buffer);
-    ASSERT_TRUE(output(make_tags<BinaryTag{.raw_fixed_data = true}>(source)));
+    ASSERT_TRUE(output(makeTags<BinaryTag{.raw_fixed_data = true}>(source)));
     ASSERT_EQ(buffer.size(), 3U);
     EXPECT_EQ(static_cast<unsigned char>(buffer[0]), 1U);
     EXPECT_EQ(static_cast<unsigned char>(buffer[1]), 0x12U);
@@ -338,22 +338,22 @@ TEST(BinarySerializer, RawFixedDataUsesCanonicalBoolAndEnumWidths) {
 
     RawTypedHeader decoded;
     BinarySerializer::InputSerializer input(buffer.data(), buffer.size());
-    auto tagged = make_tags<BinaryTag{.raw_fixed_data = true}>(decoded);
+    auto tagged = makeTags<BinaryTag{.raw_fixed_data = true}>(decoded);
     ASSERT_TRUE(input(tagged));
     EXPECT_TRUE(decoded.enabled);
     EXPECT_EQ(decoded.kind, RawHeaderKind::Data);
 
     std::vector<char> invalidBuffer;
     BinarySerializer::OutputSerializer invalidOutput(invalidBuffer);
-    EXPECT_FALSE(invalidOutput(make_tags<BinaryTag{.raw_fixed_data = true}>(InvalidRawHeader{.text = "data"})));
+    EXPECT_FALSE(invalidOutput(makeTags<BinaryTag{.raw_fixed_data = true}>(InvalidRawHeader{.text = "data"})));
     ASSERT_NE(invalidOutput.error(), nullptr);
-    EXPECT_EQ(invalidOutput.error()->ec, sa::make_error_code(sa::ErrorCode::InvalidType));
+    EXPECT_EQ(invalidOutput.error()->ec, sa::makeErrorCode(sa::ErrorCode::InvalidType));
 
     std::vector<char> scalarBuffer;
     BinarySerializer::OutputSerializer scalarOutput(scalarBuffer);
-    EXPECT_FALSE(scalarOutput(make_tags<BinaryTag{.raw_fixed_data = true}>(std::uint32_t{7})));
+    EXPECT_FALSE(scalarOutput(makeTags<BinaryTag{.raw_fixed_data = true}>(std::uint32_t{7})));
     ASSERT_NE(scalarOutput.error(), nullptr);
-    EXPECT_EQ(scalarOutput.error()->ec, sa::make_error_code(sa::ErrorCode::InvalidType));
+    EXPECT_EQ(scalarOutput.error()->ec, sa::makeErrorCode(sa::ErrorCode::InvalidType));
 }
 
 TEST(BinarySerializer, FixedLengthFieldsRemainFramedWithoutRawFixedData) {
@@ -392,13 +392,13 @@ TEST(BinarySerializer, FixedLengthTagPassesThroughOptionalPresentAndNull) {
     const auto roundTrip = [Fixed]<typename Optional>(const Optional& source) {
         std::vector<char> buffer;
         BinarySerializer::OutputSerializer output(buffer);
-        if (!output(make_tags<Fixed>(source))) {
+        if (!output(makeTags<Fixed>(source))) {
             ADD_FAILURE() << (output.error() == nullptr ? "" : output.error()->msg);
             return Optional{};
         }
 
         Optional decoded   = std::uint32_t{0xFFFFFFFFU};
-        auto taggedDecoded = make_tags<Fixed>(decoded);
+        auto taggedDecoded = makeTags<Fixed>(decoded);
         BinarySerializer::InputSerializer input(buffer.data(), buffer.size());
         if (!input(taggedDecoded)) {
             ADD_FAILURE() << (input.error() == nullptr ? "" : input.error()->msg);
@@ -424,13 +424,13 @@ TEST(BinarySerializer, PublicCustomParserRoundTripsAndBuildsSchema) {
     ASSERT_TRUE(input(decoded));
     EXPECT_EQ(decoded.value, source.value);
 
-    const auto schema   = parser_schema<PublicCustomParserId>();
-    const auto expected = parser_schema<std::uint64_t>();
+    const auto schema   = parserSchema<PublicCustomParserId>();
+    const auto expected = parserSchema<std::uint64_t>();
     EXPECT_EQ(schema.value.index(), expected.value.index());
 }
 
 TEST(BinarySerializer, BinaryTagIsPreservedInGenericSchema) {
-    const auto schema  = parser_schema<TaggedFixedLength>();
+    const auto schema  = parserSchema<TaggedFixedLength>();
     const auto& object = std::get<parsing::schema::Type::Object>(schema.value);
     const auto& field  = object.properties.at("value");
     ASSERT_TRUE(field.fixed_length);
@@ -438,7 +438,7 @@ TEST(BinarySerializer, BinaryTagIsPreservedInGenericSchema) {
 }
 
 TEST(BinarySerializer, RawFixedDataIsNotImplicitTypeMetadata) {
-    const auto schema = parser_schema<RawFixedHeader>();
+    const auto schema = parserSchema<RawFixedHeader>();
     EXPECT_FALSE(schema.unframed);
 }
 
@@ -447,7 +447,7 @@ TEST(BinarySerializer, InvalidFixedLengthReportsWidthMismatch) {
     BinarySerializer::OutputSerializer output(buffer);
     EXPECT_FALSE(output(InvalidTaggedFixedLength{.value = 42}));
     ASSERT_NE(output.error(), nullptr);
-    EXPECT_EQ(output.error()->ec, sa::make_error_code(sa::ErrorCode::InvalidLength));
+    EXPECT_EQ(output.error()->ec, sa::makeErrorCode(sa::ErrorCode::InvalidLength));
     EXPECT_NE(output.error()->msg.find("requires 4 bytes"), std::string::npos);
 }
 
@@ -455,11 +455,11 @@ TEST(BinarySerializer, TruncatedInputReportsParseError) {
     const char data[] = {0x01};
     RawFixedHeader value;
     BinarySerializer::InputSerializer input(data, sizeof(data));
-    auto taggedValue = make_tags<BinaryTag{.raw_fixed_data = true}>(value);
+    auto taggedValue = makeTags<BinaryTag{.raw_fixed_data = true}>(value);
 
     EXPECT_FALSE(input(taggedValue));
     ASSERT_NE(input.error(), nullptr);
-    EXPECT_EQ(input.error()->ec, sa::make_error_code(sa::ErrorCode::ParseError));
+    EXPECT_EQ(input.error()->ec, sa::makeErrorCode(sa::ErrorCode::ParseError));
     EXPECT_NE(input.error()->msg.find("raw fixed"), std::string::npos);
 }
 
@@ -496,10 +496,10 @@ TEST(BinarySerializer, UntaggedVariantProbeRestoresReaderAndPreservesPayloadTags
 
     std::vector<char> buffer;
     BinarySerializer::OutputSerializer output(buffer);
-    ASSERT_TRUE(output(make_tags<Untagged, Fixed>(source)));
+    ASSERT_TRUE(output(makeTags<Untagged, Fixed>(source)));
 
     std::variant<std::uint32_t, std::string> decoded = std::string{"unchanged"};
-    auto taggedDecoded = make_tags<Untagged, Fixed>(decoded);
+    auto taggedDecoded = makeTags<Untagged, Fixed>(decoded);
     BinarySerializer::InputSerializer input(buffer.data(), buffer.size());
     ASSERT_TRUE(input(taggedDecoded)) << (input.error() == nullptr ? "" : input.error()->msg);
     ASSERT_EQ(decoded.index(), 0U);
@@ -842,7 +842,7 @@ TEST(BinarySerializer, RandomInvalidAndTruncatedWireAlwaysReportsAndPreservesTar
         EXPECT_FALSE(input(target)) << "sample=" << sample;
         EXPECT_EQ(target, 99) << "sample=" << sample;
         ASSERT_NE(input.error(), nullptr) << "sample=" << sample;
-        EXPECT_EQ(input.error()->ec, sa::make_error_code(sa::ErrorCode::InvalidType)) << "sample=" << sample;
+        EXPECT_EQ(input.error()->ec, sa::makeErrorCode(sa::ErrorCode::InvalidType)) << "sample=" << sample;
     }
 
     std::vector<char> valid;

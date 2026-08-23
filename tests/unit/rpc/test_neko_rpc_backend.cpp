@@ -25,7 +25,7 @@
 #include "nekoproto/rpc/rpc.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 namespace {
 
@@ -45,10 +45,10 @@ struct UnsupportedBinaryRpcValue {
 struct NoCompressionCodec {
     using Message = rpc::NekoRpcFrameCodec::MessageType;
 
-    static constexpr auto preferred_algorithm() noexcept -> rpc::NekoRpcCompressionAlgorithm {
+    static constexpr auto preferredAlgorithm() noexcept -> rpc::NekoRpcCompressionAlgorithm {
         return rpc::NekoRpcCompressionAlgorithm::None;
     }
-    static constexpr bool supports(rpc::NekoRpcCompressionAlgorithm algorithm) noexcept {
+    static constexpr auto supports(rpc::NekoRpcCompressionAlgorithm algorithm) noexcept -> bool {
         return algorithm == rpc::NekoRpcCompressionAlgorithm::None;
     }
 
@@ -79,7 +79,7 @@ auto contains(const std::vector<std::string>& values, std::string_view expected)
                        [expected](const std::string& value) { return value == expected; });
 }
 
-auto add_metadata(std::string signature) -> detail::RpcMethodMetadata {
+auto addMetadata(std::string signature) -> detail::RpcMethodMetadata {
     return {.name = "add",
             .signature = std::move(signature),
             .description = {},
@@ -89,18 +89,18 @@ auto add_metadata(std::string signature) -> detail::RpcMethodMetadata {
             .isBind = true};
 }
 
-auto method_entries(const rpc::NekoRpcMethodIdTable& table) -> std::vector<rpc::NekoRpcMethodEntry> {
+auto methodEntries(const rpc::NekoRpcMethodIdTable& table) -> std::vector<rpc::NekoRpcMethodEntry> {
     return {table.entries().begin(), table.entries().end()};
 }
 
 template <typename Server, typename Client>
-void connect_endpoint(Server& server, Client& client) {
+void connectEndpoint(Server& server, Client& client) {
 #if 0
-    auto serverStream = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12337 + NEKO_CPP_PLUS) +
+    auto serverStream = (detail::makeUdpStreamClient("udp://127.0.0.1:" + std::to_string(12337 + NEKO_CPP_PLUS) +
                                                         "-127.0.0.1:" + std::to_string(12338 + NEKO_CPP_PLUS)))
                             .wait()
                             .value();
-    auto clientStream = (detail::make_udp_stream_client("udp://127.0.0.1:" + std::to_string(12338 + NEKO_CPP_PLUS) +
+    auto clientStream = (detail::makeUdpStreamClient("udp://127.0.0.1:" + std::to_string(12338 + NEKO_CPP_PLUS) +
                                                         "-127.0.0.1:" + std::to_string(12337 + NEKO_CPP_PLUS)))
                             .wait()
                             .value();
@@ -112,7 +112,7 @@ void connect_endpoint(Server& server, Client& client) {
 }
 
 template <typename Predicate>
-auto wait_until(Predicate predicate, std::chrono::milliseconds budget = std::chrono::milliseconds(250)) -> bool {
+auto waitUntil(Predicate predicate, std::chrono::milliseconds budget = std::chrono::milliseconds(250)) -> bool {
     using namespace std::chrono_literals;
     const auto deadline = std::chrono::steady_clock::now() + budget;
     while (!predicate()) {
@@ -163,7 +163,7 @@ TEST(NekoRpcBackend, HandlerExceptionsBecomeInternalErrorResponses) {
     ASSERT_FALSE(response.empty());
     auto decoded = BinaryRpcBackend::decodeResponse<decltype(server->add)>(asBytes(response), request->id);
     ASSERT_FALSE(decoded.has_value());
-    EXPECT_EQ(decoded.error(), make_error_code(RpcError::InternalError));
+    EXPECT_EQ(decoded.error(), makeErrorCode(RpcError::InternalError));
 }
 
 TEST(NekoRpcBackend, JsonSerializedBackendCallsRegisteredMethodThroughFrame) {
@@ -191,7 +191,7 @@ TEST(NekoRpcBackend, CallsThroughIliasDuplexStreamEndpoint) {
     context.install();
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context};
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     server->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; };
 
@@ -258,7 +258,7 @@ TEST(NekoRpcBackend, ConnectionTaskQueriesAreCurrentOnlyConnectionScopedAndNotPr
     options.max_queued_requests_global = 4U;
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     server->add = [](int delayMs, int value) -> ilias::IoTask<int> {
         co_await ilias::sleep(std::chrono::milliseconds(delayMs));
@@ -266,14 +266,14 @@ TEST(NekoRpcBackend, ConnectionTaskQueriesAreCurrentOnlyConnectionScopedAndNotPr
     };
 
     auto active = ilias::spawn(client->add(60, 1));
-    ASSERT_TRUE(wait_until([&] { return server.metrics().active == 1U; }));
+    ASSERT_TRUE(waitUntil([&] { return server.metrics().active == 1U; }));
 
     auto tasksQuery = ilias::spawn(client->rpc.getConnectionTasks());
-    ASSERT_TRUE(wait_until([&] { return server.metrics().queued == 1U; }));
+    ASSERT_TRUE(waitUntil([&] { return server.metrics().queued == 1U; }));
     auto statusQuery = ilias::spawn(client->rpc.getConnectionStatus());
-    ASSERT_TRUE(wait_until([&] { return server.metrics().queued == 2U; }));
+    ASSERT_TRUE(waitUntil([&] { return server.metrics().queued == 2U; }));
     auto later = ilias::spawn(client->add(0, 2));
-    ASSERT_TRUE(wait_until([&] { return server.metrics().queued == 3U; }));
+    ASSERT_TRUE(waitUntil([&] { return server.metrics().queued == 3U; }));
 
     auto tasksResult = tasksQuery.wait();
     ASSERT_TRUE(tasksResult.has_value());
@@ -326,8 +326,8 @@ TEST(NekoRpcBackend, ConnectionTaskQueriesDoNotExposeOtherConnections) {
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> first{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> second{context, options};
-    connect_endpoint(server, first);
-    connect_endpoint(server, second);
+    connectEndpoint(server, first);
+    connectEndpoint(server, second);
 
     server->add = [](int delayMs, int value) -> ilias::IoTask<int> {
         co_await ilias::sleep(std::chrono::milliseconds(delayMs));
@@ -335,7 +335,7 @@ TEST(NekoRpcBackend, ConnectionTaskQueriesDoNotExposeOtherConnections) {
     };
 
     auto otherConnectionCall = ilias::spawn(first->add(60, 7));
-    ASSERT_TRUE(wait_until([&] { return server.metrics().active == 1U; }));
+    ASSERT_TRUE(waitUntil([&] { return server.metrics().active == 1U; }));
 
     auto status = second->rpc.getConnectionStatus().wait();
     ASSERT_TRUE(status.has_value()) << status.error().message();
@@ -367,8 +367,8 @@ TEST(NekoRpcBackend, ConnectionTimeoutSettingHonorsBoundariesAndAppliesOnlyToFut
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> first{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> second{context, options};
-    connect_endpoint(server, first);
-    connect_endpoint(server, second);
+    connectEndpoint(server, first);
+    connectEndpoint(server, second);
 
     server->add = [](int delayMs, int value) -> ilias::IoTask<int> {
         co_await ilias::sleep(std::chrono::milliseconds(delayMs));
@@ -383,11 +383,11 @@ TEST(NekoRpcBackend, ConnectionTimeoutSettingHonorsBoundariesAndAppliesOnlyToFut
 
     auto equalToServerLimit = first->rpc.setConnectionTimeout(200'000'000U).wait();
     ASSERT_FALSE(equalToServerLimit.has_value());
-    EXPECT_EQ(equalToServerLimit.error(), make_error_code(RpcError::InvalidParams));
+    EXPECT_EQ(equalToServerLimit.error(), makeErrorCode(RpcError::InvalidParams));
     auto tooLargeForDuration =
         first->rpc.setConnectionTimeout(std::numeric_limits<std::uint64_t>::max()).wait();
     ASSERT_FALSE(tooLargeForDuration.has_value());
-    EXPECT_EQ(tooLargeForDuration.error(), make_error_code(RpcError::InvalidParams));
+    EXPECT_EQ(tooLargeForDuration.error(), makeErrorCode(RpcError::InvalidParams));
 
     auto clearAtZero = first->rpc.setConnectionTimeout(0U).wait();
     ASSERT_TRUE(clearAtZero.has_value()) << clearAtZero.error().message();
@@ -401,7 +401,7 @@ TEST(NekoRpcBackend, ConnectionTimeoutSettingHonorsBoundariesAndAppliesOnlyToFut
     EXPECT_EQ(ordinaryCall.value(), 7);
 
     auto admittedBeforeChange = ilias::spawn(first->add(90, 17));
-    ASSERT_TRUE(wait_until([&] { return server.metrics().active == 1U; }));
+    ASSERT_TRUE(waitUntil([&] { return server.metrics().active == 1U; }));
     auto middleValue = first->rpc.setConnectionTimeout(50'000'000U).wait();
     ASSERT_TRUE(middleValue.has_value()) << middleValue.error().message();
     auto admittedBeforeChangeResult = admittedBeforeChange.wait();
@@ -417,16 +417,16 @@ TEST(NekoRpcBackend, ConnectionTimeoutSettingHonorsBoundariesAndAppliesOnlyToFut
 
     auto exceedsConnectionTimeout = first->add(100, 8).wait();
     ASSERT_FALSE(exceedsConnectionTimeout.has_value());
-    EXPECT_EQ(exceedsConnectionTimeout.error(), make_error_code(RpcError::DeadlineExceeded));
+    EXPECT_EQ(exceedsConnectionTimeout.error(), makeErrorCode(RpcError::DeadlineExceeded));
 
     auto randomOutOfRange = first->rpc.setConnectionTimeout(731'245'987U).wait();
     ASSERT_FALSE(randomOutOfRange.has_value());
-    EXPECT_EQ(randomOutOfRange.error(), make_error_code(RpcError::InvalidParams));
+    EXPECT_EQ(randomOutOfRange.error(), makeErrorCode(RpcError::InvalidParams));
     auto leftBoundary = first->rpc.setConnectionTimeout(1U).wait();
     ASSERT_TRUE(leftBoundary.has_value()) << leftBoundary.error().message();
     auto immediateTimeout = first->add(10, 9).wait();
     ASSERT_FALSE(immediateTimeout.has_value());
-    EXPECT_EQ(immediateTimeout.error(), make_error_code(RpcError::DeadlineExceeded));
+    EXPECT_EQ(immediateTimeout.error(), makeErrorCode(RpcError::DeadlineExceeded));
 
     first.close();
     second.close();
@@ -441,7 +441,7 @@ TEST(NekoRpcBackend, MultiplexedClientAllowsFastCallToPassSlowCall) {
     options.method_id = BinaryRpcBackend::MethodIdMode::Disable;
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     server->add = [](int delayMs, int value) -> ilias::IoTask<int> {
         co_await ilias::sleep(std::chrono::milliseconds(delayMs));
@@ -483,8 +483,8 @@ TEST(NekoRpcBackend, RemoteCancellationIsIsolatedByConnection) {
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> first{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> second{context, options};
-    connect_endpoint(server, first);
-    connect_endpoint(server, second);
+    connectEndpoint(server, first);
+    connectEndpoint(server, second);
 
     server->add = [](int delayMs, int value) -> ilias::IoTask<int> {
         co_await ilias::sleep(std::chrono::milliseconds(delayMs));
@@ -520,7 +520,7 @@ TEST(NekoRpcBackend, CallTimeoutCleansPendingAndLateResponseCannotMatchNextCall)
     options.method_id = BinaryRpcBackend::MethodIdMode::Disable;
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     server->add = [](int delayMs, int value) -> ilias::IoTask<int> {
         co_await ilias::sleep(std::chrono::milliseconds(delayMs));
@@ -531,7 +531,7 @@ TEST(NekoRpcBackend, CallTimeoutCleansPendingAndLateResponseCannotMatchNextCall)
     timeoutOptions.timeout = 10ms;
     auto timedOut = client.callRemoteWithOptions(client->add, timeoutOptions, 60, 1).wait();
     ASSERT_FALSE(timedOut.has_value());
-    EXPECT_EQ(timedOut.error(), make_error_code(RpcError::DeadlineExceeded));
+    EXPECT_EQ(timedOut.error(), makeErrorCode(RpcError::DeadlineExceeded));
     EXPECT_EQ(client.metrics().active, 0U);
     EXPECT_EQ(client.metrics().timed_out, 1U);
 
@@ -554,7 +554,7 @@ TEST(NekoRpcBackend, ExpiredDeadlineAndCancellationStopBeforeOrDuringWait) {
     options.method_id = BinaryRpcBackend::MethodIdMode::Disable;
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     std::atomic<unsigned> invocations{0};
     server->add = [&invocations](int delayMs, int value) -> ilias::IoTask<int> {
@@ -567,14 +567,14 @@ TEST(NekoRpcBackend, ExpiredDeadlineAndCancellationStopBeforeOrDuringWait) {
     expiredOptions.deadline = RpcCallOptions::Clock::now() - 1ms;
     auto expired = client.callRemoteWithOptions(client->add, expiredOptions, 0, 1).wait();
     ASSERT_FALSE(expired.has_value());
-    EXPECT_EQ(expired.error(), make_error_code(RpcError::DeadlineExceeded));
+    EXPECT_EQ(expired.error(), makeErrorCode(RpcError::DeadlineExceeded));
     EXPECT_EQ(invocations.load(std::memory_order_relaxed), 0U);
 
     std::stop_source stopSource;
     RpcCallOptions cancelOptions;
     cancelOptions.cancellation_token = stopSource.get_token();
     auto waiting = ilias::spawn(client.callRemoteWithOptions(client->add, cancelOptions, 80, 2));
-    ASSERT_TRUE(wait_until([&] { return client.metrics().active == 1U; }));
+    ASSERT_TRUE(waitUntil([&] { return client.metrics().active == 1U; }));
     stopSource.request_stop();
     auto canceled = waiting.wait();
     ASSERT_TRUE(canceled.has_value());
@@ -598,8 +598,8 @@ TEST(NekoRpcBackend, GlobalActiveAndQueueBudgetsRejectExcessAcrossConnections) {
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> first{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> second{context, options};
-    connect_endpoint(server, first);
-    connect_endpoint(server, second);
+    connectEndpoint(server, first);
+    connectEndpoint(server, second);
 
     server->add = [](int delayMs, int value) -> ilias::IoTask<int> {
         co_await ilias::sleep(std::chrono::milliseconds(delayMs));
@@ -607,13 +607,13 @@ TEST(NekoRpcBackend, GlobalActiveAndQueueBudgetsRejectExcessAcrossConnections) {
     };
 
     auto active = ilias::spawn(first->add(60, 1));
-    ASSERT_TRUE(wait_until([&] { return server.metrics().active == 1U; }));
+    ASSERT_TRUE(waitUntil([&] { return server.metrics().active == 1U; }));
     auto queued = ilias::spawn(second->add(0, 2));
-    ASSERT_TRUE(wait_until([&] { return server.metrics().queued == 1U; }));
+    ASSERT_TRUE(waitUntil([&] { return server.metrics().queued == 1U; }));
 
     auto rejected = first->add(0, 3).wait();
     ASSERT_FALSE(rejected.has_value());
-    EXPECT_EQ(rejected.error(), make_error_code(RpcError::Overloaded));
+    EXPECT_EQ(rejected.error(), makeErrorCode(RpcError::Overloaded));
 
     auto activeResult = active.wait();
     auto queuedResult = queued.wait();
@@ -646,7 +646,7 @@ TEST(NekoRpcBackend, ServerRequestTimeoutReleasesGlobalCapacity) {
     options.request_timeout = 10ms;
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     server->add = [](int delayMs, int value) -> ilias::IoTask<int> {
         co_await ilias::sleep(std::chrono::milliseconds(delayMs));
@@ -655,7 +655,7 @@ TEST(NekoRpcBackend, ServerRequestTimeoutReleasesGlobalCapacity) {
 
     auto timedOut = client->add(60, 1).wait();
     ASSERT_FALSE(timedOut.has_value());
-    EXPECT_EQ(timedOut.error(), make_error_code(RpcError::DeadlineExceeded));
+    EXPECT_EQ(timedOut.error(), makeErrorCode(RpcError::DeadlineExceeded));
     EXPECT_EQ(server.metrics().timed_out, 1U);
     EXPECT_EQ(server.metrics().active, 0U);
 
@@ -678,7 +678,7 @@ TEST(NekoRpcBackend, ServerRequestTimeoutIncludesQueueWaitAndHandlerExecution) {
     options.request_timeout = 120ms;
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     server->add = [](int delayMs, int value) -> ilias::IoTask<int> {
         co_await ilias::sleep(std::chrono::milliseconds(delayMs));
@@ -686,9 +686,9 @@ TEST(NekoRpcBackend, ServerRequestTimeoutIncludesQueueWaitAndHandlerExecution) {
     };
 
     auto first = ilias::spawn(client->add(70, 1));
-    ASSERT_TRUE(wait_until([&] { return server.metrics().active == 1U; }));
+    ASSERT_TRUE(waitUntil([&] { return server.metrics().active == 1U; }));
     auto second = ilias::spawn(client->add(80, 2));
-    ASSERT_TRUE(wait_until([&] { return server.metrics().queued == 1U; }));
+    ASSERT_TRUE(waitUntil([&] { return server.metrics().queued == 1U; }));
 
     auto firstResult = first.wait();
     auto secondResult = second.wait();
@@ -697,7 +697,7 @@ TEST(NekoRpcBackend, ServerRequestTimeoutIncludesQueueWaitAndHandlerExecution) {
     ASSERT_TRUE(firstResult->has_value()) << firstResult->error().message();
     EXPECT_EQ(firstResult->value(), 1);
     ASSERT_FALSE(secondResult->has_value());
-    EXPECT_EQ(secondResult->error(), make_error_code(RpcError::DeadlineExceeded));
+    EXPECT_EQ(secondResult->error(), makeErrorCode(RpcError::DeadlineExceeded));
 
     const auto metrics = server.metrics();
     EXPECT_EQ(metrics.active, 0U);
@@ -718,7 +718,7 @@ TEST(NekoRpcBackend, ClientPendingBudgetRejectsWithoutDroppingExistingCall) {
     options.max_pending_calls = 1U;
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     server->add = [](int delayMs, int value) -> ilias::IoTask<int> {
         co_await ilias::sleep(std::chrono::milliseconds(delayMs));
@@ -726,7 +726,7 @@ TEST(NekoRpcBackend, ClientPendingBudgetRejectsWithoutDroppingExistingCall) {
     };
 
     auto first = ilias::spawn(client->add(40, 1));
-    ASSERT_TRUE(wait_until([&] { return client.metrics().active == 1U; }));
+    ASSERT_TRUE(waitUntil([&] { return client.metrics().active == 1U; }));
     auto rejected = client->add(0, 2).wait();
     ASSERT_FALSE(rejected.has_value());
     EXPECT_EQ(rejected.error(), make_error_code(ilias::IoError::WouldBlock));
@@ -749,7 +749,7 @@ TEST(NekoRpcBackend, ClientCloseCompletesAnInflightCallAndUpdatesConnectionState
     options.method_id = BinaryRpcBackend::MethodIdMode::Disable;
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     server->add = [](int delayMs, int value) -> ilias::IoTask<int> {
         co_await ilias::sleep(std::chrono::milliseconds(delayMs));
@@ -757,7 +757,7 @@ TEST(NekoRpcBackend, ClientCloseCompletesAnInflightCallAndUpdatesConnectionState
     };
 
     auto call = ilias::spawn(client->add(200, 1));
-    ASSERT_TRUE(wait_until([&] { return client.metrics().active == 1U; }));
+    ASSERT_TRUE(waitUntil([&] { return client.metrics().active == 1U; }));
     client.close();
     EXPECT_FALSE(client.isConnected());
     EXPECT_EQ(client.metrics().active, 0U);
@@ -765,7 +765,7 @@ TEST(NekoRpcBackend, ClientCloseCompletesAnInflightCallAndUpdatesConnectionState
     auto result = call.wait();
     ASSERT_TRUE(result.has_value());
     ASSERT_FALSE(result->has_value());
-    EXPECT_EQ(result->error(), make_error_code(RpcError::ClientNotInit));
+    EXPECT_EQ(result->error(), makeErrorCode(RpcError::ClientNotInit));
 
     server.close();
 }
@@ -798,7 +798,7 @@ TEST(NekoRpcBackend, ServerCloseInterruptsAPartialFrameBody) {
     server.close();
     const auto elapsed = std::chrono::steady_clock::now() - started;
     EXPECT_LT(elapsed, 250ms);
-    detail::close_stream(clientStream);
+    detail::closeStream(clientStream);
 }
 
 TEST(NekoRpcBackend, CallOptionsCoverZeroNegativeRandomAndArbitraryValidInputs) {
@@ -809,7 +809,7 @@ TEST(NekoRpcBackend, CallOptionsCoverZeroNegativeRandomAndArbitraryValidInputs) 
     options.method_id = BinaryRpcBackend::MethodIdMode::Disable;
     RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
     RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     std::atomic<unsigned> invocations{0};
     server->add = [&invocations](int lhs, int rhs) -> ilias::IoTask<int> {
@@ -823,7 +823,7 @@ TEST(NekoRpcBackend, CallOptionsCoverZeroNegativeRandomAndArbitraryValidInputs) 
         invalid.timeout = invalidTimeout;
         auto result = client.callRemoteWithOptions(client->add, invalid, 1, 2).wait();
         ASSERT_FALSE(result.has_value()) << "timeout=" << invalidTimeout.count();
-        EXPECT_EQ(result.error(), make_error_code(RpcError::DeadlineExceeded));
+        EXPECT_EQ(result.error(), makeErrorCode(RpcError::DeadlineExceeded));
     }
     EXPECT_EQ(invocations.load(std::memory_order_relaxed), 0U);
 
@@ -833,7 +833,7 @@ TEST(NekoRpcBackend, CallOptionsCoverZeroNegativeRandomAndArbitraryValidInputs) 
     earlierDeadline.deadline = RpcCallOptions::Clock::now() - 1ns;
     auto expired = client.callRemoteWithOptions(client->add, earlierDeadline, 3, 4).wait();
     ASSERT_FALSE(expired.has_value());
-    EXPECT_EQ(expired.error(), make_error_code(RpcError::DeadlineExceeded));
+    EXPECT_EQ(expired.error(), makeErrorCode(RpcError::DeadlineExceeded));
     EXPECT_EQ(invocations.load(std::memory_order_relaxed), 0U);
 
     // Fixed-seed random samples exercise ordinary values without making CI
@@ -871,10 +871,10 @@ TEST(NekoRpcBackend, ZeroClientServerAndConnectionCapacitiesRejectWithoutInvokin
         invocations.fetch_add(1U, std::memory_order_relaxed);
         co_return lhs + rhs;
     };
-    connect_endpoint(globalServer, globalClient);
+    connectEndpoint(globalServer, globalClient);
     auto globalRejected = globalClient->add(1, 2).wait();
     ASSERT_FALSE(globalRejected.has_value());
-    EXPECT_EQ(globalRejected.error(), make_error_code(RpcError::Overloaded));
+    EXPECT_EQ(globalRejected.error(), makeErrorCode(RpcError::Overloaded));
     EXPECT_EQ(globalServer.metrics().rejected, 1U);
     EXPECT_EQ(invocations.load(std::memory_order_relaxed), 0U);
     globalClient.close();
@@ -889,7 +889,7 @@ TEST(NekoRpcBackend, ZeroClientServerAndConnectionCapacitiesRejectWithoutInvokin
         invocations.fetch_add(1U, std::memory_order_relaxed);
         co_return lhs + rhs;
     };
-    connect_endpoint(pendingServer, pendingClient);
+    connectEndpoint(pendingServer, pendingClient);
     auto pendingRejected = pendingClient->add(1, 2).wait();
     ASSERT_FALSE(pendingRejected.has_value());
     EXPECT_EQ(pendingRejected.error(), make_error_code(ilias::IoError::WouldBlock));
@@ -907,10 +907,10 @@ TEST(NekoRpcBackend, ZeroClientServerAndConnectionCapacitiesRejectWithoutInvokin
         invocations.fetch_add(1U, std::memory_order_relaxed);
         co_return lhs + rhs;
     };
-    connect_endpoint(connectionServer, connectionClient);
+    connectEndpoint(connectionServer, connectionClient);
     auto connectionRejected = connectionClient->add(1, 2).wait();
     ASSERT_FALSE(connectionRejected.has_value());
-    EXPECT_EQ(connectionRejected.error(), make_error_code(RpcError::Overloaded));
+    EXPECT_EQ(connectionRejected.error(), makeErrorCode(RpcError::Overloaded));
     EXPECT_TRUE(connectionClient.isConnected());
     EXPECT_EQ(invocations.load(std::memory_order_relaxed), 0U);
     connectionClient.close();
@@ -929,7 +929,7 @@ TEST(NekoRpcBackend, ZeroAndNegativeServerTimeoutsAreImmediateAndReleaseCapacity
         options.request_timeout = timeout;
         RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
         RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
-        connect_endpoint(server, client);
+        connectEndpoint(server, client);
 
         std::atomic<unsigned> invocations{0};
         server->add = [&invocations](int lhs, int rhs) -> ilias::IoTask<int> {
@@ -939,7 +939,7 @@ TEST(NekoRpcBackend, ZeroAndNegativeServerTimeoutsAreImmediateAndReleaseCapacity
 
         auto result = client->add(1, 2).wait();
         ASSERT_FALSE(result.has_value()) << "timeout=" << timeout.count();
-        EXPECT_EQ(result.error(), make_error_code(RpcError::DeadlineExceeded));
+        EXPECT_EQ(result.error(), makeErrorCode(RpcError::DeadlineExceeded));
         EXPECT_EQ(invocations.load(std::memory_order_relaxed), 0U);
         const auto metrics = server.metrics();
         EXPECT_EQ(metrics.active, 0U);
@@ -1000,7 +1000,7 @@ TEST(NekoRpcBackend, RequireMethodIdModeCallsThroughNegotiatedTable) {
 
     server->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; };
 
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     auto result = client->add(20, 22).wait();
     ASSERT_TRUE(result.has_value()) << result.error().message();
@@ -1137,7 +1137,7 @@ TEST(NekoRpcBackend, MethodIdErrorResponseCarriesRefreshTableWithinBudget) {
     BinaryRpcBackend::Options options;
     options.method_id = BinaryRpcBackend::MethodIdMode::Auto;
 
-    std::vector<detail::RpcMethodMetadata> methods{add_metadata("i32 add(i32 a, i32 b)")};
+    std::vector<detail::RpcMethodMetadata> methods{addMetadata("i32 add(i32 a, i32 b)")};
     auto serverContext = BinaryRpcBackend::makeServerContext(options, methods);
     auto serverSession = BinaryRpcBackend::makeServerPeerSession(serverContext);
     serverSession.method_id_enabled = true;
@@ -1145,7 +1145,7 @@ TEST(NekoRpcBackend, MethodIdErrorResponseCarriesRefreshTableWithinBudget) {
     auto clientContext = BinaryRpcBackend::makeClientContext(options);
     auto clientSession = BinaryRpcBackend::makeClientPeerSession(clientContext);
     clientSession.method_id_enabled = true;
-    clientSession.remote_method_table.reset(method_entries(serverContext.method_table),
+    clientSession.remote_method_table.reset(methodEntries(serverContext.method_table),
                                             serverContext.method_table.version());
 
     BinaryRpcTestApi api;
@@ -1153,7 +1153,7 @@ TEST(NekoRpcBackend, MethodIdErrorResponseCarriesRefreshTableWithinBudget) {
     auto request = BinaryRpcBackend::encodeRequest(clientContext, clientSession, api.add, false, 4, 2);
     ASSERT_TRUE(request.has_value()) << request.error().message();
 
-    methods = {add_metadata("i32 add(i32 lhs, i32 rhs)")};
+    methods = {addMetadata("i32 add(i32 lhs, i32 rhs)")};
     BinaryRpcBackend::refreshMethodCatalog(serverContext, methods);
 
     auto decoded = BinaryRpcBackend::decodeIncoming(serverContext, serverSession, asBytes(request.value().message));
@@ -1171,7 +1171,7 @@ TEST(NekoRpcBackend, MethodIdErrorResponseCarriesRefreshTableWithinBudget) {
         BinaryRpcBackend::decodeResponse<decltype(api.add)>(clientContext, clientSession, asBytes(response),
                                                             request.value().id);
     ASSERT_FALSE(failed.has_value());
-    EXPECT_EQ(failed.error(), make_error_code(RpcError::MethodIdRemoved));
+    EXPECT_EQ(failed.error(), makeErrorCode(RpcError::MethodIdRemoved));
     EXPECT_EQ(clientSession.remote_method_table.version(), serverContext.method_table.version());
     const auto* refreshed = clientSession.remote_method_table.findByName("add");
     ASSERT_NE(refreshed, nullptr);
@@ -1183,7 +1183,7 @@ TEST(NekoRpcBackend, MethodIdErrorResponseOmitsRefreshTableOverBudget) {
     options.method_id                             = BinaryRpcBackend::MethodIdMode::Auto;
     options.max_auto_method_table_extension_bytes = 60;
 
-    std::vector<detail::RpcMethodMetadata> methods{add_metadata("i32 add(i32 a, i32 b)")};
+    std::vector<detail::RpcMethodMetadata> methods{addMetadata("i32 add(i32 a, i32 b)")};
     auto serverContext = BinaryRpcBackend::makeServerContext(options, methods);
     auto serverSession = BinaryRpcBackend::makeServerPeerSession(serverContext);
     serverSession.method_id_enabled = true;
@@ -1191,7 +1191,7 @@ TEST(NekoRpcBackend, MethodIdErrorResponseOmitsRefreshTableOverBudget) {
     auto clientContext = BinaryRpcBackend::makeClientContext(options);
     auto clientSession = BinaryRpcBackend::makeClientPeerSession(clientContext);
     clientSession.method_id_enabled = true;
-    clientSession.remote_method_table.reset(method_entries(serverContext.method_table),
+    clientSession.remote_method_table.reset(methodEntries(serverContext.method_table),
                                             serverContext.method_table.version());
 
     BinaryRpcTestApi api;
@@ -1199,7 +1199,7 @@ TEST(NekoRpcBackend, MethodIdErrorResponseOmitsRefreshTableOverBudget) {
     auto request = BinaryRpcBackend::encodeRequest(clientContext, clientSession, api.add, false, 4, 2);
     ASSERT_TRUE(request.has_value()) << request.error().message();
 
-    methods = {add_metadata("i32 add(i32 lhs, i32 rhs)")};
+    methods = {addMetadata("i32 add(i32 lhs, i32 rhs)")};
     BinaryRpcBackend::refreshMethodCatalog(serverContext, methods);
 
     auto decoded = BinaryRpcBackend::decodeIncoming(serverContext, serverSession, asBytes(request.value().message));
@@ -1281,7 +1281,7 @@ TEST(NekoRpcBackend, FrameLimitsApplyToBackendOwnedEncodeAndDirectDecodePaths) {
     ASSERT_FALSE(oversizedEncode.has_value());
     EXPECT_EQ(oversizedEncode.error(), make_error_code(ilias::IoError::MessageTooLarge));
 
-    std::vector<detail::RpcMethodMetadata> methods{add_metadata("i32 add(i32 a, i32 b)")};
+    std::vector<detail::RpcMethodMetadata> methods{addMetadata("i32 add(i32 a, i32 b)")};
     auto limitedServer = BinaryRpcBackend::makeServerContext(limitedOptions, methods);
     auto limitedServerSession = BinaryRpcBackend::makeServerPeerSession(limitedServer);
     auto validated = BinaryRpcBackend::validateMessage(limitedServer, asBytes(request->message));
@@ -1305,7 +1305,7 @@ TEST(NekoRpcBackend, RequireCompressionCallsThroughCompressedPayloads) {
     server.bindMethod("echo", traits::FunctionT<ilias::IoTask<std::string>(std::string)>(
                                   [](std::string value) -> ilias::IoTask<std::string> { co_return value; }));
 
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     std::string payload(512, 'A');
     auto result = client.callRemote<std::string>("echo", payload).wait();
@@ -1336,7 +1336,7 @@ TEST(NekoRpcBackend, ReplaceableCompressionCodecFallsBackWhenUnsupported) {
 
     server->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; };
 
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     auto result = client->add(20, 22).wait();
     ASSERT_TRUE(result.has_value()) << result.error().message();
@@ -1357,7 +1357,7 @@ TEST(NekoRpcBackend, MethodIdTableRefreshAddsMethodWithinConnection) {
 
     server->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; };
 
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     auto first = client->add(20, 22).wait();
     ASSERT_TRUE(first.has_value()) << first.error().message();
@@ -1387,7 +1387,7 @@ TEST(NekoRpcBackend, MethodIdErrorCanBeReturnedWhenClientRecoveryIsDisabled) {
 
     server->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; };
 
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     auto first = client->add(1, 2).wait();
     ASSERT_TRUE(first.has_value()) << first.error().message();
@@ -1420,7 +1420,7 @@ TEST(NekoRpcBackend, MethodIdErrorRefreshesTableAndRetriesOnceOnClient) {
 
     server->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; };
 
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     auto first = client->add(1, 2).wait();
     ASSERT_TRUE(first.has_value()) << first.error().message();
@@ -1467,7 +1467,7 @@ TEST(NekoRpcBackend, BuiltinMethodsAvailableOnClientByDefault) {
     context.install();
     RpcServer<BinaryRpcBackend> server{context};
     RpcClient<BinaryRpcBackend> client{context};
-    connect_endpoint(server, client);
+    connectEndpoint(server, client);
 
     auto methods = client->rpc.getMethodList().wait();
     ASSERT_TRUE(methods.has_value()) << methods.error().message();

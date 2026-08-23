@@ -16,7 +16,7 @@ class BrokenMMQueue {
 public:
     explicit BrokenMMQueue(std::size_t size) : mHead(0), mTail(0), mBuffer(size) {}
 
-    bool tryPush(int value) {
+    auto tryPush(int value) -> bool {
         int head      = mHead.load(std::memory_order_acquire);
         int tail      = mTail.load(std::memory_order_acquire);
         int next_tail = (tail + 1) % mBuffer.capacity();
@@ -34,7 +34,7 @@ public:
         return false;
     }
 
-    bool tryPop(int& value) {
+    auto tryPop(int& value) -> bool {
         int head      = mHead.load(std::memory_order_acquire);
         int tail      = mTail.load(std::memory_order_acquire);
         int next_head = (head + 1) % mBuffer.capacity();
@@ -79,9 +79,9 @@ public:
     }
 
     BoundedMPMCQueue(const BoundedMPMCQueue&)            = delete;
-    BoundedMPMCQueue& operator=(const BoundedMPMCQueue&) = delete;
+    auto operator=(const BoundedMPMCQueue&) -> BoundedMPMCQueue& = delete;
 
-    bool tryPush(int value) {
+    auto tryPush(int value) -> bool {
         Cell* cell      = nullptr;
         std::size_t pos = mEnqueuePos.load(std::memory_order_relaxed);
 
@@ -107,7 +107,7 @@ public:
         return true;
     }
 
-    bool tryPop(int& value) {
+    auto tryPop(int& value) -> bool {
         Cell* cell      = nullptr;
         std::size_t pos = mDequeuePos.load(std::memory_order_relaxed);
 
@@ -152,7 +152,7 @@ struct StressResult {
 };
 
 template <typename Queue>
-StressResult run_stress(Queue& queue, int producer_count, int consumer_count, int items_per_producer) {
+auto runStress(Queue& queue, int producer_count, int consumer_count, int items_per_producer) -> StressResult {
 
     const std::uint64_t total =
         static_cast<std::uint64_t>(producer_count) * static_cast<std::uint64_t>(items_per_producer);
@@ -243,7 +243,7 @@ StressResult run_stress(Queue& queue, int producer_count, int consumer_count, in
     };
 }
 
-void print_result(const std::string& name, const StressResult& r1) {
+void printResult(const std::string& name, const StressResult& r1) {
     std::cout << "\n[" << name << "]\n"
               << "  total        = " << r1.total << '\n'
               << "  produced     = " << r1.produced << '\n'
@@ -260,15 +260,15 @@ void print_result(const std::string& name, const StressResult& r1) {
     std::cout << "  RESULT       = " << (passed ? "PASS" : "FAIL") << '\n';
 }
 
-void run_broken_race_test(int producers, int consumers, int items_per_producer) {
+void runBrokenRaceTest(int producers, int consumers, int items_per_producer) {
     const std::size_t total = static_cast<std::size_t>(producers) * static_cast<std::size_t>(items_per_producer);
 
     // 分配 total+1，故意避免越界，让测试只攻击发布顺序竞态。
     BrokenMMQueue queue(total + 1);
-    print_result("原始队列：不回绕竞态测试", run_stress(queue, producers, consumers, items_per_producer));
+    printResult("原始队列：不回绕竞态测试", runStress(queue, producers, consumers, items_per_producer));
 }
 
-void run_broken_wrap_test() {
+void runBrokenWrapTest() {
     BrokenMMQueue queue(64);
     for (int i = 0; i < 100'000; ++i) {
         if (!queue.tryPush(i + 1)) {
@@ -279,12 +279,12 @@ void run_broken_wrap_test() {
     std::cout << "原始队列接受了 100000 次 push；开启 ASan 时通常会更早报告堆越界。\n";
 }
 
-void run_fixed_test(int producers, int consumers, int items_per_producer, std::size_t capacity) {
+void runFixedTest(int producers, int consumers, int items_per_producer, std::size_t capacity) {
     BoundedMPMCQueue queue(capacity);
-    print_result("修正版有界 MPMC 队列", run_stress(queue, producers, consumers, items_per_producer));
+    printResult("修正版有界 MPMC 队列", runStress(queue, producers, consumers, items_per_producer));
 }
 
-int main(int argc, char** argv) {
+auto main(int argc, char** argv) -> int {
     const std::string mode     = argc >= 2 ? argv[1] : "fixed";
     const int producers        = argc >= 3 ? std::atoi(argv[2]) : 8;
     const int consumers        = argc >= 4 ? std::atoi(argv[3]) : 8;
@@ -292,11 +292,11 @@ int main(int argc, char** argv) {
     const std::size_t capacity = argc >= 6 ? static_cast<std::size_t>(std::strtoull(argv[5], nullptr, 10)) : 1024;
 
     if (mode == "broken-race") {
-        run_broken_race_test(producers, consumers, items_per_producer);
+        runBrokenRaceTest(producers, consumers, items_per_producer);
     } else if (mode == "broken-wrap") {
-        run_broken_wrap_test();
+        runBrokenWrapTest();
     } else if (mode == "fixed") {
-        run_fixed_test(producers, consumers, items_per_producer, capacity);
+        runFixedTest(producers, consumers, items_per_producer, capacity);
     } else {
         std::cerr << "用法：\n"
                   << "  " << argv[0] << " fixed [生产者数] [消费者数] [每生产者元素数] [容量]\n"

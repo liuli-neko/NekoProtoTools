@@ -18,23 +18,23 @@
 #include <utility>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 class PrintSerializer {
 public:
     PrintSerializer() = default;
 
     template <typename T>
-    bool operator()(const T& value) {
+    auto operator()(const T& value) -> bool {
         mWriter.reset();
-        mLastResult = parser_write<print::TextWriter>(mWriter, value, parsing::Parent<print::TextWriter>::Root{});
+        mLastResult = parserWrite<print::TextWriter>(mWriter, value, parsing::Parent<print::TextWriter>::Root{});
         return static_cast<bool>(mLastResult);
     }
 
-    bool end() const noexcept { return static_cast<bool>(mLastResult); }
+    auto end() const noexcept -> bool { return static_cast<bool>(mLastResult); }
     explicit operator bool() const noexcept { return static_cast<bool>(mLastResult); }
-    const sa::Error* error() const noexcept { return sa::error_ptr(mLastResult); }
-    std::string str() const { return mWriter.str(); }
+    auto error() const noexcept -> const sa::Error* { return sa::errorPtr(mLastResult); }
+    auto str() const -> std::string { return mWriter.str(); }
 
 private:
     print::TextWriter mWriter;
@@ -42,7 +42,7 @@ private:
 };
 
 template <typename T>
-inline std::string serializable_to_string(T&& value) {
+inline auto serializableToString(T&& value) -> std::string {
     PrintSerializer serializer;
     if (!serializer(value)) {
         return {};
@@ -52,7 +52,7 @@ inline std::string serializable_to_string(T&& value) {
 
 #ifndef NEKO_PROTO_NO_JSON_SERIALIZER
 template <typename T>
-inline std::string to_json_string(T&& value) {
+inline auto toJsonString(T&& value) -> std::string {
     std::vector<char> buffer;
     JsonSerializer::OutputSerializer json(buffer);
     if (!json(value) || !json.end()) {
@@ -62,4 +62,4 @@ inline std::string to_json_string(T&& value) {
 }
 #endif
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

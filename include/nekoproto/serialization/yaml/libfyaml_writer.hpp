@@ -20,7 +20,7 @@
 #include <string_view>
 #include <type_traits>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace yaml {
 
 class Writer {
@@ -42,180 +42,181 @@ public:
         mTagStorage.clear();
     }
 
-    const sa::Result<void>& result() const noexcept { return mResult; }
+    auto result() const noexcept -> const sa::Result<void>& { return mResult; }
 
     template <typename Tags>
-    OutputArrayType arrayAsRoot(std::size_t /*size*/, const Tags& tags) {
-        auto node = _createSequence();
-        _setRoot(node);
-        return _applyTags(OutputArrayType{node}, tags);
+    auto arrayAsRoot(std::size_t /*size*/, const Tags& tags) -> OutputArrayType {
+        auto node = createSequence();
+        setRoot(node);
+        return applyTags(OutputArrayType{node}, tags);
     }
 
     template <typename Tags>
-    OutputObjectType objectAsRoot(std::size_t /*size*/, const Tags& tags) {
-        auto node = _createMapping();
-        _setRoot(node);
-        return _applyTags(OutputObjectType{node}, tags);
+    auto objectAsRoot(std::size_t /*size*/, const Tags& tags) -> OutputObjectType {
+        auto node = createMapping();
+        setRoot(node);
+        return applyTags(OutputObjectType{node}, tags);
     }
 
     template <typename Tags>
-    OutputValueType nullAsRoot(const Tags& tags) {
-        auto node = _createNull();
-        _setRoot(node);
-        return _applyTags(OutputValueType{node}, tags);
+    auto nullAsRoot(const Tags& tags) -> OutputValueType {
+        auto node = createNull();
+        setRoot(node);
+        return applyTags(OutputValueType{node}, tags);
     }
 
     template <typename T, typename Tags>
-    OutputValueType valueAsRoot(const T& value, const Tags& tags) {
-        auto node = _createScalar(value);
-        _setRoot(node);
-        return _applyTags(OutputValueType{node}, tags);
+    auto valueAsRoot(const T& value, const Tags& tags) -> OutputValueType {
+        auto node = createScalar(value);
+        setRoot(node);
+        return applyTags(OutputValueType{node}, tags);
     }
 
     template <typename Tags>
-    OutputArrayType addArrayToArray(std::size_t /*size*/, OutputArrayType* parent, const Tags& tags) {
-        auto node = _createSequence();
-        _appendToSequence(parent, node);
-        return _applyTags(OutputArrayType{node}, tags);
+    auto addArrayToArray(std::size_t /*size*/, OutputArrayType* parent, const Tags& tags) -> OutputArrayType {
+        auto node = createSequence();
+        appendToSequence(parent, node);
+        return applyTags(OutputArrayType{node}, tags);
     }
 
     template <typename Tags>
-    OutputArrayType addArrayToObject(std::string_view name, std::size_t /*size*/, OutputObjectType* parent,
-                                     const Tags& tags) {
-        auto node = _createSequence();
-        _appendToMapping(parent, name, node);
-        return _applyTags(OutputArrayType{node}, tags);
+    auto addArrayToObject(std::string_view name, std::size_t /*size*/, OutputObjectType* parent, const Tags& tags)
+        -> OutputArrayType {
+        auto node = createSequence();
+        appendToMapping(parent, name, node);
+        return applyTags(OutputArrayType{node}, tags);
     }
 
     template <typename Tags>
-    OutputObjectType addObjectToArray(std::size_t /*size*/, OutputArrayType* parent, const Tags& tags) {
-        auto node = _createMapping();
-        _appendToSequence(parent, node);
-        return _applyTags(OutputObjectType{node}, tags);
+    auto addObjectToArray(std::size_t /*size*/, OutputArrayType* parent, const Tags& tags) -> OutputObjectType {
+        auto node = createMapping();
+        appendToSequence(parent, node);
+        return applyTags(OutputObjectType{node}, tags);
     }
 
     template <typename Tags>
-    OutputObjectType addObjectToObject(std::string_view name, std::size_t /*size*/, OutputObjectType* parent,
-                                       const Tags& tags) {
-        auto node = _createMapping();
-        _appendToMapping(parent, name, node);
-        return _applyTags(OutputObjectType{node}, tags);
+    auto addObjectToObject(std::string_view name, std::size_t /*size*/, OutputObjectType* parent, const Tags& tags)
+        -> OutputObjectType {
+        auto node = createMapping();
+        appendToMapping(parent, name, node);
+        return applyTags(OutputObjectType{node}, tags);
     }
 
     template <typename T, typename Tags>
-    OutputValueType addValueToArray(const T& value, OutputArrayType* parent, const Tags& tags) {
-        auto node = _createScalar(value);
-        _appendToSequence(parent, node);
-        return _applyTags(OutputValueType{node}, tags);
+    auto addValueToArray(const T& value, OutputArrayType* parent, const Tags& tags) -> OutputValueType {
+        auto node = createScalar(value);
+        appendToSequence(parent, node);
+        return applyTags(OutputValueType{node}, tags);
     }
 
     template <typename T, typename Tags>
-    OutputValueType addValueToObject(std::string_view name, const T& value, OutputObjectType* parent,
-                                     const Tags& tags) {
-        auto node = _createScalar(value);
-        _appendToMapping(parent, name, node);
-        return _applyTags(OutputValueType{node}, tags);
+    auto addValueToObject(std::string_view name, const T& value, OutputObjectType* parent, const Tags& tags)
+        -> OutputValueType {
+        auto node = createScalar(value);
+        appendToMapping(parent, name, node);
+        return applyTags(OutputValueType{node}, tags);
     }
 
     template <typename Tags>
-    OutputValueType addNullToArray(OutputArrayType* parent, const Tags& tags) {
-        auto node = _createNull();
-        _appendToSequence(parent, node);
-        return _applyTags(OutputValueType{node}, tags);
+    auto addNullToArray(OutputArrayType* parent, const Tags& tags) -> OutputValueType {
+        auto node = createNull();
+        appendToSequence(parent, node);
+        return applyTags(OutputValueType{node}, tags);
     }
 
     template <typename Tags>
-    OutputValueType addNullToObject(std::string_view name, OutputObjectType* parent, const Tags& tags) {
-        auto node = _createNull();
-        _appendToMapping(parent, name, node);
-        return _applyTags(OutputValueType{node}, tags);
+    auto addNullToObject(std::string_view name, OutputObjectType* parent, const Tags& tags) -> OutputValueType {
+        auto node = createNull();
+        appendToMapping(parent, name, node);
+        return applyTags(OutputValueType{node}, tags);
     }
 
     void endArray(OutputArrayType* /*unused*/) noexcept {}
     void endObject(OutputObjectType* /*unused*/) noexcept {}
 
 private:
-    sa::Result<void> _remember(sa::ErrorCode code, std::string message) {
+    auto remember(sa::ErrorCode code, std::string message) -> sa::Result<void> {
         mResult = sa::error(code, std::move(message));
         return mResult;
     }
 
     template <typename Output, typename Tags>
-    Output _applyTags(Output output, const Tags& tags) {
-        if constexpr (tag_query::has<tag_property::yaml_tag>(Tags{})) {
-            _applyYamlTag(output.node, tag_query::get<tag_property::yaml_tag>(tags));
+    auto applyTags(Output output, const Tags& tags) -> Output {
+        if constexpr (tag_query::has<tag_property::YamlTag>(Tags{})) {
+            applyYamlTag(output.node, tag_query::get<tag_property::YamlTag>(tags));
         }
-        if constexpr (tag_query::has<tag_property::yaml_anchor>(Tags{})) {
-            _applyYamlAnchor(output.node, tag_query::get<tag_property::yaml_anchor>(tags));
+        if constexpr (tag_query::has<tag_property::YamlAnchor>(Tags{})) {
+            applyYamlAnchor(output.node, tag_query::get<tag_property::YamlAnchor>(tags));
         }
-        if constexpr (tag_query::has<tag_property::yaml_scalar_style>(Tags{})) {
-            _applyYamlScalarStyle(output.node, tag_query::get<tag_property::yaml_scalar_style>(tags));
+        if constexpr (tag_query::has<tag_property::YamlScalarStyleProperty>(Tags{})) {
+            applyYamlScalarStyle(output.node, tag_query::get<tag_property::YamlScalarStyleProperty>(tags));
         }
-        if constexpr (tag_query::has<tag_property::yaml_collection_style>(Tags{})) {
-            _applyYamlCollectionStyle(output.node, tag_query::get<tag_property::yaml_collection_style>(tags));
+        if constexpr (tag_query::has<tag_property::YamlCollectionStyleProperty>(Tags{})) {
+            applyYamlCollectionStyle(output.node, tag_query::get<tag_property::YamlCollectionStyleProperty>(tags));
         }
         return output;
     }
 
-    void _applyYamlTag(fy_node* node, std::string_view tag) {
+    void applyYamlTag(fy_node* node, std::string_view tag) {
         if (tag.empty()) {
             return;
         }
         if (node == nullptr) {
-            _remember(sa::ErrorCode::InvalidType, "Cannot apply YAML tag to an empty node");
+            remember(sa::ErrorCode::InvalidType, "Cannot apply YAML tag to an empty node");
             return;
         }
         mTagStorage.emplace_back(tag);
         const auto& ownedTag = mTagStorage.back();
         if (fy_node_set_tag(node, ownedTag.data(), ownedTag.size()) != 0) {
-            _remember(sa::ErrorCode::InvalidType, "Could not apply YAML tag '" + std::string(tag) + "'");
+            remember(sa::ErrorCode::InvalidType, "Could not apply YAML tag '" + std::string(tag) + "'");
         }
     }
 
-    void _applyYamlAnchor(fy_node* node, std::string_view anchor) {
+    void applyYamlAnchor(fy_node* node, std::string_view anchor) {
         if (anchor.empty()) {
             return;
         }
         if (node == nullptr) {
-            _remember(sa::ErrorCode::InvalidType, "Cannot apply YAML anchor to an empty node");
+            remember(sa::ErrorCode::InvalidType, "Cannot apply YAML anchor to an empty node");
             return;
         }
         if (fy_node_set_anchor_copy(node, anchor.data(), anchor.size()) != 0) {
-            _remember(sa::ErrorCode::InvalidType, "Could not apply YAML anchor '" + std::string(anchor) + "'");
+            remember(sa::ErrorCode::InvalidType, "Could not apply YAML anchor '" + std::string(anchor) + "'");
         }
     }
 
-    void _applyYamlScalarStyle(fy_node* node, YamlScalarStyle style) {
+    void applyYamlScalarStyle(fy_node* node, YamlScalarStyle style) {
         if (style == YamlScalarStyle::Any) {
             return;
         }
         if (node == nullptr || !fy_node_is_scalar(node)) {
-            _remember(sa::ErrorCode::InvalidType, "YAML scalar style can only be applied to scalar nodes");
+            remember(sa::ErrorCode::InvalidType, "YAML scalar style can only be applied to scalar nodes");
             return;
         }
-        const auto requested = _toLibfyamlStyle(style);
+        const auto requested = toLibfyamlStyle(style);
         const auto actual    = fy_node_set_style(node, requested);
         if (actual != requested) {
-            _remember(sa::ErrorCode::InvalidType, "Could not apply requested YAML scalar style");
+            remember(sa::ErrorCode::InvalidType, "Could not apply requested YAML scalar style");
         }
     }
 
-    void _applyYamlCollectionStyle(fy_node* node, YamlCollectionStyle style) {
+    void applyYamlCollectionStyle(fy_node* node, YamlCollectionStyle style) {
         if (style == YamlCollectionStyle::Any) {
             return;
         }
         if (node == nullptr || (!fy_node_is_sequence(node) && !fy_node_is_mapping(node))) {
-            _remember(sa::ErrorCode::InvalidType, "YAML collection style can only be applied to sequence or mapping nodes");
+            remember(sa::ErrorCode::InvalidType,
+                     "YAML collection style can only be applied to sequence or mapping nodes");
             return;
         }
-        const auto requested = _toLibfyamlStyle(style);
+        const auto requested = toLibfyamlStyle(style);
         const auto actual    = fy_node_set_style(node, requested);
         if (actual != requested) {
-            _remember(sa::ErrorCode::InvalidType, "Could not apply requested YAML collection style");
+            remember(sa::ErrorCode::InvalidType, "Could not apply requested YAML collection style");
         }
     }
 
-    static fy_node_style _toLibfyamlStyle(YamlScalarStyle style) noexcept {
+    static auto toLibfyamlStyle(YamlScalarStyle style) noexcept -> fy_node_style {
         switch (style) {
         case YamlScalarStyle::Any:
             return FYNS_ANY;
@@ -233,7 +234,7 @@ private:
         return FYNS_ANY;
     }
 
-    static fy_node_style _toLibfyamlStyle(YamlCollectionStyle style) noexcept {
+    static auto toLibfyamlStyle(YamlCollectionStyle style) noexcept -> fy_node_style {
         switch (style) {
         case YamlCollectionStyle::Any:
             return FYNS_ANY;
@@ -245,58 +246,58 @@ private:
         return FYNS_ANY;
     }
 
-    fy_node* _createSequence() {
+    auto createSequence() -> fy_node* {
         if (mDocument == nullptr) {
-            _remember(sa::ErrorCode::InvalidType, "YAML document is not initialized");
+            remember(sa::ErrorCode::InvalidType, "YAML document is not initialized");
             return nullptr;
         }
         auto* node = fy_node_create_sequence(mDocument);
         if (node == nullptr) {
-            _remember(sa::ErrorCode::Unknown, "Could not create YAML sequence node");
+            remember(sa::ErrorCode::Unknown, "Could not create YAML sequence node");
         }
         return node;
     }
 
-    fy_node* _createMapping() {
+    auto createMapping() -> fy_node* {
         if (mDocument == nullptr) {
-            _remember(sa::ErrorCode::InvalidType, "YAML document is not initialized");
+            remember(sa::ErrorCode::InvalidType, "YAML document is not initialized");
             return nullptr;
         }
         auto* node = fy_node_create_mapping(mDocument);
         if (node == nullptr) {
-            _remember(sa::ErrorCode::Unknown, "Could not create YAML mapping node");
+            remember(sa::ErrorCode::Unknown, "Could not create YAML mapping node");
         }
         return node;
     }
 
-    fy_node* _createNull() {
+    auto createNull() -> fy_node* {
         if (mDocument == nullptr) {
-            _remember(sa::ErrorCode::InvalidType, "YAML document is not initialized");
+            remember(sa::ErrorCode::InvalidType, "YAML document is not initialized");
             return nullptr;
         }
         auto* node = fy_node_build_from_string(mDocument, "null", 4);
         if (node == nullptr) {
-            _remember(sa::ErrorCode::Unknown, "Could not create YAML null node");
+            remember(sa::ErrorCode::Unknown, "Could not create YAML null node");
         }
         return node;
     }
 
     template <typename T>
-    fy_node* _createScalar(const T& value) {
+    auto createScalar(const T& value) -> fy_node* {
         if (mDocument == nullptr) {
-            _remember(sa::ErrorCode::InvalidType, "YAML document is not initialized");
+            remember(sa::ErrorCode::InvalidType, "YAML document is not initialized");
             return nullptr;
         }
         if constexpr (std::is_floating_point_v<std::remove_cvref_t<T>>) {
             if (!std::isfinite(value)) {
-                _remember(sa::ErrorCode::InvalidType, "Cannot serialize non-finite floating point value to YAML");
+                remember(sa::ErrorCode::InvalidType, "Cannot serialize non-finite floating point value to YAML");
                 return nullptr;
             }
         }
-        const auto text = _toString(value);
+        const auto text = toString(value);
         auto* node      = fy_node_create_scalar_copy(mDocument, text.data(), text.size());
         if (node == nullptr) {
-            _remember(sa::ErrorCode::Unknown, "Could not create YAML scalar node");
+            remember(sa::ErrorCode::Unknown, "Could not create YAML scalar node");
             return nullptr;
         }
         if constexpr (std::is_same_v<std::remove_cvref_t<T>, std::string> ||
@@ -306,43 +307,43 @@ private:
         return node;
     }
 
-    void _setRoot(fy_node* node) {
+    void setRoot(fy_node* node) {
         if (node == nullptr) {
             return;
         }
         if (fy_document_set_root(mDocument, node) != 0) {
-            _remember(sa::ErrorCode::Unknown, "Could not set YAML document root");
+            remember(sa::ErrorCode::Unknown, "Could not set YAML document root");
         }
     }
 
-    void _appendToSequence(OutputArrayType* parent, fy_node* node) {
+    void appendToSequence(OutputArrayType* parent, fy_node* node) {
         if (parent == nullptr || parent->node == nullptr || node == nullptr) {
-            _remember(sa::ErrorCode::InvalidType, "Cannot append to an empty YAML sequence");
+            remember(sa::ErrorCode::InvalidType, "Cannot append to an empty YAML sequence");
             return;
         }
         if (fy_node_sequence_append(parent->node, node) != 0) {
-            _remember(sa::ErrorCode::InvalidType, "Could not append YAML sequence item");
+            remember(sa::ErrorCode::InvalidType, "Could not append YAML sequence item");
         }
     }
 
-    void _appendToMapping(OutputObjectType* parent, std::string_view name, fy_node* node) {
+    void appendToMapping(OutputObjectType* parent, std::string_view name, fy_node* node) {
         if (parent == nullptr || parent->node == nullptr || node == nullptr) {
-            _remember(sa::ErrorCode::InvalidType, "Cannot append to an empty YAML mapping");
+            remember(sa::ErrorCode::InvalidType, "Cannot append to an empty YAML mapping");
             return;
         }
         auto* key = fy_node_create_scalar_copy(mDocument, name.data(), name.size());
         if (key == nullptr) {
-            _remember(sa::ErrorCode::Unknown, "Could not create YAML mapping key '" + std::string(name) + "'");
+            remember(sa::ErrorCode::Unknown, "Could not create YAML mapping key '" + std::string(name) + "'");
             return;
         }
         fy_node_set_style(key, FYNS_PLAIN);
         if (fy_node_mapping_append(parent->node, key, node) != 0) {
-            _remember(sa::ErrorCode::InvalidField, "Could not append YAML mapping field '" + std::string(name) + "'");
+            remember(sa::ErrorCode::InvalidField, "Could not append YAML mapping field '" + std::string(name) + "'");
         }
     }
 
     template <typename T>
-    static std::string _toString(const T& value) {
+    static auto toString(const T& value) -> std::string {
         using U = std::remove_cvref_t<T>;
         if constexpr (std::is_same_v<U, std::string>) {
             return value;
@@ -366,7 +367,7 @@ private:
             return stream.str();
         } else if constexpr (std::is_enum_v<U>) {
             using I = std::underlying_type_t<U>;
-            return _toString(static_cast<I>(value));
+            return toString(static_cast<I>(value));
         } else {
             static_assert(std::is_same_v<U, void>, "Unsupported YAML scalar type");
         }
@@ -380,6 +381,6 @@ private:
 
 } // namespace yaml
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
 #endif

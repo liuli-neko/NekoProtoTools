@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace json {
 
 struct RawValue {
@@ -45,7 +45,7 @@ private:
             objectValues.reserve(size);
         }
 
-        std::pair<std::string_view, const Node&> object(int index) const {
+        auto object(int index) const -> std::pair<std::string_view, const Node&> {
             return {objectNames[index], objectValues[index]};
         }
     };
@@ -67,83 +67,84 @@ public:
 
     void reset() { mRoot = Node{}; }
 
-    OutputArrayType arrayAsRoot(std::size_t size) {
-        _initializeArray(mRoot, size);
+    auto arrayAsRoot(std::size_t size) -> OutputArrayType {
+        initializeArray(mRoot, size);
         return {&mRoot};
     }
 
-    OutputObjectType objectAsRoot(std::size_t size) {
-        _initializeObject(mRoot, size);
+    auto objectAsRoot(std::size_t size) -> OutputObjectType {
+        initializeObject(mRoot, size);
         return {&mRoot};
     }
 
-    OutputValueType nullAsRoot() {
+    auto nullAsRoot() -> OutputValueType {
         mRoot = Node{};
         return {&mRoot};
     }
 
     template <typename T>
-    OutputValueType valueAsRoot(const T& value) {
-        _setValue(mRoot, value);
+    auto valueAsRoot(const T& value) -> OutputValueType {
+        setValue(mRoot, value);
         return {&mRoot};
     }
 
-    static OutputArrayType addArrayToArray(std::size_t size, OutputArrayType* parent) {
+    static auto addArrayToArray(std::size_t size, OutputArrayType* parent) -> OutputArrayType {
         auto& child = parent->value->array.emplace_back();
-        _initializeArray(child, size);
+        initializeArray(child, size);
         return {&child};
     }
 
-    static OutputArrayType addArrayToObject(std::string_view name, std::size_t size, OutputObjectType* parent) {
+    static auto addArrayToObject(std::string_view name, std::size_t size, OutputObjectType* parent) -> OutputArrayType {
         auto& child = parent->value->emplaceObject(std::string{name}, Node{}).second;
-        _initializeArray(child, size);
+        initializeArray(child, size);
         return {&child};
     }
 
-    static OutputObjectType addObjectToArray(std::size_t size, OutputArrayType* parent) {
+    static auto addObjectToArray(std::size_t size, OutputArrayType* parent) -> OutputObjectType {
         auto& child = parent->value->array.emplace_back();
-        _initializeObject(child, size);
+        initializeObject(child, size);
         return {&child};
     }
 
-    static OutputObjectType addObjectToObject(std::string_view name, std::size_t size, OutputObjectType* parent) {
+    static auto addObjectToObject(std::string_view name, std::size_t size, OutputObjectType* parent)
+        -> OutputObjectType {
         auto& child = parent->value->emplaceObject(std::string{name}, Node{}).second;
-        _initializeObject(child, size);
+        initializeObject(child, size);
         return {&child};
     }
 
     template <typename T>
-    OutputValueType addValueToArray(const T& value, OutputArrayType* parent) {
+    auto addValueToArray(const T& value, OutputArrayType* parent) -> OutputValueType {
         auto& child = parent->value->array.emplace_back();
-        _setValue(child, value);
+        setValue(child, value);
         return {&child};
     }
 
     template <typename T>
-    OutputValueType addValueToObject(std::string_view name, const T& value, OutputObjectType* parent) {
+    auto addValueToObject(std::string_view name, const T& value, OutputObjectType* parent) -> OutputValueType {
         auto& child = parent->value->emplaceObject(std::string{name}, Node{}).second;
-        _setValue(child, value);
+        setValue(child, value);
         return {&child};
     }
 
-    static OutputValueType addNullToArray(OutputArrayType* parent) {
+    static auto addNullToArray(OutputArrayType* parent) -> OutputValueType {
         auto& child = parent->value->array.emplace_back();
         return {&child};
     }
 
-    static OutputValueType addNullToObject(std::string_view name, OutputObjectType* parent) {
+    static auto addNullToObject(std::string_view name, OutputObjectType* parent) -> OutputValueType {
         auto& child = parent->value->emplaceObject(std::string{name}, Node{}).second;
         return {&child};
     }
 
-    std::string str() const {
+    auto str() const -> std::string {
         std::string output;
-        _render(mRoot, output);
+        render(mRoot, output);
         return output;
     }
 
 private:
-    static void _initializeArray(Node& node, std::size_t size) {
+    static void initializeArray(Node& node, std::size_t size) {
         node      = Node{};
         node.kind = Node::Kind::Array;
         if (size != static_cast<std::size_t>(-1)) {
@@ -151,7 +152,7 @@ private:
         }
     }
 
-    static void _initializeObject(Node& node, std::size_t size) {
+    static void initializeObject(Node& node, std::size_t size) {
         node      = Node{};
         node.kind = Node::Kind::Object;
         if (size != static_cast<std::size_t>(-1)) {
@@ -159,7 +160,7 @@ private:
         }
     }
 
-    static std::string _escape(std::string_view value) {
+    static auto escape(std::string_view value) -> std::string {
         std::string output;
         output.reserve(value.size() + 2);
         for (const unsigned char ch : value) {
@@ -201,7 +202,7 @@ private:
     }
 
     template <typename T>
-    static std::string _numberToString(T value) {
+    static auto numberToString(T value) -> std::string {
         if constexpr (std::is_floating_point_v<T>) {
             constexpr int KJsonFloatPrecision = std::numeric_limits<T>::digits10;
 
@@ -222,7 +223,7 @@ private:
     }
 
     template <typename T>
-    static void _setValue(Node& node, const T& value) {
+    static void setValue(Node& node, const T& value) {
         using U = std::remove_cvref_t<T>;
         node    = Node{};
         if constexpr (std::is_same_v<U, RawValue>) {
@@ -236,11 +237,11 @@ private:
             node.value = value ? "true" : "false";
         } else if constexpr (std::is_integral_v<U>) {
             node.kind  = Node::Kind::Scalar;
-            node.value = _numberToString(value);
+            node.value = numberToString(value);
         } else if constexpr (std::is_floating_point_v<U>) {
             node.kind = Node::Kind::Scalar;
             if (std::isfinite(value)) {
-                node.value = _numberToString(value);
+                node.value = numberToString(value);
             } else {
                 node.kind = Node::Kind::Null;
             }
@@ -249,7 +250,7 @@ private:
         }
     }
 
-    static void _render(const Node& node, std::string& output) {
+    static void render(const Node& node, std::string& output) {
         switch (node.kind) {
         case Node::Kind::Null:
             output += "null";
@@ -260,7 +261,7 @@ private:
             break;
         case Node::Kind::String:
             output.push_back('"');
-            output += _escape(node.value);
+            output += escape(node.value);
             output.push_back('"');
             break;
         case Node::Kind::Array:
@@ -269,7 +270,7 @@ private:
                 if (i != 0) {
                     output.push_back(',');
                 }
-                _render(node.array[i], output);
+                render(node.array[i], output);
             }
             output.push_back(']');
             break;
@@ -280,9 +281,9 @@ private:
                     output.push_back(',');
                 }
                 output.push_back('"');
-                output += _escape(node.object(i).first);
+                output += escape(node.object(i).first);
                 output += "\":";
-                _render(node.object(i).second, output);
+                render(node.object(i).second, output);
             }
             output.push_back('}');
             break;
@@ -293,4 +294,4 @@ private:
     Node mRoot;
 };
 } // namespace json
-NEKO_END_NAMESPACE
+} // namespace nekoproto

@@ -7,7 +7,7 @@
 #include <tuple>
 #include <utility>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace detail {
 
 template <typename W, typename... Ts>
@@ -15,14 +15,14 @@ struct WriteParser<W, std::tuple<Ts...>, void> {
     using Tuple = std::tuple<Ts...>;
 
     template <typename ParentType, typename Tags, std::size_t... Is>
-    static ParserResult writeImpl(W& writer, const Tuple& value, const ParentType& parent,
-                                  std::index_sequence<Is...>, const Tags& tags) {
+    static auto writeImpl(W& writer, const Tuple& value, const ParentType& parent,
+                                  std::index_sequence<Is...>, const Tags& tags) -> ParserResult {
         auto array = parsing::Parent<W>::addArray(writer, sizeof...(Ts), parent, tags);
         ParserResult result;
         const auto writeElement = [&]<std::size_t I>() {
             if (result) {
-                result = parser_context(
-                    parser_write<W>(writer, std::get<I>(value), typename parsing::Parent<W>::Array{&array}),
+                result = parserContext(
+                    parserWrite<W>(writer, std::get<I>(value), typename parsing::Parent<W>::Array{&array}),
                     "Failed to write tuple element " + std::to_string(I) + ": ");
             }
         };
@@ -31,7 +31,7 @@ struct WriteParser<W, std::tuple<Ts...>, void> {
     }
 
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Tuple& value, const ParentType& parent, const Tags& tags) {
+    static auto write(W& writer, const Tuple& value, const ParentType& parent, const Tags& tags) -> ParserResult {
         return writeImpl(writer, value, parent, std::index_sequence_for<Ts...>{}, tags);
     }
 };
@@ -41,11 +41,11 @@ struct ReadParser<R, std::tuple<Ts...>, void> {
     using Tuple = std::tuple<Ts...>;
 
     template <std::size_t... Is>
-    static ParserResult readImpl(const typename R::InputArrayType& array, Tuple& value, std::index_sequence<Is...>) {
+    static auto readImpl(const typename R::InputArrayType& array, Tuple& value, std::index_sequence<Is...>) -> ParserResult {
         ParserResult result;
         const auto readElement = [&]<std::size_t I>() {
             if (result) {
-                result = parser_context(parser_read<R>(R::arrayElement(array, I), std::get<I>(value)),
+                result = parserContext(parserRead<R>(R::arrayElement(array, I), std::get<I>(value)),
                                         "Failed to parse tuple element " + std::to_string(I) + ": ");
             }
         };
@@ -54,14 +54,14 @@ struct ReadParser<R, std::tuple<Ts...>, void> {
     }
 
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Tuple& value, const Tags& tags) {
-        auto array = parsing::reader_to_array<R>(in, tags);
+    static auto read(typename R::InputValueType in, Tuple& value, const Tags& tags) -> ParserResult {
+        auto array = parsing::readerToArray<R>(in, tags);
         if (!array) {
             return array.error();
         }
         const auto actualSize = R::arraySize(array.value());
         if (actualSize != sizeof...(Ts)) {
-            return parser_error(sa::ErrorCode::InvalidLength, "Expected tuple with " + std::to_string(sizeof...(Ts)) +
+            return parserError(sa::ErrorCode::InvalidLength, "Expected tuple with " + std::to_string(sizeof...(Ts)) +
                                                                   " elements, got " + std::to_string(actualSize));
         }
         return readImpl(array.value(), value, std::index_sequence_for<Ts...>{});
@@ -70,9 +70,9 @@ struct ReadParser<R, std::tuple<Ts...>, void> {
 
 template <typename... Ts>
 struct SchemaParser<std::tuple<Ts...>, void> {
-    static parsing::schema::Type toSchema() {
+    static auto toSchema() -> parsing::schema::Type {
         parsing::schema::Type::Array schema;
-        schema.prefixItems     = {parser_schema<Ts>()...};
+        schema.prefixItems     = {parserSchema<Ts>()...};
         schema.minItems        = sizeof...(Ts);
         schema.maxItems        = sizeof...(Ts);
         schema.additionalItems = false;
@@ -85,14 +85,14 @@ struct WriteParser<W, std::pair<K, V>, void> {
     using Pair = std::pair<K, V>;
 
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Pair& value, const ParentType& parent, const Tags& tags) {
+    static auto write(W& writer, const Pair& value, const ParentType& parent, const Tags& tags) -> ParserResult {
         auto object = parsing::Parent<W>::addObject(writer, 2, parent, tags);
-        auto result = parser_write<W>(writer, value.first, typename parsing::Parent<W>::Object{"first", &object});
+        auto result = parserWrite<W>(writer, value.first, typename parsing::Parent<W>::Object{"first", &object});
         if (!result) {
-            return parser_context(std::move(result), "Failed to write pair field 'first': ");
+            return parserContext(std::move(result), "Failed to write pair field 'first': ");
         }
-        return parser_context(
-            parser_write<W>(writer, value.second, typename parsing::Parent<W>::Object{"second", &object}),
+        return parserContext(
+            parserWrite<W>(writer, value.second, typename parsing::Parent<W>::Object{"second", &object}),
             "Failed to write pair field 'second': ");
     }
 };
@@ -102,37 +102,37 @@ struct ReadParser<R, std::pair<K, V>, void> {
     using Pair = std::pair<K, V>;
 
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Pair& value, const Tags& tags) {
-        auto object = parsing::reader_to_object<R>(in, tags);
+    static auto read(typename R::InputValueType in, Pair& value, const Tags& tags) -> ParserResult {
+        auto object = parsing::readerToObject<R>(in, tags);
         if (!object) {
             return object.error();
         }
-        auto first = parsing::reader_object_field<R>(object.value(), "first", NoTags{});
+        auto first = parsing::readerObjectField<R>(object.value(), "first", NoTags{});
         if (!first) {
-            return parser_error(sa::ErrorCode::InvalidField, "Required pair field 'first' is missing");
+            return parserError(sa::ErrorCode::InvalidField, "Required pair field 'first' is missing");
         }
-        auto result = parser_read<R>(first.value(), value.first);
+        auto result = parserRead<R>(first.value(), value.first);
         if (!result) {
-            return parser_context(std::move(result), "Failed to parse pair field 'first': ");
+            return parserContext(std::move(result), "Failed to parse pair field 'first': ");
         }
-        auto second = parsing::reader_object_field<R>(object.value(), "second", NoTags{});
+        auto second = parsing::readerObjectField<R>(object.value(), "second", NoTags{});
         if (!second) {
-            return parser_error(sa::ErrorCode::InvalidField, "Required pair field 'second' is missing");
+            return parserError(sa::ErrorCode::InvalidField, "Required pair field 'second' is missing");
         }
-        return parser_context(parser_read<R>(second.value(), value.second), "Failed to parse pair field 'second': ");
+        return parserContext(parserRead<R>(second.value(), value.second), "Failed to parse pair field 'second': ");
     }
 };
 
 template <typename K, typename V>
 struct SchemaParser<std::pair<K, V>, void> {
-    static parsing::schema::Type toSchema() {
+    static auto toSchema() -> parsing::schema::Type {
         parsing::schema::Type::Object schema;
-        schema.properties.emplace("first", parser_schema<K>());
-        schema.properties.emplace("second", parser_schema<V>());
+        schema.properties.emplace("first", parserSchema<K>());
+        schema.properties.emplace("second", parserSchema<V>());
         schema.required = {"first", "second"};
         return schema;
     }
 };
 
 } // namespace detail
-NEKO_END_NAMESPACE
+} // namespace nekoproto

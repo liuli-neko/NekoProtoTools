@@ -11,8 +11,8 @@
 #include <utility>
 #include <vector>
 
-#include <ilias/io/ext.hpp>
 #include <ilias/io/error.hpp>
+#include <ilias/io/ext.hpp>
 #include <ilias/io/traits.hpp>
 #include <ilias/result.hpp>
 
@@ -24,7 +24,7 @@
 #include "nekoproto/rpc/server.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 struct JsonRpcBackend {
     using Id             = detail::JsonRpcIdType;
@@ -49,11 +49,11 @@ struct JsonRpcBackend {
     };
 
     struct Options {
-        std::size_t max_message_bytes = 16U * 1024U * 1024U;
-        std::size_t max_pending_calls = 1024U;
+        std::size_t max_message_bytes                    = 16U * 1024U * 1024U;
+        std::size_t max_pending_calls                    = 1024U;
         std::size_t max_inflight_requests_per_connection = 1024U;
-        std::size_t max_active_requests_global = 4096U;
-        std::size_t max_queued_requests_global = 4096U;
+        std::size_t max_active_requests_global           = 4096U;
+        std::size_t max_queued_requests_global           = 4096U;
         std::optional<std::chrono::nanoseconds> request_timeout;
     };
 
@@ -70,7 +70,7 @@ struct JsonRpcBackend {
 
 public:
     template <typename T>
-    static consteval bool serializable() {
+    static consteval auto serializable() -> bool {
         if constexpr (std::is_void_v<T>) {
             return true;
         } else {
@@ -113,22 +113,21 @@ public:
         return {};
     }
 
-    static auto refreshMethodCatalog(ServerContext& /*context*/, std::vector<detail::RpcMethodMetadata> /*methods*/)
-        -> void {}
+    static void refreshMethodCatalog(ServerContext& /*context*/, std::vector<detail::RpcMethodMetadata> /*methods*/) {}
 
-    static DecodeResult decodeIncoming(ServerContext& context, PeerSession& /*session*/,
-                                       std::span<const std::byte> message) {
+    static auto decodeIncoming(ServerContext& context, PeerSession& /*session*/, std::span<const std::byte> message)
+        -> DecodeResult {
         DecodeResult result;
         result.ok = true;
         if (message.size() > context.options.max_message_bytes) {
-            _appendProtocolError(result.responses, {}, JsonRpcError::MessageToolLarge);
+            appendProtocolError(result.responses, {}, JsonRpcError::MessageToolLarge);
             return result;
         }
 
         JsonSerializer::JsonValue root;
         JsonSerializer::InputSerializer rootIn(reinterpret_cast<const char*>(message.data()), message.size());
         if (!rootIn(root)) {
-            _appendProtocolError(result.responses, {}, JsonRpcError::ParseError);
+            appendProtocolError(result.responses, {}, JsonRpcError::ParseError);
             return result;
         }
 
@@ -137,7 +136,7 @@ public:
         if (result.batch) {
             if (root.size() == 0U) {
                 result.batch = false;
-                _appendProtocolError(result.responses, {}, JsonRpcError::InvalidRequest);
+                appendProtocolError(result.responses, {}, JsonRpcError::InvalidRequest);
                 return result;
             }
             rawRequests.reserve(root.size());
@@ -152,7 +151,7 @@ public:
             JsonSerializer::InputSerializer methodIn(requestValue);
             detail::JsonRpcRequestMethod method;
             if (!requestValue.isObject() || !methodIn(method) || method.jsonrpc != std::optional<std::string>{"2.0"}) {
-                _appendProtocolError(result.responses, {}, JsonRpcError::InvalidRequest);
+                appendProtocolError(result.responses, {}, JsonRpcError::InvalidRequest);
                 continue;
             }
             result.requests.push_back({std::move(requestValue), std::move(method)});
@@ -163,7 +162,7 @@ public:
     static auto methodName(const DecodedRequest& request) noexcept -> std::string_view { return request.method.method; }
     static auto id(const DecodedRequest& request) noexcept -> const Id& { return request.method.id; }
 
-    static bool expectsResponse(const DecodedRequest& request) noexcept {
+    static auto expectsResponse(const DecodedRequest& request) noexcept -> bool {
         if (std::holds_alternative<std::monostate>(request.method.id)) {
             return false;
         }
@@ -252,12 +251,12 @@ public:
         } else {
             response.result = std::forward<RetT>(ret);
         }
-        auto value = to_json_value(response);
+        auto value = toJsonValue(response);
         if (value) {
             responses.emplace_back(std::move(value.value()));
         } else {
             NEKO_LOG_ERROR("rpc", "serialize JSON-RPC success response failed: {}", value.error().msg);
-            _appendProtocolError(responses, request.method.id, JsonRpcError::InternalError);
+            appendProtocolError(responses, request.method.id, JsonRpcError::InternalError);
         }
     }
 
@@ -265,10 +264,10 @@ public:
         if (!expectsResponse(request)) {
             return;
         }
-        _appendProtocolError(responses, request.method.id, error);
+        appendProtocolError(responses, request.method.id, error);
     }
 
-    static Message encodeResponses(const ResponseValues& responses, bool batch) {
+    static auto encodeResponses(const ResponseValues& responses, bool batch) -> Message {
         Message buffer;
         if (responses.empty()) {
             return buffer;
@@ -282,8 +281,8 @@ public:
         return buffer;
     }
 
-    static Message encodeResponses(ServerContext& context, PeerSession& /*session*/,
-                                   const ResponseValues& responses, bool batch) {
+    static auto encodeResponses(ServerContext& context, PeerSession& /*session*/, const ResponseValues& responses,
+                                bool batch) -> Message {
         auto buffer = encodeResponses(responses, batch);
         if (buffer.size() > context.options.max_message_bytes) {
             buffer.clear();
@@ -376,8 +375,8 @@ public:
         }
     }
 
-    static std::error_code clientNotInitError() { return JsonRpcError::ClientNotInit; }
-    static std::error_code notificationOk() { return JsonRpcError::Ok; }
+    static auto clientNotInitError() -> std::error_code { return JsonRpcError::ClientNotInit; }
+    static auto notificationOk() -> std::error_code { return JsonRpcError::Ok; }
 
     template <typename Endpoint>
     static auto ensureClientReady(ClientContext& /*context*/, PeerSession& /*session*/, Endpoint& /*endpoint*/)
@@ -385,8 +384,8 @@ public:
         co_return {};
     }
 
-    static bool handleClientControl(ClientContext& /*context*/, PeerSession& /*session*/,
-                                    std::span<const std::byte> /*message*/) {
+    static auto handleClientControl(ClientContext& /*context*/, PeerSession& /*session*/,
+                                    std::span<const std::byte> /*message*/) -> bool {
         return false;
     }
 
@@ -421,8 +420,8 @@ public:
 
     template <ilias::Stream StreamT>
     static auto makeEndpoint(StreamT stream, const Options& options) {
-        return detail::LengthPrefixedStreamMessageEndpoint<StreamT>{
-            std::move(stream), JsonRpcError::InvalidRequest, options.max_message_bytes};
+        return detail::LengthPrefixedStreamMessageEndpoint<StreamT>{std::move(stream), JsonRpcError::InvalidRequest,
+                                                                    options.max_message_bytes};
     }
 
     template <MessageEndpoint EndpointT>
@@ -431,12 +430,12 @@ public:
     }
 
 private:
-    static auto _appendProtocolError(ResponseValues& responses, Id id, std::error_code error) -> bool {
+    static auto appendProtocolError(ResponseValues& responses, Id id, std::error_code error) -> bool {
         using ErrorTraits = detail::RpcMethodTraits<void(void)>;
         detail::JsonRpcResponse<ErrorTraits> response;
         response.id    = std::move(id);
         response.error = makeErrorResponse(error);
-        auto value     = to_json_value(response);
+        auto value     = toJsonValue(response);
         if (!value) {
             NEKO_LOG_ERROR("rpc", "serialize JSON-RPC error response failed: {}", value.error().msg);
             return false;
@@ -488,7 +487,7 @@ private:
     template <typename Method, typename Request, typename... Args>
     static void fillParams(Request& request, Args&&... args) {
         using JsonTraits = detail::JsonRpcMethodTraits<typename Method::MethodTraits>;
-        if constexpr (traits::optional_like_type<typename JsonTraits::ParamsTupleType>::value) {
+        if constexpr (traits::OptionalLikeType<typename JsonTraits::ParamsTupleType>::value) {
             if constexpr (sizeof...(Args) > 0) {
                 request.params = typename JsonTraits::ParamsTupleType(std::forward<Args>(args)...);
             }
@@ -508,4 +507,4 @@ using JsonRpcServer = RpcServer<JsonRpcBackend, Protocols...>;
 template <typename... Protocols>
 using JsonRpcClient = RpcClient<JsonRpcBackend, Protocols...>;
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

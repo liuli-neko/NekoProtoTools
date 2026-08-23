@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <utility>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace detail {
 
 template <typename Backend, typename BufferT>
@@ -21,13 +21,13 @@ public:
 
     OutputSerializerAdapter(const OutputSerializerAdapter&)            = delete;
     OutputSerializerAdapter(OutputSerializerAdapter&&)                 = delete;
-    OutputSerializerAdapter& operator=(const OutputSerializerAdapter&) = delete;
-    OutputSerializerAdapter& operator=(OutputSerializerAdapter&&)      = delete;
+    auto operator=(const OutputSerializerAdapter&) -> OutputSerializerAdapter& = delete;
+    auto operator=(OutputSerializerAdapter&&) -> OutputSerializerAdapter&      = delete;
 
     ~OutputSerializerAdapter() { end(); }
 
     template <typename T>
-    bool operator()(const T& value) {
+    auto operator()(const T& value) -> bool {
         if (mDocumentAttempted) {
             mLastResult = sa::error(sa::ErrorCode::InvalidLength,
                                     "A document serializer cannot write a second root value");
@@ -39,7 +39,7 @@ public:
         return static_cast<bool>(mLastResult);
     }
 
-    bool end() {
+    auto end() -> bool {
         if constexpr (requires(StateType& state, sa::Result<void> result) {
                           { Backend::finish(state, result) } -> std::same_as<sa::Result<void>>;
                       }) {
@@ -63,10 +63,10 @@ public:
             return static_cast<bool>(mLastResult);
         }
     }
-    const sa::Error* error() const noexcept { return sa::error_ptr(mLastResult); }
+    auto error() const noexcept -> const sa::Error* { return sa::errorPtr(mLastResult); }
 
-    StateType& state() noexcept { return mState; }
-    const StateType& state() const noexcept { return mState; }
+    auto state() noexcept -> StateType& { return mState; }
+    auto state() const noexcept -> const StateType& { return mState; }
 
 private:
     StateType mState;
@@ -82,17 +82,17 @@ public:
 
     template <typename... Args>
     explicit InputSerializerAdapter(Args&&... args) : mState(std::forward<Args>(args)...) {
-        mInitResult = _initialResult();
+        mInitResult = initialResult();
         mLastResult = mInitResult;
     }
 
     InputSerializerAdapter(const InputSerializerAdapter&)            = delete;
     InputSerializerAdapter(InputSerializerAdapter&&)                 = delete;
-    InputSerializerAdapter& operator=(const InputSerializerAdapter&) = delete;
-    InputSerializerAdapter& operator=(InputSerializerAdapter&&)      = delete;
+    auto operator=(const InputSerializerAdapter&) -> InputSerializerAdapter& = delete;
+    auto operator=(InputSerializerAdapter&&) -> InputSerializerAdapter&      = delete;
 
     template <typename T>
-    bool operator()(T& value) {
+    auto operator()(T& value) -> bool {
         if (!mInitResult) {
             mLastResult = mInitResult;
             return false;
@@ -120,9 +120,9 @@ public:
     }
 
     explicit operator bool() const noexcept { return static_cast<bool>(mLastResult); }
-    const sa::Error* error() const noexcept { return sa::error_ptr(mLastResult); }
+    auto error() const noexcept -> const sa::Error* { return sa::errorPtr(mLastResult); }
 
-    std::size_t offset() const noexcept
+    auto offset() const noexcept -> std::size_t
         requires requires(const StateType& state) {
             { Backend::offset(state) } -> std::convertible_to<std::size_t>;
         }
@@ -130,11 +130,11 @@ public:
         return Backend::offset(mState);
     }
 
-    StateType& state() noexcept { return mState; }
-    const StateType& state() const noexcept { return mState; }
+    auto state() noexcept -> StateType& { return mState; }
+    auto state() const noexcept -> const StateType& { return mState; }
 
 private:
-    sa::Result<void> _initialResult() const {
+    auto initialResult() const -> sa::Result<void> {
         if constexpr (requires(const StateType& state) {
                           { Backend::inputResult(state) } -> std::same_as<sa::Result<void>>;
                       }) {
@@ -152,4 +152,4 @@ private:
 };
 
 } // namespace detail
-NEKO_END_NAMESPACE
+} // namespace nekoproto

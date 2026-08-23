@@ -46,7 +46,7 @@
 #include "nekoproto/serialization/private/helpers.hpp"
 #include "nekoproto/serialization/serializer_adapter.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace detail {
 
@@ -64,52 +64,52 @@ template <typename BufferT = std::vector<char>>
 struct PrettyJsonWriter {};
 
 template <typename T>
-struct json_output_argument { // NOLINT(readability-identifier-naming)
+struct JsonOutputArgument {
     using sink_type              = T;
     static constexpr bool pretty = false;
 };
 
 template <typename T>
-struct json_output_argument<PrettyJsonWriter<T>> { // NOLINT(readability-identifier-naming)
+struct JsonOutputArgument<PrettyJsonWriter<T>> {
     using sink_type              = T;
     static constexpr bool pretty = true;
 };
 
 template <typename SinkT, class enable = void>
-struct json_output_sink_traits { // NOLINT(readability-identifier-naming)
+struct JsonOutputSinkTraits {
     using output_buffer_type = void;
     using wrapper_type       = void;
 };
 
 template <typename T>
-struct json_output_sink_traits<T, std::enable_if_t<std::is_base_of_v<std::ostream, std::remove_reference_t<T>>>> {
+struct JsonOutputSinkTraits<T, std::enable_if_t<std::is_base_of_v<std::ostream, std::remove_reference_t<T>>>> {
     using output_buffer_type = std::remove_reference_t<T>;
     using wrapper_type       = rapidjson::BasicOStreamWrapper<output_buffer_type>;
 };
 
 template <>
-struct json_output_sink_traits<std::vector<char>, void> {
+struct JsonOutputSinkTraits<std::vector<char>, void> {
     using output_buffer_type = std::vector<char>;
     using wrapper_type       = OutBufferWrapper;
 };
 
 template <>
-struct json_output_sink_traits<std::vector<std::byte>, void> {
+struct JsonOutputSinkTraits<std::vector<std::byte>, void> {
     using output_buffer_type = std::vector<std::byte>;
     using wrapper_type       = ByteOutBufferWrapper;
 };
 
 template <>
-struct json_output_sink_traits<OutBufferWrapper, void> {
+struct JsonOutputSinkTraits<OutBufferWrapper, void> {
     using output_buffer_type = std::vector<char>;
     using wrapper_type       = OutBufferWrapper;
 };
 
 template <typename BufferT>
-struct json_output_traits { // NOLINT(readability-identifier-naming)
-    using argument               = json_output_argument<std::remove_cvref_t<BufferT>>;
+struct JsonOutputTraits {
+    using argument               = JsonOutputArgument<std::remove_cvref_t<BufferT>>;
     using sink_type              = typename argument::sink_type;
-    using sink_traits            = json_output_sink_traits<sink_type>;
+    using sink_traits            = JsonOutputSinkTraits<sink_type>;
     using output_buffer_type     = typename sink_traits::output_buffer_type;
     using wrapper_type           = typename sink_traits::wrapper_type;
     static constexpr bool pretty = argument::pretty;
@@ -118,23 +118,23 @@ struct json_output_traits { // NOLINT(readability-identifier-naming)
 };
 
 template <typename T, class enable = void>
-struct json_input_buffer_type // NOLINT(readability-identifier-naming)
+struct JsonInputBufferType
     : std::false_type {
     using input_buffer_type = void;
 };
 
 template <typename T>
-struct json_input_buffer_type<T, typename std::enable_if<std::is_base_of<std::istream, T>::value>::type>
+struct JsonInputBufferType<T, typename std::enable_if<std::is_base_of<std::istream, T>::value>::type>
     : std::true_type {
     using input_buffer_type = T;
 };
 
 template <typename T, class enable = void>
-struct is_pretty_json_writer // NOLINT(readability-identifier-naming)
+struct IsPrettyJsonWriter
     : std::false_type {};
 
 template <typename T>
-struct is_pretty_json_writer<rapidjson::PrettyWriter<T>> : std::true_type {};
+struct IsPrettyJsonWriter<rapidjson::PrettyWriter<T>> : std::true_type {};
 } // namespace detail
 
 struct JsonOutputFormatOptions {
@@ -145,10 +145,10 @@ public:
         Tab     = '\t',
     };
     using FormatOptions = rapidjson::PrettyFormatOptions;
-    static JsonOutputFormatOptions Default() { // NOLINT(readability-identifier-naming)
+    static auto Default() -> JsonOutputFormatOptions { // NOLINT(readability-identifier-naming)
         return JsonOutputFormatOptions();
     }
-    static JsonOutputFormatOptions Compact() { // NOLINT(readability-identifier-naming)
+    static auto Compact() -> JsonOutputFormatOptions { // NOLINT(readability-identifier-naming)
         return JsonOutputFormatOptions(Indent::Space, 0);
     }
     explicit JsonOutputFormatOptions(Indent indentChar = Indent::Space, uint32_t indentLength = 4,
@@ -165,14 +165,14 @@ public:
 
 namespace detail {
 template <typename T, class enable = void>
-struct set_json_format_option { // NOLINT(readability-identifier-naming)
+struct SetJsonFormatOption {
     static void setting(T& /* unused */, const JsonOutputFormatOptions& /* unused */) {
         NEKO_LOG_INFO("rapidjson", "No output format options support for this writer({})", class_nameof<T>);
     };
 };
 
 template <typename T>
-struct set_json_format_option<T, typename std::enable_if<is_pretty_json_writer<T>::value>::type> {
+struct SetJsonFormatOption<T, typename std::enable_if<IsPrettyJsonWriter<T>::value>::type> {
     static void setting(T& writer, const JsonOutputFormatOptions& options) {
         writer.SetIndent(options.indentChar, options.indentLength);
         writer.SetFormatOptions(options.formatOptions);
@@ -254,8 +254,8 @@ namespace detail {
 template <>
 struct WriteParser<rapid::Writer, RapidJsonValue, void> {
     template <typename ParentType, typename Tags>
-    static ParserResult write(rapid::Writer& writer, const RapidJsonValue& value, const ParentType& parent,
-                              const Tags& tags) {
+    static auto write(rapid::Writer& writer, const RapidJsonValue& value, const ParentType& parent,
+                              const Tags& tags) -> ParserResult {
         if (value.hasValue()) {
             parsing::Parent<rapid::Writer>::addValue(writer, value.nativeValue(), parent, tags);
             return sa::success();
@@ -268,9 +268,9 @@ struct WriteParser<rapid::Writer, RapidJsonValue, void> {
 template <>
 struct ReadParser<rapid::Reader, RapidJsonValue, void> {
     template <typename Tags>
-    static ParserResult read(rapid::Reader::InputValueType in, RapidJsonValue& value, const Tags& /*tags*/) {
+    static auto read(rapid::Reader::InputValueType in, RapidJsonValue& value, const Tags& /*tags*/) -> ParserResult {
         if (in == nullptr) {
-            return parser_error(sa::ErrorCode::InvalidType, "Cannot read RapidJsonValue from a null input handle");
+            return parserError(sa::ErrorCode::InvalidType, "Cannot read RapidJsonValue from a null input handle");
         }
         value = RapidJsonValue(*in);
         return sa::success();
@@ -288,7 +288,7 @@ struct RapidJsonBackend {
     template <typename BufferT>
     class OutputState {
     public:
-        using OutputTraits = detail::json_output_traits<BufferT>;
+        using OutputTraits = detail::JsonOutputTraits<BufferT>;
         using WriterType   = typename OutputTraits::writer_type;
 
         explicit OutputState(typename OutputTraits::output_buffer_type& buffer) noexcept : stream(buffer) {}
@@ -345,16 +345,16 @@ struct RapidJsonBackend {
     };
 
     template <typename BufferT, typename T>
-    static sa::Result<void> write(OutputState<BufferT>& state, const T& value) {
+    static auto write(OutputState<BufferT>& state, const T& value) -> sa::Result<void> {
         state.writer.doc()->SetNull();
-        auto result   = parser_write<rapid::Writer>(state.writer, value, parsing::Parent<rapid::Writer>::Root{});
+        auto result   = parserWrite<rapid::Writer>(state.writer, value, parsing::Parent<rapid::Writer>::Root{});
         state.hasRoot = static_cast<bool>(result);
         state.flushed = false;
         return result;
     }
 
     template <typename BufferT>
-    static sa::Result<void> finish(OutputState<BufferT>& state, sa::Result<void> result) {
+    static auto finish(OutputState<BufferT>& state, sa::Result<void> result) -> sa::Result<void> {
         if (!state.hasRoot || !result) {
             return result;
         }
@@ -364,7 +364,7 @@ struct RapidJsonBackend {
 
         typename OutputState<BufferT>::WriterType writer(state.stream);
         if (state.hasFormatOptions) {
-            detail::set_json_format_option<typename OutputState<BufferT>::WriterType>::setting(writer, state.options);
+            detail::SetJsonFormatOption<typename OutputState<BufferT>::WriterType>::setting(writer, state.options);
         }
         const auto flushed = state.writer.doc()->Accept(writer);
         writer.Flush();
@@ -376,18 +376,18 @@ struct RapidJsonBackend {
     }
 
     template <typename BufferT>
-    static bool outputReady(const OutputState<BufferT>& state, const sa::Result<void>& result) noexcept {
+    static auto outputReady(const OutputState<BufferT>& state, const sa::Result<void>& result) noexcept -> bool {
         return state.hasRoot && static_cast<bool>(result);
     }
 
     template <typename BufferT>
-    static sa::Result<void> inputResult(const InputState<BufferT>& state) {
+    static auto inputResult(const InputState<BufferT>& state) -> sa::Result<void> {
         return state.result;
     }
 
     template <typename BufferT, typename T>
-    static sa::Result<void> read(InputState<BufferT>& state, T& value) {
-        return parser_read<rapid::Reader>(&state.document, value);
+    static auto read(InputState<BufferT>& state, T& value) -> sa::Result<void> {
+        return parserRead<rapid::Reader>(&state.document, value);
     }
 };
 
@@ -427,7 +427,7 @@ struct RapidJsonSerializer {
     using Writer               = rapid::Writer;
 };
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
 #ifdef _WIN32
 #pragma pop_macro("GetObject")

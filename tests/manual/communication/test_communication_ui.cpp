@@ -6,10 +6,10 @@
 
 #pragma comment(linker, "/subsystem:console") // 设置连接器选项
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 using namespace ilias;
 
-MainWidget::MainWidget(QIoContext* ctxt, NEKO_NAMESPACE::ProtoFactory& protoFactory, QWidget* parent)
+MainWidget::MainWidget(QIoContext* ctxt, nekoproto::ProtoFactory& protoFactory, QWidget* parent)
     : QMainWindow(parent), ui(new Ui::MainWindow), mCtxt(ctxt), mProtoFactor(protoFactory) {
     ui->setupUi(this);
     connect(ui->listening, &QPushButton::clicked, this, &MainWidget::startService);
@@ -38,7 +38,7 @@ MainWidget::~MainWidget() {
 }
 
 Task<void>
-MainWidget::clientLoop(std::map<int, NEKO_NAMESPACE::ProtoStreamClient<ilias::TcpClient>>::iterator client,
+MainWidget::clientLoop(std::map<int, nekoproto::ProtoStreamClient<ilias::TcpClient>>::iterator client,
                        QListWidgetItem* item) {
     mExit = false;
     while (!mExit) {
@@ -86,7 +86,7 @@ ilias::Task<void> MainWidget::serverLoop() {
                                      .arg(ret.value().second.port())
                                      .arg(++mChannelCount));
         auto item   = ui->channelList->item(ui->channelList->count() - 1);
-        auto client = mClients.emplace(mChannelCount, NEKO_NAMESPACE::ProtoStreamClient<TcpClient>(
+        auto client = mClients.emplace(mChannelCount, nekoproto::ProtoStreamClient<TcpClient>(
                                                           mProtoFactor, *mCtxt, std::move(ret.value().first)));
         ilias_go clientLoop(client.first, item);
     }
@@ -106,7 +106,7 @@ ilias::Task<void> MainWidget::makeMainChannel() {
         QString("%1 %2").arg(ui->serviceUrlEdit->text().toLocal8Bit().constData()).arg(++mChannelCount));
     auto item       = ui->channelList->item(ui->channelList->count() - 1);
     auto clientiter = mClients.emplace(
-        mChannelCount, NEKO_NAMESPACE::ProtoStreamClient<TcpClient>(mProtoFactor, *mCtxt, std::move(client)));
+        mChannelCount, nekoproto::ProtoStreamClient<TcpClient>(mProtoFactor, *mCtxt, std::move(client)));
     ilias_go clientLoop(clientiter.first, item);
 
     co_return Result<>();
@@ -143,7 +143,7 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv);
     app.setDesktopSettingsAware(true);
     QIoContext ioContext;
-    NEKO_NAMESPACE::ProtoFactory protoFactory;
+    nekoproto::ProtoFactory protoFactory;
     MainWidget mainWidget(&ioContext, protoFactory);
     mainWidget.show();
 

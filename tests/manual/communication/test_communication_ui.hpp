@@ -26,25 +26,25 @@ struct Message {
     std::vector<int> numbers;
 
     NEKO_SERIALIZER(timestamp, msg, id, numbers)
-    NEKO_DECLARE_PROTOCOL(Message, NEKO_NAMESPACE::JsonSerializer)
+    NEKO_DECLARE_PROTOCOL(Message, nekoproto::JsonSerializer)
 };
 
 class MainWidget : public QMainWindow {
     Q_OBJECT
 public:
-    MainWidget(ilias::QIoContext* ctxt, NEKO_NAMESPACE::ProtoFactory& protoFactory,
+    MainWidget(ilias::QIoContext* ctxt, nekoproto::ProtoFactory& protoFactory,
                QWidget* parent = nullptr);
     ~MainWidget();
 
     ilias::Task<void>
-    clientLoop(std::map<int, NEKO_NAMESPACE::ProtoStreamClient<ilias::TcpClient>>::iterator client,
+    clientLoop(std::map<int, nekoproto::ProtoStreamClient<ilias::TcpClient>>::iterator client,
                QListWidgetItem* item);
     ilias::Task<void> serverLoop();
     ilias::Task<void> makeMainChannel();
     template <typename T>
-    ilias::Task<void> sendMessage(NEKO_NAMESPACE::ProtoStreamClient<T>& client);
+    ilias::Task<void> sendMessage(nekoproto::ProtoStreamClient<T>& client);
     template <typename T>
-    ilias::Task<void> recvMessage(NEKO_NAMESPACE::ProtoStreamClient<T>& client);
+    ilias::Task<void> recvMessage(nekoproto::ProtoStreamClient<T>& client);
 
 protected Q_SLOTS:
     void startService();
@@ -56,23 +56,23 @@ protected Q_SLOTS:
 private:
     Ui::MainWindow* ui;
     ilias::QIoContext* mCtxt;
-    NEKO_NAMESPACE::ProtoFactory& mProtoFactor;
+    nekoproto::ProtoFactory& mProtoFactor;
     bool mExit = true;
     ilias::TcpListener mListener;
     std::vector<ilias::CancelHandle> mHandles;
-    std::map<int, NEKO_NAMESPACE::ProtoStreamClient<ilias::TcpClient>> mClients;
+    std::map<int, nekoproto::ProtoStreamClient<ilias::TcpClient>> mClients;
     int mChannelCount = 0;
     int mCurrentIndex = 0;
 };
 
 template <typename T>
-ilias::Task<void> MainWidget::sendMessage(NEKO_NAMESPACE::ProtoStreamClient<T>& client) {
+ilias::Task<void> MainWidget::sendMessage(nekoproto::ProtoStreamClient<T>& client) {
     Message msg;
     msg.id        = mCurrentIndex;
     msg.msg       = std::string(ui->sendEdit->toPlainText().toUtf8());
     msg.timestamp = (time(NULL));
     msg.numbers   = std::vector<int>({1, 2, 3, 4, 5});
-    auto ret1     = co_await client.send(msg.makeProto(), NEKO_NAMESPACE::ProtoStreamClient<T>::SerializerInThread);
+    auto ret1     = co_await client.send(msg.makeProto(), nekoproto::ProtoStreamClient<T>::SerializerInThread);
     if (!ret1) {
         NEKO_LOG_ERROR("ui test", "send failed: {}",
                        QString::fromUtf8(ret1.error().message()).toLocal8Bit().constData());
@@ -82,8 +82,8 @@ ilias::Task<void> MainWidget::sendMessage(NEKO_NAMESPACE::ProtoStreamClient<T>& 
 }
 
 template <typename T>
-ilias::Task<void> MainWidget::recvMessage(NEKO_NAMESPACE::ProtoStreamClient<T>& client) {
-    auto ret = co_await client.recv(NEKO_NAMESPACE::ProtoStreamClient<T>::SerializerInThread);
+ilias::Task<void> MainWidget::recvMessage(nekoproto::ProtoStreamClient<T>& client) {
+    auto ret = co_await client.recv(nekoproto::ProtoStreamClient<T>::SerializerInThread);
     if (!ret) {
         NEKO_LOG_ERROR("ui test", "recv failed: {}", ret.error().message());
         co_return ilias::Err(ret.error());

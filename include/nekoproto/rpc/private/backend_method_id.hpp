@@ -16,10 +16,10 @@
 #include "nekoproto/rpc/private/backend_base.hpp"
 #include "nekoproto/rpc/private/method_id.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace rpc {
 
-inline auto NekoRpcMethodIdResolveStatusName(NekoRpcMethodIdResolveStatus status) noexcept -> std::string_view {
+inline auto nekoRpcMethodIdResolveStatusName(NekoRpcMethodIdResolveStatus status) noexcept -> std::string_view {
     switch (status) {
     case NekoRpcMethodIdResolveStatus::Ok:
         return "ok";
@@ -36,7 +36,7 @@ inline auto NekoRpcMethodIdResolveStatusName(NekoRpcMethodIdResolveStatus status
 }
 
 template <typename Methods>
-auto NekoRpcMethodEntries(Methods&& methods) -> std::vector<NekoRpcMethodEntry> {
+auto nekoRpcMethodEntries(Methods&& methods) -> std::vector<NekoRpcMethodEntry> {
     std::vector<NekoRpcMethodEntry> entries;
     std::uint64_t id = 0;
     for (const auto& method : methods) {
@@ -55,14 +55,13 @@ auto NekoRpcMethodEntries(Methods&& methods) -> std::vector<NekoRpcMethodEntry> 
     return entries;
 }
 
-inline auto NekoRpcMethodEntriesFromMetadata(const std::vector<::NEKO_NAMESPACE::detail::RpcMethodMetadata>& methods)
+inline auto nekoRpcMethodEntriesFromMetadata(const std::vector<::nekoproto::detail::RpcMethodMetadata>& methods)
     -> std::vector<NekoRpcMethodEntry> {
-    return NekoRpcMethodEntries(methods);
+    return nekoRpcMethodEntries(methods);
 }
 
-inline auto NekoRpcSyncMethodTable(NekoRpcMethodIdTable& table,
-                                   const std::vector<NekoRpcMethodEntry>& active_entries,
-                                   std::vector<NekoRpcMethodEntry>& delta) -> void {
+inline void nekoRpcSyncMethodTable(NekoRpcMethodIdTable& table, const std::vector<NekoRpcMethodEntry>& active_entries,
+                                   std::vector<NekoRpcMethodEntry>& delta) {
     delta.clear();
     for (const auto& entry : active_entries) {
         const auto* current = table.findByName(entry.name);
@@ -102,9 +101,8 @@ inline auto NekoRpcSyncMethodTable(NekoRpcMethodIdTable& table,
 }
 
 template <typename Backend>
-auto NekoRpcIncomingMethodName(typename Backend::ServerContext& context,
-                              typename Backend::PeerSession& session,
-                              const typename Backend::Codec::FrameParts& parts)
+auto nekoRpcIncomingMethodName(typename Backend::ServerContext& context, typename Backend::PeerSession& session,
+                               const typename Backend::Codec::FrameParts& parts)
     -> ilias::Result<std::string, std::error_code> {
     using Flag = typename Backend::Flag;
 
@@ -125,13 +123,12 @@ auto NekoRpcIncomingMethodName(typename Backend::ServerContext& context,
     }
 
     std::uint64_t signature_hash = 0;
-    const bool has_signature =
-        NekoRpcExtensionCodec::readIntegerTlv(parts.extensions, NekoRpcExtensionType::MethodSignatureHash,
-                                              signature_hash);
+    const bool has_signature     = NekoRpcExtensionCodec::readIntegerTlv(
+        parts.extensions, NekoRpcExtensionType::MethodSignatureHash, signature_hash);
     const auto method_id = NekoRpcExtensionCodec::readInteger<std::uint64_t>(parts.method);
     auto resolved        = context.method_table.resolve(method_id, version, signature_hash, true);
-    NEKO_LOG_TRACE("rpc", "rpc backend method-id lookup: id={} version={} signature_present={} status={}",
-                   method_id, version, has_signature, NekoRpcMethodIdResolveStatusName(resolved.status));
+    NEKO_LOG_TRACE("rpc", "rpc backend method-id lookup: id={} version={} signature_present={} status={}", method_id,
+                   version, has_signature, nekoRpcMethodIdResolveStatusName(resolved.status));
 
     if (!has_signature && resolved.status == NekoRpcMethodIdResolveStatus::SignatureMismatch) {
         NEKO_LOG_WARN("rpc", "rpc backend method-id rejected: id={} version={} reason=missing_signature", method_id,
@@ -160,4 +157,4 @@ auto NekoRpcIncomingMethodName(typename Backend::ServerContext& context,
 }
 
 } // namespace rpc
-NEKO_END_NAMESPACE
+} // namespace nekoproto

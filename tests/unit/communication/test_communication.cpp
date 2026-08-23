@@ -17,7 +17,7 @@
 #include <ilias/task/when_all.hpp>
 #include <system_error>
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 using ilias::IoContext;
 using ilias::IPEndpoint;

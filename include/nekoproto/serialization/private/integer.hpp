@@ -9,7 +9,7 @@
 #include <type_traits>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace detail {
 
 struct IntegerEncoder {
@@ -31,7 +31,7 @@ struct IntegerEncoder {
      * @return int
      */
     template <typename T, typename OutputBuffer>
-    static int encode(T&& value, OutputBuffer& outputBuffer, uint8_t bitsOffset = 0);
+    static auto encode(T&& value, OutputBuffer& outputBuffer, uint8_t bitsOffset = 0) -> int;
 };
 
 struct IntegerDecoder {
@@ -83,11 +83,11 @@ struct IntegerDecoder {
      * @return int the next position if successful, -1 otherwise
      */
     template <typename T>
-    static int decode(const uint8_t* buffer, int size, T& value, uint8_t bitsOffset = 0);
+    static auto decode(const uint8_t* buffer, int size, T& value, uint8_t bitsOffset = 0) -> int;
 };
 
 template <typename T, typename OutputBuffer>
-inline int IntegerEncoder::encode(T&& value, OutputBuffer& outputBuffer, uint8_t bitsOffset) {
+inline auto IntegerEncoder::encode(T&& value, OutputBuffer& outputBuffer, uint8_t bitsOffset) -> int {
     using Byte = typename OutputBuffer::value_type;
     NEKO_ASSERT(bitsOffset < 8, "serializer", "bitsOffset must be between 0 and 8");
     if (outputBuffer.empty()) {
@@ -113,7 +113,7 @@ inline int IntegerEncoder::encode(T&& value, OutputBuffer& outputBuffer, uint8_t
 }
 
 template <typename T>
-inline int IntegerDecoder::decode(const uint8_t* buffer, int size, T& value, uint8_t bitsOffset) {
+inline auto IntegerDecoder::decode(const uint8_t* buffer, int size, T& value, uint8_t bitsOffset) -> int {
     NEKO_ASSERT(bitsOffset < 8, "serializer", "bitsOffset must be between 0 and 8");
     NEKO_ASSERT(size > 0, "serializer", "buffer must not be empty");
 
@@ -152,4 +152,4 @@ inline int IntegerDecoder::decode(const uint8_t* buffer, int size, T& value, uin
 }
 
 } // namespace detail
-NEKO_END_NAMESPACE
+} // namespace nekoproto

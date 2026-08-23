@@ -13,7 +13,7 @@
 #include <string_view>
 #include <type_traits>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace detail::simd {
 
 using JsonParser = simdjson::dom::parser;
@@ -38,15 +38,16 @@ struct Reader {
     using InputObjectType = InputObject;
     using InputValueType  = InputValue;
 
-    static std::size_t arraySize(const InputArrayType& array) noexcept { return array.value.size(); }
+    static auto arraySize(const InputArrayType& array) noexcept -> std::size_t { return array.value.size(); }
 
-    static InputValueType arrayElement(const InputArrayType& array, std::size_t index) noexcept {
+    static auto arrayElement(const InputArrayType& array, std::size_t index) noexcept -> InputValueType {
         return {array.value.at(index).value_unsafe(), array.owner};
     }
 
-    static std::size_t objectSize(const InputObjectType& object) noexcept { return object.value.size(); }
+    static auto objectSize(const InputObjectType& object) noexcept -> std::size_t { return object.value.size(); }
 
-    static sa::Result<InputValueType> objectField(const InputObjectType& object, std::string_view name) noexcept {
+    static auto objectField(const InputObjectType& object, std::string_view name) noexcept
+        -> sa::Result<InputValueType> {
         auto value = object.value.at_key(name);
         if (value.error() != simdjson::SUCCESS) {
             return sa::error(sa::ErrorCode::InvalidField,
@@ -57,7 +58,7 @@ struct Reader {
     }
 
     template <typename Fn>
-    static bool forEachObjectMember(const InputObjectType& object, Fn&& fn) {
+    static auto forEachObjectMember(const InputObjectType& object, Fn&& fn) -> bool {
         for (const auto field : object.value) {
             if (!fn(field.key, InputValueType{field.value, object.owner})) {
                 return false;
@@ -66,9 +67,9 @@ struct Reader {
         return true;
     }
 
-    static bool isEmpty(const InputValueType& value) noexcept { return value.value.is_null(); }
+    static auto isEmpty(const InputValueType& value) noexcept -> bool { return value.value.is_null(); }
 
-    static sa::Result<std::string> toRawString(const InputValueType& value) noexcept {
+    static auto toRawString(const InputValueType& value) noexcept -> sa::Result<std::string> {
         try {
             return simdjson::minify(value.value);
         } catch (const simdjson::simdjson_error& error) {
@@ -77,7 +78,8 @@ struct Reader {
     }
 
     template <typename CharT, typename Traits>
-    static sa::Result<std::basic_string_view<CharT, Traits>> toStringView(const InputValueType& value) noexcept {
+    static auto toStringView(const InputValueType& value) noexcept
+        -> sa::Result<std::basic_string_view<CharT, Traits>> {
         auto string = value.value.get_string();
         if (string.error() != simdjson::SUCCESS) {
             return sa::error(sa::ErrorCode::InvalidType, "Expected string");
@@ -87,7 +89,7 @@ struct Reader {
     }
 
     template <typename T>
-    static sa::Result<T> toBasicType(const InputValueType& input) noexcept {
+    static auto toBasicType(const InputValueType& input) noexcept -> sa::Result<T> {
         using U = std::remove_cvref_t<T>;
         if constexpr (std::is_same_v<U, std::string>) {
             auto value = input.value.get_string();
@@ -131,7 +133,7 @@ struct Reader {
         }
     }
 
-    static sa::Result<InputArrayType> toArray(const InputValueType& input) noexcept {
+    static auto toArray(const InputValueType& input) noexcept -> sa::Result<InputArrayType> {
         auto value = input.value.get_array();
         if (value.error() != simdjson::SUCCESS) {
             return sa::error(sa::ErrorCode::InvalidType, "Expected array");
@@ -139,7 +141,7 @@ struct Reader {
         return InputArrayType{value.value_unsafe(), input.owner};
     }
 
-    static sa::Result<InputObjectType> toObject(const InputValueType& input) noexcept {
+    static auto toObject(const InputValueType& input) noexcept -> sa::Result<InputObjectType> {
         auto value = input.value.get_object();
         if (value.error() != simdjson::SUCCESS) {
             return sa::error(sa::ErrorCode::InvalidType, "Expected object");
@@ -149,6 +151,6 @@ struct Reader {
 };
 
 } // namespace detail::simd
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
 #endif

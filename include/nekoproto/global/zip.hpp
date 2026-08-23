@@ -14,7 +14,7 @@
 
 #include "global.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 template <typename... Args>
 class Zip {
@@ -23,18 +23,18 @@ public:
     class Iterator {
     public:
         Iterator(Iterators... iterables);
-        bool operator==(const Iterator& other) const noexcept;
-        bool operator!=(const Iterator& other) const noexcept;
-        Iterator& operator++() noexcept;
-        Iterator operator++(int) noexcept;
-        Iterator& operator--() noexcept;
-        Iterator operator--(int) noexcept;
+        auto operator==(const Iterator& other) const noexcept -> bool;
+        auto operator!=(const Iterator& other) const noexcept -> bool;
+        auto operator++() noexcept -> Iterator&;
+        auto operator++(int) noexcept -> Iterator;
+        auto operator--() noexcept -> Iterator&;
+        auto operator--(int) noexcept -> Iterator;
         auto operator*() noexcept;
-        const auto& operator*() const noexcept;
+        auto operator*() const noexcept -> const auto&;
 
     private:
         template <std::size_t... Indices>
-        bool _compare(std::index_sequence<Indices...> /*unused*/, const Iterator& other) const;
+        auto compare(std::index_sequence<Indices...> /*unused*/, const Iterator& other) const -> bool;
 
     private:
         std::tuple<Iterators...> mIterators;
@@ -55,21 +55,21 @@ public:
 
 protected:
     template <std::size_t... Indices>
-    auto _makeBegin(std::index_sequence<Indices...> /*unused*/) noexcept;
+    auto makeBegin(std::index_sequence<Indices...> /*unused*/) noexcept;
     template <std::size_t... Indices>
-    auto _makeEnd(std::index_sequence<Indices...> /*unused*/) noexcept;
+    auto makeEnd(std::index_sequence<Indices...> /*unused*/) noexcept;
     template <std::size_t... Indices>
-    auto _makeCBegin(std::index_sequence<Indices...> /*unused*/) noexcept;
+    auto makeCBegin(std::index_sequence<Indices...> /*unused*/) noexcept;
     template <std::size_t... Indices>
-    auto _makeCEnd(std::index_sequence<Indices...> /*unused*/) noexcept;
+    auto makeCEnd(std::index_sequence<Indices...> /*unused*/) noexcept;
     template <std::size_t... Indices>
-    auto _makeRBegin(std::index_sequence<Indices...> /*unused*/) noexcept;
+    auto makeRBegin(std::index_sequence<Indices...> /*unused*/) noexcept;
     template <std::size_t... Indices>
-    auto _makeREnd(std::index_sequence<Indices...> /*unused*/) noexcept;
+    auto makeREnd(std::index_sequence<Indices...> /*unused*/) noexcept;
     template <std::size_t... Indices>
-    auto _makeCrBegin(std::index_sequence<Indices...> /*unused*/) noexcept;
+    auto makeCrBegin(std::index_sequence<Indices...> /*unused*/) noexcept;
     template <std::size_t... Indices>
-    auto _makeCrEnd(std::index_sequence<Indices...> /*unused*/) noexcept;
+    auto makeCrEnd(std::index_sequence<Indices...> /*unused*/) noexcept;
 
 private:
     std::tuple<Args...> mIterable;
@@ -97,8 +97,8 @@ private:
 template <typename... Args>
 template <typename... Iterators>
 template <std::size_t... Indices>
-bool Zip<Args...>::Iterator<Iterators...>::_compare(std::index_sequence<Indices...> /*unused*/,
-                                                    const Iterator& other) const {
+auto Zip<Args...>::Iterator<Iterators...>::compare(std::index_sequence<Indices...> /*unused*/,
+                                                   const Iterator& other) const -> bool {
     return ((std::get<Indices>(mIterators) == std::get<Indices>(other.mIterators)) || ...);
 }
 
@@ -108,16 +108,16 @@ Zip<Args...>::Iterator<Iterators...>::Iterator(Iterators... iterables) : mIterat
 
 template <typename... Args>
 template <typename... Iterators>
-bool Zip<Args...>::Iterator<Iterators...>::operator==(const Iterator& other) const noexcept {
+auto Zip<Args...>::Iterator<Iterators...>::operator==(const Iterator& other) const noexcept -> bool {
     constexpr std::size_t Size = sizeof...(Args);
-    return _compare(std::make_index_sequence<Size>(), other);
+    return compare(std::make_index_sequence<Size>(), other);
 }
 
 template <typename... Args>
 template <typename... Iterators>
-bool Zip<Args...>::Iterator<Iterators...>::operator!=(const Iterator& other) const noexcept {
+auto Zip<Args...>::Iterator<Iterators...>::operator!=(const Iterator& other) const noexcept -> bool {
     constexpr std::size_t Size = sizeof...(Args);
-    return !_compare(std::make_index_sequence<Size>(), other);
+    return !compare(std::make_index_sequence<Size>(), other);
 }
 
 template <typename... Args>
@@ -158,98 +158,98 @@ auto Zip<Args...>::Iterator<Iterators...>::operator*() noexcept {
 
 template <typename... Args>
 template <typename... Iterators>
-const auto& Zip<Args...>::Iterator<Iterators...>::operator*() const noexcept {
+auto Zip<Args...>::Iterator<Iterators...>::operator*() const noexcept -> const auto& {
     return std::apply([](auto&... iterators) { return std::tuple<const typename Args::value_type&...>(*iterators...); },
                       mIterators);
 }
 
 template <typename... Args>
 template <std::size_t... Indices>
-auto Zip<Args...>::_makeBegin(std::index_sequence<Indices...> /*unused*/) noexcept {
+auto Zip<Args...>::makeBegin(std::index_sequence<Indices...> /*unused*/) noexcept {
     return Iterator(std::begin(std::get<Indices>(mIterable))...);
 }
 template <typename... Args>
 template <std::size_t... Indices>
-auto Zip<Args...>::_makeEnd(std::index_sequence<Indices...> /*unused*/) noexcept {
+auto Zip<Args...>::makeEnd(std::index_sequence<Indices...> /*unused*/) noexcept {
     return Iterator(std::end(std::get<Indices>(mIterable))...);
 }
 template <typename... Args>
 template <std::size_t... Indices>
-auto Zip<Args...>::_makeCBegin(std::index_sequence<Indices...> /*unused*/) noexcept {
+auto Zip<Args...>::makeCBegin(std::index_sequence<Indices...> /*unused*/) noexcept {
     return Iterator(std::cbegin(std::get<Indices>(mIterable))...);
 }
 template <typename... Args>
 template <std::size_t... Indices>
-auto Zip<Args...>::_makeCEnd(std::index_sequence<Indices...> /*unused*/) noexcept {
+auto Zip<Args...>::makeCEnd(std::index_sequence<Indices...> /*unused*/) noexcept {
     return Iterator(std::cend(std::get<Indices>(mIterable))...);
 }
 template <typename... Args>
 template <std::size_t... Indices>
-auto Zip<Args...>::_makeRBegin(std::index_sequence<Indices...> /*unused*/) noexcept {
+auto Zip<Args...>::makeRBegin(std::index_sequence<Indices...> /*unused*/) noexcept {
     return Iterator(std::rbegin(std::get<Indices>(mIterable))...);
 }
 template <typename... Args>
 template <std::size_t... Indices>
-auto Zip<Args...>::_makeREnd(std::index_sequence<Indices...> /*unused*/) noexcept {
+auto Zip<Args...>::makeREnd(std::index_sequence<Indices...> /*unused*/) noexcept {
     return Iterator(std::rend(std::get<Indices>(mIterable))...);
 }
 template <typename... Args>
 template <std::size_t... Indices>
-auto Zip<Args...>::_makeCrBegin(std::index_sequence<Indices...> /*unused*/) noexcept {
+auto Zip<Args...>::makeCrBegin(std::index_sequence<Indices...> /*unused*/) noexcept {
     return Iterator(std::crbegin(std::get<Indices>(mIterable))...);
 }
 template <typename... Args>
 template <std::size_t... Indices>
-auto Zip<Args...>::_makeCrEnd(std::index_sequence<Indices...> /*unused*/) noexcept {
+auto Zip<Args...>::makeCrEnd(std::index_sequence<Indices...> /*unused*/) noexcept {
     return Iterator(std::crend(std::get<Indices>(mIterable))...);
 }
 
 template <typename... Args>
 auto Zip<Args...>::begin() noexcept {
     constexpr std::size_t Size = sizeof...(Args);
-    return _makeBegin(std::make_index_sequence<Size>());
+    return makeBegin(std::make_index_sequence<Size>());
 }
 
 template <typename... Args>
 auto Zip<Args...>::end() noexcept {
     constexpr std::size_t Size = sizeof...(Args);
-    return _makeEnd(std::make_index_sequence<Size>());
+    return makeEnd(std::make_index_sequence<Size>());
 }
 
 template <typename... Args>
 auto Zip<Args...>::cbegin() noexcept {
     constexpr std::size_t Size = sizeof...(Args);
-    return _makeCBegin(std::make_index_sequence<Size>());
+    return makeCBegin(std::make_index_sequence<Size>());
 }
 
 template <typename... Args>
 auto Zip<Args...>::cend() noexcept {
     constexpr std::size_t Size = sizeof...(Args);
-    return _makeCEnd(std::make_index_sequence<Size>());
+    return makeCEnd(std::make_index_sequence<Size>());
 }
 
 template <typename... Args>
 auto Zip<Args...>::rbegin() noexcept {
     constexpr std::size_t Size = sizeof...(Args);
-    return _makeRBegin(std::make_index_sequence<Size>());
+    return makeRBegin(std::make_index_sequence<Size>());
 }
 
 template <typename... Args>
 auto Zip<Args...>::rend() noexcept {
     constexpr std::size_t Size = sizeof...(Args);
-    return _makeREnd(std::make_index_sequence<Size>());
+    return makeREnd(std::make_index_sequence<Size>());
 }
 
 template <typename... Args>
 auto Zip<Args...>::crbegin() noexcept {
     constexpr std::size_t Size = sizeof...(Args);
-    return _makeCRBegin(std::make_index_sequence<Size>());
+    return makeCRBegin(std::make_index_sequence<Size>());
 }
 
 template <typename... Args>
 auto Zip<Args...>::crend() noexcept {
     constexpr std::size_t Size = sizeof...(Args);
-    return _makeCREnd(std::make_index_sequence<Size>());
+    return makeCREnd(std::make_index_sequence<Size>());
 }
 
 template <typename... Args>
@@ -292,4 +292,4 @@ auto ReverseZip<Args...>::crend() noexcept {
     return mZip.cend();
 }
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

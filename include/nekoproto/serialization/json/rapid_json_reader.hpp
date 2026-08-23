@@ -24,15 +24,15 @@
 
 #include "nekoproto/serialization/error.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace rapid {
 #if NEKO_CPP_PLUS < 20
 namespace detail {
 template <class T, class = void>
-struct has_from_json_obj : std::false_type {};
+struct HasFromJsonObj : std::false_type {};
 
 template <class T>
-struct has_from_json_obj<T, std::void_t<decltype(T::from_json_obj(std::declval<Reader::InputValueType>()))>>
+struct HasFromJsonObj<T, std::void_t<decltype(T::from_json_obj(std::declval<Reader::InputValueType>()))>>
     : std::true_type {};
 } // namespace detail
 #endif
@@ -47,18 +47,18 @@ struct Reader {
 #if NEKO_CPP_PLUS >= 20
         requires(InputValueType var) { T::from_json_obj(var); };
 #else
-        detail::has_from_json_obj<T>::value;
+        detail::HasFromJsonObj<T>::value;
 #endif
 
-    static sa::Result<InputValueType> getFieldFromArray(const size_t idx, const InputArrayType& array) noexcept {
+    static auto getFieldFromArray(const size_t idx, const InputArrayType& array) noexcept -> sa::Result<InputValueType> {
         if (idx >= array.Size()) {
             return sa::error(sa::ErrorCode::InvalidIndex, "Index " + std::to_string(idx) + " out of range");
         }
         return &array[idx];
     }
 
-    static sa::Result<InputValueType> getFieldFromObject(const std::string_view name,
-                                                         const InputObjectType& object) noexcept {
+    static auto getFieldFromObject(const std::string_view name,
+                                                         const InputObjectType& object) noexcept -> sa::Result<InputValueType> {
         auto it = object.FindMember(rapidjson::Value(name.data(), name.size()));
         if (it != object.MemberEnd()) {
             return &it->value;
@@ -66,20 +66,20 @@ struct Reader {
         return sa::error(sa::ErrorCode::InvalidField, "Field " + std::string(name) + " not found");
     }
 
-    static std::size_t arraySize(const InputArrayType& array) noexcept { return array.Size(); }
+    static auto arraySize(const InputArrayType& array) noexcept -> std::size_t { return array.Size(); }
 
-    static InputValueType arrayElement(const InputArrayType& array, std::size_t index) noexcept {
+    static auto arrayElement(const InputArrayType& array, std::size_t index) noexcept -> InputValueType {
         return &array[static_cast<rapidjson::SizeType>(index)];
     }
 
-    static std::size_t objectSize(const InputObjectType& object) noexcept { return object.MemberCount(); }
+    static auto objectSize(const InputObjectType& object) noexcept -> std::size_t { return object.MemberCount(); }
 
-    static sa::Result<InputValueType> objectField(const InputObjectType& object, std::string_view name) noexcept {
+    static auto objectField(const InputObjectType& object, std::string_view name) noexcept -> sa::Result<InputValueType> {
         return getFieldFromObject(name, object);
     }
 
     template <typename Fn>
-    static bool forEachObjectMember(const InputObjectType& object, Fn&& fn) {
+    static auto forEachObjectMember(const InputObjectType& object, Fn&& fn) -> bool {
         for (const auto& member : object) {
             std::string_view name{member.name.GetString(), member.name.GetStringLength()};
             if (!fn(name, &member.value)) {
@@ -89,9 +89,9 @@ struct Reader {
         return true;
     }
 
-    static bool isEmpty(const InputValueType& value) noexcept { return value == nullptr || value->IsNull(); }
+    static auto isEmpty(const InputValueType& value) noexcept -> bool { return value == nullptr || value->IsNull(); }
 
-    static sa::Result<std::string> toRawString(InputValueType value) noexcept {
+    static auto toRawString(InputValueType value) noexcept -> sa::Result<std::string> {
         if (value == nullptr) {
             return sa::error(sa::ErrorCode::InvalidType, "value is null");
         }
@@ -104,7 +104,7 @@ struct Reader {
     }
 
     template <typename CharT, typename Traits>
-    static sa::Result<std::basic_string_view<CharT, Traits>> toStringView(InputValueType value) noexcept {
+    static auto toStringView(InputValueType value) noexcept -> sa::Result<std::basic_string_view<CharT, Traits>> {
         if (value == nullptr || !value->IsString()) {
             return sa::error(sa::ErrorCode::InvalidType, "Expected string");
         }
@@ -113,7 +113,7 @@ struct Reader {
     }
 
     template <typename T>
-    static sa::Result<T> toBasicType(InputValueType value) noexcept {
+    static auto toBasicType(InputValueType value) noexcept -> sa::Result<T> {
         if (value == nullptr) {
             return sa::error(sa::ErrorCode::InvalidType, "value is null");
         }
@@ -166,7 +166,7 @@ struct Reader {
     }
 
     template <class ArrayReader>
-    sa::Error readArray(const ArrayReader& reader, const InputArrayType& value) const noexcept {
+    auto readArray(const ArrayReader& reader, const InputArrayType& value) const noexcept -> sa::Error {
         const auto size = value.Size();
         for (rapidjson::SizeType i = 0; i < size; ++i) {
             const auto err = reader.read(&value[i]);
@@ -178,7 +178,7 @@ struct Reader {
     }
 
     template <class ObjectReader>
-    sa::Error readObject(const ObjectReader& reader, const InputObjectType& value) const noexcept {
+    auto readObject(const ObjectReader& reader, const InputObjectType& value) const noexcept -> sa::Error {
         for (const auto& member : value) {
             std::string name = {member.name.GetString(), member.name.GetStringLength()};
             const auto err   = reader.read(name, &member.value);
@@ -189,7 +189,7 @@ struct Reader {
         return sa::error(sa::ErrorCode::Ok);
     }
 
-    static sa::Result<InputArrayType> toArray(InputValueType value) noexcept {
+    static auto toArray(InputValueType value) noexcept -> sa::Result<InputArrayType> {
         if (value == nullptr) {
             return sa::error(sa::ErrorCode::InvalidType, "value is null");
         }
@@ -199,7 +199,7 @@ struct Reader {
         return value->GetArray();
     }
 
-    static sa::Result<InputObjectType> toObject(InputValueType value) noexcept {
+    static auto toObject(InputValueType value) noexcept -> sa::Result<InputObjectType> {
         if (value == nullptr) {
             return sa::error(sa::ErrorCode::InvalidType, "value is null");
         }
@@ -210,7 +210,7 @@ struct Reader {
     }
 
     template <class T>
-    static sa::Result<T> useCustomConstructor(InputValueType value) noexcept {
+    static auto useCustomConstructor(InputValueType value) noexcept -> sa::Result<T> {
         try {
             return T::from_json_obj(value);
         } catch (const std::exception& e) {
@@ -219,7 +219,7 @@ struct Reader {
     }
 };
 } // namespace rapid
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 #ifdef _WIN32
 #pragma pop_macro("GetObject")
 #endif

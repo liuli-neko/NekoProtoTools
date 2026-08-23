@@ -12,7 +12,7 @@
 #include <variant>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace parsing::schema {
 
@@ -71,7 +71,7 @@ struct Type {
     bool unframed = false;
 };
 
-inline const Type& unwrapOptional(const Type& type) {
+inline auto unwrapOptional(const Type& type) -> const Type& {
     if (const auto* optional = std::get_if<Type::Optional>(&type.value)) {
         return *optional->type;
     }
@@ -80,4 +80,4 @@ inline const Type& unwrapOptional(const Type& type) {
 
 } // namespace parsing::schema
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

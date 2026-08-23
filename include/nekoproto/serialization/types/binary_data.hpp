@@ -19,7 +19,7 @@
 #include <string_view>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 /// ================== Base 64 ==========================
 struct Base64Covert {
@@ -28,21 +28,21 @@ struct Base64Covert {
 #else
     static const char Table[65];
 #endif
-    static inline uint8_t QueryTable(uint8_t ch) noexcept {
+    static inline auto queryTable(uint8_t ch) noexcept -> uint8_t {
         // search on table
         return (uint8_t)(strchr(Table, ch) - Table);
     }
-    static std::vector<char> Encode(const std::vector<char>& str) {
+    static auto encode(const std::vector<char>& str) -> std::vector<char> {
         // encode string to base64
-        return Encode(str.data(), str.size());
+        return encode(str.data(), str.size());
     }
-    static std::vector<char> Encode(const char* str) { return Encode(str, strlen(str)); }
-    static std::vector<char> Encode(const char* str, std::size_t datalen) {
+    static auto encode(const char* str) -> std::vector<char> { return encode(str, strlen(str)); }
+    static auto encode(const char* str, std::size_t datalen) -> std::vector<char> {
         std::vector<uint8_t> buf;
-        Encode(reinterpret_cast<const uint8_t*>(str), datalen, buf);
+        encode(reinterpret_cast<const uint8_t*>(str), datalen, buf);
         return std::vector<char>((char*)(buf.data()), (char*)(buf.data()) + buf.size());
     }
-    static void Encode(const uint8_t* data, std::size_t datalen, std::vector<uint8_t>& buf) {
+    static void encode(const uint8_t* data, std::size_t datalen, std::vector<uint8_t>& buf) {
         auto cptr  = data;
         auto table = Table;
         buf.resize(((datalen + 2) / 3) * 4, '=');
@@ -82,14 +82,14 @@ struct Base64Covert {
         }
         NEKO_ASSERT(bufptr == buf.data() + buf.size(), "BinarySerializer", "Bad Base64 String");
     }
-    static std::vector<char> Decode(const std::vector<char>& str) { return Decode(str.data(), str.size()); }
-    static std::vector<char> Decode(const char* str) { return Decode(str, strlen(str)); }
-    static std::vector<char> Decode(const char* str, std::size_t datalen) {
+    static auto decode(const std::vector<char>& str) -> std::vector<char> { return decode(str.data(), str.size()); }
+    static auto decode(const char* str) -> std::vector<char> { return decode(str, strlen(str)); }
+    static auto decode(const char* str, std::size_t datalen) -> std::vector<char> {
         std::vector<uint8_t> buf;
-        Decode(reinterpret_cast<const uint8_t*>(str), datalen, buf);
+        decode(reinterpret_cast<const uint8_t*>(str), datalen, buf);
         return std::vector<char>((char*)(buf.data()), (char*)(buf.data()) + buf.size());
     }
-    static bool Decode(const uint8_t* data, std::size_t datalen, std::vector<uint8_t>& buf) {
+    static auto decode(const uint8_t* data, std::size_t datalen, std::vector<uint8_t>& buf) -> bool {
         if ((datalen % 4) != 0) {
             NEKO_LOG_ERROR("proto", "Bad Base64 String len({}), data({:.{}s})", datalen,
                            reinterpret_cast<const char*>(data), datalen);
@@ -112,10 +112,10 @@ struct Base64Covert {
         uint8_t array[4];
         auto* bufptr = buf.data();
         while (datalen > 3) {
-            array[0]  = QueryTable(cptr[0]);
-            array[1]  = QueryTable(cptr[1]);
-            array[2]  = QueryTable(cptr[2]);
-            array[3]  = QueryTable(cptr[3]);
+            array[0]  = queryTable(cptr[0]);
+            array[1]  = queryTable(cptr[1]);
+            array[2]  = queryTable(cptr[2]);
+            array[3]  = queryTable(cptr[3]);
             bufptr[0] = ((array[0] << 2) | (array[1] >> 4));
             bufptr[1] = ((array[1] << 4) | (array[2] >> 2));
             bufptr[2] = ((array[2] << 6) | array[3]);
@@ -126,16 +126,16 @@ struct Base64Covert {
         NEKO_ASSERT(datalen != 1, "BinarySerializer", "Bad Base64 String");
         switch (datalen) {
         case 2: {
-            array[0]  = QueryTable(cptr[0]);
-            array[1]  = QueryTable(cptr[1]);
+            array[0]  = queryTable(cptr[0]);
+            array[1]  = queryTable(cptr[1]);
             bufptr[0] = ((array[0] << 2) | (array[1] >> 4));
             bufptr += 1;
             break;
         }
         case 3: {
-            array[0]  = QueryTable(cptr[0]);
-            array[1]  = QueryTable(cptr[1]);
-            array[2]  = QueryTable(cptr[2]);
+            array[0]  = queryTable(cptr[0]);
+            array[1]  = queryTable(cptr[1]);
+            array[2]  = queryTable(cptr[2]);
             bufptr[0] = ((array[0] << 2) | (array[1] >> 4));
             bufptr[1] = ((array[1] << 4) | (array[2] >> 2));
             bufptr += 2;
@@ -174,10 +174,10 @@ namespace detail {
 template <typename W, typename T>
 struct WriteParser<W, BinaryData<T>, void> {
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const BinaryData<T>& value, const ParentType& parent, const Tags& tags) {
+    static auto write(W& writer, const BinaryData<T>& value, const ParentType& parent, const Tags& tags) -> ParserResult {
         std::vector<uint8_t> buf;
-        Base64Covert::Encode(reinterpret_cast<const uint8_t*>(value.data), value.size, buf);
-        return parser_write<W>(writer, std::string_view{reinterpret_cast<const char*>(buf.data()), buf.size()}, parent,
+        Base64Covert::encode(reinterpret_cast<const uint8_t*>(value.data), value.size, buf);
+        return parserWrite<W>(writer, std::string_view{reinterpret_cast<const char*>(buf.data()), buf.size()}, parent,
                                tags);
     }
 };
@@ -185,16 +185,16 @@ struct WriteParser<W, BinaryData<T>, void> {
 template <typename R, typename T>
 struct ReadParser<R, BinaryData<T>, void> {
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, BinaryData<T>& value, const Tags& tags) {
+    static auto read(typename R::InputValueType in, BinaryData<T>& value, const Tags& tags) -> ParserResult {
         std::string sv;
-        auto result = parser_read<R>(in, sv, tags);
+        auto result = parserRead<R>(in, sv, tags);
         if (!result) {
-            return parser_context(std::move(result), "Failed to parse encoded binary data: ");
+            return parserContext(std::move(result), "Failed to parse encoded binary data: ");
         }
         std::vector<uint8_t> buf;
-        auto ret = Base64Covert::Decode(reinterpret_cast<const uint8_t*>(sv.data()), sv.size(), buf);
+        auto ret = Base64Covert::decode(reinterpret_cast<const uint8_t*>(sv.data()), sv.size(), buf);
         if (!ret) {
-            return parser_error(sa::ErrorCode::ParseError, "Invalid base64 data");
+            return parserError(sa::ErrorCode::ParseError, "Invalid base64 data");
         }
         std::memcpy(value.data, buf.data(), buf.size());
         return sa::success();
@@ -203,8 +203,8 @@ struct ReadParser<R, BinaryData<T>, void> {
 
 template <typename T>
 struct SchemaParser<BinaryData<T>, void> {
-    static parsing::schema::Type toSchema() { return parsing::schema::Type::String{}; }
+    static auto toSchema() -> parsing::schema::Type { return parsing::schema::Type::String{}; }
 };
 } // namespace detail
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

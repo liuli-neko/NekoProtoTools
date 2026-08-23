@@ -5,7 +5,7 @@
 #include <concepts>
 #include <string_view>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace parsing {
 template <typename W>
@@ -23,4 +23,4 @@ template <typename R, typename W>
 concept supports_unframed_objects = supports_unframed_object_reader<R> && supports_unframed_object_writer<W>;
 } // namespace parsing
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

@@ -2,10 +2,10 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <chrono>
 #include <limits>
 #include <map>
 #include <memory>
@@ -41,7 +41,7 @@
 #include "nekoproto/serialization/parsing/parser.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 template <typename Serializer, std::uint8_t CodecId = 0, typename CompressionCodecT = rpc::NekoRpcCompressionCodec>
 struct NekoRpcBackend {
@@ -64,20 +64,19 @@ struct NekoRpcBackend {
     using CompressionAlgorithm = rpc::NekoRpcCompressionAlgorithm;
 
     struct Options {
-        MethodIdMode method_id                     = MethodIdMode::Auto;
-        CompressionMode compression                = CompressionMode::Disable;
-        std::uint32_t compression_min_payload_size = 64;
-        bool retry_method_id_error_once            = true;
-        std::size_t max_auto_method_table_extension_bytes =
-            Codec::MaxExtensionBytes;
+        MethodIdMode method_id                            = MethodIdMode::Auto;
+        CompressionMode compression                       = CompressionMode::Disable;
+        std::uint32_t compression_min_payload_size        = 64;
+        bool retry_method_id_error_once                   = true;
+        std::size_t max_auto_method_table_extension_bytes = Codec::MaxExtensionBytes;
         rpc::NekoRpcFrameLimits frame_limits;
-        std::size_t max_decompressed_payload_bytes = 16U * 1024U * 1024U;
-        std::size_t max_compression_ratio = 130U;
-        std::size_t max_method_entries = 64U * 1024U;
-        std::size_t max_pending_calls = 1024U;
+        std::size_t max_decompressed_payload_bytes       = 16U * 1024U * 1024U;
+        std::size_t max_compression_ratio                = 130U;
+        std::size_t max_method_entries                   = 64U * 1024U;
+        std::size_t max_pending_calls                    = 1024U;
         std::size_t max_inflight_requests_per_connection = 1024U;
-        std::size_t max_active_requests_global = 4096U;
-        std::size_t max_queued_requests_global = 4096U;
+        std::size_t max_active_requests_global           = 4096U;
+        std::size_t max_queued_requests_global           = 4096U;
         std::optional<std::chrono::nanoseconds> request_timeout;
         std::shared_ptr<CompressionStats> compression_stats;
     };
@@ -127,7 +126,7 @@ struct NekoRpcBackend {
 
 public:
     template <typename T>
-    static consteval bool serializable() {
+    static consteval auto serializable() -> bool {
         if constexpr (std::is_void_v<T>) {
             return true;
         } else {
@@ -143,9 +142,9 @@ public:
     template <typename Methods>
     static auto makeServerContext(Options options, Methods&& methods) -> ServerContext {
         const auto max_method_entries = options.max_method_entries;
-        ServerContext context{.options = std::move(options),
+        ServerContext context{.options      = std::move(options),
                               .method_table = rpc::NekoRpcMethodIdTable(max_method_entries)};
-        context.method_table.reset(rpc::NekoRpcMethodEntries(std::forward<Methods>(methods)),
+        context.method_table.reset(rpc::nekoRpcMethodEntries(std::forward<Methods>(methods)),
                                    rpc::NekoRpcMethodIdExtension::InitialTableVersion);
         return context;
     }
@@ -169,17 +168,17 @@ public:
 
     static auto validateMessage(const ClientContext& context, std::span<const std::byte> message)
         -> ilias::Result<void, std::error_code> {
-        return _validateFrameSize(message, context.options.frame_limits);
+        return validateFrameSize(message, context.options.frame_limits);
     }
 
     static auto validateMessage(const ServerContext& context, std::span<const std::byte> message)
         -> ilias::Result<void, std::error_code> {
-        return _validateFrameSize(message, context.options.frame_limits);
+        return validateFrameSize(message, context.options.frame_limits);
     }
 
-    static auto refreshMethodCatalog(ServerContext& context, std::vector<detail::RpcMethodMetadata> methods) -> void {
+    static void refreshMethodCatalog(ServerContext& context, std::vector<detail::RpcMethodMetadata> methods) {
         std::vector<rpc::NekoRpcMethodEntry> delta;
-        rpc::NekoRpcSyncMethodTable(context.method_table, rpc::NekoRpcMethodEntriesFromMetadata(methods), delta);
+        rpc::nekoRpcSyncMethodTable(context.method_table, rpc::nekoRpcMethodEntriesFromMetadata(methods), delta);
         if (!delta.empty()) {
             NEKO_LOG_INFO("rpc", "rpc backend method catalog refresh: version={} min_version={} delta_count={}",
                           context.method_table.version(), context.method_table.minimumCompatibleVersion(),
@@ -190,7 +189,7 @@ public:
     static auto decodeIncoming(ServerContext& context, PeerSession& session, std::span<const std::byte> message)
         -> DecodeResult {
         DecodeResult result;
-        if (!_validFrameSize(message, context.options.frame_limits)) {
+        if (!validFrameSize(message, context.options.frame_limits)) {
             NEKO_LOG_WARN("rpc", "rpc backend incoming frame rejected: reason=size_limit bytes={}", message.size());
             return result;
         }
@@ -207,12 +206,12 @@ public:
         // Extension transforms are backend state transitions. Keep the original
         // frame parsed once and switch only the payload view when decompression
         // succeeds, so endpoint code never has to rewrite protocol frames.
-        auto decompressed = rpc::neko_rpc_decompress_incoming_payload<NekoRpcBackend>(context.options, session, parts);
+        auto decompressed = rpc::nekoRpcDecompressIncomingPayload<NekoRpcBackend>(context.options, session, parts);
         if (!decompressed) {
             result.ok = true;
             NEKO_LOG_WARN("rpc", "rpc backend incoming extension failed: id={} error={}", parts.header.id,
                           decompressed.error().message());
-            _appendFrameError(result.responses, parts, decompressed.error());
+            appendFrameError(result.responses, parts, decompressed.error());
             return result;
         }
         std::optional<Message> payload_storage;
@@ -241,11 +240,11 @@ public:
 
         // Method-id resolution belongs here because it depends on backend-owned
         // session state and extension TLVs, not on endpoint transport behavior.
-        auto method_name = rpc::NekoRpcIncomingMethodName<NekoRpcBackend>(context, session, parts);
+        auto method_name = rpc::nekoRpcIncomingMethodName<NekoRpcBackend>(context, session, parts);
         if (!method_name) {
             result.ok = true;
-            _appendFrameError(result.responses, parts, method_name.error(),
-                              _methodIdErrorResponseExtensions(context, session, method_name.error()));
+            appendFrameError(result.responses, parts, method_name.error(),
+                             methodIdErrorResponseExtensions(context, session, method_name.error()));
             return result;
         }
         if (method_name.value().empty()) {
@@ -277,7 +276,9 @@ public:
         return Codec::methodName(request);
     }
     static auto id(const DecodedRequest& request) noexcept -> const Id& { return Codec::id(request); }
-    static bool expectsResponse(const DecodedRequest& request) noexcept { return Codec::expectsResponse(request); }
+    static auto expectsResponse(const DecodedRequest& request) noexcept -> bool {
+        return Codec::expectsResponse(request);
+    }
 
     template <typename Method>
     static auto decodeParams(const DecodedRequest& request, const Method& /*method*/)
@@ -286,7 +287,7 @@ public:
         static_assert(BackendSerializable<NekoRpcBackend, Params>,
                       "NekoRpcBackend: method parameters are not serializable by this Serializer");
         Params params;
-        if (!_decodePayload(request.payload, params)) {
+        if (!decodePayload(request.payload, params)) {
             return ilias::Err(RpcError::InvalidParams);
         }
         return params;
@@ -313,49 +314,49 @@ public:
         }
 
         if (!result) {
-            responses.emplace_back(_makeErrorResponse(request.header.id, result.error()));
+            responses.emplace_back(makeErrorResponse(request.header.id, result.error()));
             return;
         }
 
         if constexpr (std::is_void_v<typename Method::RawReturnType>) {
-            responses.emplace_back(_makeResponse(request.header.id, {}, 0));
+            responses.emplace_back(makeResponse(request.header.id, {}, 0));
         } else {
-            if (auto payload = _encodePayload(result.value())) {
-                responses.emplace_back(_makeResponse(request.header.id, std::move(payload.value()), 0));
+            if (auto payload = encodePayload(result.value())) {
+                responses.emplace_back(makeResponse(request.header.id, std::move(payload.value()), 0));
             } else {
-                responses.emplace_back(_makeErrorResponse(request.header.id, RpcError::InternalError));
+                responses.emplace_back(makeErrorResponse(request.header.id, RpcError::InternalError));
             }
         }
     }
 
     static void appendError(ResponseValues& responses, const DecodedRequest& request, std::error_code error) {
         if (expectsResponse(request)) {
-            responses.emplace_back(_makeErrorResponse(request.header.id, error));
+            responses.emplace_back(makeErrorResponse(request.header.id, error));
         }
     }
 
-    static Message encodeResponses(const ResponseValues& responses, bool batch) {
+    static auto encodeResponses(const ResponseValues& responses, bool batch) -> Message {
         WireResponseValues frames;
         frames.reserve(responses.size());
         for (const auto& response : responses) {
-            auto frame = _encodeResponseFrame(response);
-            if (_validFrameSize(frame, rpc::NekoRpcFrameLimits{})) {
+            auto frame = encodeResponseFrame(response);
+            if (validFrameSize(frame, rpc::NekoRpcFrameLimits{})) {
                 frames.emplace_back(std::move(frame));
             }
         }
         return Codec::encodeResponses(frames, batch);
     }
 
-    static Message encodeResponses(ServerContext& context, PeerSession& session, const ResponseValues& responses,
-                                   bool batch) {
+    static auto encodeResponses(ServerContext& context, PeerSession& session, const ResponseValues& responses,
+                                bool batch) -> Message {
         WireResponseValues frames;
         frames.reserve(responses.size());
         for (const auto& response : responses) {
-            if (auto encoded = _encodeResponseFrame(context.options, session, response)) {
+            if (auto encoded = encodeResponseFrame(context.options, session, response)) {
                 frames.emplace_back(std::move(encoded.value()));
             } else {
-                auto fallback = _encodeResponseFrame(response);
-                if (_validFrameSize(fallback, context.options.frame_limits)) {
+                auto fallback = encodeResponseFrame(response);
+                if (validFrameSize(fallback, context.options.frame_limits)) {
                     frames.emplace_back(std::move(fallback));
                 }
             }
@@ -381,7 +382,7 @@ public:
         static_assert(BackendSerializable<NekoRpcBackend, Params>,
                       "NekoRpcBackend: request parameters are not serializable by this Serializer");
 
-        ILIAS_TRY(auto payload, _encodePayload(Params{std::forward<Args>(args)...}));
+        ILIAS_TRY(auto payload, encodePayload(Params{std::forward<Args>(args)...}));
 
         Id id = 0;
         if (!notification) {
@@ -414,14 +415,13 @@ public:
         FrameParts request_frame{
             .header     = header,
             .method     = method_bytes,
-            .extensions = _extensionViews(extensions),
+            .extensions = extensionViews(extensions),
             .payload    = std::move(payload),
         };
         NEKO_LOG_TRACE("rpc", "rpc backend encode request: method={} id={} notification={} method_id={} payload={}",
                        method.name(), id, notification, (header.flags & Flag::MethodId) != 0U,
                        request_frame.payload.size());
-        ILIAS_TRY(auto frame,
-                  rpc::neko_rpc_encode_outgoing_frame<NekoRpcBackend>(context.options, session, request_frame));
+        ILIAS_TRY(auto frame, rpc::nekoRpcEncodeOutgoingFrame<NekoRpcBackend>(context.options, session, request_frame));
 
         return EncodedRequest{.message = std::move(frame), .id = id};
     }
@@ -441,7 +441,7 @@ public:
         static_assert(BackendSerializable<NekoRpcBackend, typename Method::RawReturnType>,
                       "NekoRpcBackend: response type is not serializable by this Serializer");
 
-        ILIAS_TRYV(_validateFrameSize(buffer, context.options.frame_limits));
+        ILIAS_TRYV(validateFrameSize(buffer, context.options.frame_limits));
         FrameParts parts;
         if (!Codec::parseFrame(buffer, CodecId, parts)) {
             return ilias::Err(RpcError::InvalidRequest);
@@ -452,7 +452,7 @@ public:
 
         std::span<const std::byte> payload_view = parts.payload;
         ILIAS_TRY(auto decompressed,
-                  rpc::neko_rpc_decompress_incoming_payload<NekoRpcBackend>(context.options, session, parts));
+                  rpc::nekoRpcDecompressIncomingPayload<NekoRpcBackend>(context.options, session, parts));
         std::optional<Message> payload_storage;
         if (decompressed) {
             payload_storage = std::move(*decompressed);
@@ -468,12 +468,12 @@ public:
 
         if ((parts.header.flags & Flag::Error) != 0U) {
             rpc::NekoRpcError error;
-            if (!_decodePayload(payload_view, error)) {
+            if (!decodePayload(payload_view, error)) {
                 return ilias::Err(RpcError::InternalError);
             }
             auto ec = std::error_code(error.code, RpcErrorCategory::instance());
-            if (_isMethodIdError(ec)) {
-                const bool updated = _applyMethodIdTableExtensions(session, parts.extensions);
+            if (isMethodIdError(ec)) {
+                const bool updated = applyMethodIdTableExtensions(session, parts.extensions);
                 NEKO_LOG_WARN("rpc", "rpc backend method-id response error: id={} error=\"{}\" table_updated={}",
                               parts.header.id, ec.message(), updated);
                 if (!updated) {
@@ -488,7 +488,7 @@ public:
             return {};
         } else {
             typename Method::RawReturnType value;
-            if (!_decodePayload(payload_view, value)) {
+            if (!decodePayload(payload_view, value)) {
                 return ilias::Err(RpcError::InvalidParams);
             }
             NEKO_LOG_TRACE("rpc", "rpc backend response decoded: id={} payload={}", parts.header.id,
@@ -502,7 +502,7 @@ public:
                                   std::error_code error, std::size_t retry_count) -> ilias::IoTask<bool> {
         (void)endpoint;
         if (!context.options.retry_method_id_error_once || retry_count != 0U ||
-            !feature_enabled(context.options.method_id) || !_isMethodIdError(error)) {
+            !featureEnabled(context.options.method_id) || !isMethodIdError(error)) {
             co_return false;
         }
 
@@ -524,25 +524,25 @@ public:
         co_return true;
     }
 
-    static std::error_code clientNotInitError() { return RpcError::ClientNotInit; }
-    static std::error_code notificationOk() { return RpcError::Ok; }
+    static auto clientNotInitError() -> std::error_code { return RpcError::ClientNotInit; }
+    static auto notificationOk() -> std::error_code { return RpcError::Ok; }
 
     template <typename Endpoint>
     static auto ensureClientReady(ClientContext& context, PeerSession& session, Endpoint& endpoint)
         -> ilias::IoTask<void> {
         if (session.handshake_done ||
-            (!feature_enabled(context.options.method_id) && !feature_enabled(context.options.compression))) {
+            (!featureEnabled(context.options.method_id) && !featureEnabled(context.options.compression))) {
             session.handshake_done = true;
             co_return {};
         }
 
         ExtensionStore hello_extensions;
-        if (feature_enabled(context.options.method_id)) {
+        if (featureEnabled(context.options.method_id)) {
             hello_extensions[Extension::MethodId] = {};
         }
 
-        const auto compression_algorithm = CompressionCodec::preferred_algorithm();
-        if (feature_enabled(context.options.compression) && compression_algorithm != CompressionAlgorithm::None &&
+        const auto compression_algorithm = CompressionCodec::preferredAlgorithm();
+        if (featureEnabled(context.options.compression) && compression_algorithm != CompressionAlgorithm::None &&
             CompressionCodec::supports(compression_algorithm)) {
             hello_extensions[Extension::Compression] = {};
             hello_extensions[Extension::CompressionAlgorithm] =
@@ -559,7 +559,7 @@ public:
         NEKO_LOG_INFO("rpc", "rpc backend client hello begin: method_id_mode={} compression_mode={} min_payload={}",
                       static_cast<unsigned>(context.options.method_id),
                       static_cast<unsigned>(context.options.compression), context.options.compression_min_payload_size);
-        auto hello = _encodeHello(hello_extensions);
+        auto hello = encodeHello(hello_extensions);
         ILIAS_CO_TRY(auto sent, co_await endpoint.send(rpc::NekoRpcExtensionCodec::asBytes(hello)));
         if (sent != hello.size()) {
             co_return ilias::Err(ilias::IoError::WriteZero);
@@ -582,12 +582,13 @@ public:
         co_return {};
     }
 
-    static bool handleClientControl(ClientContext& context, PeerSession& session, std::span<const std::byte> message) {
+    static auto handleClientControl(ClientContext& context, PeerSession& session, std::span<const std::byte> message)
+        -> bool {
         (void)context;
-        if (!_isHello(message)) {
+        if (!isHello(message)) {
             return false;
         }
-        return _handleServerHello(session, message);
+        return handleServerHello(session, message);
     }
 
     static auto encodeCancel(Id id) -> Message {
@@ -597,8 +598,8 @@ public:
 
     static auto cancelId(std::span<const std::byte> message) -> std::optional<Id> {
         FrameParts parts;
-        if (!Codec::parseFrame(message, CodecId, parts) || parts.header.kind != Kind::Cancel ||
-            !parts.method.empty() || !parts.extensions.empty() || !parts.payload.empty()) {
+        if (!Codec::parseFrame(message, CodecId, parts) || parts.header.kind != Kind::Cancel || !parts.method.empty() ||
+            !parts.extensions.empty() || !parts.payload.empty()) {
             return std::nullopt;
         }
         return parts.header.id;
@@ -615,10 +616,10 @@ public:
     template <typename Endpoint>
     static auto handleServerControl(ServerContext& context, PeerSession& session, Endpoint& endpoint,
                                     std::span<const std::byte> message) -> ilias::IoTask<bool> {
-        if (!_isHello(message)) {
+        if (!isHello(message)) {
             co_return false;
         }
-        ILIAS_CO_TRY(auto response, _handleClientHello(context, session, message));
+        ILIAS_CO_TRY(auto response, handleClientHello(context, session, message));
         ILIAS_CO_TRY(auto sent, co_await endpoint.send(rpc::NekoRpcExtensionCodec::asBytes(response)));
         if (sent != response.size()) {
             co_return ilias::Err(ilias::IoError::WriteZero);
@@ -664,7 +665,7 @@ public:
 private:
     using FrameParts = typename Codec::FrameParts;
 
-    static auto _validateFrameSize(std::span<const std::byte> frame, const rpc::NekoRpcFrameLimits& limits)
+    static auto validateFrameSize(std::span<const std::byte> frame, const rpc::NekoRpcFrameLimits& limits)
         -> ilias::Result<void, std::error_code> {
         const auto header_size = Codec::headerSize();
         if (frame.size() < header_size) {
@@ -677,11 +678,11 @@ private:
         return {};
     }
 
-    static auto _validFrameSize(std::span<const std::byte> frame, const rpc::NekoRpcFrameLimits& limits) -> bool {
-        return static_cast<bool>(_validateFrameSize(frame, limits));
+    static auto validFrameSize(std::span<const std::byte> frame, const rpc::NekoRpcFrameLimits& limits) -> bool {
+        return static_cast<bool>(validateFrameSize(frame, limits));
     }
 
-    static auto _extensionViews(const ExtensionStore& extensions) -> ExtensionMap {
+    static auto extensionViews(const ExtensionStore& extensions) -> ExtensionMap {
         ExtensionMap views;
         for (const auto& [type, value] : extensions) {
             views.emplace(type, rpc::NekoRpcExtensionCodec::asBytes(value));
@@ -689,7 +690,7 @@ private:
         return views;
     }
 
-    static auto _ownExtensions(const ExtensionMap& extensions) -> ExtensionStore {
+    static auto ownExtensions(const ExtensionMap& extensions) -> ExtensionStore {
         ExtensionStore owned;
         for (const auto& [type, value] : extensions) {
             owned[type] = rpc::NekoRpcExtensionCodec::copyBytes(value);
@@ -697,18 +698,17 @@ private:
         return owned;
     }
 
-    static auto _encodeHello(const ExtensionStore& extensions) -> Message {
-        return Codec::encodeHello(_extensionViews(extensions), CodecId);
+    static auto encodeHello(const ExtensionStore& extensions) -> Message {
+        return Codec::encodeHello(extensionViews(extensions), CodecId);
     }
 
-    static constexpr bool feature_enabled(MethodIdMode mode) noexcept { return mode != MethodIdMode::Disable; }
+    static constexpr auto featureEnabled(MethodIdMode mode) noexcept -> bool { return mode != MethodIdMode::Disable; }
 
-    static auto _extensionWireSize(const ExtensionStore& extensions) -> std::optional<std::size_t> {
+    static auto extensionWireSize(const ExtensionStore& extensions) -> std::optional<std::size_t> {
         std::size_t size = 0;
         for (const auto& [type, value] : extensions) {
             (void)type;
-            if (value.size() > std::numeric_limits<std::uint16_t>::max() ||
-                size > Codec::MaxExtensionBytes - 4U ||
+            if (value.size() > std::numeric_limits<std::uint16_t>::max() || size > Codec::MaxExtensionBytes - 4U ||
                 size + 4U > Codec::MaxExtensionBytes - value.size()) {
                 return std::nullopt;
             }
@@ -717,12 +717,12 @@ private:
         return size;
     }
 
-    static bool _extensionsFitAutoBudget(const Options& options, const ExtensionStore& extensions) {
-        const auto size = _extensionWireSize(extensions);
+    static auto extensionsFitAutoBudget(const Options& options, const ExtensionStore& extensions) -> bool {
+        const auto size = extensionWireSize(extensions);
         return size && *size <= std::min(options.max_auto_method_table_extension_bytes, Codec::MaxExtensionBytes);
     }
 
-    static auto _methodIdTableExtensions(const ServerContext& context, bool include_table) -> ExtensionStore {
+    static auto methodIdTableExtensions(const ServerContext& context, bool include_table) -> ExtensionStore {
         ExtensionStore extensions;
         extensions[Extension::MethodId] = {};
         extensions[Extension::MethodTableVersion] =
@@ -736,9 +736,9 @@ private:
         return extensions;
     }
 
-    static auto _methodIdErrorResponseExtensions(const ServerContext& context, const PeerSession& session,
-                                                 std::error_code error) -> ExtensionStore {
-        if (!session.method_id_enabled || !_isMethodIdError(error) || context.method_table.empty() ||
+    static auto methodIdErrorResponseExtensions(const ServerContext& context, const PeerSession& session,
+                                                std::error_code error) -> ExtensionStore {
+        if (!session.method_id_enabled || !isMethodIdError(error) || context.method_table.empty() ||
             context.options.max_auto_method_table_extension_bytes == 0U) {
             return {};
         }
@@ -747,17 +747,16 @@ private:
         // error response is allowed to carry recovery metadata. Keep it bounded:
         // small tables ride the failed response, large tables force the client
         // into an explicit refresh path instead of surprise multi-frame pushes.
-        auto extensions = _methodIdTableExtensions(context, true);
-        if (_extensionsFitAutoBudget(context.options, extensions)) {
+        auto extensions = methodIdTableExtensions(context, true);
+        if (extensionsFitAutoBudget(context.options, extensions)) {
             NEKO_LOG_INFO("rpc", "rpc backend method-id error response carries table: version={} entries={}",
                           context.method_table.version(), context.method_table.entries().size());
             return extensions;
         }
 
-        auto hint = _methodIdTableExtensions(context, false);
-        if (_extensionsFitAutoBudget(context.options, hint)) {
-            NEKO_LOG_INFO("rpc",
-                          "rpc backend method-id error response omits oversized table: version={} entries={}",
+        auto hint = methodIdTableExtensions(context, false);
+        if (extensionsFitAutoBudget(context.options, hint)) {
+            NEKO_LOG_INFO("rpc", "rpc backend method-id error response omits oversized table: version={} entries={}",
                           context.method_table.version(), context.method_table.entries().size());
             return hint;
         }
@@ -767,26 +766,26 @@ private:
         return {};
     }
 
-    static auto _appendMethodIdHelloExtensions(const ServerContext& context, ExtensionStore& extensions) -> void {
+    static void appendMethodIdHelloExtensions(const ServerContext& context, ExtensionStore& extensions) {
         // Client Hello is also an explicit request for negotiated extension
         // state. Send the table immediately when it fits the same automatic
         // budget; otherwise only acknowledge the feature/version and let a
         // future explicit refresh transfer the larger data.
-        auto table = _methodIdTableExtensions(context, true);
-        if (_extensionsFitAutoBudget(context.options, table)) {
+        auto table = methodIdTableExtensions(context, true);
+        if (extensionsFitAutoBudget(context.options, table)) {
             extensions.insert(table.begin(), table.end());
             return;
         }
 
-        auto hint = _methodIdTableExtensions(context, false);
-        if (_extensionsFitAutoBudget(context.options, hint)) {
+        auto hint = methodIdTableExtensions(context, false);
+        if (extensionsFitAutoBudget(context.options, hint)) {
             NEKO_LOG_INFO("rpc", "rpc backend server hello omits oversized method table: version={} entries={}",
                           context.method_table.version(), context.method_table.entries().size());
             extensions.insert(hint.begin(), hint.end());
         }
     }
 
-    static bool _applyMethodIdTableExtensions(PeerSession& session, const ExtensionMap& extensions) {
+    static auto applyMethodIdTableExtensions(PeerSession& session, const ExtensionMap& extensions) -> bool {
         if (!extensions.contains(Extension::MethodTable) && !extensions.contains(Extension::MethodTableDelta)) {
             return false;
         }
@@ -819,55 +818,53 @@ private:
         return true;
     }
 
-    static auto _makeResponse(Id id, Message payload, std::uint8_t flags, ExtensionStore extensions = {})
+    static auto makeResponse(Id id, Message payload, std::uint8_t flags, ExtensionStore extensions = {})
         -> ResponseValue {
         Header header{.kind = Kind::Response, .flags = flags, .codec = CodecId, .id = id};
-        return ResponseValue{.header = header,
-                             .method = {},
-                             .extensions = std::move(extensions),
-                             .payload = std::move(payload)};
+        return ResponseValue{
+            .header = header, .method = {}, .extensions = std::move(extensions), .payload = std::move(payload)};
     }
 
-    static auto _makeErrorResponse(Id id, std::error_code error, ExtensionStore extensions = {}) -> ResponseValue {
+    static auto makeErrorResponse(Id id, std::error_code error, ExtensionStore extensions = {}) -> ResponseValue {
         const rpc::NekoRpcError rpc_error{
             .code    = static_cast<std::int32_t>(error.value()),
             .message = error.message(),
             .data    = {},
         };
-        auto payload = _encodePayload(rpc_error);
+        auto payload = encodePayload(rpc_error);
         if (!payload) {
-            return _makeResponse(id, {}, Flag::Error, std::move(extensions));
+            return makeResponse(id, {}, Flag::Error, std::move(extensions));
         }
-        return _makeResponse(id, std::move(payload.value()), Flag::Error, std::move(extensions));
+        return makeResponse(id, std::move(payload.value()), Flag::Error, std::move(extensions));
     }
 
-    static auto _encodeResponseFrame(const ResponseValue& response) -> Message {
+    static auto encodeResponseFrame(const ResponseValue& response) -> Message {
         return Codec::encodeFrame({
             .header     = response.header,
             .method     = rpc::NekoRpcExtensionCodec::asBytes(response.method),
-            .extensions = _extensionViews(response.extensions),
+            .extensions = extensionViews(response.extensions),
             .payload    = rpc::NekoRpcExtensionCodec::asBytes(response.payload),
         });
     }
 
-    static auto _encodeResponseFrame(const Options& options, PeerSession& session, const ResponseValue& response)
+    static auto encodeResponseFrame(const Options& options, PeerSession& session, const ResponseValue& response)
         -> ilias::Result<Message, std::error_code> {
-        return rpc::neko_rpc_encode_outgoing_frame<NekoRpcBackend>(
+        return rpc::nekoRpcEncodeOutgoingFrame<NekoRpcBackend>(
             options, session,
             {
                 .header     = response.header,
                 .method     = rpc::NekoRpcExtensionCodec::asBytes(response.method),
-                .extensions = _extensionViews(response.extensions),
+                .extensions = extensionViews(response.extensions),
                 .payload    = rpc::NekoRpcExtensionCodec::asBytes(response.payload),
             });
     }
 
-    static auto _decodeFrame(std::span<const std::byte> data) -> ilias::Result<DecodedRequest, std::error_code> {
+    static auto decodeFrame(std::span<const std::byte> data) -> ilias::Result<DecodedRequest, std::error_code> {
         return Codec::decodeFrame(data);
     }
 
     template <typename T>
-    static auto _encodePayload(const T& value) -> ilias::Result<Message, std::error_code> {
+    static auto encodePayload(const T& value) -> ilias::Result<Message, std::error_code> {
         // Serializer-provided byte output keeps binary frame assembly single-pass.
         // Text serializers may still opt in by writing their JSON bytes directly.
         if constexpr (rpc::NekoRpcByteOutputSerializerAvailable<Serializer, Message>::value) {
@@ -891,24 +888,24 @@ private:
     }
 
     template <typename T>
-    static bool _decodePayload(std::span<const std::byte> payload, T& value) {
+    static auto decodePayload(std::span<const std::byte> payload, T& value) -> bool {
         typename Serializer::InputSerializer in(reinterpret_cast<const char*>(payload.data()), payload.size());
         return in(value);
     }
 
-    static auto _appendFrameError(ResponseValues& responses, const FrameParts& parts, std::error_code error,
-                                  ExtensionStore extensions = {}) -> void {
+    static void appendFrameError(ResponseValues& responses, const FrameParts& parts, std::error_code error,
+                                 ExtensionStore extensions = {}) {
         if (parts.header.kind == Kind::Request) {
-            responses.emplace_back(_makeErrorResponse(parts.header.id, error, std::move(extensions)));
+            responses.emplace_back(makeErrorResponse(parts.header.id, error, std::move(extensions)));
         }
     }
 
-    static bool _isHello(std::span<const std::byte> frame) {
+    static auto isHello(std::span<const std::byte> frame) -> bool {
         FrameParts parts;
         return Codec::parseFrame(frame, CodecId, parts) && parts.header.kind == Kind::Hello;
     }
 
-    static auto _handleClientHello(ServerContext& context, PeerSession& session, std::span<const std::byte> frame)
+    static auto handleClientHello(ServerContext& context, PeerSession& session, std::span<const std::byte> frame)
         -> ilias::Result<Message, std::error_code> {
         FrameParts parts;
         if (!Codec::parseFrame(frame, CodecId, parts)) {
@@ -930,8 +927,8 @@ private:
                                                  CompressionCodec::supports(client_compression_algorithm);
 
         session.method_id_enabled =
-            feature_enabled(context.options.method_id) && client_supports_method_id && !context.method_table.empty();
-        session.compression_enabled = feature_enabled(context.options.compression) && client_supports_compression;
+            featureEnabled(context.options.method_id) && client_supports_method_id && !context.method_table.empty();
+        session.compression_enabled = featureEnabled(context.options.compression) && client_supports_compression;
         session.compression_algorithm =
             session.compression_enabled ? client_compression_algorithm : CompressionAlgorithm::None;
         if (session.compression_enabled && client_min_payload_size > session.compression_min_payload_size) {
@@ -943,12 +940,12 @@ private:
                       "method_count={} client_compression={} compression_enabled={} algorithm={} min_payload={}",
                       client_supports_method_id, session.method_id_enabled, context.method_table.version(),
                       context.method_table.entries().size(), client_supports_compression, session.compression_enabled,
-                      rpc::neko_rpc_compression_algorithm_name(session.compression_algorithm),
+                      rpc::nekoRpcCompressionAlgorithmName(session.compression_algorithm),
                       session.compression_min_payload_size);
 
         ExtensionStore extensions;
         if (session.method_id_enabled) {
-            _appendMethodIdHelloExtensions(context, extensions);
+            appendMethodIdHelloExtensions(context, extensions);
         }
         if (session.compression_enabled) {
             extensions[Extension::Compression] = {};
@@ -959,10 +956,10 @@ private:
         }
 
         session.handshake_done = true;
-        return _encodeHello(extensions);
+        return encodeHello(extensions);
     }
 
-    static bool _handleServerHello(PeerSession& session, std::span<const std::byte> frame) {
+    static auto handleServerHello(PeerSession& session, std::span<const std::byte> frame) -> bool {
         FrameParts parts;
         if (!Codec::parseFrame(frame, CodecId, parts)) {
             return false;
@@ -970,7 +967,7 @@ private:
 
         session.method_id_enabled = false;
         if (parts.extensions.contains(Extension::MethodId)) {
-            session.method_id_enabled = _applyMethodIdTableExtensions(session, parts.extensions);
+            session.method_id_enabled = applyMethodIdTableExtensions(session, parts.extensions);
             if (!session.method_id_enabled && !session.remote_method_table.empty()) {
                 session.method_id_enabled = true;
             }
@@ -997,14 +994,14 @@ private:
                       "compression={} algorithm={} min_payload={}",
                       session.method_id_enabled, session.remote_method_table.version(),
                       session.remote_method_table.minimumCompatibleVersion(), session.compression_enabled,
-                      rpc::neko_rpc_compression_algorithm_name(session.compression_algorithm),
+                      rpc::nekoRpcCompressionAlgorithmName(session.compression_algorithm),
                       session.compression_min_payload_size);
 
         session.handshake_done = true;
         return true;
     }
 
-    static bool _isMethodIdError(std::error_code error) {
+    static auto isMethodIdError(std::error_code error) -> bool {
         if (&error.category() != &RpcErrorCategory::instance()) {
             return false;
         }
@@ -1023,4 +1020,4 @@ private:
 
 using BinaryRpcBackend = NekoRpcBackend<BinarySerializer, 0>;
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

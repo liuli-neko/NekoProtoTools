@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace binary {
 
 /**
@@ -106,7 +106,7 @@ enum class ValueTag : std::uint8_t {
 
 inline constexpr std::byte BinaryMagic[] = {std::byte{0x4E}, std::byte{0x50}, std::byte{0x02}};
 
-inline constexpr std::uint32_t fieldId(std::string_view name) noexcept {
+inline constexpr auto fieldId(std::string_view name) noexcept -> std::uint32_t {
     std::uint32_t hash = 2166136261U;
     for (const char ch : name) {
         hash ^= static_cast<std::uint8_t>(ch);
@@ -115,7 +115,7 @@ inline constexpr std::uint32_t fieldId(std::string_view name) noexcept {
     return hash;
 }
 
-inline constexpr std::size_t ulebSize(std::uint64_t value) noexcept {
+inline constexpr auto ulebSize(std::uint64_t value) noexcept -> std::size_t {
     std::size_t size = 1;
     while (value >= 0x80U) {
         value >>= 7U;
@@ -124,7 +124,7 @@ inline constexpr std::size_t ulebSize(std::uint64_t value) noexcept {
     return size;
 }
 
-inline constexpr bool useHashedFieldId(std::string_view name) noexcept {
+inline constexpr auto useHashedFieldId(std::string_view name) noexcept -> bool {
     const auto namedKey = static_cast<std::uint64_t>(name.size()) << 1U;
     const auto hashedKey = (static_cast<std::uint64_t>(fieldId(name)) << 1U) | 1U;
     return ulebSize(hashedKey) < ulebSize(namedKey) + name.size();
@@ -142,38 +142,38 @@ private:
         ContainerScope(Writer& writer, std::size_t expected) noexcept : mWriter(&writer), mExpected(expected) {}
 
         ContainerScope(const ContainerScope&)            = delete;
-        ContainerScope& operator=(const ContainerScope&) = delete;
-        ContainerScope(ContainerScope&& other) noexcept { _moveFrom(other); }
-        ContainerScope& operator=(ContainerScope&& other) noexcept {
+        auto operator=(const ContainerScope&) -> ContainerScope& = delete;
+        ContainerScope(ContainerScope&& other) noexcept { moveFrom(other); }
+        auto operator=(ContainerScope&& other) noexcept -> ContainerScope& {
             if (this != &other) {
-                _finish();
-                _moveFrom(other);
+                finish();
+                moveFrom(other);
             }
             return *this;
         }
-        ~ContainerScope() { _finish(); }
+        ~ContainerScope() { finish(); }
 
     private:
         friend class Writer;
 
-        void _increment() noexcept { ++mActual; }
+        void increment() noexcept { ++mActual; }
 
-        bool _rememberId(std::uint32_t id) {
+        auto rememberId(std::uint32_t id) -> bool {
             if constexpr (Kind == ContainerKind::IdObject) {
                 return mIds.insert(id).second;
             }
             return true;
         }
 
-        void _finish() noexcept {
+        void finish() noexcept {
             if (mWriter != nullptr && mActual != mExpected) {
-                mWriter->_setError(sa::ErrorCode::InvalidLength,
+                mWriter->setError(sa::ErrorCode::InvalidLength,
                                    "Binary container emitted member count does not match its declared count");
             }
             mWriter = nullptr;
         }
 
-        void _moveFrom(ContainerScope& other) noexcept {
+        void moveFrom(ContainerScope& other) noexcept {
             mWriter   = std::exchange(other.mWriter, nullptr);
             mExpected = other.mExpected;
             mActual   = other.mActual;
@@ -196,206 +196,206 @@ public:
 
     void beginRawFixedDataAsRoot() noexcept { mRawRoot = true; }
 
-    OutputArrayType arrayAsRoot(std::size_t size) {
-        _writeContainerHeader(ValueTag::Array, size);
+    auto arrayAsRoot(std::size_t size) -> OutputArrayType {
+        writeContainerHeader(ValueTag::Array, size);
         return {*this, size};
     }
-    OutputObjectType objectAsRoot(std::size_t size) {
-        _writeContainerHeader(ValueTag::NamedObject, size);
+    auto objectAsRoot(std::size_t size) -> OutputObjectType {
+        writeContainerHeader(ValueTag::NamedObject, size);
         return {*this, size};
     }
-    OutputIdObjectType idObjectAsRoot(std::size_t size) {
-        _writeContainerHeader(ValueTag::IdObject, size);
+    auto idObjectAsRoot(std::size_t size) -> OutputIdObjectType {
+        writeContainerHeader(ValueTag::IdObject, size);
         return {*this, size};
     }
 
-    OutputValueType nullAsRoot() {
+    auto nullAsRoot() -> OutputValueType {
         if (mRawRoot) {
-            _setError(sa::ErrorCode::InvalidType, "raw_fixed_data binary values cannot encode null");
+            setError(sa::ErrorCode::InvalidType, "raw_fixed_data binary values cannot encode null");
         } else {
-            _ensureDocumentHeader();
-            _pushByte(ValueTag::Null);
+            ensureDocumentHeader();
+            pushByte(ValueTag::Null);
         }
         return {};
     }
 
     template <typename T>
-    OutputValueType valueAsRoot(const T& value) {
-        mRawRoot ? _writeRawValue(value) : _writeValue(value);
+    auto valueAsRoot(const T& value) -> OutputValueType {
+        mRawRoot ? writeRawValue(value) : writeValue(value);
         return {};
     }
 
     template <typename T>
-    OutputValueType fixedValueAsRoot(const T& value, std::size_t size) {
-        mRawRoot ? _writeRawFixed(value, size) : _writeFixed(value, size);
+    auto fixedValueAsRoot(const T& value, std::size_t size) -> OutputValueType {
+        mRawRoot ? writeRawFixed(value, size) : writeFixed(value, size);
         return {};
     }
 
-    OutputArrayType addArrayToArray(std::size_t size, OutputArrayType* parent) {
-        _increment(parent);
-        _writeContainerHeader(ValueTag::Array, size);
+    auto addArrayToArray(std::size_t size, OutputArrayType* parent) -> OutputArrayType {
+        increment(parent);
+        writeContainerHeader(ValueTag::Array, size);
         return {*this, size};
     }
-    OutputArrayType addArrayToObject(std::string_view name, std::size_t size, OutputObjectType* parent) {
-        _beginNamedField(name, parent);
-        _writeContainerHeader(ValueTag::Array, size);
+    auto addArrayToObject(std::string_view name, std::size_t size, OutputObjectType* parent) -> OutputArrayType {
+        beginNamedField(name, parent);
+        writeContainerHeader(ValueTag::Array, size);
         return {*this, size};
     }
-    OutputArrayType addArrayToObject(std::string_view name, std::size_t size, OutputIdObjectType* parent) {
-        _beginIdField(name, parent);
-        _writeContainerHeader(ValueTag::Array, size);
-        return {*this, size};
-    }
-
-    OutputObjectType addObjectToArray(std::size_t size, OutputArrayType* parent) {
-        _increment(parent);
-        _writeContainerHeader(ValueTag::NamedObject, size);
-        return {*this, size};
-    }
-    OutputObjectType addObjectToObject(std::string_view name, std::size_t size, OutputObjectType* parent) {
-        _beginNamedField(name, parent);
-        _writeContainerHeader(ValueTag::NamedObject, size);
-        return {*this, size};
-    }
-    OutputObjectType addObjectToObject(std::string_view name, std::size_t size, OutputIdObjectType* parent) {
-        _beginIdField(name, parent);
-        _writeContainerHeader(ValueTag::NamedObject, size);
+    auto addArrayToObject(std::string_view name, std::size_t size, OutputIdObjectType* parent) -> OutputArrayType {
+        beginIdField(name, parent);
+        writeContainerHeader(ValueTag::Array, size);
         return {*this, size};
     }
 
-    OutputIdObjectType addIdObjectToArray(std::size_t size, OutputArrayType* parent) {
-        _increment(parent);
-        _writeContainerHeader(ValueTag::IdObject, size);
+    auto addObjectToArray(std::size_t size, OutputArrayType* parent) -> OutputObjectType {
+        increment(parent);
+        writeContainerHeader(ValueTag::NamedObject, size);
         return {*this, size};
     }
-    OutputIdObjectType addIdObjectToObject(std::string_view name, std::size_t size, OutputObjectType* parent) {
-        _beginNamedField(name, parent);
-        _writeContainerHeader(ValueTag::IdObject, size);
+    auto addObjectToObject(std::string_view name, std::size_t size, OutputObjectType* parent) -> OutputObjectType {
+        beginNamedField(name, parent);
+        writeContainerHeader(ValueTag::NamedObject, size);
         return {*this, size};
     }
-    OutputIdObjectType addIdObjectToObject(std::string_view name, std::size_t size, OutputIdObjectType* parent) {
-        _beginIdField(name, parent);
-        _writeContainerHeader(ValueTag::IdObject, size);
+    auto addObjectToObject(std::string_view name, std::size_t size, OutputIdObjectType* parent) -> OutputObjectType {
+        beginIdField(name, parent);
+        writeContainerHeader(ValueTag::NamedObject, size);
         return {*this, size};
     }
 
-    template <typename T>
-    OutputValueType addValueToArray(const T& value, OutputArrayType* parent) {
-        _increment(parent);
-        _writeValue(value);
-        return {};
+    auto addIdObjectToArray(std::size_t size, OutputArrayType* parent) -> OutputIdObjectType {
+        increment(parent);
+        writeContainerHeader(ValueTag::IdObject, size);
+        return {*this, size};
     }
-    template <typename T>
-    OutputValueType addValueToObject(std::string_view name, const T& value, OutputObjectType* parent) {
-        _beginNamedField(name, parent);
-        _writeValue(value);
-        return {};
+    auto addIdObjectToObject(std::string_view name, std::size_t size, OutputObjectType* parent) -> OutputIdObjectType {
+        beginNamedField(name, parent);
+        writeContainerHeader(ValueTag::IdObject, size);
+        return {*this, size};
     }
-    template <typename T>
-    OutputValueType addValueToObject(std::string_view name, const T& value, OutputIdObjectType* parent) {
-        _beginIdField(name, parent);
-        _writeValue(value);
-        return {};
+    auto addIdObjectToObject(std::string_view name, std::size_t size, OutputIdObjectType* parent) -> OutputIdObjectType {
+        beginIdField(name, parent);
+        writeContainerHeader(ValueTag::IdObject, size);
+        return {*this, size};
     }
 
     template <typename T>
-    OutputValueType addFixedValueToArray(const T& value, std::size_t size, OutputArrayType* parent) {
-        _increment(parent);
-        _writeFixed(value, size);
+    auto addValueToArray(const T& value, OutputArrayType* parent) -> OutputValueType {
+        increment(parent);
+        writeValue(value);
         return {};
     }
     template <typename T>
-    OutputValueType addFixedValueToObject(std::string_view name, const T& value, std::size_t size,
-                                          OutputObjectType* parent) {
-        _beginNamedField(name, parent);
-        _writeFixed(value, size);
+    auto addValueToObject(std::string_view name, const T& value, OutputObjectType* parent) -> OutputValueType {
+        beginNamedField(name, parent);
+        writeValue(value);
         return {};
     }
     template <typename T>
-    OutputValueType addFixedValueToObject(std::string_view name, const T& value, std::size_t size,
-                                          OutputIdObjectType* parent) {
-        _beginIdField(name, parent);
-        _writeFixed(value, size);
+    auto addValueToObject(std::string_view name, const T& value, OutputIdObjectType* parent) -> OutputValueType {
+        beginIdField(name, parent);
+        writeValue(value);
         return {};
     }
 
-    OutputValueType addNullToArray(OutputArrayType* parent) {
-        _increment(parent);
-        _ensureDocumentHeader();
-        _pushByte(ValueTag::Null);
+    template <typename T>
+    auto addFixedValueToArray(const T& value, std::size_t size, OutputArrayType* parent) -> OutputValueType {
+        increment(parent);
+        writeFixed(value, size);
         return {};
     }
-    OutputValueType addNullToObject(std::string_view name, OutputObjectType* parent) {
-        _beginNamedField(name, parent);
-        _pushByte(ValueTag::Null);
+    template <typename T>
+    auto addFixedValueToObject(std::string_view name, const T& value, std::size_t size,
+                                          OutputObjectType* parent) -> OutputValueType {
+        beginNamedField(name, parent);
+        writeFixed(value, size);
         return {};
     }
-    OutputValueType addNullToObject(std::string_view name, OutputIdObjectType* parent) {
-        _beginIdField(name, parent);
-        _pushByte(ValueTag::Null);
+    template <typename T>
+    auto addFixedValueToObject(std::string_view name, const T& value, std::size_t size,
+                                          OutputIdObjectType* parent) -> OutputValueType {
+        beginIdField(name, parent);
+        writeFixed(value, size);
         return {};
     }
 
-    sa::Result<void> result() const {
+    auto addNullToArray(OutputArrayType* parent) -> OutputValueType {
+        increment(parent);
+        ensureDocumentHeader();
+        pushByte(ValueTag::Null);
+        return {};
+    }
+    auto addNullToObject(std::string_view name, OutputObjectType* parent) -> OutputValueType {
+        beginNamedField(name, parent);
+        pushByte(ValueTag::Null);
+        return {};
+    }
+    auto addNullToObject(std::string_view name, OutputIdObjectType* parent) -> OutputValueType {
+        beginIdField(name, parent);
+        pushByte(ValueTag::Null);
+        return {};
+    }
+
+    auto result() const -> sa::Result<void> {
         if (mError) {
             return *mError;
         }
         return sa::success();
     }
-    std::size_t size() const noexcept { return mBuffer.size(); }
+    auto size() const noexcept -> std::size_t { return mBuffer.size(); }
 
 private:
     template <ContainerKind Kind>
-    static void _increment(ContainerScope<Kind>* parent) noexcept {
+    static void increment(ContainerScope<Kind>* parent) noexcept {
         if (parent != nullptr) {
-            parent->_increment();
+            parent->increment();
         }
     }
 
-    void _writeContainerHeader(ValueTag tag, std::size_t size) {
-        _ensureDocumentHeader();
-        _pushByte(tag);
-        _writeUleb128(static_cast<std::uint64_t>(size));
+    void writeContainerHeader(ValueTag tag, std::size_t size) {
+        ensureDocumentHeader();
+        pushByte(tag);
+        writeUleb128(static_cast<std::uint64_t>(size));
     }
 
-    void _beginNamedField(std::string_view name, OutputObjectType* parent) {
-        _increment(parent);
-        _writeUleb128(static_cast<std::uint64_t>(name.size()));
-        _appendBytes(name.data(), name.size());
+    void beginNamedField(std::string_view name, OutputObjectType* parent) {
+        increment(parent);
+        writeUleb128(static_cast<std::uint64_t>(name.size()));
+        appendBytes(name.data(), name.size());
     }
 
-    void _beginIdField(std::string_view name, OutputIdObjectType* parent) {
-        _increment(parent);
+    void beginIdField(std::string_view name, OutputIdObjectType* parent) {
+        increment(parent);
         if (!useHashedFieldId(name)) {
-            _writeUleb128(static_cast<std::uint64_t>(name.size()) << 1U);
-            _appendBytes(name.data(), name.size());
+            writeUleb128(static_cast<std::uint64_t>(name.size()) << 1U);
+            appendBytes(name.data(), name.size());
             return;
         }
         const auto id = fieldId(name);
-        if (parent != nullptr && !parent->_rememberId(id)) {
-            _setError(sa::ErrorCode::InvalidField, "Reflected binary object contains colliding hashed field ids");
+        if (parent != nullptr && !parent->rememberId(id)) {
+            setError(sa::ErrorCode::InvalidField, "Reflected binary object contains colliding hashed field ids");
         }
-        _writeUleb128((static_cast<std::uint64_t>(id) << 1U) | 1U);
+        writeUleb128((static_cast<std::uint64_t>(id) << 1U) | 1U);
     }
 
-    void _ensureDocumentHeader() {
+    void ensureDocumentHeader() {
         if (mDocumentStarted || mRawRoot) {
             return;
         }
         mDocumentStarted = true;
-        _appendBytes(BinaryMagic, sizeof(BinaryMagic));
+        appendBytes(BinaryMagic, sizeof(BinaryMagic));
     }
 
     template <typename T>
-    void _writeValue(const T& value) {
+    void writeValue(const T& value) {
         using U = std::remove_cvref_t<T>;
-        _ensureDocumentHeader();
+        ensureDocumentHeader();
         if constexpr (std::is_same_v<U, std::string> || std::is_same_v<U, std::string_view>) {
-            _pushByte(ValueTag::String);
-            _writeUleb128(static_cast<std::uint64_t>(value.size()));
-            _appendBytes(value.data(), value.size());
+            pushByte(ValueTag::String);
+            writeUleb128(static_cast<std::uint64_t>(value.size()));
+            appendBytes(value.data(), value.size());
         } else if constexpr (std::is_same_v<U, bool>) {
-            _pushByte(value ? ValueTag::True : ValueTag::False);
+            pushByte(value ? ValueTag::True : ValueTag::False);
         } else if constexpr (std::is_integral_v<U>) {
             if constexpr (std::is_signed_v<U>) {
                 using Unsigned = std::make_unsigned_t<U>;
@@ -403,97 +403,97 @@ private:
                 const auto magnitude = negative ? static_cast<Unsigned>(-(value + 1)) + Unsigned{1}
                                                 : static_cast<Unsigned>(value);
                 const auto zigzag = static_cast<Unsigned>((magnitude << 1U) - (negative ? Unsigned{1} : Unsigned{0}));
-                _pushByte(ValueTag::SignedInteger);
-                _writeUleb128(zigzag);
+                pushByte(ValueTag::SignedInteger);
+                writeUleb128(zigzag);
             } else {
-                _pushByte(ValueTag::UnsignedInteger);
-                _writeUleb128(value);
+                pushByte(ValueTag::UnsignedInteger);
+                writeUleb128(value);
             }
         } else if constexpr (std::is_floating_point_v<U>) {
-            _writeFloating(value);
+            writeFloating(value);
         } else {
             static_assert(std::is_same_v<U, void>, "Unsupported binary value type");
         }
     }
 
     template <typename T>
-    void _writeFixed(const T& value, std::size_t size) {
+    void writeFixed(const T& value, std::size_t size) {
         using U = std::remove_cvref_t<T>;
-        _ensureDocumentHeader();
+        ensureDocumentHeader();
         if (size != sizeof(U)) {
-            _setError(sa::ErrorCode::InvalidLength, "Fixed binary value width does not match its C++ type");
+            setError(sa::ErrorCode::InvalidLength, "Fixed binary value width does not match its C++ type");
             return;
         }
         if constexpr (std::is_same_v<U, bool>) {
-            _pushByte(value ? ValueTag::True : ValueTag::False);
+            pushByte(value ? ValueTag::True : ValueTag::False);
         } else if constexpr (std::is_integral_v<U>) {
-            _pushByte(_fixedTag<U>());
-            _writeRawFixed(value, size);
+            pushByte(fixedTag<U>());
+            writeRawFixed(value, size);
         } else if constexpr (std::is_floating_point_v<U>) {
-            _writeFloating(value);
+            writeFloating(value);
         } else {
             static_assert(std::is_same_v<U, void>, "Unsupported fixed binary value type");
         }
     }
 
     template <typename T>
-    void _writeRawValue(const T& value) {
+    void writeRawValue(const T& value) {
         using U = std::remove_cvref_t<T>;
         if constexpr (std::is_same_v<U, std::string> || std::is_same_v<U, std::string_view>) {
-            _writeUleb128(static_cast<std::uint64_t>(value.size()));
-            _appendBytes(value.data(), value.size());
+            writeUleb128(static_cast<std::uint64_t>(value.size()));
+            appendBytes(value.data(), value.size());
         } else if constexpr (std::is_arithmetic_v<U>) {
-            _writeRawFixed(value, sizeof(U));
+            writeRawFixed(value, sizeof(U));
         } else {
             static_assert(std::is_same_v<U, void>, "Unsupported raw binary value type");
         }
     }
 
     template <typename T>
-    void _writeRawFixed(const T& value, std::size_t size) {
+    void writeRawFixed(const T& value, std::size_t size) {
         using U = std::remove_cvref_t<T>;
         if (size != sizeof(U)) {
-            _setError(sa::ErrorCode::InvalidLength, "Raw fixed binary value width does not match its C++ type");
+            setError(sa::ErrorCode::InvalidLength, "Raw fixed binary value width does not match its C++ type");
             return;
         }
         if constexpr (std::is_same_v<U, bool>) {
             const std::uint8_t encoded = value ? 1U : 0U;
-            _appendBytes(&encoded, sizeof(encoded));
+            appendBytes(&encoded, sizeof(encoded));
         } else if constexpr (std::is_integral_v<U> && sizeof(U) > 1) {
             const U encoded = htobe(value);
-            _appendBytes(&encoded, sizeof(encoded));
+            appendBytes(&encoded, sizeof(encoded));
         } else if constexpr (std::is_same_v<U, float>) {
             const auto encoded = htobe(std::bit_cast<std::uint32_t>(value));
-            _appendBytes(&encoded, sizeof(encoded));
+            appendBytes(&encoded, sizeof(encoded));
         } else if constexpr (std::is_same_v<U, double>) {
             const auto encoded = htobe(std::bit_cast<std::uint64_t>(value));
-            _appendBytes(&encoded, sizeof(encoded));
+            appendBytes(&encoded, sizeof(encoded));
         } else if constexpr (std::is_floating_point_v<U>) {
-            _setError(sa::ErrorCode::InvalidType, "Raw fixed binary supports only IEEE-754 float and double");
+            setError(sa::ErrorCode::InvalidType, "Raw fixed binary supports only IEEE-754 float and double");
         } else {
-            _appendBytes(&value, sizeof(value));
+            appendBytes(&value, sizeof(value));
         }
     }
 
     template <typename T>
-    void _writeFloating(const T& value) {
+    void writeFloating(const T& value) {
         using U = std::remove_cvref_t<T>;
         static_assert(std::numeric_limits<U>::is_iec559, "Binary floating-point requires IEEE-754");
         if constexpr (std::is_same_v<U, float>) {
-            _pushByte(ValueTag::Float32);
+            pushByte(ValueTag::Float32);
             const auto encoded = htobe(std::bit_cast<std::uint32_t>(value));
-            _appendBytes(&encoded, sizeof(encoded));
+            appendBytes(&encoded, sizeof(encoded));
         } else if constexpr (std::is_same_v<U, double>) {
-            _pushByte(ValueTag::Float64);
+            pushByte(ValueTag::Float64);
             const auto encoded = htobe(std::bit_cast<std::uint64_t>(value));
-            _appendBytes(&encoded, sizeof(encoded));
+            appendBytes(&encoded, sizeof(encoded));
         } else {
             static_assert(std::is_same_v<U, void>, "Binary V2 supports only IEEE-754 float and double");
         }
     }
 
     template <typename U>
-    static consteval ValueTag _fixedTag() {
+    static consteval auto fixedTag() -> ValueTag {
         if constexpr (std::is_signed_v<U>) {
             if constexpr (sizeof(U) == 1) return ValueTag::FixedSigned8;
             else if constexpr (sizeof(U) == 2) return ValueTag::FixedSigned16;
@@ -510,29 +510,29 @@ private:
     }
 
     template <typename UInt>
-    void _writeUleb128(UInt value) {
+    void writeUleb128(UInt value) {
         static_assert(std::is_unsigned_v<UInt>);
         do {
             auto byte = static_cast<std::uint8_t>(value & static_cast<UInt>(0x7FU));
             value >>= 7U;
             if (value != 0) byte |= 0x80U;
-            _pushByte(byte);
+            pushByte(byte);
         } while (value != 0);
     }
 
-    void _setError(sa::ErrorCode code, std::string message) noexcept {
+    void setError(sa::ErrorCode code, std::string message) noexcept {
         if (!mError) {
             mError = sa::error(code, std::move(message));
         }
     }
 
-    void _pushByte(ValueTag tag) { _pushByte(static_cast<std::uint8_t>(tag)); }
-    void _pushByte(std::uint8_t byte) { mBuffer.push_back(static_cast<typename BufferT::value_type>(byte)); }
-    void _appendBytes(const void* data, std::size_t size) {
+    void pushByte(ValueTag tag) { pushByte(static_cast<std::uint8_t>(tag)); }
+    void pushByte(std::uint8_t byte) { mBuffer.push_back(static_cast<typename BufferT::value_type>(byte)); }
+    void appendBytes(const void* data, std::size_t size) {
         if (size == 0) return;
         const auto* bytes = static_cast<const std::uint8_t*>(data);
         mBuffer.reserve(mBuffer.size() + size);
-        for (std::size_t ix = 0; ix < size; ++ix) _pushByte(bytes[ix]);
+        for (std::size_t ix = 0; ix < size; ++ix) pushByte(bytes[ix]);
     }
 
 private:
@@ -543,4 +543,4 @@ private:
 };
 
 } // namespace binary
-NEKO_END_NAMESPACE
+} // namespace nekoproto

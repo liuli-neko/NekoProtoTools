@@ -28,11 +28,11 @@
 #include <utility>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace detail {
 template <typename BufferT>
-void append_toml(BufferT& buffer, std::string_view toml) {
+void appendToml(BufferT& buffer, std::string_view toml) {
     if constexpr (requires { buffer.insert(buffer.end(), toml.begin(), toml.end()); }) {
         buffer.insert(buffer.end(), toml.begin(), toml.end());
     } else if constexpr (requires { buffer.write(toml.data(), static_cast<std::streamsize>(toml.size())); }) {
@@ -42,13 +42,13 @@ void append_toml(BufferT& buffer, std::string_view toml) {
     }
 }
 
-inline std::string toml_parse_error_message(const toml::parse_error& error) {
+inline auto tomlParseErrorMessage(const toml::parse_error& error) -> std::string {
     std::ostringstream stream;
     stream << error;
     return stream.str();
 }
 
-inline std::string remove_blank_toml_lines(std::string_view toml) {
+inline auto removeBlankTomlLines(std::string_view toml) -> std::string {
     std::string result;
     result.reserve(toml.size());
 
@@ -84,18 +84,18 @@ inline std::string remove_blank_toml_lines(std::string_view toml) {
 struct TomlOutputFormatOptions {
     using FormatOptions = toml::format_flags;
 
-    static constexpr FormatOptions CompactFlags() noexcept { // NOLINT(readability-identifier-naming)
+    static constexpr auto CompactFlags() noexcept -> FormatOptions { // NOLINT(readability-identifier-naming)
         return toml::format_flags::allow_literal_strings | toml::format_flags::allow_unicode_strings |
                toml::format_flags::allow_real_tabs_in_strings | toml::format_flags::allow_binary_integers |
                toml::format_flags::allow_octal_integers | toml::format_flags::allow_hexadecimal_integers |
                toml::format_flags::terse_key_value_pairs;
     }
 
-    static TomlOutputFormatOptions Compact() { // NOLINT(readability-identifier-naming)
+    static auto Compact() -> TomlOutputFormatOptions { // NOLINT(readability-identifier-naming)
         return TomlOutputFormatOptions(CompactFlags(), true);
     }
 
-    static TomlOutputFormatOptions Pretty() { // NOLINT(readability-identifier-naming)
+    static auto Pretty() -> TomlOutputFormatOptions { // NOLINT(readability-identifier-naming)
         return TomlOutputFormatOptions(toml::toml_formatter::default_flags, false);
     }
 
@@ -146,7 +146,7 @@ struct TomlplusplusBackend {
             }
             auto parsed = toml::parse(std::string_view{buffer, size});
             if (!parsed) {
-                result = sa::error(sa::ErrorCode::ParseError, detail::toml_parse_error_message(parsed.error()));
+                result = sa::error(sa::ErrorCode::ParseError, detail::tomlParseErrorMessage(parsed.error()));
                 return;
             }
             document = std::move(parsed).table();
@@ -159,10 +159,10 @@ struct TomlplusplusBackend {
     };
 
     template <typename BufferT, typename T>
-    static sa::Result<void> write(OutputState<BufferT>& state, const T& value) {
+    static auto write(OutputState<BufferT>& state, const T& value) -> sa::Result<void> {
         state.document.clear();
         state.writer.reset(&state.document);
-        auto result = parser_write<tomlplusplus::Writer>(state.writer, value,
+        auto result = parserWrite<tomlplusplus::Writer>(state.writer, value,
                                                          parsing::Parent<tomlplusplus::Writer>::Root{});
         state.hasRoot = static_cast<bool>(result) && static_cast<bool>(state.writer.result());
         state.flushed = false;
@@ -173,7 +173,7 @@ struct TomlplusplusBackend {
     }
 
     template <typename BufferT>
-    static sa::Result<void> finish(OutputState<BufferT>& state, sa::Result<void> result) {
+    static auto finish(OutputState<BufferT>& state, sa::Result<void> result) -> sa::Result<void> {
         if (!result) {
             return result;
         }
@@ -188,27 +188,27 @@ struct TomlplusplusBackend {
             stream << toml::toml_formatter{state.document, state.options.flags};
             auto output = stream.str();
             if (state.options.stripBlankLines) {
-                output = detail::remove_blank_toml_lines(output);
+                output = detail::removeBlankTomlLines(output);
             }
-            detail::append_toml(state.buffer, output);
+            detail::appendToml(state.buffer, output);
             state.flushed = true;
         }
         return result;
     }
 
     template <typename BufferT>
-    static bool outputReady(const OutputState<BufferT>& state, const sa::Result<void>& result) noexcept {
+    static auto outputReady(const OutputState<BufferT>& state, const sa::Result<void>& result) noexcept -> bool {
         return state.hasRoot && static_cast<bool>(result) && static_cast<bool>(state.writer.result());
     }
 
     template <typename SourceT>
-    static sa::Result<void> inputResult(const InputState<SourceT>& state) {
+    static auto inputResult(const InputState<SourceT>& state) -> sa::Result<void> {
         return state.result;
     }
 
     template <typename SourceT, typename T>
-    static sa::Result<void> read(InputState<SourceT>& state, T& value) {
-        return parser_read<tomlplusplus::Reader>(&state.document, value);
+    static auto read(InputState<SourceT>& state, T& value) -> sa::Result<void> {
+        return parserRead<tomlplusplus::Reader>(&state.document, value);
     }
 };
 
@@ -241,7 +241,7 @@ struct TomlplusplusSerializer {
 
 using TomlSerializer = TomlplusplusSerializer;
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
 #else
 #define NEKO_PROTO_NO_TOML_SERIALIZER

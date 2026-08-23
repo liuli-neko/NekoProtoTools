@@ -17,7 +17,7 @@
 #include <utility>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace detail::simd {
 
@@ -33,21 +33,21 @@ public:
     SimdJsonValue(const RawJsonValue& value, std::shared_ptr<JsonParser> parser)
         : mValue(std::make_shared<RawJsonValue>(value)), mParser(std::move(parser)) {}
 
-    bool hasValue() const noexcept { return mValue != nullptr; }
+    auto hasValue() const noexcept -> bool { return mValue != nullptr; }
     explicit operator bool() const noexcept { return hasValue(); }
 
-    const RawJsonValue& nativeValue() const { return *mValue; }
-    RawJsonValue& nativeValue() { return *mValue; }
+    auto nativeValue() const -> const RawJsonValue& { return *mValue; }
+    auto nativeValue() -> RawJsonValue& { return *mValue; }
 
-    bool isObject() const { return mValue && mValue->is_object(); }
-    bool isArray() const { return mValue && mValue->is_array(); }
-    bool isString() const { return mValue && mValue->is_string(); }
-    bool isNumber() const { return mValue && mValue->is_number(); }
-    bool isBool() const { return mValue && mValue->is_bool(); }
-    bool isNull() const { return mValue && mValue->is_null(); }
+    auto isObject() const -> bool { return mValue && mValue->is_object(); }
+    auto isArray() const -> bool { return mValue && mValue->is_array(); }
+    auto isString() const -> bool { return mValue && mValue->is_string(); }
+    auto isNumber() const -> bool { return mValue && mValue->is_number(); }
+    auto isBool() const -> bool { return mValue && mValue->is_bool(); }
+    auto isNull() const -> bool { return mValue && mValue->is_null(); }
 
     template <typename T>
-    bool value(T& output) const {
+    auto value(T& output) const -> bool {
         if (!mValue) {
             return false;
         }
@@ -59,7 +59,7 @@ public:
         return true;
     }
 
-    std::size_t size() const {
+    auto size() const -> std::size_t {
         if (isArray()) {
             return mValue->get_array().value_unsafe().size();
         }
@@ -71,7 +71,7 @@ public:
 
     template <typename T>
         requires std::convertible_to<T, std::string_view>
-    SimdJsonValue operator[](const T& name) const {
+    auto operator[](const T& name) const -> SimdJsonValue {
         if (!isObject()) {
             return {};
         }
@@ -82,7 +82,7 @@ public:
         return SimdJsonValue(value.value_unsafe(), mParser);
     }
 
-    SimdJsonValue operator[](std::size_t index) const {
+    auto operator[](std::size_t index) const -> SimdJsonValue {
         if (isArray() && index < size()) {
             return SimdJsonValue(mValue->get_array().value_unsafe().at(index).value_unsafe(), mParser);
         }
@@ -136,8 +136,8 @@ namespace detail {
 template <>
 struct WriteParser<simd::Writer, simd::SimdJsonValue, void> {
     template <typename ParentType, typename Tags>
-    static ParserResult write(simd::Writer& writer, const simd::SimdJsonValue& value, const ParentType& parent,
-                              const Tags& tags) {
+    static auto write(simd::Writer& writer, const simd::SimdJsonValue& value, const ParentType& parent,
+                      const Tags& tags) -> ParserResult {
         if (!value.hasValue()) {
             parsing::Parent<simd::Writer>::addNull(writer, parent, tags);
             return sa::success();
@@ -151,7 +151,8 @@ struct WriteParser<simd::Writer, simd::SimdJsonValue, void> {
 template <>
 struct ReadParser<simd::Reader, simd::SimdJsonValue, void> {
     template <typename Tags>
-    static ParserResult read(simd::Reader::InputValueType input, simd::SimdJsonValue& value, const Tags& /*tags*/) {
+    static auto read(simd::Reader::InputValueType input, simd::SimdJsonValue& value, const Tags& /*tags*/)
+        -> ParserResult {
         value = simd::SimdJsonValue(input);
         return sa::success();
     }
@@ -212,17 +213,17 @@ struct SimdJsonBackend {
     };
 
     template <typename BufferT, typename T>
-    static sa::Result<void> write(OutputState<BufferT>& state, const T& value) {
+    static auto write(OutputState<BufferT>& state, const T& value) -> sa::Result<void> {
         state.writer.reset();
         auto result =
-            parser_write<detail::simd::Writer>(state.writer, value, parsing::Parent<detail::simd::Writer>::Root{});
+            parserWrite<detail::simd::Writer>(state.writer, value, parsing::Parent<detail::simd::Writer>::Root{});
         state.hasRoot = static_cast<bool>(result);
         state.flushed = false;
         return result;
     }
 
     template <typename BufferT>
-    static sa::Result<void> finish(OutputState<BufferT>& state, sa::Result<void> result) {
+    static auto finish(OutputState<BufferT>& state, sa::Result<void> result) -> sa::Result<void> {
         if (!state.hasRoot || !result) {
             return result;
         }
@@ -235,18 +236,18 @@ struct SimdJsonBackend {
     }
 
     template <typename BufferT>
-    static bool outputReady(const OutputState<BufferT>& state, const sa::Result<void>& result) noexcept {
+    static auto outputReady(const OutputState<BufferT>& state, const sa::Result<void>& result) noexcept -> bool {
         return state.hasRoot && static_cast<bool>(result);
     }
 
     template <typename SourceT>
-    static sa::Result<void> inputResult(const InputState<SourceT>& state) {
+    static auto inputResult(const InputState<SourceT>& state) -> sa::Result<void> {
         return state.result;
     }
 
     template <typename SourceT, typename T>
-    static sa::Result<void> read(InputState<SourceT>& state, T& value) {
-        return parser_read<detail::simd::Reader>(state.root, value);
+    static auto read(InputState<SourceT>& state, T& value) -> sa::Result<void> {
+        return parserRead<detail::simd::Reader>(state.root, value);
     }
 };
 
@@ -278,6 +279,6 @@ struct SimdJsonSerializer {
     using Writer               = detail::simd::Writer;
 };
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
 #endif

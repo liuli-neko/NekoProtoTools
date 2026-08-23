@@ -9,22 +9,22 @@
 #include <variant>
 #include <vector>
 
-NEKO_USE_NAMESPACE
-using namespace NEKO_NAMESPACE::argparser;
+using namespace nekoproto;
+using namespace nekoproto::argparser;
 
 enum class BuildMode {
     Debug,
     Release,
 };
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 template <>
 struct Meta<::BuildMode, void> {
     constexpr static auto value = Enumerate("debug", ::BuildMode::Debug, "release", ::BuildMode::Release);
 };
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
-void set_demo_env(const char* name, const char* value) {
+void setDemoEnv(const char* name, const char* value) {
 #ifdef _WIN32
     _putenv_s(name, value == nullptr ? "" : value);
 #else
@@ -43,13 +43,13 @@ struct ServeNetworkOptions {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("host",
-                   make_tags<arg_absolute_name<"host">,
+                   makeTags<arg_absolute_name<"host">,
                             arg_value_name<"HOST">, 
                             arg_env<"NEKO_ARGPARSER_MANUAL_HOST">,
                             arg_help<"listen host">, 
                             ArgTags{.required = true}>(&ServeNetworkOptions::host),
                    "port",
-                   make_tags<arg_absolute_name<"port">,
+                   makeTags<arg_absolute_name<"port">,
                             arg_value_name<"PORT">, 
                             arg_default<8080>, 
                             arg_help<"listen port">,
@@ -71,14 +71,14 @@ struct ServeCommand {
                 "network", &ServeCommand::network, 
                 
                 "verbose",
-                make_tags<arg_short_name<'v'>, 
+                makeTags<arg_short_name<'v'>, 
                         arg_group<"General">, 
                         arg_help<"enable verbose output">,
                         arg_aliases<"V", "debug">, 
                         ArgTags{.flag = true}>(&ServeCommand::verbose),
                 
                 "config",
-                make_tags<arg_complete_file,
+                makeTags<arg_complete_file,
                         arg_short_name<'c'>,
                         arg_group<"General">, 
                         arg_env<"NEKO_ARGPARSER_MANUAL_CONFIG">,
@@ -86,7 +86,7 @@ struct ServeCommand {
                         arg_help<"config file">>(&ServeCommand::config),
 
                 "include",
-                make_tags<arg_complete_directory,
+                makeTags<arg_complete_directory,
                         arg_short_name<'I'>,
                         arg_group<"Paths">,
                         arg_separator<','>, 
@@ -96,7 +96,7 @@ struct ServeCommand {
                     &ServeCommand::includeDirs),
 
                 "color",
-                make_tags<arg_group<"General">, 
+                makeTags<arg_group<"General">, 
                         arg_aliases<"colour">, 
                         arg_implicit<"auto"_cs>,
                         arg_choices<"auto", "always", "never">, 
@@ -104,7 +104,7 @@ struct ServeCommand {
                         arg_help<"colorize output">>(&ServeCommand::color),
 
                 "root",
-                make_tags<arg_complete_directory,
+                makeTags<arg_complete_directory,
                         arg_group<"Paths">,
                         arg_help<"document root">, 
                         ArgTags{.positional = true}>(
@@ -131,7 +131,7 @@ struct BuildCommand {
         constexpr static auto value = // NOLINT
             Object(
                 "jobs",
-                make_tags<arg_short_name<'j'>, 
+                makeTags<arg_short_name<'j'>, 
                         arg_group<"Build">, 
                         arg_value_name<"N">, 
                         arg_default<4>,
@@ -139,32 +139,32 @@ struct BuildCommand {
                         ArgTags{.range_min = 1, .range_max = 65}>(&BuildCommand::jobs),
 
                 "release",
-                make_tags<arg_short_name<'r'>, 
+                makeTags<arg_short_name<'r'>, 
                         arg_group<"Build">, 
                         arg_help<"release build">,
                         ArgTags{.flag = true}>(&BuildCommand::release),
 
                 "dryRun",
-                make_tags<arg_long_name<"dry-run">, 
+                makeTags<arg_long_name<"dry-run">, 
                         arg_group<"Build">, 
                         arg_help<"show work without executing">,
                         arg_conflicts<"release">, 
                         ArgTags{.flag = true}>(&BuildCommand::dryRun),
 
                 "legacy",
-                make_tags<arg_long_name<"legacy-mode">, 
+                makeTags<arg_long_name<"legacy-mode">, 
                         arg_group<"Compatibility">, 
                         arg_help<"legacy build mode">,
                         arg_deprecated<"use --mode release instead">, 
                         ArgTags{.flag = true}>(&BuildCommand::legacy),
                         
                 "traceParser",
-                make_tags<arg_long_name<"trace-parser">, 
+                makeTags<arg_long_name<"trace-parser">, 
                         arg_help<"internal parser tracing">,
                         ArgTags{.flag = true, .hidden = true}>(&BuildCommand::traceParser),
 
                 "output",
-                make_tags<arg_complete_directory,
+                makeTags<arg_complete_directory,
                         arg_short_name<'o'>,
                         arg_group<"Paths">, 
                         arg_env<"NEKO_ARGPARSER_MANUAL_OUTPUT">,
@@ -173,7 +173,7 @@ struct BuildCommand {
                         arg_help<"output directory">>(&BuildCommand::output),
 
                 "mode",
-                make_tags<arg_short_name<'m'>, 
+                makeTags<arg_short_name<'m'>, 
                         arg_group<"Build">, 
                         arg_default<"debug"_cs>,
                         arg_choices<"debug", "release">, 
@@ -181,7 +181,7 @@ struct BuildCommand {
                         arg_help<"build mode">>(&BuildCommand::mode),
 
                 "define",
-                make_tags<arg_short_name<'D'>, 
+                makeTags<arg_short_name<'D'>, 
                         arg_group<"C/C++">, 
                         arg_separator<','>, 
                         arg_value_name<"DEFINE">,
@@ -189,30 +189,30 @@ struct BuildCommand {
                         ArgTags{.repeatable = true}>(&BuildCommand::defines),
 
                 "publish",
-                make_tags<arg_group<"Publish">, 
+                makeTags<arg_group<"Publish">, 
                         arg_help<"publish build artifact">,
                         arg_requires<"token">, 
                         ArgTags{.flag = true}>(&BuildCommand::publish),
 
                 "token",
-                make_tags<arg_group<"Publish">, 
+                makeTags<arg_group<"Publish">, 
                         arg_env<"NEKO_ARGPARSER_MANUAL_TOKEN">,
                         arg_value_name<"TOKEN">, 
                         arg_help<"publish token">>(&BuildCommand::token),
 
                 "json",
-                make_tags<arg_group<"Output">, 
+                makeTags<arg_group<"Output">, 
                         arg_help<"json diagnostics">, 
                         arg_conflicts<"yaml">,
                         ArgTags{.flag = true}>(&BuildCommand::json),
 
                 "yaml",
-                make_tags<arg_group<"Output">, 
+                makeTags<arg_group<"Output">, 
                         arg_help<"yaml diagnostics">, 
                         ArgTags{.flag = true}>(&BuildCommand::yaml),
 
                 "target",
-                make_tags<arg_help<"target name">, 
+                makeTags<arg_help<"target name">, 
                         ArgTags{.positional = true}>(&BuildCommand::target));
     };
 };
@@ -225,15 +225,15 @@ struct ToolCommands {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("serve",
-                   make_tags<arg_help<"run an HTTP-like demo server">, 
+                   makeTags<arg_help<"run an HTTP-like demo server">, 
                             ArgTags{.command = true}>(&ToolCommands::serve),
 
                    "build",
-                   make_tags<arg_help<"build a target">, 
+                   makeTags<arg_help<"build a target">, 
                             ArgTags{.command = true}>(&ToolCommands::build),
 
                    "clean",
-                   make_tags<arg_help<"remove generated files">, 
+                   makeTags<arg_help<"remove generated files">, 
                             ArgTags{.command = true}>(&ToolCommands::clean));
     };
 };
@@ -257,20 +257,20 @@ struct StandaloneOptions {
     struct Neko {
         constexpr static auto value = // NOLINT
             Object("verbose",
-                   make_tags<arg_short_name<'v'>, 
+                   makeTags<arg_short_name<'v'>, 
                             arg_group<"General">, 
                             arg_help<"enable verbose output">,
                             ArgTags{.flag = true}>(&StandaloneOptions::verbose),
 
                    "count",
-                   make_tags<arg_short_name<'c'>, 
+                   makeTags<arg_short_name<'c'>, 
                             arg_value_name<"N">, 
                             arg_default<1>, 
                             arg_help<"repeat count">,
                             ArgTags{.range_min = 1, .range_max = 10}>(&StandaloneOptions::count),
 
                    "output",
-                   make_tags<arg_complete_file,
+                   makeTags<arg_complete_file,
                             arg_short_name<'o'>,
                             arg_group<"Paths">, 
                             arg_env<"NEKO_ARGPARSER_MANUAL_OUTPUT">,
@@ -279,7 +279,7 @@ struct StandaloneOptions {
                             ArgTags{.required = true}>(&StandaloneOptions::output),
 
                    "include",
-                   make_tags<arg_complete_directory,
+                   makeTags<arg_complete_directory,
                             arg_short_name<'I'>,
                             arg_group<"Paths">, 
                             arg_separator<','>, 
@@ -288,14 +288,14 @@ struct StandaloneOptions {
                             ArgTags{.repeatable = true}>(&StandaloneOptions::includeDirs),
 
                    "mode",
-                   make_tags<arg_short_name<'m'>, 
+                   makeTags<arg_short_name<'m'>, 
                             arg_group<"General">, 
                             arg_default<"debug"_cs>,
                             arg_choices<"debug", "release">, 
                             arg_case_insensitive_choices, arg_help<"build mode">>(&StandaloneOptions::mode),
 
                    "color",
-                   make_tags<arg_group<"General">, 
+                   makeTags<arg_group<"General">, 
                             arg_aliases<"colour">, 
                             arg_implicit<"auto"_cs>,
                             arg_choices<"auto", "always", "never">, 
@@ -303,54 +303,54 @@ struct StandaloneOptions {
                             arg_help<"colorize output">>(&StandaloneOptions::color),
 
                    "token",
-                   make_tags<arg_group<"Security">, 
+                   makeTags<arg_group<"Security">, 
                             arg_env<"NEKO_ARGPARSER_MANUAL_TOKEN">,
                             arg_value_name<"TOKEN">, 
                             arg_help<"login token">>(&StandaloneOptions::token),
 
                    "login",
-                   make_tags<arg_group<"Security">, 
+                   makeTags<arg_group<"Security">, 
                             arg_requires<"token">, 
                             arg_help<"enable login">,
                             ArgTags{.flag = true}>(&StandaloneOptions::login),
 
                    "json",
-                   make_tags<arg_group<"Output">, 
+                   makeTags<arg_group<"Output">, 
                             arg_conflicts<"yaml">, 
                             arg_help<"json output">,
                             ArgTags{.flag = true}>(&StandaloneOptions::json),
 
                    "yaml",
-                   make_tags<arg_group<"Output">, 
+                   makeTags<arg_group<"Output">, 
                             arg_help<"yaml output">, 
                             ArgTags{.flag = true}>(&StandaloneOptions::yaml),
 
                    "legacyMode",
-                   make_tags<arg_long_name<"legacy-mode">, 
+                   makeTags<arg_long_name<"legacy-mode">, 
                             arg_group<"Compatibility">,
                             arg_deprecated<"use --mode release instead">, 
                             arg_help<"legacy compatibility flag">,
                             ArgTags{.flag = true}>(&StandaloneOptions::legacyMode),
 
                    "traceParser",
-                   make_tags<arg_long_name<"trace-parser">, 
+                   makeTags<arg_long_name<"trace-parser">, 
                             arg_help<"internal parser tracing">,
                             ArgTags{.flag = true, .hidden = true}>(&StandaloneOptions::traceParser),
 
                    "network", &StandaloneOptions::network, 
                    
                    "input",
-                   make_tags<arg_complete_file,
+                   makeTags<arg_complete_file,
                             arg_help<"input file">,
                             ArgTags{.positional = true}>(&StandaloneOptions::input));
     };
 };
 // clang-format on
-void print_error(std::error_code error) {
+void printError(std::error_code error) {
     std::cout << "parse error: " << error.category().name() << ": " << error.message() << '\n';
 }
 
-void print_vector(const std::vector<std::string>& values) {
+void printVector(const std::vector<std::string>& values) {
     std::cout << '[';
     for (std::size_t idx = 0; idx < values.size(); ++idx) {
         if (idx != 0) {
@@ -361,7 +361,7 @@ void print_vector(const std::vector<std::string>& values) {
     std::cout << ']';
 }
 
-std::string_view mode_name(BuildMode mode) {
+auto modeName(BuildMode mode) -> std::string_view {
     switch (mode) {
     case BuildMode::Debug:
         return "debug";
@@ -382,7 +382,7 @@ void print(const ServeCommand& command) {
     std::cout << "verbose = " << command.verbose << '\n';
     std::cout << "config = " << command.config.value_or("<none>") << '\n';
     std::cout << "includeDirs = ";
-    print_vector(command.includeDirs);
+    printVector(command.includeDirs);
     std::cout << '\n';
     std::cout << "color = " << command.color << '\n';
     std::cout << "root = " << command.root << '\n';
@@ -396,9 +396,9 @@ void print(const BuildCommand& command) {
     std::cout << "legacy = " << command.legacy << '\n';
     std::cout << "traceParser = " << command.traceParser << '\n';
     std::cout << "output = " << command.output << '\n';
-    std::cout << "mode = " << mode_name(command.mode) << '\n';
+    std::cout << "mode = " << modeName(command.mode) << '\n';
     std::cout << "defines = ";
-    print_vector(command.defines);
+    printVector(command.defines);
     std::cout << '\n';
     std::cout << "publish = " << command.publish << '\n';
     std::cout << "token = " << (command.token.empty() ? "<none>" : command.token) << '\n';
@@ -418,9 +418,9 @@ void print(const StandaloneOptions& options) {
     std::cout << "count = " << options.count << '\n';
     std::cout << "output = " << options.output.value_or("<none>") << '\n';
     std::cout << "includeDirs = ";
-    print_vector(options.includeDirs);
+    printVector(options.includeDirs);
     std::cout << '\n';
-    std::cout << "mode = " << mode_name(options.mode) << '\n';
+    std::cout << "mode = " << modeName(options.mode) << '\n';
     std::cout << "color = " << options.color << '\n';
     std::cout << "token = " << options.token.value_or("<none>") << '\n';
     std::cout << "login = " << options.login << '\n';
@@ -432,8 +432,8 @@ void print(const StandaloneOptions& options) {
     std::cout << "input = " << options.input << '\n';
 }
 
-void run_standalone_demo() {
-    set_demo_env("NEKO_ARGPARSER_MANUAL_TOKEN", "env-token");
+void runStandaloneDemo() {
+    setDemoEnv("NEKO_ARGPARSER_MANUAL_TOKEN", "env-token");
 
     const char* argv[] = {"standalone-demo",
                           "--verbose",
@@ -462,16 +462,16 @@ void run_standalone_demo() {
     };
 
     auto result = parser<StandaloneOptions>(static_cast<int>(std::size(argv)), argv, config);
-    set_demo_env("NEKO_ARGPARSER_MANUAL_TOKEN", nullptr);
+    setDemoEnv("NEKO_ARGPARSER_MANUAL_TOKEN", nullptr);
     if (!result) {
-        print_error(result.error());
-        std::cout << format_help<StandaloneOptions>(config);
+        printError(result.error());
+        std::cout << formatHelp<StandaloneOptions>(config);
         return;
     }
     print(*result);
 }
 
-int main(int argc, char** argv) {
+auto main(int argc, char** argv) -> int {
     ArgParserConfig config;
     config.programName             = argc > 0 ? argv[0] : "test_argparser_manual";
     config.description             = "Manual argparser example covering command dispatch and option parsing.";
@@ -490,11 +490,11 @@ int main(int argc, char** argv) {
     if (argc == 3 && std::string_view(argv[1]) == "--generate-completion") {
         const auto shell_name = std::string_view(argv[2]);
         if (shell_name == "bash") {
-            std::cout << format_completion<ToolCommands>(CompletionShell::Bash, "test_argparser_manual", config);
+            std::cout << formatCompletion<ToolCommands>(CompletionShell::Bash, "test_argparser_manual", config);
             return 0;
         }
         if (shell_name == "zsh") {
-            std::cout << format_completion<ToolCommands>(CompletionShell::Zsh, "test_argparser_manual", config);
+            std::cout << formatCompletion<ToolCommands>(CompletionShell::Zsh, "test_argparser_manual", config);
             return 0;
         }
         std::cerr << "unsupported shell: " << shell_name << '\n';
@@ -502,7 +502,7 @@ int main(int argc, char** argv) {
     }
 
     if (argc == 1) {
-        std::cout << format_help<ToolCommands>(config) << '\n';
+        std::cout << formatHelp<ToolCommands>(config) << '\n';
         std::cout << "Examples:\n";
         std::cout << "  " << config.programName
                   << " serve --network.host 0.0.0.0 --network.port 9000 -v -I include,src --colour=always public\n";
@@ -512,22 +512,22 @@ int main(int argc, char** argv) {
         std::cout << "  " << config.programName << " --version\n";
         std::cout << "  " << config.programName << " clean\n\n";
         std::cout << "Standalone parser demo output:\n";
-        run_standalone_demo();
+        runStandaloneDemo();
         return 0;
     }
 
     auto result = parser<ToolCommands>(argc, argv, config);
     if (!result) {
-        if (result.error() == make_error_code(ArgParserError::HelpRequested)) {
-            std::cout << format_help<ToolCommands>(argc, argv, config);
+        if (result.error() == makeErrorCode(ArgParserError::HelpRequested)) {
+            std::cout << formatHelp<ToolCommands>(argc, argv, config);
             return 0;
         }
-        if (result.error() == make_error_code(ArgParserError::VersionRequested)) {
-            std::cout << format_version(config);
+        if (result.error() == makeErrorCode(ArgParserError::VersionRequested)) {
+            std::cout << formatVersion(config);
             return 0;
         }
-        print_error(result.error());
-        std::cout << format_help<ToolCommands>(argc, argv, config);
+        printError(result.error());
+        std::cout << formatHelp<ToolCommands>(argc, argv, config);
         return 1;
     }
 

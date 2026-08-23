@@ -15,8 +15,8 @@
 
 #include <array>
 #include <map>
-#include <optional>
 #include <memory>
+#include <optional>
 #include <variant>
 #include <vector>
 
@@ -24,72 +24,84 @@
 #include "nekoproto/serialization/parsing/parsers.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace detail {
-#define NEKO_JSON_SCHEMA_TYPES_TABLE                                                                                   \
-    NEKO_JSON_SCHEMA_TYPES_ENUM(Null, "null")                                                                          \
-    NEKO_JSON_SCHEMA_TYPES_ENUM(Boolean, "boolean")                                                                    \
-    NEKO_JSON_SCHEMA_TYPES_ENUM(Integer, "integer")                                                                    \
-    NEKO_JSON_SCHEMA_TYPES_ENUM(Number, "number")                                                                      \
-    NEKO_JSON_SCHEMA_TYPES_ENUM(String, "string")                                                                      \
-    NEKO_JSON_SCHEMA_TYPES_ENUM(Array, "array")                                                                        \
-    NEKO_JSON_SCHEMA_TYPES_ENUM(Object, "object")
-
-#define NEKO_JSON_SCHEMA_TYPES_ENUM(Name, Value) Name,
-enum class JsonSchemaType { NEKO_JSON_SCHEMA_TYPES_TABLE };
-#undef NEKO_JSON_SCHEMA_TYPES_ENUM
+enum class JsonSchemaType { Null, Boolean, Integer, Number, String, Array, Object };
 } // namespace detail
 
 template <>
 struct Meta<detail::JsonSchemaType> {
-    using T                     = detail::JsonSchemaType;
-    static constexpr auto value = Enumerate{// NOLINT
-#define NEKO_JSON_SCHEMA_TYPES_ENUM(name, str) str, detail::JsonSchemaType::name,
-                                            NEKO_JSON_SCHEMA_TYPES_TABLE
-#undef NEKO_JSON_SCHEMA_TYPES_ENUM
-    };
+    using T = detail::JsonSchemaType;
+    static constexpr auto value =
+        Enumerate{"null",    T::Null,  "boolean", T::Boolean, "integer", T::Integer, "number",
+                  T::Number, "string", T::String, "array",    T::Array,  "object",   T::Object}; // NOLINT
 };
-#undef NEKO_JSON_SCHEMA_TYPES_TABLE
-
-#define NEKO_JSON_SCHEMA_FORMATS_TABLE                                                                                 \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Datetime, "date-time")                                                               \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Date, "date")                                                                        \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Time, "time")                                                                        \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Duration, "duration")                                                                \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Email, "email")                                                                      \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(IdnEmail, "idn-email")                                                               \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Hostname, "hostname")                                                                \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(IdnHostname, "idn-hostname")                                                         \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Ipv4, "ipv4")                                                                        \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Ipv6, "ipv6")                                                                        \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Uri, "uri")                                                                          \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(UriReference, "uri-reference")                                                       \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Iri, "iri")                                                                          \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(IriReference, "iri-reference")                                                       \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Uuid, "uuid")                                                                        \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(UriTemplate, "uri-template")                                                         \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(JsonPointer, "json-pointer")                                                         \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(RelativeJsonPointer, "relative-json-pointer")                                        \
-    NEKO_JSON_SCHEMA_FORMATS_ENUM(Regex, "regex")
 
 enum struct DefinedFormats : uint32_t {
-#define NEKO_JSON_SCHEMA_FORMATS_ENUM(name, _) name,
-    NEKO_JSON_SCHEMA_FORMATS_TABLE
-#undef NEKO_JSON_SCHEMA_FORMATS_ENUM
+    Datetime,
+    Date,
+    Time,
+    Duration,
+    Email,
+    IdnEmail,
+    Hostname,
+    IdnHostname,
+    Ipv4,
+    Ipv6,
+    Uri,
+    UriReference,
+    Iri,
+    IriReference,
+    Uuid,
+    UriTemplate,
+    JsonPointer,
+    RelativeJsonPointer,
+    Regex,
 };
 
 template <>
 struct Meta<DefinedFormats> {
     using T                     = DefinedFormats;
-    static constexpr auto value = Enumerate{// NOLINT
-#define NEKO_JSON_SCHEMA_FORMATS_ENUM(name, str) str, DefinedFormats::name,
-                                            NEKO_JSON_SCHEMA_FORMATS_TABLE
-#undef NEKO_JSON_SCHEMA_FORMATS_ENUM
-    };
+    static constexpr auto value = Enumerate{"date-time",
+                                            T::Datetime,
+                                            "date",
+                                            T::Date,
+                                            "time",
+                                            T::Time,
+                                            "duration",
+                                            T::Duration,
+                                            "email",
+                                            T::Email,
+                                            "idn-email",
+                                            T::IdnEmail,
+                                            "hostname",
+                                            T::Hostname,
+                                            "idn-hostname",
+                                            T::IdnHostname,
+                                            "ipv4",
+                                            T::Ipv4,
+                                            "ipv6",
+                                            T::Ipv6,
+                                            "uri",
+                                            T::Uri,
+                                            "uri-reference",
+                                            T::UriReference,
+                                            "iri",
+                                            T::Iri,
+                                            "iri-reference",
+                                            T::IriReference,
+                                            "uuid",
+                                            T::Uuid,
+                                            "uri-template",
+                                            T::UriTemplate,
+                                            "json-pointer",
+                                            T::JsonPointer,
+                                            "relative-json-pointer",
+                                            T::RelativeJsonPointer,
+                                            "regex",
+                                            T::Regex}; // NOLINT
 };
-
-#undef NEKO_JSON_SCHEMA_FORMATS_TABLE
 
 // https://json-schema.org/draft-07/schema#
 struct JsonSchema final {
@@ -154,7 +166,7 @@ struct JsonSchema final {
                 "oneOf",    //
                 "required", //
                 // "examples",         //
-                "$ref", //
+                "$ref",             //
                 "title",            //
                 "description",      //
                 "default",          //
@@ -193,8 +205,8 @@ struct JsonSchema final {
                 &T::oneOf,    //
                 &T::required, //
                 // &T::examples,             //
-                &T::ref, //
-                &T::title,                //
+                &T::ref,              //
+                &T::title,            //
                 &T::description,      //
                 &T::defaultValue,     //
                 &T::deprecated,       //
@@ -224,109 +236,101 @@ struct JsonSchema final {
 
 namespace detail {
 
-inline void parser_schema_to_json(const parsing::schema::Type& source, JsonSchema& target);
+inline void parserSchemaToJson(const parsing::schema::Type& source, JsonSchema& target);
 
-inline void parser_schema_number(const std::optional<parsing::schema::Type::Number>& source,
-                                 JsonSchema::schema_number& target) {
+inline void parserSchemaNumber(const std::optional<parsing::schema::Type::Number>& source,
+                               JsonSchema::schema_number& target) {
     if (source) {
-        target = std::visit([](const auto value) -> JsonSchema::schema_number::value_type {
-            return value;
-        }, *source);
+        target = std::visit([](const auto value) -> JsonSchema::schema_number::value_type { return value; }, *source);
     }
 }
 
-inline void parser_schema_to_json(const parsing::schema::Type& source, JsonSchema& target) {
-    std::visit(
-        Overloads{
-            [&target](const parsing::schema::Type::Null&) {
-                target.type = "null";
-            },
-            [&target](const parsing::schema::Type::Boolean&) {
-                target.type = "boolean";
-            },
-            [&target](const parsing::schema::Type::Integer& integer) {
-                target.type = "integer";
-                parser_schema_number(integer.minimum, target.minimum);
-                parser_schema_number(integer.maximum, target.maximum);
-            },
-            [&target](const parsing::schema::Type::FloatingPoint& number) {
-                target.type = "number";
-                parser_schema_number(number.minimum, target.minimum);
-                parser_schema_number(number.maximum, target.maximum);
-            },
-            [&target](const parsing::schema::Type::String& string) {
-                target.type = "string";
-                if (!string.enumeration.empty()) {
-                    target.enumeration = string.enumeration;
-                }
-            },
-            [&target](const parsing::schema::Type::Array& array) {
-                target.type            = "array";
-                target.minItems        = array.minItems;
-                target.maxItems        = array.maxItems;
-                target.additionalItems = array.additionalItems;
-                target.uniqueItems     = array.uniqueItems;
-                if (array.items) {
-                    auto item = std::make_unique<JsonSchema>();
-                    parser_schema_to_json(*array.items, *item);
-                    target.items = std::move(item);
-                } else if (!array.prefixItems.empty()) {
-                    std::vector<JsonSchema> items(array.prefixItems.size());
-                    for (std::size_t i = 0; i < array.prefixItems.size(); ++i) {
-                        parser_schema_to_json(array.prefixItems[i], items[i]);
-                    }
-                    target.items = std::move(items);
-                }
-            },
-            [&target](const parsing::schema::Type::Object& object) {
-                target.type = "object";
-                if (!object.properties.empty()) {
-                    target.properties = std::map<std::string, JsonSchema>{};
-                    for (const auto& [name, property] : object.properties) {
-                        parser_schema_to_json(property, target.properties->try_emplace(name).first->second);
-                    }
-                }
-                if (!object.required.empty()) {
-                    target.required = object.required;
-                }
-                if (object.additionalProperties) {
-                    auto additional = std::make_unique<JsonSchema>();
-                    parser_schema_to_json(*object.additionalProperties, *additional);
-                    target.additionalProperties = std::move(additional);
-                }
-            },
-            [&target](const parsing::schema::Type::AnyOf& anyOf) {
-                target.oneOf = std::vector<JsonSchema>(anyOf.types.size());
-                for (std::size_t i = 0; i < anyOf.types.size(); ++i) {
-                    parser_schema_to_json(anyOf.types[i], (*target.oneOf)[i]);
-                }
-            },
-            [&target](const parsing::schema::Type::Optional& optional) {
-                target.oneOf = std::vector<JsonSchema>(2);
-                parser_schema_to_json(*optional.type, (*target.oneOf)[0]);
-                (*target.oneOf)[1].type = "null";
-            },
-        },
-        source.value);
+inline void parserSchemaToJson(const parsing::schema::Type& source, JsonSchema& target) {
+    std::visit(Overloads{
+                   [&target](const parsing::schema::Type::Null&) { target.type = "null"; },
+                   [&target](const parsing::schema::Type::Boolean&) { target.type = "boolean"; },
+                   [&target](const parsing::schema::Type::Integer& integer) {
+                       target.type = "integer";
+                       parserSchemaNumber(integer.minimum, target.minimum);
+                       parserSchemaNumber(integer.maximum, target.maximum);
+                   },
+                   [&target](const parsing::schema::Type::FloatingPoint& number) {
+                       target.type = "number";
+                       parserSchemaNumber(number.minimum, target.minimum);
+                       parserSchemaNumber(number.maximum, target.maximum);
+                   },
+                   [&target](const parsing::schema::Type::String& string) {
+                       target.type = "string";
+                       if (!string.enumeration.empty()) {
+                           target.enumeration = string.enumeration;
+                       }
+                   },
+                   [&target](const parsing::schema::Type::Array& array) {
+                       target.type            = "array";
+                       target.minItems        = array.minItems;
+                       target.maxItems        = array.maxItems;
+                       target.additionalItems = array.additionalItems;
+                       target.uniqueItems     = array.uniqueItems;
+                       if (array.items) {
+                           auto item = std::make_unique<JsonSchema>();
+                           parserSchemaToJson(*array.items, *item);
+                           target.items = std::move(item);
+                       } else if (!array.prefixItems.empty()) {
+                           std::vector<JsonSchema> items(array.prefixItems.size());
+                           for (std::size_t i = 0; i < array.prefixItems.size(); ++i) {
+                               parserSchemaToJson(array.prefixItems[i], items[i]);
+                           }
+                           target.items = std::move(items);
+                       }
+                   },
+                   [&target](const parsing::schema::Type::Object& object) {
+                       target.type = "object";
+                       if (!object.properties.empty()) {
+                           target.properties = std::map<std::string, JsonSchema>{};
+                           for (const auto& [name, property] : object.properties) {
+                               parserSchemaToJson(property, target.properties->try_emplace(name).first->second);
+                           }
+                       }
+                       if (!object.required.empty()) {
+                           target.required = object.required;
+                       }
+                       if (object.additionalProperties) {
+                           auto additional = std::make_unique<JsonSchema>();
+                           parserSchemaToJson(*object.additionalProperties, *additional);
+                           target.additionalProperties = std::move(additional);
+                       }
+                   },
+                   [&target](const parsing::schema::Type::AnyOf& anyOf) {
+                       target.oneOf = std::vector<JsonSchema>(anyOf.types.size());
+                       for (std::size_t i = 0; i < anyOf.types.size(); ++i) {
+                           parserSchemaToJson(anyOf.types[i], (*target.oneOf)[i]);
+                       }
+                   },
+                   [&target](const parsing::schema::Type::Optional& optional) {
+                       target.oneOf = std::vector<JsonSchema>(2);
+                       parserSchemaToJson(*optional.type, (*target.oneOf)[0]);
+                       (*target.oneOf)[1].type = "null";
+                   },
+               },
+               source.value);
 }
 
 } // namespace detail
 
 template <typename R, typename W, typename T>
-bool generate_schema_for(JsonSchema& schema) {
+auto generateSchemaFor(JsonSchema& schema) -> bool {
     schema.schema = "http://json-schema.org/draft-07/schema#";
-    detail::parser_schema_to_json(parser_schema<std::decay_t<T>>(), schema);
+    detail::parserSchemaToJson(parserSchema<std::decay_t<T>>(), schema);
     return true;
 }
 
 template <typename T>
-bool generate_schema(JsonSchema& schema) {
-    return generate_schema_for<typename JsonSerializer::Reader, typename JsonSerializer::Writer,
-                               std::decay_t<T>>(schema);
+auto generateSchema(JsonSchema& schema) -> bool {
+    return generateSchemaFor<typename JsonSerializer::Reader, typename JsonSerializer::Writer, std::decay_t<T>>(schema);
 }
 
 template <typename T>
-bool generate_schema([[maybe_unused]] const T& value, JsonSchema& schema) {
-    return generate_schema<std::decay_t<T>>(schema);
+auto generateSchema([[maybe_unused]] const T& value, JsonSchema& schema) -> bool {
+    return generateSchema<std::decay_t<T>>(schema);
 }
-NEKO_END_NAMESPACE
+} // namespace nekoproto

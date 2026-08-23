@@ -14,10 +14,10 @@
 
 #include <array>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 template <size_t N>
-struct string_literal { // NOLINT
+struct StringLiteral {
     using value_type      = char;
     using reference       = value_type&;
     using const_reference = const value_type&;
@@ -27,37 +27,37 @@ struct string_literal { // NOLINT
 
     static constexpr size_t length = (N > 0) ? (N - 1) : 0; // NOLINT
 
-    [[nodiscard]] constexpr size_t size() const noexcept { return length; }
+    [[nodiscard]] constexpr auto size() const noexcept -> size_t { return length; }
 
-    constexpr string_literal() noexcept                                 = default;
-    constexpr string_literal(const string_literal&) noexcept            = default;
-    constexpr string_literal(string_literal&&) noexcept                 = default;
-    constexpr string_literal& operator=(const string_literal&) noexcept = default;
-    constexpr string_literal& operator=(string_literal&&) noexcept      = default;
+    constexpr StringLiteral() noexcept                                        = default;
+    constexpr StringLiteral(const StringLiteral&) noexcept                    = default;
+    constexpr StringLiteral(StringLiteral&&) noexcept                         = default;
+    constexpr auto operator=(const StringLiteral&) noexcept -> StringLiteral& = default;
+    constexpr auto operator=(StringLiteral&&) noexcept -> StringLiteral&      = default;
 
-    constexpr string_literal(const char (&str)[N]) noexcept {
+    constexpr StringLiteral(const char (&str)[N]) noexcept {
         for (size_t i = 0; i < N; ++i) {
             value[i] = str[i];
         }
     }
 
     char value[N];
-    constexpr const char* begin() const noexcept { return value; }
-    constexpr const char* end() const noexcept { return value + length; }
+    constexpr auto begin() const noexcept -> const char* { return value; }
+    constexpr auto end() const noexcept -> const char* { return value + length; }
 
-    [[nodiscard]] constexpr auto operator<=>(const string_literal&) const = default;
+    [[nodiscard]] constexpr auto operator<=>(const StringLiteral&) const = default;
 
-    [[nodiscard]] constexpr std::string_view view() const noexcept { return {value, length}; }
+    [[nodiscard]] constexpr auto view() const noexcept -> std::string_view { return {value, length}; }
 
     [[nodiscard]] constexpr operator std::string_view() const noexcept { return {value, length}; }
 
-    constexpr reference operator[](size_type index) noexcept { return value[index]; }
-    constexpr const_reference operator[](size_type index) const noexcept { return value[index]; }
+    constexpr auto operator[](size_type index) noexcept -> reference { return value[index]; }
+    constexpr auto operator[](size_type index) const noexcept -> const_reference { return value[index]; }
 };
 
 template <size_t N>
-constexpr auto string_literal_from_view(std::string_view str) {
-    string_literal<N + 1> sl{};
+constexpr auto stringLiteralFromView(std::string_view str) {
+    StringLiteral<N + 1> sl{};
     for (size_t i = 0; i < str.size(); ++i) {
         sl[i] = str[i];
     }
@@ -67,12 +67,12 @@ constexpr auto string_literal_from_view(std::string_view str) {
 
 namespace detail {
 template <std::array V>
-struct make_static {                 // NOLINT
+struct MakeStatic {
     static constexpr auto value = V; // NOLINT
 };
 
 template <const std::string_view&... Strs>
-inline constexpr std::string_view join() {              // NOLINT
+inline constexpr auto join() -> std::string_view {
     constexpr auto joined_arr = []() {                  // NOLINT
         constexpr size_t len = (Strs.size() + ... + 0); // NOLINT
         std::array<char, len + 1> arr;
@@ -85,7 +85,7 @@ inline constexpr std::string_view join() {              // NOLINT
         arr[len] = '\0';
         return arr;
     }();
-    auto& static_arr = make_static<joined_arr>::value; // NOLINT
+    auto& static_arr = MakeStatic<joined_arr>::value; // NOLINT
     return {static_arr.data(), static_arr.size() - 1};
 }
 } // namespace detail
@@ -116,20 +116,20 @@ struct ConstexprString {
     }
 
     // 比较运算符对 NTTP 至关重要
-    constexpr auto operator<=>(const ConstexprString&) const = default;
-    constexpr bool operator==(const ConstexprString&) const  = default;
+    constexpr auto operator<=>(const ConstexprString&) const        = default;
+    constexpr auto operator==(const ConstexprString&) const -> bool = default;
 
     // 访问器
     [[nodiscard]]
-    constexpr std::size_t size() const noexcept {
+    constexpr auto size() const noexcept -> std::size_t {
         return N;
     }
     [[nodiscard]]
-    constexpr std::string_view view() const noexcept {
+    constexpr auto view() const noexcept -> std::string_view {
         return std::string_view(data.data(), N);
     }
     [[nodiscard]]
-    constexpr const char* c_str() const noexcept { // NOLINT
+    constexpr auto c_str() const noexcept -> const char* { // NOLINT(readability-identifier-naming)
         return data.data();
     }
 };
@@ -145,9 +145,9 @@ consteval auto operator""_cs() noexcept {
 }
 
 template <typename T, class enable = void>
-struct is_constexpr_string : std::false_type {}; // NOLINT
+struct IsConstexprString : std::false_type {};
 
 template <std::size_t N>
-struct is_constexpr_string<ConstexprString<N>, void> : std::true_type {};
+struct IsConstexprString<ConstexprString<N>, void> : std::true_type {};
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

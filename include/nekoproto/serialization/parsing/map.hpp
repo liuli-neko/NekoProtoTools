@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <utility>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace detail {
 
 template <typename T>
@@ -23,15 +23,15 @@ template <typename T>
 inline constexpr bool ParserIsStringKeyV = ParserIsStringKey<std::remove_cvref_t<T>>::value;
 
 template <typename K, typename V, bool StringKey = ParserIsStringKeyV<K>>
-parsing::schema::Type parser_map_schema() {
+auto parserMapSchema() -> parsing::schema::Type {
     if constexpr (StringKey) {
         parsing::schema::Type::Object object;
-        object.additionalProperties = std::make_shared<parsing::schema::Type>(parser_schema<V>());
+        object.additionalProperties = std::make_shared<parsing::schema::Type>(parserSchema<V>());
         return object;
     } else {
         parsing::schema::Type::Object entry;
-        entry.properties.emplace("key", parser_schema<K>());
-        entry.properties.emplace("value", parser_schema<V>());
+        entry.properties.emplace("key", parserSchema<K>());
+        entry.properties.emplace("value", parserSchema<V>());
         entry.required = {"key", "value"};
         parsing::schema::Type::Array array;
         array.items = std::make_shared<parsing::schema::Type>(std::move(entry));
@@ -40,18 +40,18 @@ parsing::schema::Type parser_map_schema() {
 }
 
 template <typename W, typename T, typename ParentType, typename Tags>
-ParserResult parser_write_key_value_array(W& writer, const T& values, const ParentType& parent, const Tags& tags) {
+auto parserWriteKeyValueArray(W& writer, const T& values, const ParentType& parent, const Tags& tags) -> ParserResult {
     auto array        = parsing::Parent<W>::addArray(writer, values.size(), parent, tags);
     std::size_t index = 0;
     for (const auto& item : values) {
         auto object = parsing::Parent<W>::addObject(writer, 2, typename parsing::Parent<W>::Array{&array});
-        auto result = parser_write<W>(writer, item.first, typename parsing::Parent<W>::Object{"key", &object});
+        auto result = parserWrite<W>(writer, item.first, typename parsing::Parent<W>::Object{"key", &object});
         if (!result) {
-            return parser_context(std::move(result), "Failed to write map entry " + std::to_string(index) + " key: ");
+            return parserContext(std::move(result), "Failed to write map entry " + std::to_string(index) + " key: ");
         }
-        result = parser_write<W>(writer, item.second, typename parsing::Parent<W>::Object{"value", &object});
+        result = parserWrite<W>(writer, item.second, typename parsing::Parent<W>::Object{"value", &object});
         if (!result) {
-            return parser_context(std::move(result), "Failed to write map entry " + std::to_string(index) + " value: ");
+            return parserContext(std::move(result), "Failed to write map entry " + std::to_string(index) + " value: ");
         }
         ++index;
     }
@@ -59,44 +59,44 @@ ParserResult parser_write_key_value_array(W& writer, const T& values, const Pare
 }
 
 template <typename R, typename T, typename Tags>
-ParserResult parser_read_key_value_array(typename R::InputValueType in, T& values, const Tags& tags) {
-    auto array = parsing::reader_to_array<R>(in, tags);
+auto parserReadKeyValueArray(typename R::InputValueType in, T& values, const Tags& tags) -> ParserResult {
+    auto array = parsing::readerToArray<R>(in, tags);
     if (!array) {
         return array.error();
     }
-    T parsed = parser_empty_container_like(values);
+    T parsed = parserEmptyContainerLike(values);
     const auto size = R::arraySize(array.value());
     for (std::size_t i = 0; i < size; ++i) {
-        auto object = parsing::reader_to_object<R>(R::arrayElement(array.value(), i), NoTags{});
+        auto object = parsing::readerToObject<R>(R::arrayElement(array.value(), i), NoTags{});
         if (!object) {
-            return parser_context(object.error(), "Failed to parse map entry " + std::to_string(i) + ": ");
+            return parserContext(object.error(), "Failed to parse map entry " + std::to_string(i) + ": ");
         }
         using Key   = typename T::key_type;
         using Value = typename T::mapped_type;
         Key key{};
         Value value{};
-        auto keyField = parsing::reader_object_field<R>(object.value(), "key", NoTags{});
+        auto keyField = parsing::readerObjectField<R>(object.value(), "key", NoTags{});
         if (!keyField) {
-            return parser_error(sa::ErrorCode::InvalidField,
+            return parserError(sa::ErrorCode::InvalidField,
                                 "Map entry " + std::to_string(i) + " is missing required field 'key'");
         }
-        auto result = parser_read<R>(keyField.value(), key);
+        auto result = parserRead<R>(keyField.value(), key);
         if (!result) {
-            return parser_context(std::move(result), "Failed to parse map entry " + std::to_string(i) + " key: ");
+            return parserContext(std::move(result), "Failed to parse map entry " + std::to_string(i) + " key: ");
         }
-        auto valField = parsing::reader_object_field<R>(object.value(), "value", NoTags{});
+        auto valField = parsing::readerObjectField<R>(object.value(), "value", NoTags{});
         if (!valField) {
-            return parser_error(sa::ErrorCode::InvalidField,
+            return parserError(sa::ErrorCode::InvalidField,
                                 "Map entry " + std::to_string(i) + " is missing required field 'value'");
         }
-        result = parser_read<R>(valField.value(), value);
+        result = parserRead<R>(valField.value(), value);
         if (!result) {
-            return parser_context(std::move(result), "Failed to parse map entry " + std::to_string(i) + " value: ");
+            return parserContext(std::move(result), "Failed to parse map entry " + std::to_string(i) + " value: ");
         }
         auto inserted = parsed.emplace(std::move(key), std::move(value));
         if constexpr (requires { inserted.second; }) {
             if (!inserted.second) {
-                return parser_error(sa::ErrorCode::InvalidField,
+                return parserError(sa::ErrorCode::InvalidField,
                                     "Map entry " + std::to_string(i) + " contains a duplicate key");
             }
         }
@@ -106,26 +106,26 @@ ParserResult parser_read_key_value_array(typename R::InputValueType in, T& value
 }
 
 template <typename W, typename T, typename ParentType, typename Tags>
-ParserResult parser_write_string_key_map(W& writer, const T& values, const ParentType& parent, const Tags& tags) {
+auto parserWriteStringKeyMap(W& writer, const T& values, const ParentType& parent, const Tags& tags) -> ParserResult {
     auto object = parsing::Parent<W>::addObject(writer, values.size(), parent, tags);
     for (const auto& item : values) {
-        auto result = parser_write<W>(writer, item.second, typename parsing::Parent<W>::Object{item.first, &object});
+        auto result = parserWrite<W>(writer, item.second, typename parsing::Parent<W>::Object{item.first, &object});
         if (!result) {
-            return parser_context(std::move(result), "Failed to write map field '" + std::string(item.first) + "': ");
+            return parserContext(std::move(result), "Failed to write map field '" + std::string(item.first) + "': ");
         }
     }
     return sa::success();
 }
 
 template <typename R, typename T, typename Tags>
-ParserResult parser_read_string_key_map(typename R::InputValueType in, T& values, const Tags& tags) {
-    auto object = parsing::reader_to_object<R>(in, tags);
+auto parserReadStringKeyMap(typename R::InputValueType in, T& values, const Tags& tags) -> ParserResult {
+    auto object = parsing::readerToObject<R>(in, tags);
     if (!object) {
         return object.error();
     }
-    T parsed = parser_empty_container_like(values);
+    T parsed = parserEmptyContainerLike(values);
     ParserResult result;
-    parsing::reader_for_each_object_member<R>(
+    parsing::readerForEachObjectMember<R>(
         object.value(),
         [&parsed, &result](std::string_view name, auto field) {
             if (!result) {
@@ -133,14 +133,14 @@ ParserResult parser_read_string_key_map(typename R::InputValueType in, T& values
             }
             typename T::mapped_type value{};
             result =
-                parser_context(parser_read<R>(field, value), "Failed to parse map field '" + std::string(name) + "': ");
+                parserContext(parserRead<R>(field, value), "Failed to parse map field '" + std::string(name) + "': ");
             if (!result) {
                 return false;
             }
             auto inserted = parsed.emplace(typename T::key_type{name.data(), name.size()}, std::move(value));
             if constexpr (requires { inserted.second; }) {
                 if (!inserted.second) {
-                    result = parser_error(sa::ErrorCode::InvalidField,
+                    result = parserError(sa::ErrorCode::InvalidField,
                                           "Map contains duplicate key '" + std::string(name) + "'");
                     return false;
                 }
@@ -160,16 +160,16 @@ struct MapWriteParser;
 template <typename W, typename Map>
 struct MapWriteParser<W, Map, true> {
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Map& value, const ParentType& parent, const Tags& tags) {
-        return parser_write_string_key_map<W>(writer, value, parent, tags);
+    static auto write(W& writer, const Map& value, const ParentType& parent, const Tags& tags) -> ParserResult {
+        return parserWriteStringKeyMap<W>(writer, value, parent, tags);
     }
 };
 
 template <typename W, typename Map>
 struct MapWriteParser<W, Map, false> {
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Map& value, const ParentType& parent, const Tags& tags) {
-        return parser_write_key_value_array<W>(writer, value, parent, tags);
+    static auto write(W& writer, const Map& value, const ParentType& parent, const Tags& tags) -> ParserResult {
+        return parserWriteKeyValueArray<W>(writer, value, parent, tags);
     }
 };
 
@@ -179,22 +179,22 @@ struct MapReadParser;
 template <typename R, typename Map>
 struct MapReadParser<R, Map, true> {
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Map& value, const Tags& tags) {
-        return parser_read_string_key_map<R>(in, value, tags);
+    static auto read(typename R::InputValueType in, Map& value, const Tags& tags) -> ParserResult {
+        return parserReadStringKeyMap<R>(in, value, tags);
     }
 };
 
 template <typename R, typename Map>
 struct MapReadParser<R, Map, false> {
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Map& value, const Tags& tags) {
-        return parser_read_key_value_array<R>(in, value, tags);
+    static auto read(typename R::InputValueType in, Map& value, const Tags& tags) -> ParserResult {
+        return parserReadKeyValueArray<R>(in, value, tags);
     }
 };
 
 template <typename K, typename V, bool StringKey = ParserIsStringKeyV<K>>
 struct MapSchemaParser {
-    static parsing::schema::Type toSchema() { return parser_map_schema<K, V, StringKey>(); }
+    static auto toSchema() -> parsing::schema::Type { return parserMapSchema<K, V, StringKey>(); }
 };
 
 template <typename W, typename K, typename V, typename Compare, typename Alloc>
@@ -240,4 +240,4 @@ template <typename K, typename V, typename Hash, typename Eq, typename Alloc>
 struct SchemaParser<std::unordered_multimap<K, V, Hash, Eq, Alloc>, void> : MapSchemaParser<K, V, false> {};
 
 } // namespace detail
-NEKO_END_NAMESPACE
+} // namespace nekoproto

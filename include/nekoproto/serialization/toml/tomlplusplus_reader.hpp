@@ -24,7 +24,7 @@
 #include <type_traits>
 #include <utility>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace tomlplusplus {
 
 class Reader {
@@ -39,22 +39,23 @@ public:
 
     using InputValueType = const toml::node*;
 
-    static std::size_t arraySize(const InputArrayType& array) noexcept {
+    static auto arraySize(const InputArrayType& array) noexcept -> std::size_t {
         return array.node == nullptr ? 0U : array.node->size();
     }
 
-    static InputValueType arrayElement(const InputArrayType& array, std::size_t index) noexcept {
+    static auto arrayElement(const InputArrayType& array, std::size_t index) noexcept -> InputValueType {
         if (array.node == nullptr || index >= array.node->size()) {
             return nullptr;
         }
         return &(*array.node)[index];
     }
 
-    static std::size_t objectSize(const InputObjectType& object) noexcept {
+    static auto objectSize(const InputObjectType& object) noexcept -> std::size_t {
         return object.node == nullptr ? 0U : object.node->size();
     }
 
-    static sa::Result<InputValueType> objectField(const InputObjectType& object, std::string_view name) noexcept {
+    static auto objectField(const InputObjectType& object, std::string_view name) noexcept
+        -> sa::Result<InputValueType> {
         if (object.node == nullptr) {
             return sa::error(sa::ErrorCode::InvalidType, "TOML table is empty");
         }
@@ -66,7 +67,7 @@ public:
     }
 
     template <typename Fn>
-    static bool forEachObjectMember(const InputObjectType& object, Fn&& fn) {
+    static auto forEachObjectMember(const InputObjectType& object, Fn&& fn) -> bool {
         if (object.node == nullptr) {
             return false;
         }
@@ -78,10 +79,10 @@ public:
         return true;
     }
 
-    static bool isEmpty(InputValueType value) noexcept { return value == nullptr; }
+    static auto isEmpty(InputValueType value) noexcept -> bool { return value == nullptr; }
 
     template <typename CharT, typename Traits>
-    static sa::Result<std::basic_string_view<CharT, Traits>> toStringView(InputValueType value) noexcept {
+    static auto toStringView(InputValueType value) noexcept -> sa::Result<std::basic_string_view<CharT, Traits>> {
         static_assert(sizeof(CharT) == sizeof(char), "TOML string views require byte-sized characters");
         if (value == nullptr) {
             return sa::error(sa::ErrorCode::InvalidType, "Expected TOML string, got empty node");
@@ -94,7 +95,7 @@ public:
     }
 
     template <typename T>
-    static sa::Result<T> toBasicType(InputValueType value) noexcept {
+    static auto toBasicType(InputValueType value) noexcept -> sa::Result<T> {
         using U = std::remove_cvref_t<T>;
         if (value == nullptr) {
             return sa::error(sa::ErrorCode::InvalidType, "TOML node is empty");
@@ -140,7 +141,7 @@ public:
         }
     }
 
-    static sa::Result<InputArrayType> toArray(InputValueType value) noexcept {
+    static auto toArray(InputValueType value) noexcept -> sa::Result<InputArrayType> {
         if (value == nullptr) {
             return sa::error(sa::ErrorCode::InvalidType, "TOML node is empty");
         }
@@ -151,7 +152,7 @@ public:
         return InputArrayType{array};
     }
 
-    static sa::Result<InputObjectType> toObject(InputValueType value) noexcept {
+    static auto toObject(InputValueType value) noexcept -> sa::Result<InputObjectType> {
         if (value == nullptr) {
             return sa::error(sa::ErrorCode::InvalidType, "TOML node is empty");
         }
@@ -165,6 +166,6 @@ public:
 
 } // namespace tomlplusplus
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
 #endif

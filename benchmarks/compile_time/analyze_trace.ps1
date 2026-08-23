@@ -13,8 +13,8 @@ $eventNames = @(
     "EvaluateAsConstantExpr"
 )
 $needles = @(
-    "_serializer_get_n_member_reference",
-    "_neko_get_n_member_reference",
+    "serializerGetMemberReference",
+    "nekoGetMemberReference",
     "ReflectProvider",
     "ReflectModel",
     "forEach",

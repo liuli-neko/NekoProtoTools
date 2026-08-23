@@ -38,7 +38,7 @@
 #define NEKO_LOG_LEVEL_ERROR "error"
 #define NEKO_LOG_LEVEL_FATAL "fatal"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 struct LogContext {
     const char* module;
     const char* file;
@@ -48,8 +48,9 @@ struct LogContext {
     const char* color;
 };
 namespace logdetail {
-inline std::function<void(const char* level, const char* message, const LogContext& context)>&
-logger_func(std::function<void(const char* level, const char* message, const LogContext& context)> logger = nullptr) {
+inline auto
+loggerFunc(std::function<void(const char* level, const char* message, const LogContext& context)> logger = nullptr)
+    -> std::function<void(const char* level, const char* message, const LogContext& context)>& {
     static std::function<void(const char* level, const char* message, const LogContext& context)> kLoggerFunc = logger;
     if (logger) {
         kLoggerFunc = logger;
@@ -58,52 +59,46 @@ logger_func(std::function<void(const char* level, const char* message, const Log
 }
 } // namespace logdetail
 inline void
-install_logger(std::function<void(const char* level, const char* message, const LogContext& context)> logger) {
-    logdetail::logger_func(logger);
+installLogger(std::function<void(const char* level, const char* message, const LogContext& context)> logger) {
+    logdetail::loggerFunc(logger);
 }
 namespace logdetail {
-inline std::string to_lower(const std::string& str) {
+inline auto toLower(const std::string& str) -> std::string {
     std::string result = str; // 创建字符串副本
     std::transform(result.begin(), result.end(), result.begin(), [](unsigned char ch) { return std::tolower(ch); });
     return result;
 }
-#define ANSI_COLOR_TABLE                                                                                               \
-    ANSI_COLOR(reset, "\033[0m")                                                                                       \
-    ANSI_COLOR(black, "\033[30m")                                                                                      \
-    ANSI_COLOR(red, "\033[31m")                                                                                        \
-    ANSI_COLOR(green, "\033[32m")                                                                                      \
-    ANSI_COLOR(yellow, "\033[33m")                                                                                     \
-    ANSI_COLOR(blue, "\033[34m")                                                                                       \
-    ANSI_COLOR(magenta, "\033[35m")                                                                                    \
-    ANSI_COLOR(cyan, "\033[36m")                                                                                       \
-    ANSI_COLOR(lightgray, "\033[37m")                                                                                  \
-    ANSI_COLOR(darkgray, "\033[90m")                                                                                   \
-    ANSI_COLOR(lightred, "\033[91m")                                                                                   \
-    ANSI_COLOR(lightgreen, "\033[92m")                                                                                 \
-    ANSI_COLOR(lightyellow, "\033[93m")                                                                                \
-    ANSI_COLOR(lightblue, "\033[94m")                                                                                  \
-    ANSI_COLOR(lightmagenta, "\033[95m")                                                                               \
-    ANSI_COLOR(lightcyan, "\033[96m")                                                                                  \
-    ANSI_COLOR(white, "\033[97m")
-
 #ifdef NEKO_LOG_NO_COLOR
-iline const char* ansi_color_code(const char*) { return ""; }
+inline auto ansiColorCode(const char*) -> const char* { return ""; }
 #else
-inline const char* ansi_color_code(const char* name) {
-#define ANSI_COLOR(color, code)                                                                                        \
-    if (strcmp(to_lower(name).c_str(), #color) == 0) return code;
-    ANSI_COLOR_TABLE
+inline auto ansiColorCode(const char* name) -> const char* {
+    const auto color = toLower(name);
+    if (color == "reset") return "\033[0m";
+    if (color == "black") return "\033[30m";
+    if (color == "red") return "\033[31m";
+    if (color == "green") return "\033[32m";
+    if (color == "yellow") return "\033[33m";
+    if (color == "blue") return "\033[34m";
+    if (color == "magenta") return "\033[35m";
+    if (color == "cyan") return "\033[36m";
+    if (color == "lightgray") return "\033[37m";
+    if (color == "darkgray") return "\033[90m";
+    if (color == "lightred") return "\033[91m";
+    if (color == "lightgreen") return "\033[92m";
+    if (color == "lightyellow") return "\033[93m";
+    if (color == "lightblue") return "\033[94m";
+    if (color == "lightmagenta") return "\033[95m";
+    if (color == "lightcyan") return "\033[96m";
+    if (color == "white") return "\033[97m";
     return "";
 }
-#undef ANSI_COLOR
 #endif
-#undef ANSI_COLOR_TABLE
 
-enum LogFliterMode {
+enum LogFilterMode {
     FilterInclude,
     FilterExclude,
 };
-inline bool log_level_filter(const std::string& level, int op) {
+inline auto logLevelFilter(const std::string& level, int op) -> bool {
     static std::vector<std::string> kLevels = {NEKO_LOG_LEVEL_FATAL, NEKO_LOG_LEVEL_ERROR, NEKO_LOG_LEVEL_WARN,
                                                NEKO_LOG_LEVEL_INFO,  NEKO_LOG_LEVEL_DEBUG, NEKO_LOG_LEVEL_TRACE};
     static std::set<std::string> kFilter    = {NEKO_LOG_LEVEL_FATAL, NEKO_LOG_LEVEL_ERROR, NEKO_LOG_LEVEL_WARN};
@@ -124,16 +119,16 @@ inline bool log_level_filter(const std::string& level, int op) {
     }
     return kFilter.find(level) == kFilter.end();
 }
-inline std::tuple<int, std::set<std::string>>& log_filter(int opt, int flag = FilterInclude,
-                                                          const std::string& module = "") {
+inline auto logFilter(int opt, int flag = FilterInclude, const std::string& module = "")
+    -> std::tuple<int, std::set<std::string>>& {
     static std::tuple<int, std::set<std::string>> kNekoLogFilter = {FilterExclude, {}};
     if (opt == 0) {
         if (flag == std::get<0>(kNekoLogFilter)) {
-            std::get<1>(kNekoLogFilter).insert(to_lower(module));
+            std::get<1>(kNekoLogFilter).insert(toLower(module));
         } else {
             std::get<0>(kNekoLogFilter) = flag;
             std::get<1>(kNekoLogFilter).clear();
-            std::get<1>(kNekoLogFilter).insert(to_lower(module));
+            std::get<1>(kNekoLogFilter).insert(toLower(module));
         }
     } else if (opt == 2) {
         std::get<1>(kNekoLogFilter).clear();
@@ -142,26 +137,26 @@ inline std::tuple<int, std::set<std::string>>& log_filter(int opt, int flag = Fi
     return kNekoLogFilter;
 }
 template <typename... Args>
-inline void add_log_filter(const int flag, Args&&... args) {
-    (log_filter(0, flag, std::forward<Args>(args)), ...);
+inline void addLogFilter(const int flag, Args&&... args) {
+    (logFilter(0, flag, std::forward<Args>(args)), ...);
 }
 
-inline void neko_proto_private_log_out(const char* level, const char* message, const LogContext& context) {
-    if (logger_func() != nullptr) {
-        logger_func()(level, message, context);
+inline void nekoProtoPrivateLogOut(const char* level, const char* message, const LogContext& context) {
+    if (loggerFunc() != nullptr) {
+        loggerFunc()(level, message, context);
         return;
     }
-    if (!log_level_filter(level, 1)) {
+    if (!logLevelFilter(level, 1)) {
         return;
     }
-    auto& [flag, filters] = log_filter(1);
-    if (flag == FilterExclude && !filters.empty() && filters.find(to_lower(context.module)) != filters.end()) {
+    auto& [flag, filters] = logFilter(1);
+    if (flag == FilterExclude && !filters.empty() && filters.find(toLower(context.module)) != filters.end()) {
         return;
     }
     if (flag == FilterInclude && filters.empty()) {
         return;
     }
-    if (flag == FilterInclude && filters.find(to_lower(context.module)) == filters.end()) {
+    if (flag == FilterInclude && filters.find(toLower(context.module)) == filters.end()) {
         return;
     }
     time_t time  = std::chrono::system_clock::to_time_t(context.time);
@@ -188,25 +183,25 @@ inline void neko_proto_private_log_out(const char* level, const char* message, c
     if (funcStr.find_last_of(':') != std::string::npos) {
         funcStr = funcStr.substr(funcStr.find_last_of(':') + 1);
     }
-    fprintf(stderr, "%s[%s.%03d] %s - [%s:%d][%s] [%s]%s %s\n", ansi_color_code(context.color), buf,
+    fprintf(stderr, "%s[%s.%03d] %s - [%s:%d][%s] [%s]%s %s\n", ansiColorCode(context.color), buf,
             static_cast<int>(disMillseconds), level, fileStr.c_str(), context.line, funcStr.c_str(), context.module,
-            ansi_color_code("reset"), message);
+            ansiColorCode("reset"), message);
 #else
     fprintf(stderr, "[%s.%03d] %s - [%s] %s\n", buf, static_cast<int>(disMillseconds), level, context.module, message);
 #endif
 }
 } // namespace logdetail
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
 #define NEKO_LOG_INCLUDE(module, ...)                                                                                  \
-    NEKO_NAMESPACE::logdetail::add_log_filter(NEKO_NAMESPACE::logdetail::FilterInclude, module, ##__VA_ARGS__)
+    nekoproto::logdetail::addLogFilter(nekoproto::logdetail::FilterInclude, module, ##__VA_ARGS__)
 #define NEKO_LOG_EXCLUDE(module, ...)                                                                                  \
-    NEKO_NAMESPACE::logdetail::add_log_filter(NEKO_NAMESPACE::logdetail::FilterExclude, module, ##__VA_ARGS__)
-#define NEKO_LOG_SET_LEVEL(level) NEKO_NAMESPACE::logdetail::log_level_filter(level, 0)
+    nekoproto::logdetail::addLogFilter(nekoproto::logdetail::FilterExclude, module, ##__VA_ARGS__)
+#define NEKO_LOG_SET_LEVEL(level) nekoproto::logdetail::logLevelFilter(level, 0)
 #if defined(NEKO_PROTO_USE_FMT)
 #include <fmt/format.h>
 #define NEKO_PRIVATE_LOG(level, color, module, fmtstr, ...)                                                            \
-    NEKO_NAMESPACE::logdetail::neko_proto_private_log_out(                                                             \
+    nekoproto::logdetail::nekoProtoPrivateLogOut(                                                                      \
         #level, fmt::format(fmtstr, ##__VA_ARGS__).c_str(),                                                            \
         {module, __FILE__, __FUNCTION__, __LINE__, std::chrono::system_clock::now(), #color})
 #elif defined(NEKO_PROTO_USE_SPDLOG)
@@ -216,7 +211,7 @@ NEKO_END_NAMESPACE
 #elif defined(NEKO_PROTO_USE_STD_FORMAT) && NEKO_CPP_PLUS >= 20
 #include <format>
 #define NEKO_PRIVATE_LOG(level, color, module, fmt, ...)                                                               \
-    NEKO_NAMESPACE::logdetail::neko_proto_private_log_out(                                                             \
+    nekoproto::logdetail::nekoProtoPrivateLogOut(                                                                      \
         #level, std::format(fmt, ##__VA_ARGS__).c_str(),                                                               \
         {module, __FILE__, __FUNCTION__, __LINE__, std::chrono::system_clock::now(), #color})
 #else

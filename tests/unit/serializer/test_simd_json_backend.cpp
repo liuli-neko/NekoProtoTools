@@ -11,7 +11,7 @@
 #include "nekoproto/serialization/json/simd_json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 namespace {
 
@@ -29,7 +29,7 @@ struct RawSimdField {
 
     struct Neko {
         static constexpr auto value =
-            Object("payload", make_tags<JsonTag{.raw_string = true}>(&RawSimdField::payload)); // NOLINT
+            Object("payload", makeTags<JsonTag{.raw_string = true}>(&RawSimdField::payload)); // NOLINT
     };
 };
 
@@ -40,7 +40,7 @@ struct SimdRequiredField {
 };
 
 template <typename T>
-std::string write_json(const T& value) {
+std::string writeJson(const T& value) {
     std::vector<char> buffer;
     SimdJsonSerializer::OutputSerializer output(buffer);
     EXPECT_TRUE(output(value)) << (output.error() == nullptr ? "" : output.error()->msg);
@@ -49,7 +49,7 @@ std::string write_json(const T& value) {
 }
 
 template <typename T>
-bool read_json(std::string_view json, T& value) {
+bool readJson(std::string_view json, T& value) {
     SimdJsonSerializer::InputSerializer input(json.data(), json.size());
     const auto result = input(value);
     EXPECT_TRUE(result) << (input.error() == nullptr ? "" : input.error()->msg);
@@ -60,11 +60,11 @@ bool read_json(std::string_view json, T& value) {
 
 TEST(SimdJsonBackend, RoundTripsReflectionAndContainers) {
     const SimdSmoke source{.id = 7, .text = "hello", .values = {1, 2, 3}, .optional = 9};
-    const auto json = write_json(source);
+    const auto json = writeJson(source);
     EXPECT_EQ(json, R"({"id":7,"text":"hello","values":[1,2,3],"optional":9})");
 
     SimdSmoke decoded;
-    ASSERT_TRUE(read_json(json, decoded));
+    ASSERT_TRUE(readJson(json, decoded));
     EXPECT_EQ(decoded.id, source.id);
     EXPECT_EQ(decoded.text, source.text);
     EXPECT_EQ(decoded.values, source.values);
@@ -73,21 +73,21 @@ TEST(SimdJsonBackend, RoundTripsReflectionAndContainers) {
 
 TEST(SimdJsonBackend, TextWriterEscapesStrings) {
     const std::string source = "quote=\" slash=\\ newline=\n";
-    const auto json = write_json(source);
+    const auto json = writeJson(source);
     EXPECT_EQ(json, R"("quote=\" slash=\\ newline=\n")");
 
     std::string decoded;
-    ASSERT_TRUE(read_json(json, decoded));
+    ASSERT_TRUE(readJson(json, decoded));
     EXPECT_EQ(decoded, source);
 }
 
 TEST(SimdJsonBackend, RawStringUsesSimdjsonValidation) {
     const RawSimdField source{.payload = R"({"enabled":true,"items":[1,2]})"};
-    const auto json = write_json(source);
+    const auto json = writeJson(source);
     EXPECT_EQ(json, R"({"payload":{"enabled":true,"items":[1,2]}})");
 
     RawSimdField decoded;
-    ASSERT_TRUE(read_json(json, decoded));
+    ASSERT_TRUE(readJson(json, decoded));
     EXPECT_EQ(decoded.payload, source.payload);
 
     RawSimdField invalid{.payload = R"({"broken":)"};
@@ -100,11 +100,11 @@ TEST(SimdJsonBackend, RawStringUsesSimdjsonValidation) {
 
 TEST(SimdJsonBackend, StringKeyMapUsesJsonObject) {
     const std::map<std::string, int> source{{"a", 1}, {"b", 2}};
-    const auto json = write_json(source);
+    const auto json = writeJson(source);
     EXPECT_EQ(json, R"({"a":1,"b":2})");
 
     std::map<std::string, int> decoded;
-    ASSERT_TRUE(read_json(json, decoded));
+    ASSERT_TRUE(readJson(json, decoded));
     EXPECT_EQ(decoded, source);
 }
 
@@ -133,7 +133,7 @@ TEST(SimdJsonBackend, NativeValueKeepsParserAlive) {
     EXPECT_TRUE(value["nested"]["value"].value(decoded));
     EXPECT_EQ(decoded, 42);
 
-    const auto json = write_json(value);
+    const auto json = writeJson(value);
     EXPECT_EQ(json, R"({"nested":{"value":42}})");
 }
 

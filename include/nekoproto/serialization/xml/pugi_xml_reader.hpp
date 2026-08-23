@@ -20,7 +20,7 @@
 #include <type_traits>
 #include <variant>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace xml {
 
 class Reader {
@@ -44,7 +44,7 @@ public:
         InputValueType(pugi::xml_attribute attribute) : value(attribute) {}
     };
 
-    static std::size_t arraySize(const InputArrayType& array) noexcept {
+    static auto arraySize(const InputArrayType& array) noexcept -> std::size_t {
         if (array.empty || !array.first) {
             return 0;
         }
@@ -55,7 +55,7 @@ public:
         return size;
     }
 
-    static InputValueType arrayElement(const InputArrayType& array, std::size_t index) noexcept {
+    static auto arrayElement(const InputArrayType& array, std::size_t index) noexcept -> InputValueType {
         auto node = array.first;
         while ((node != nullptr) && index > 0) {
             node = node.next_sibling(array.name.c_str());
@@ -64,22 +64,24 @@ public:
         return InputValueType{node, true};
     }
 
-    static std::size_t objectSize(const InputObjectType& object) noexcept {
+    static auto objectSize(const InputObjectType& object) noexcept -> std::size_t {
         std::size_t size = 0;
         for (auto child = object.node.first_child(); child != nullptr; child = child.next_sibling()) {
             if (child.type() == pugi::node_element) {
                 ++size;
             }
         }
-        for (auto attribute = object.node.first_attribute(); attribute != nullptr; attribute = attribute.next_attribute()) {
-            if (!_isInternalAttribute(attribute.name())) {
+        for (auto attribute = object.node.first_attribute(); attribute != nullptr;
+             attribute      = attribute.next_attribute()) {
+            if (!isInternalAttribute(attribute.name())) {
                 ++size;
             }
         }
         return size;
     }
 
-    static sa::Result<InputValueType> objectField(const InputObjectType& object, std::string_view name) noexcept {
+    static auto objectField(const InputObjectType& object, std::string_view name) noexcept
+        -> sa::Result<InputValueType> {
         if (name == XmlContent) {
             return InputValueType{object.node};
         }
@@ -94,14 +96,14 @@ public:
     }
 
     template <typename Fn>
-    static bool forEachObjectMember(const InputObjectType& object, Fn&& fn) {
+    static auto forEachObjectMember(const InputObjectType& object, Fn&& fn) -> bool {
         for (auto child = object.node.first_child(); child; child = child.next_sibling()) {
             if (child.type() == pugi::node_element && !fn(std::string_view{child.name()}, InputValueType{child})) {
                 return false;
             }
         }
         for (auto attribute = object.node.first_attribute(); attribute; attribute = attribute.next_attribute()) {
-            if (!_isInternalAttribute(attribute.name()) &&
+            if (!isInternalAttribute(attribute.name()) &&
                 !fn(std::string_view{attribute.name()}, InputValueType{attribute})) {
                 return false;
             }
@@ -109,7 +111,7 @@ public:
         return true;
     }
 
-    static bool isEmpty(const InputValueType& input) noexcept {
+    static auto isEmpty(const InputValueType& input) noexcept -> bool {
         return std::visit(
             [](const auto& value) {
                 using U = std::remove_cvref_t<decltype(value)>;
@@ -127,22 +129,23 @@ public:
     }
 
     template <typename CharT, typename Traits>
-    static sa::Result<std::basic_string_view<CharT, Traits>> toStringView(const InputValueType& input) noexcept {
+    static auto toStringView(const InputValueType& input) noexcept
+        -> sa::Result<std::basic_string_view<CharT, Traits>> {
         static_assert(sizeof(CharT) == sizeof(char), "XML string views require byte-sized characters");
         if (isEmpty(input)) {
             return sa::error(sa::ErrorCode::InvalidType, "Expected string, got null");
         }
-        const auto text = _valueView(input);
+        const auto text = valueView(input);
         return std::basic_string_view<CharT, Traits>{reinterpret_cast<const CharT*>(text.data()), text.size()};
     }
 
     template <typename T>
-    static sa::Result<T> toBasicType(const InputValueType& input) noexcept {
+    static auto toBasicType(const InputValueType& input) noexcept -> sa::Result<T> {
         using U = std::remove_cvref_t<T>;
         if (isEmpty(input)) {
             return sa::error(sa::ErrorCode::InvalidType, "Expected value, got null");
         }
-        const auto text = _valueView(input);
+        const auto text = valueView(input);
         if constexpr (std::is_same_v<U, std::string>) {
             return std::string{text};
         } else if constexpr (std::is_same_v<U, bool>) {
@@ -176,8 +179,8 @@ public:
         }
     }
 
-    static sa::Result<InputArrayType> toArray(const InputValueType& input) noexcept {
-        auto node = _asNode(input);
+    static auto toArray(const InputValueType& input) noexcept -> sa::Result<InputArrayType> {
+        auto node = asNode(input);
         if (!node) {
             return node.error();
         }
@@ -203,8 +206,8 @@ public:
         return InputArrayType{node.value(), node.value().name(), false};
     }
 
-    static sa::Result<InputObjectType> toObject(const InputValueType& input) noexcept {
-        auto node = _asNode(input);
+    static auto toObject(const InputValueType& input) noexcept -> sa::Result<InputObjectType> {
+        auto node = asNode(input);
         if (!node) {
             return node.error();
         }
@@ -212,11 +215,11 @@ public:
     }
 
 private:
-    static bool _isInternalAttribute(std::string_view name) noexcept {
+    static auto isInternalAttribute(std::string_view name) noexcept -> bool {
         return name == ArrayMarker || name == NullMarker;
     }
 
-    static std::string_view _valueView(const InputValueType& input) noexcept {
+    static auto valueView(const InputValueType& input) noexcept -> std::string_view {
         return std::visit(
             [](const auto& value) -> std::string_view {
                 using U = std::remove_cvref_t<decltype(value)>;
@@ -231,7 +234,7 @@ private:
             input.value);
     }
 
-    static sa::Result<pugi::xml_node> _asNode(const InputValueType& input) noexcept {
+    static auto asNode(const InputValueType& input) noexcept -> sa::Result<pugi::xml_node> {
         if (const auto* node = std::get_if<pugi::xml_node>(&input.value)) {
             if (*node != nullptr) {
                 return *node;
@@ -244,6 +247,6 @@ private:
 };
 
 } // namespace xml
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
 #endif

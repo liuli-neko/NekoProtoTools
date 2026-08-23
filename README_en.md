@@ -24,7 +24,7 @@ Core features of this library:
 
 *   **Simplified Message Definition**: Business types only need to define fields. The recommended manual metadata entry is a non-intrusive `template<> struct Meta<T>`, which makes custom C++ types usable as serializable objects or protocol messages.
 *   **Unified Parser Serialization Layer**: JSON, Binary, XML, YAML, TOML, and schema generation share one set of type rules; concrete formats provide only Reader/Writer implementations and small format-specific capabilities.
-*   **Field-Level Metadata Tags**: `make_tags<Tag>(field)` describes a field or call site instead of permanently annotating the type, so the same type can use different layouts in different contexts.
+*   **Field-Level Metadata Tags**: `makeTags<Tag>(field)` describes a field or call site instead of permanently annotating the type, so the same type can use different layouts in different contexts.
 *   **Reflection-Driven ArgParser**: Define CLI options with reflected objects and tags, including nested options, subcommands, defaults, environment variables, aliases, conflicts/requires rules, and help/version output.
 *   **Basic Static Reflection Capability**: Provides a simple static reflection mechanism for compile-time type checks and metadata extraction.
 *   **Generic RPC Frontend With Replaceable Backends**: RPC method declarations, registration, and calls are not tied to a specific wire protocol. Built-in backends currently include JSON-RPC and the compact binary `BinaryRpcBackend`.
@@ -272,7 +272,7 @@ Serializers are responsible for converting C++ objects into byte streams (serial
 
 ### 5.2. Field Tags And Call-Site Metadata
 
-`make_tags<Tag>(value_or_accessor)` describes how a field should be handled in the current binding. It is not permanent type metadata, so the same type can use different tags in different structs, backends, or top-level calls.
+`makeTags<Tag>(value_or_accessor)` describes how a field should be handled in the current binding. It is not permanent type metadata, so the same type can use different tags in different structs, backends, or top-level calls.
 
 ```cpp
 #include <nekoproto/serialization/reflection.hpp>
@@ -289,15 +289,15 @@ template <>
 struct Meta<::Header> {
     constexpr static auto value =
         Object("length",
-               make_tags<BinaryTag{.fixed_length = sizeof(std::uint32_t)}>(&::Header::length),
+               makeTags<BinaryTag{.fixed_length = sizeof(std::uint32_t)}>(&::Header::length),
                "type",
-               make_tags<BinaryTag{.fixed_length = sizeof(std::uint16_t)}>(&::Header::type));
+               makeTags<BinaryTag{.fixed_length = sizeof(std::uint16_t)}>(&::Header::type));
 };
 } // namespace NekoProto
 
 std::vector<char> buffer;
 BinarySerializer::OutputSerializer out(buffer);
-out(make_tags<BinaryTag{.unframed = true}>(Header{12, 3}));
+out(makeTags<BinaryTag{.unframed = true}>(Header{12, 3}));
 out.end();
 ```
 
@@ -335,19 +335,19 @@ template <>
 struct Meta<::BuildOptions> {
     constexpr static auto value =
         Object("verbose",
-               make_tags<argparser::arg_name<"verbose", 'v'>,
+               makeTags<argparser::arg_name<"verbose", 'v'>,
                          argparser::arg_help<"enable verbose logs">,
                          argparser::ArgTags{.flag = true}>(&::BuildOptions::verbose),
                "jobs",
-               make_tags<argparser::arg_name<"jobs", 'j'>,
+               makeTags<argparser::arg_name<"jobs", 'j'>,
                          argparser::arg_default<4>,
                          argparser::arg_help<"parallel jobs">,
                          argparser::ArgTags{.range_min = 1, .range_max = 65}>(&::BuildOptions::jobs),
                "mode",
-               make_tags<argparser::arg_name<"mode", 'm'>,
+               makeTags<argparser::arg_name<"mode", 'm'>,
                          argparser::arg_choices<"debug", "release">>(&::BuildOptions::mode),
                "include",
-               make_tags<argparser::arg_name<"include", 'I'>,
+               makeTags<argparser::arg_name<"include", 'I'>,
                          argparser::arg_help<"include path">,
                          argparser::ArgTags{.repeatable = true}>(&::BuildOptions::include));
 };
@@ -437,7 +437,7 @@ This library provides a coroutine-based communication abstraction layer built up
 #include <string>
 #include <chrono> // For timestamp
 
-NEKO_USE_NAMESPACE // Use nekoproto namespace
+using namespace nekoproto;
 using namespace ilias; // Use ilias namespace
 
 // Define the message protocol to be transmitted
@@ -602,7 +602,7 @@ The RPC module is now split into a generic frontend plus replaceable backends. `
 #include <string>
 #include <vector>
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 struct CalculatorApi {
     RpcMethod<int(int, int), "add", "lhs", "rhs"> add;
@@ -636,7 +636,7 @@ struct Meta<::AppApi> {
     // while the remote method name is just "version".
     constexpr static auto value =
         Object("calc", &::AppApi::calc,
-               "common", make_tags<rpc_no_prefix_tag>(&::AppApi::common));
+               "common", makeTags<rpc_no_prefix_tag>(&::AppApi::common));
 };
 } // namespace NekoProto
 
@@ -714,7 +714,7 @@ template <>
 struct Meta<::Api> {
     constexpr static auto value =
         Object("admin", &::Api::admin,                                      // remote name "admin.reload"
-               "user", make_tags<rpc_prefix_tag<"account">>(&::Api::user)); // remote name "account.name"
+               "user", makeTags<rpc_prefix_tag<"account">>(&::Api::user)); // remote name "account.name"
 };
 } // namespace NekoProto
 ```
@@ -932,7 +932,7 @@ Design check:
 
 *   **Generality**: The RPC frontend keeps only method metadata, registration, binding, calls, and complete-message endpoints. JSON-RPC ids, batch handling, request/response envelopes, and wire error mapping live in `JsonRpcBackend`.
 *   **Minimal Interface**: The current backend interface follows the actual use sites in `RpcDispatcher` / `RpcClient`; it does not add listeners, sessions, transport ownership, or inheritance layers. Stream support is attached through the optional static `makeEndpoint` hook.
-*   **Non-Intrusive Extension**: Protocol structs only need `RpcMethod` fields and reflection metadata. Naming policy is attached at the field use site through `make_tags<rpc_prefix_tag>` / `make_tags<rpc_no_prefix_tag>`.
+*   **Non-Intrusive Extension**: Protocol structs only need `RpcMethod` fields and reflection metadata. Naming policy is attached at the field use site through `makeTags<rpc_prefix_tag>` / `makeTags<rpc_no_prefix_tag>`.
 *   **Consistent With Serialization Extensions**: Serialization extends through `CustomParser<T>`, while RPC backends extend through static functions and concept-style requirements. Both avoid requiring business types to inherit framework base classes.
 *   **Future Improvements**: Common `invoke` / tuple expansion helpers could reduce boilerplate for custom backends.
 

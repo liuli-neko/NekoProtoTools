@@ -2151,7 +2151,7 @@ struct UnionTag {
 使用形式例如：
 
 ```cpp
-make_tags<UnionTag{.encoding = UnionEncoding::Untagged}>(field)
+makeTags<UnionTag{.encoding = UnionEncoding::Untagged}>(field)
 ```
 
 这不是为了 `std::variant` 单独增加一个零散 flag，而是定义 union-like 类型的共同策略入口。以后可在同一类别中增加 `TaggedObject`、稳定名称 discriminator 或显式 alternative ID，无需继续堆 bool。

@@ -20,7 +20,7 @@
 #include <utility>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace argparser::config_io {
 
 using Bytes = std::vector<char>;
@@ -38,9 +38,9 @@ enum class ConfigIoErrorCode {
 
 class ConfigIoErrorCategory final : public std::error_category {
 public:
-    [[nodiscard]] const char* name() const noexcept override { return "nekoproto.argparser.config_io"; }
+    [[nodiscard]] auto name() const noexcept -> const char* override { return "nekoproto.argparser.config_io"; }
 
-    [[nodiscard]] std::string message(int condition) const override {
+    [[nodiscard]] auto message(int condition) const -> std::string override {
         switch (static_cast<ConfigIoErrorCode>(condition)) {
         case ConfigIoErrorCode::Success:
             return "success";
@@ -63,13 +63,18 @@ public:
     }
 };
 
-inline const std::error_category& config_io_error_category() {
+inline auto configIoErrorCategory() -> const std::error_category& {
     static ConfigIoErrorCategory category;
     return category;
 }
 
-inline std::error_code make_error_code(ConfigIoErrorCode error) noexcept {
-    return {static_cast<int>(error), config_io_error_category()};
+inline auto makeErrorCode(ConfigIoErrorCode error) noexcept -> std::error_code {
+    return {static_cast<int>(error), configIoErrorCategory()};
+}
+
+// Required by std::error_code's ADL customization protocol.
+inline auto make_error_code(ConfigIoErrorCode error) noexcept -> std::error_code { // NOLINT(readability-identifier-naming)
+    return makeErrorCode(error);
 }
 
 struct ConfigIoError {
@@ -98,30 +103,30 @@ inline constexpr Format<argparser::detail::BinaryConfigIoBackend> binary;
 
 namespace detail {
 
-inline ConfigIoError make_error(ConfigIoErrorCode code, std::string message, std::string_view format = {},
-                                std::filesystem::path path = {}, std::error_code cause = {}) {
-    return {.code    = make_error_code(code),
+inline auto makeError(ConfigIoErrorCode code, std::string message, std::string_view format = {},
+                                std::filesystem::path path = {}, std::error_code cause = {}) -> ConfigIoError {
+    return {.code    = makeErrorCode(code),
             .cause   = cause,
             .message = std::move(message),
             .format  = std::string(format),
             .path    = std::move(path)};
 }
 
-inline expected::unexpected<ConfigIoError> unexpected(ConfigIoError error) {
+inline auto unexpected(ConfigIoError error) -> expected::unexpected<ConfigIoError> {
     return expected::unexpected<ConfigIoError>(std::move(error));
 }
 
-inline std::string quote_text(std::string_view value) { return "'" + std::string(value) + "'"; }
+inline auto quoteText(std::string_view value) -> std::string { return "'" + std::string(value) + "'"; }
 
-inline std::string path_text(const std::filesystem::path& path) { return quote_text(path.string()); }
+inline auto pathText(const std::filesystem::path& path) -> std::string { return quoteText(path.string()); }
 
-inline void add_path_context(ConfigIoError& error, const std::filesystem::path& path) {
+inline void addPathContext(ConfigIoError& error, const std::filesystem::path& path) {
     error.path = path;
     error.message.append(" in config file ");
-    error.message.append(path_text(path));
+    error.message.append(pathText(path));
 }
 
-inline std::string normalized_extension(const std::filesystem::path& path) {
+inline auto normalizedExtension(const std::filesystem::path& path) -> std::string {
     auto extension = path.extension().string();
     if (!extension.empty() && extension.front() == '.') {
         extension.erase(extension.begin());
@@ -132,55 +137,55 @@ inline std::string normalized_extension(const std::filesystem::path& path) {
     return extension;
 }
 
-inline Result<Bytes> read_stream(std::istream& input, std::string_view format, const std::filesystem::path& path = {}) {
+inline auto readStream(std::istream& input, std::string_view format, const std::filesystem::path& path = {}) -> Result<Bytes> {
     Bytes bytes{std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
     if (!input.eof() && input.fail()) {
         auto message = std::string("failed to read ") + std::string(format) + " config data";
         if (!path.empty()) {
             message.append(" from ");
-            message.append(path_text(path));
+            message.append(pathText(path));
         }
-        return unexpected(make_error(ConfigIoErrorCode::ReadFailed, std::move(message), format, path));
+        return unexpected(makeError(ConfigIoErrorCode::ReadFailed, std::move(message), format, path));
     }
     return bytes;
 }
 
-inline Result<void> write_stream(std::ostream& output, std::span<const char> bytes, std::string_view format,
-                                 const std::filesystem::path& path = {}) {
+inline auto writeStream(std::ostream& output, std::span<const char> bytes, std::string_view format,
+                                 const std::filesystem::path& path = {}) -> Result<void> {
     output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
     if (!output) {
         auto message = std::string("failed to write ") + std::string(format) + " config data";
         if (!path.empty()) {
             message.append(" to ");
-            message.append(path_text(path));
+            message.append(pathText(path));
         }
-        return unexpected(make_error(ConfigIoErrorCode::WriteFailed, std::move(message), format, path));
+        return unexpected(makeError(ConfigIoErrorCode::WriteFailed, std::move(message), format, path));
     }
     return {};
 }
 
 template <typename Backend>
-ConfigIoError unavailable_error() {
+auto unavailableError() -> ConfigIoError {
     auto message = std::string(Backend::label) + " config backend is not available";
-    return make_error(ConfigIoErrorCode::BackendUnavailable, std::move(message), Backend::format);
+    return makeError(ConfigIoErrorCode::BackendUnavailable, std::move(message), Backend::format);
 }
 
-inline ConfigIoError unknown_format_error(std::string_view format, const std::filesystem::path& path = {}) {
-    auto message = std::string("unknown config format ") + quote_text(format);
+inline auto unknownFormatError(std::string_view format, const std::filesystem::path& path = {}) -> ConfigIoError {
+    auto message = std::string("unknown config format ") + quoteText(format);
     if (!path.empty()) {
         message.append(" for ");
-        message.append(path_text(path));
+        message.append(pathText(path));
     }
-    return make_error(ConfigIoErrorCode::UnknownFormat, std::move(message), format, path);
+    return makeError(ConfigIoErrorCode::UnknownFormat, std::move(message), format, path);
 }
 
 } // namespace detail
 
 template <typename T, typename Backend>
-Result<T> decode(std::span<const char> data, Format<Backend> /*format*/) {
+auto decode(std::span<const char> data, Format<Backend> /*format*/) -> Result<T> {
     static_assert(std::is_default_constructible_v<T>, "config_io::decode requires a default constructible type");
     if constexpr (!Backend::available) {
-        return detail::unexpected(detail::unavailable_error<Backend>());
+        return detail::unexpected(detail::unavailableError<Backend>());
     } else {
         using Serializer = typename Backend::Serializer;
         T value{};
@@ -194,16 +199,16 @@ Result<T> decode(std::span<const char> data, Format<Backend> /*format*/) {
                 message.append(input.error()->msg);
             }
             return detail::unexpected(
-                detail::make_error(ConfigIoErrorCode::DecodeFailed, std::move(message), Backend::format, {}, cause));
+                detail::makeError(ConfigIoErrorCode::DecodeFailed, std::move(message), Backend::format, {}, cause));
         }
         return value;
     }
 }
 
 template <typename T, typename Backend, typename... SerializerArgs>
-Result<Bytes> encode(const T& value, Format<Backend> /*format*/, SerializerArgs&&... serializer_args) {
+auto encode(const T& value, Format<Backend> /*format*/, SerializerArgs&&... serializer_args) -> Result<Bytes> {
     if constexpr (!Backend::available) {
-        return detail::unexpected(detail::unavailable_error<Backend>());
+        return detail::unexpected(detail::unavailableError<Backend>());
     } else {
         using Serializer = typename Backend::Serializer;
         Bytes bytes;
@@ -217,50 +222,50 @@ Result<Bytes> encode(const T& value, Format<Backend> /*format*/, SerializerArgs&
                 message.append(output.error()->msg);
             }
             return detail::unexpected(
-                detail::make_error(ConfigIoErrorCode::EncodeFailed, std::move(message), Backend::format, {}, cause));
+                detail::makeError(ConfigIoErrorCode::EncodeFailed, std::move(message), Backend::format, {}, cause));
         }
         return bytes;
     }
 }
 
 template <typename T>
-Result<T> decode(std::span<const char> data, std::string_view format) {
+auto decode(std::span<const char> data, std::string_view format) -> Result<T> {
     std::optional<Result<T>> result;
-    argparser::detail::for_each_config_io_backend([&]<typename Backend>(std::type_identity<Backend>) {
-        if (result.has_value() || !argparser::detail::config_io_format_matches<Backend>(format)) {
+    argparser::detail::forEachConfigIoBackend([&]<typename Backend>(std::type_identity<Backend>) {
+        if (result.has_value() || !argparser::detail::configIoFormatMatches<Backend>(format)) {
             return;
         }
         result.emplace(decode<T>(data, Format<Backend>{}));
     });
     if (!result.has_value()) {
-        return detail::unexpected(detail::unknown_format_error(format));
+        return detail::unexpected(detail::unknownFormatError(format));
     }
     return std::move(*result);
 }
 
 template <typename T>
-Result<T> decode(std::string_view data, std::string_view format) {
+auto decode(std::string_view data, std::string_view format) -> Result<T> {
     return decode<T>(std::span<const char>{data.data(), data.size()}, format);
 }
 
 template <typename T>
-Result<Bytes> encode(const T& value, std::string_view format) {
+auto encode(const T& value, std::string_view format) -> Result<Bytes> {
     std::optional<Result<Bytes>> result;
-    argparser::detail::for_each_config_io_backend([&]<typename Backend>(std::type_identity<Backend>) {
-        if (result.has_value() || !argparser::detail::config_io_format_matches<Backend>(format)) {
+    argparser::detail::forEachConfigIoBackend([&]<typename Backend>(std::type_identity<Backend>) {
+        if (result.has_value() || !argparser::detail::configIoFormatMatches<Backend>(format)) {
             return;
         }
         result.emplace(encode(value, Format<Backend>{}));
     });
     if (!result.has_value()) {
-        return detail::unexpected(detail::unknown_format_error(format));
+        return detail::unexpected(detail::unknownFormatError(format));
     }
     return std::move(*result);
 }
 
 template <typename T, typename Backend>
-Result<T> load(std::istream& input, Format<Backend> format) {
-    auto bytes = detail::read_stream(input, Backend::format);
+auto load(std::istream& input, Format<Backend> format) -> Result<T> {
+    auto bytes = detail::readStream(input, Backend::format);
     if (!bytes) {
         return detail::unexpected(std::move(bytes.error()));
     }
@@ -268,8 +273,8 @@ Result<T> load(std::istream& input, Format<Backend> format) {
 }
 
 template <typename T>
-Result<T> load(std::istream& input, std::string_view format) {
-    auto bytes = detail::read_stream(input, format);
+auto load(std::istream& input, std::string_view format) -> Result<T> {
+    auto bytes = detail::readStream(input, format);
     if (!bytes) {
         return detail::unexpected(std::move(bytes.error()));
     }
@@ -277,108 +282,108 @@ Result<T> load(std::istream& input, std::string_view format) {
 }
 
 template <typename T, typename Backend>
-Result<T> load(const std::filesystem::path& path, Format<Backend> format) {
+auto load(const std::filesystem::path& path, Format<Backend> format) -> Result<T> {
     std::ifstream input(path, std::ios::binary);
     if (!input) {
-        auto message = std::string("could not open config file ") + detail::path_text(path);
-        return detail::unexpected(detail::make_error(ConfigIoErrorCode::OpenFailed, std::move(message), Backend::format,
+        auto message = std::string("could not open config file ") + detail::pathText(path);
+        return detail::unexpected(detail::makeError(ConfigIoErrorCode::OpenFailed, std::move(message), Backend::format,
                                                      path, {errno, std::generic_category()}));
     }
     auto result = load<T>(input, format);
     if (!result) {
-        detail::add_path_context(result.error(), path);
+        detail::addPathContext(result.error(), path);
     }
     return result;
 }
 
 template <typename T>
-Result<T> load(const std::filesystem::path& path, std::string_view format) {
+auto load(const std::filesystem::path& path, std::string_view format) -> Result<T> {
     std::ifstream input(path, std::ios::binary);
     if (!input) {
-        auto message = std::string("could not open config file ") + detail::path_text(path);
-        return detail::unexpected(detail::make_error(ConfigIoErrorCode::OpenFailed, std::move(message), format, path,
+        auto message = std::string("could not open config file ") + detail::pathText(path);
+        return detail::unexpected(detail::makeError(ConfigIoErrorCode::OpenFailed, std::move(message), format, path,
                                                      {errno, std::generic_category()}));
     }
     auto result = load<T>(input, format);
     if (!result) {
-        detail::add_path_context(result.error(), path);
+        detail::addPathContext(result.error(), path);
     }
     return result;
 }
 
 template <typename T>
-Result<T> load(const std::filesystem::path& path) {
-    const auto format = detail::normalized_extension(path);
+auto load(const std::filesystem::path& path) -> Result<T> {
+    const auto format = detail::normalizedExtension(path);
     if (format.empty()) {
-        return detail::unexpected(detail::unknown_format_error(format, path));
+        return detail::unexpected(detail::unknownFormatError(format, path));
     }
     return load<T>(path, format);
 }
 
 template <typename T, typename Backend, typename... SerializerArgs>
-Result<void> save(const T& value, std::ostream& output, Format<Backend> format, SerializerArgs&&... serializer_args) {
+auto save(const T& value, std::ostream& output, Format<Backend> format, SerializerArgs&&... serializer_args) -> Result<void> {
     auto bytes = encode(value, format, std::forward<SerializerArgs>(serializer_args)...);
     if (!bytes) {
         return detail::unexpected(std::move(bytes.error()));
     }
-    return detail::write_stream(output, std::span<const char>{bytes->data(), bytes->size()}, Backend::format);
+    return detail::writeStream(output, std::span<const char>{bytes->data(), bytes->size()}, Backend::format);
 }
 
 template <typename T>
-Result<void> save(const T& value, std::ostream& output, std::string_view format) {
+auto save(const T& value, std::ostream& output, std::string_view format) -> Result<void> {
     auto bytes = encode(value, format);
     if (!bytes) {
         return detail::unexpected(std::move(bytes.error()));
     }
-    return detail::write_stream(output, std::span<const char>{bytes->data(), bytes->size()}, format);
+    return detail::writeStream(output, std::span<const char>{bytes->data(), bytes->size()}, format);
 }
 
 template <typename T, typename Backend, typename... SerializerArgs>
-Result<void> save(const T& value, const std::filesystem::path& path, Format<Backend> format,
-                  SerializerArgs&&... serializer_args) {
+auto save(const T& value, const std::filesystem::path& path, Format<Backend> format,
+                  SerializerArgs&&... serializer_args) -> Result<void> {
     auto bytes = encode(value, format, std::forward<SerializerArgs>(serializer_args)...);
     if (!bytes) {
-        detail::add_path_context(bytes.error(), path);
+        detail::addPathContext(bytes.error(), path);
         return detail::unexpected(std::move(bytes.error()));
     }
     std::ofstream output(path, std::ios::binary);
     if (!output) {
-        auto message = std::string("could not open config file ") + detail::path_text(path);
-        return detail::unexpected(detail::make_error(ConfigIoErrorCode::OpenFailed, std::move(message), Backend::format,
+        auto message = std::string("could not open config file ") + detail::pathText(path);
+        return detail::unexpected(detail::makeError(ConfigIoErrorCode::OpenFailed, std::move(message), Backend::format,
                                                      path, {errno, std::generic_category()}));
     }
-    return detail::write_stream(output, std::span<const char>{bytes->data(), bytes->size()}, Backend::format, path);
+    return detail::writeStream(output, std::span<const char>{bytes->data(), bytes->size()}, Backend::format, path);
 }
 
 template <typename T>
-Result<void> save(const T& value, const std::filesystem::path& path, std::string_view format) {
+auto save(const T& value, const std::filesystem::path& path, std::string_view format) -> Result<void> {
     auto bytes = encode(value, format);
     if (!bytes) {
-        detail::add_path_context(bytes.error(), path);
+        detail::addPathContext(bytes.error(), path);
         return detail::unexpected(std::move(bytes.error()));
     }
     std::ofstream output(path, std::ios::binary);
     if (!output) {
-        auto message = std::string("could not open config file ") + detail::path_text(path);
-        return detail::unexpected(detail::make_error(ConfigIoErrorCode::OpenFailed, std::move(message), format, path,
+        auto message = std::string("could not open config file ") + detail::pathText(path);
+        return detail::unexpected(detail::makeError(ConfigIoErrorCode::OpenFailed, std::move(message), format, path,
                                                      {errno, std::generic_category()}));
     }
-    return detail::write_stream(output, std::span<const char>{bytes->data(), bytes->size()}, format, path);
+    return detail::writeStream(output, std::span<const char>{bytes->data(), bytes->size()}, format, path);
 }
 
 template <typename T>
-Result<void> save(const T& value, const std::filesystem::path& path) {
-    const auto format = detail::normalized_extension(path);
+auto save(const T& value, const std::filesystem::path& path) -> Result<void> {
+    const auto format = detail::normalizedExtension(path);
     if (format.empty()) {
-        return detail::unexpected(detail::unknown_format_error(format, path));
+        return detail::unexpected(detail::unknownFormatError(format, path));
     }
     return save(value, path, format);
 }
 
 } // namespace argparser::config_io
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
 namespace std {
 template <>
-struct is_error_code_enum<NEKO_NAMESPACE::argparser::config_io::ConfigIoErrorCode> : true_type {};
+struct is_error_code_enum<nekoproto::argparser::config_io::ConfigIoErrorCode> : true_type {};
 } // namespace std

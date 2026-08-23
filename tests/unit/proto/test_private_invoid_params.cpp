@@ -9,7 +9,7 @@
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/to_string.hpp"           // IWYU pragma: export
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 struct TestStruct {
     int a                        = 1;
@@ -49,14 +49,14 @@ TEST(PrivateInvoidParams, RefTest) {
     auto pdata = proto.toData();
     pdata.push_back('\0');
     NEKO_LOG_DEBUG("unit test", "{}", pdata.data());
-    TestStruct::ProtoType::Deserialize(pdata.data(), pdata.size(), ts2);
+    TestStruct::ProtoType::deserialize(pdata.data(), pdata.size(), ts2);
     EXPECT_EQ(ts2.a, 4);
     EXPECT_EQ(ts2.b, 5.0);
     EXPECT_EQ(ts2.c, 6);
     EXPECT_STREQ(std::string(proto.protoName().data(), proto.protoName().size()).c_str(), "TestStruct");
 }
 
-int main(int argc, char** argv) {
+auto main(int argc, char** argv) -> int {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
     auto pdata = proto.toData();
     pdata.push_back('\0');
     NEKO_LOG_DEBUG("unit test", "{}", pdata.data());
-    TestStruct::ProtoType::Deserialize(pdata.data(), pdata.size(), ts2);
+    TestStruct::ProtoType::deserialize(pdata.data(), pdata.size(), ts2);
     EXPECT_EQ(ts2.a, 4);
     EXPECT_EQ(ts2.b, 5.0);
     EXPECT_EQ(ts2.c, 6);

@@ -6,7 +6,7 @@
 
 #include "nekoproto/rpc/tags.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace detail {
 
 struct RpcPropertyPatch {
@@ -21,34 +21,34 @@ struct RpcPropertyPatch {
 };
 
 template <typename Tags>
-auto collect_rpc_properties(const Tags& tags) -> RpcPropertyPatch {
+auto collectRpcProperties(const Tags& tags) -> RpcPropertyPatch {
     RpcPropertyPatch properties;
 
-    if (tag_query::has<tag_property::rpc_name>(tags)) {
-        properties.name = tag_query::get<tag_property::rpc_name>(tags);
+    if (tag_query::has<tag_property::RpcName>(tags)) {
+        properties.name = tag_query::get<tag_property::RpcName>(tags);
     }
-    if (tag_query::has<tag_property::rpc_no_prefix>(tags)) {
-        properties.noPrefix = tag_query::get<tag_property::rpc_no_prefix>(tags);
+    if (tag_query::has<tag_property::RpcNoPrefix>(tags)) {
+        properties.noPrefix = tag_query::get<tag_property::RpcNoPrefix>(tags);
     }
-    if (tag_query::has<tag_property::rpc_prefix>(tags)) {
-        properties.prefix = tag_query::get<tag_property::rpc_prefix>(tags);
+    if (tag_query::has<tag_property::RpcPrefix>(tags)) {
+        properties.prefix = tag_query::get<tag_property::RpcPrefix>(tags);
     }
-    if (tag_query::has<tag_property::rpc_desc>(tags)) {
-        properties.description = tag_query::get<tag_property::rpc_desc>(tags);
+    if (tag_query::has<tag_property::RpcDesc>(tags)) {
+        properties.description = tag_query::get<tag_property::RpcDesc>(tags);
     }
-    if (tag_query::has<tag_property::rpc_version>(tags)) {
-        properties.version = tag_query::get<tag_property::rpc_version>(tags);
+    if (tag_query::has<tag_property::RpcVersion>(tags)) {
+        properties.version = tag_query::get<tag_property::RpcVersion>(tags);
     }
-    if (tag_query::has<tag_property::rpc_args>(tags)) {
-        properties.argNames    = tag_query::get<tag_property::rpc_args>(tags);
+    if (tag_query::has<tag_property::RpcArgs>(tags)) {
+        properties.argNames    = tag_query::get<tag_property::RpcArgs>(tags);
         properties.hasArgNames = true;
     }
-    if (tag_query::has<tag_property::rpc_notification_flag>(tags)) {
-        properties.notification = tag_query::get<tag_property::rpc_notification_flag>(tags);
+    if (tag_query::has<tag_property::RpcNotificationFlag>(tags)) {
+        properties.notification = tag_query::get<tag_property::RpcNotificationFlag>(tags);
     }
 
     return properties;
 }
 
 } // namespace detail
-NEKO_END_NAMESPACE
+} // namespace nekoproto

@@ -21,7 +21,7 @@ enum class ExplicitEnum1 { Zero, One, Two, Three };
 
 } // namespace neko_compile_bench
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 template <>
 struct Meta<neko_compile_bench::ExplicitEnum0> {
     using T                     = neko_compile_bench::ExplicitEnum0;
@@ -32,11 +32,11 @@ struct Meta<neko_compile_bench::ExplicitEnum1> {
     using T                     = neko_compile_bench::ExplicitEnum1;
     static constexpr auto value = Enumerate{"Zero", T::Zero, "One", T::One, "Two", T::Two, "Three", T::Three};
 };
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
 template <typename T>
 constexpr std::size_t reflect_enum() {
-    return NEKO_NAMESPACE::Reflect<T>::names().size() + NEKO_NAMESPACE::Reflect<T>::values().size();
+    return nekoproto::Reflect<T>::names().size() + nekoproto::Reflect<T>::values().size();
 }
 
 static_assert(reflect_enum<neko_compile_bench::Enum0>() == 16);

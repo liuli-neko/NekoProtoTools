@@ -6,7 +6,7 @@
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/transport/endpoint.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace detail {
 
@@ -27,4 +27,4 @@ concept RpcStreamBackend = CommunicationStream<StreamT> && requires(StreamT stre
 
 } // namespace detail
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

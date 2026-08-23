@@ -11,7 +11,7 @@
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/yaml_serializer.hpp"
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 #if !defined(NEKO_PROTO_NO_YAML_SERIALIZER)
 
@@ -21,7 +21,7 @@ struct YamlNested {
     int code = 0;
     std::string label;
 
-    NEKO_SERIALIZER((make_tags<rename_tag<"wire_code">>(code)), label)
+    NEKO_SERIALIZER((makeTags<rename_tag<"wire_code">>(code)), label)
 };
 
 struct Config {
@@ -36,9 +36,9 @@ struct YamlDocument {
     YamlNested nested;
     std::vector<Config> configs;
 
-    NEKO_SERIALIZER((make_tags<yaml_tag<"!title">, yaml_scalar_style_tag<YamlScalarStyle::DoubleQuoted>>(title)),
-                    (make_tags<yaml_collection_style_tag<YamlCollectionStyle::Flow>>(values)), maybe,
-                    (make_tags<ParserTag{.flat = true}>(nested)), configs)
+    NEKO_SERIALIZER((makeTags<yaml_tag<"!title">, yaml_scalar_style_tag<YamlScalarStyle::DoubleQuoted>>(title)),
+                    (makeTags<yaml_collection_style_tag<YamlCollectionStyle::Flow>>(values)), maybe,
+                    (makeTags<ParserTag{.flat = true}>(nested)), configs)
 };
 
 static_assert(traits::is_scalar_like_v<std::string>);
@@ -47,7 +47,7 @@ static_assert(!traits::is_scalar_like_v<std::vector<int>>);
 static_assert(traits::is_collection_like_v<std::vector<int>>);
 static_assert(traits::is_collection_like_v<YamlDocument>);
 static_assert(!traits::is_collection_like_v<int>);
-static_assert(tag_detail::yaml_tag_impl<"tag:example.com,2000:app/title">::yaml_tag ==
+static_assert(tag_detail::YamlTagImpl<"tag:example.com,2000:app/title">::yaml_tag ==
               std::string_view{"tag:example.com,2000:app/title"});
 
 template <typename Serializer, typename T>
@@ -85,7 +85,7 @@ TEST(YamlSerialization, RoundTripsReflectionTagsAndYamlMetadata) {
                                           {.key = "config3", .values = 3.14}}};
 
     const auto output =
-        writeYaml(make_tags<yaml_tag<"!config">, yaml_collection_style_tag<YamlCollectionStyle::Block>>(source));
+        writeYaml(makeTags<yaml_tag<"!config">, yaml_collection_style_tag<YamlCollectionStyle::Block>>(source));
     EXPECT_NE(output.find("!config"), std::string::npos) << output;
     EXPECT_NE(output.find("!title"), std::string::npos) << output;
     EXPECT_NE(output.find("values:"), std::string::npos) << output;
@@ -114,7 +114,7 @@ TEST(YamlSerialization, ParseErrorsAreReportedAsSerializationErrors) {
 TEST(YamlSerialization, CollectionTagsDoNotPropagateToElements) {
     const std::array<int, 3> values{1, 2, 3};
     const auto output =
-        writeYaml(make_tags<yaml_tag<"!numbers">, yaml_collection_style_tag<YamlCollectionStyle::Flow>>(values));
+        writeYaml(makeTags<yaml_tag<"!numbers">, yaml_collection_style_tag<YamlCollectionStyle::Flow>>(values));
 
     EXPECT_EQ(countOccurrences(output, "!numbers"), 1U) << output;
     EXPECT_NE(output.find("["), std::string::npos) << output;
@@ -137,7 +137,7 @@ TEST(YamlSerialization, YamlCppBackendRoundTripsObjects) {
                               .configs = {{.key = "config", .values = 42}}};
 
     const auto output = writeYaml<YamlCppSerializer>(
-        make_tags<yaml_tag<"!config">, yaml_collection_style_tag<YamlCollectionStyle::Block>>(source));
+        makeTags<yaml_tag<"!config">, yaml_collection_style_tag<YamlCollectionStyle::Block>>(source));
     EXPECT_NE(output.find("!config"), std::string::npos) << output;
     EXPECT_NE(output.find("values: ["), std::string::npos) << output;
 

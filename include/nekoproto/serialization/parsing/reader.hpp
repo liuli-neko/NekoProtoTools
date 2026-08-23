@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <utility>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace parsing {
 
 /**
@@ -17,7 +17,7 @@ namespace parsing {
  * being decoded; container elements do not inherit their container's tags.
  */
 template <typename R, typename Tags>
-auto reader_to_array(typename R::InputValueType input, const Tags& tags) {
+auto readerToArray(typename R::InputValueType input, const Tags& tags) {
     if constexpr (requires { R::toArray(input, tags); }) {
         return R::toArray(input, tags);
     } else {
@@ -26,7 +26,7 @@ auto reader_to_array(typename R::InputValueType input, const Tags& tags) {
 }
 
 template <typename R, typename Tags>
-auto reader_to_object(typename R::InputValueType input, const Tags& tags) {
+auto readerToObject(typename R::InputValueType input, const Tags& tags) {
     if constexpr (requires { R::toObject(input, tags); }) {
         return R::toObject(input, tags);
     } else {
@@ -35,7 +35,7 @@ auto reader_to_object(typename R::InputValueType input, const Tags& tags) {
 }
 
 template <typename R, typename T, typename Tags>
-auto reader_to_basic(typename R::InputValueType input, const Tags& tags) {
+auto readerToBasic(typename R::InputValueType input, const Tags& tags) {
     if constexpr (requires { R::template toBasicType<T>(input, tags); }) {
         return R::template toBasicType<T>(input, tags);
     } else {
@@ -44,7 +44,7 @@ auto reader_to_basic(typename R::InputValueType input, const Tags& tags) {
 }
 
 template <typename R, typename T, typename Tags>
-auto reader_to_fixed_basic(typename R::InputValueType input, std::size_t size, const Tags& tags) {
+auto readerToFixedBasic(typename R::InputValueType input, std::size_t size, const Tags& tags) {
     if constexpr (requires { R::template toFixedBasicType<T>(input, size, tags); }) {
         return R::template toFixedBasicType<T>(input, size, tags);
     } else {
@@ -53,7 +53,7 @@ auto reader_to_fixed_basic(typename R::InputValueType input, std::size_t size, c
 }
 
 template <typename R, typename Tags>
-bool reader_is_empty(typename R::InputValueType input, const Tags& tags) {
+auto readerIsEmpty(typename R::InputValueType input, const Tags& tags) -> bool {
     if constexpr (requires { R::isEmpty(input, tags); }) {
         return R::isEmpty(input, tags);
     } else {
@@ -64,7 +64,7 @@ bool reader_is_empty(typename R::InputValueType input, const Tags& tags) {
 template <typename R, typename Tags>
     requires requires(typename R::InputValueType input, const Tags& tags) { R::toRawString(input, tags); } ||
              requires(typename R::InputValueType input) { R::toRawString(input); }
-auto reader_to_raw_string(typename R::InputValueType input, const Tags& tags) {
+auto readerToRawString(typename R::InputValueType input, const Tags& tags) {
     if constexpr (requires { R::toRawString(input, tags); }) {
         return R::toRawString(input, tags);
     } else {
@@ -76,7 +76,7 @@ template <typename R, typename CharT, typename Traits, typename Tags>
     requires requires(typename R::InputValueType input, const Tags& tags) {
         R::template toStringView<CharT, Traits>(input, tags);
     } || requires(typename R::InputValueType input) { R::template toStringView<CharT, Traits>(input); }
-auto reader_to_string_view(typename R::InputValueType input, const Tags& tags) {
+auto readerToStringView(typename R::InputValueType input, const Tags& tags) {
     if constexpr (requires { R::template toStringView<CharT, Traits>(input, tags); }) {
         return R::template toStringView<CharT, Traits>(input, tags);
     } else {
@@ -85,7 +85,7 @@ auto reader_to_string_view(typename R::InputValueType input, const Tags& tags) {
 }
 
 template <typename R, typename Name, typename Tags>
-auto reader_object_field(const typename R::InputObjectType& object, Name&& name, const Tags& tags) {
+auto readerObjectField(const typename R::InputObjectType& object, Name&& name, const Tags& tags) {
     if constexpr (requires { R::objectField(object, std::forward<Name>(name), tags); }) {
         return R::objectField(object, std::forward<Name>(name), tags);
     } else {
@@ -94,7 +94,7 @@ auto reader_object_field(const typename R::InputObjectType& object, Name&& name,
 }
 
 template <typename R, typename Fn, typename Tags>
-bool reader_for_each_object_member(const typename R::InputObjectType& object, Fn&& fn, const Tags& tags) {
+auto readerForEachObjectMember(const typename R::InputObjectType& object, Fn&& fn, const Tags& tags) -> bool {
     if constexpr (requires { R::forEachObjectMember(object, std::forward<Fn>(fn), tags); }) {
         return R::forEachObjectMember(object, std::forward<Fn>(fn), tags);
     } else {
@@ -103,4 +103,4 @@ bool reader_for_each_object_member(const typename R::InputObjectType& object, Fn
 }
 
 } // namespace parsing
-NEKO_END_NAMESPACE
+} // namespace nekoproto

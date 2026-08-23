@@ -7,7 +7,7 @@
 #include <string_view>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace argparser {
 
 struct ArgParserConfigIoOptionNames {
@@ -48,4 +48,4 @@ struct ArgParserConfig {
 };
 
 } // namespace argparser
-NEKO_END_NAMESPACE
+} // namespace nekoproto

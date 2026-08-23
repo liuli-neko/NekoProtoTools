@@ -31,11 +31,11 @@
 #include <utility>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace detail {
 
-inline bool is_valid_xml_name(std::string_view name) {
+inline auto isValidXmlName(std::string_view name) -> bool {
     if (name.empty()) {
         return false;
     }
@@ -50,16 +50,16 @@ inline bool is_valid_xml_name(std::string_view name) {
 }
 
 template <typename T>
-std::string default_xml_root_name() {
+auto defaultXmlRootName() -> std::string {
     constexpr auto Name = class_nameof<std::remove_cvref_t<T>>;
-    if (is_valid_xml_name(Name)) {
+    if (isValidXmlName(Name)) {
         return std::string{Name};
     }
     return "root";
 }
 
 template <typename BufferT>
-void append_xml(BufferT& buffer, std::string_view xml) {
+void appendXml(BufferT& buffer, std::string_view xml) {
     if constexpr (requires { buffer.insert(buffer.end(), xml.begin(), xml.end()); }) {
         buffer.insert(buffer.end(), xml.begin(), xml.end());
     } else if constexpr (requires { buffer.write(xml.data(), static_cast<std::streamsize>(xml.size())); }) {
@@ -124,46 +124,46 @@ struct PugiXmlBackend {
     };
 
     template <typename BufferT, typename T>
-    static sa::Result<void> write(OutputState<BufferT>& state, const T& value) {
+    static auto write(OutputState<BufferT>& state, const T& value) -> sa::Result<void> {
         const auto rootName =
-            state.configuredRootName.empty() ? detail::default_xml_root_name<T>() : state.configuredRootName;
-        if (!detail::is_valid_xml_name(rootName)) {
+            state.configuredRootName.empty() ? detail::defaultXmlRootName<T>() : state.configuredRootName;
+        if (!detail::isValidXmlName(rootName)) {
             state.hasRoot = false;
             return sa::error(sa::ErrorCode::InvalidField, "Invalid XML root name '" + rootName + "'");
         }
         state.writer.reset(rootName);
-        auto result   = parser_write<xml::Writer>(state.writer, value, parsing::Parent<xml::Writer>::Root{});
+        auto result   = parserWrite<xml::Writer>(state.writer, value, parsing::Parent<xml::Writer>::Root{});
         state.hasRoot = static_cast<bool>(result);
         state.flushed = false;
         return result;
     }
 
     template <typename BufferT>
-    static sa::Result<void> finish(OutputState<BufferT>& state, sa::Result<void> result) {
+    static auto finish(OutputState<BufferT>& state, sa::Result<void> result) -> sa::Result<void> {
         if (!state.hasRoot || !result) {
             return result;
         }
         if (!state.flushed) {
             const auto output = state.writer.str(state.indentation);
-            detail::append_xml(state.buffer, output);
+            detail::appendXml(state.buffer, output);
             state.flushed = true;
         }
         return result;
     }
 
     template <typename BufferT>
-    static bool outputReady(const OutputState<BufferT>& state, const sa::Result<void>& result) noexcept {
+    static auto outputReady(const OutputState<BufferT>& state, const sa::Result<void>& result) noexcept -> bool {
         return state.hasRoot && static_cast<bool>(result);
     }
 
     template <typename SourceT>
-    static sa::Result<void> inputResult(const InputState<SourceT>& state) {
+    static auto inputResult(const InputState<SourceT>& state) -> sa::Result<void> {
         return state.result;
     }
 
     template <typename SourceT, typename T>
-    static sa::Result<void> read(InputState<SourceT>& state, T& value) {
-        return parser_read<xml::Reader>(xml::Reader::InputValueType{state.root, true}, value);
+    static auto read(InputState<SourceT>& state, T& value) -> sa::Result<void> {
+        return parserRead<xml::Reader>(xml::Reader::InputValueType{state.root, true}, value);
     }
 };
 
@@ -202,6 +202,6 @@ struct PugiXmlSerializer {
 
 using XmlSerializer = PugiXmlSerializer;
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
 #endif

@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <string_view>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace parsing {
 template <typename W, typename T, typename Tags = NoTags>
@@ -42,4 +42,4 @@ template <typename R, typename W, typename T>
 concept supports_fixed_length = supports_fixed_length_reader<R, T> && supports_fixed_length_writer<W, T>;
 } // namespace parsing
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

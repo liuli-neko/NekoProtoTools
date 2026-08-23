@@ -7,7 +7,7 @@
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/global/traits.hpp"
 // MARK: region traits
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 struct TestStruct {
     int a;
     std::string b;
@@ -18,10 +18,10 @@ struct TestStruct {
 };
 
 TEST(TraitsTest, test) {
-    EXPECT_FALSE(traits::optional_like_type<int>::value);
-    EXPECT_TRUE(traits::optional_like_type<std::optional<int>&>::value);
-    EXPECT_TRUE(traits::optional_like_type<const std::optional<int>&>::value);
-    EXPECT_TRUE(traits::optional_like_type<const std::optional<int>>::value);
+    EXPECT_FALSE(traits::OptionalLikeType<int>::value);
+    EXPECT_TRUE(traits::OptionalLikeType<std::optional<int>&>::value);
+    EXPECT_TRUE(traits::OptionalLikeType<const std::optional<int>&>::value);
+    EXPECT_TRUE(traits::OptionalLikeType<const std::optional<int>>::value);
     EXPECT_TRUE(detail::can_unwrap_v<TestStruct>);
 }
 

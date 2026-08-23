@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 struct PublicConfigValue {
     int count = 0;
@@ -21,16 +21,16 @@ struct PublicConfigValue {
     };
 };
 
-void expect_config_eq(const PublicConfigValue& lhs, const PublicConfigValue& rhs) {
+void expectConfigEq(const PublicConfigValue& lhs, const PublicConfigValue& rhs) {
     EXPECT_EQ(lhs.count, rhs.count);
     EXPECT_EQ(lhs.name, rhs.name);
     EXPECT_EQ(lhs.ports, rhs.ports);
 }
 
-PublicConfigValue sample_config() { return {.count = 7, .name = "public-config-io", .ports = {8000, 8080}}; }
+auto sampleConfig() -> PublicConfigValue { return {.count = 7, .name = "public-config-io", .ports = {8000, 8080}}; }
 
 TEST(ArgParserConfigIo, RuntimeFormatEncodesAndDecodesBytes) {
-    const auto original = sample_config();
+    const auto original = sampleConfig();
 
     auto encoded = argparser::config_io::encode(original, "binary");
     ASSERT_TRUE(encoded.has_value()) << encoded.error().message;
@@ -38,11 +38,11 @@ TEST(ArgParserConfigIo, RuntimeFormatEncodesAndDecodesBytes) {
     auto decoded =
         argparser::config_io::decode<PublicConfigValue>(std::span<const char>{encoded->data(), encoded->size()}, "bin");
     ASSERT_TRUE(decoded.has_value()) << decoded.error().message;
-    expect_config_eq(*decoded, original);
+    expectConfigEq(*decoded, original);
 }
 
 TEST(ArgParserConfigIo, TypedFormatEncodesAndDecodesBytes) {
-    const auto original = sample_config();
+    const auto original = sampleConfig();
 
     auto encoded = argparser::config_io::encode(original, argparser::config_io::formats::binary);
     ASSERT_TRUE(encoded.has_value()) << encoded.error().message;
@@ -50,11 +50,11 @@ TEST(ArgParserConfigIo, TypedFormatEncodesAndDecodesBytes) {
     auto decoded = argparser::config_io::decode<PublicConfigValue>(
         std::span<const char>{encoded->data(), encoded->size()}, argparser::config_io::formats::binary);
     ASSERT_TRUE(decoded.has_value()) << decoded.error().message;
-    expect_config_eq(*decoded, original);
+    expectConfigEq(*decoded, original);
 }
 
 TEST(ArgParserConfigIo, StreamSaveAndLoadRoundTrip) {
-    const auto original = sample_config();
+    const auto original = sampleConfig();
     std::stringstream stream(std::ios::in | std::ios::out | std::ios::binary);
 
     auto saved = argparser::config_io::save(original, stream, "binary");
@@ -63,11 +63,11 @@ TEST(ArgParserConfigIo, StreamSaveAndLoadRoundTrip) {
     stream.seekg(0);
     auto loaded = argparser::config_io::load<PublicConfigValue>(stream, "bin");
     ASSERT_TRUE(loaded.has_value()) << loaded.error().message;
-    expect_config_eq(*loaded, original);
+    expectConfigEq(*loaded, original);
 }
 
 TEST(ArgParserConfigIo, FileSaveAndLoadInferFormatFromExtension) {
-    const auto original = sample_config();
+    const auto original = sampleConfig();
     const auto path     = std::filesystem::temp_directory_path() / "neko_argparser_public_config_io.bin";
     std::error_code ignored;
     std::filesystem::remove(path, ignored);
@@ -77,7 +77,7 @@ TEST(ArgParserConfigIo, FileSaveAndLoadInferFormatFromExtension) {
 
     auto loaded = argparser::config_io::load<PublicConfigValue>(path);
     ASSERT_TRUE(loaded.has_value()) << loaded.error().message;
-    expect_config_eq(*loaded, original);
+    expectConfigEq(*loaded, original);
 
     std::filesystem::remove(path, ignored);
 }
@@ -87,13 +87,13 @@ TEST(ArgParserConfigIo, UnknownRuntimeFormatReturnsConfigIoError) {
 
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error().code,
-              argparser::config_io::make_error_code(argparser::config_io::ConfigIoErrorCode::UnknownFormat));
+              argparser::config_io::makeErrorCode(argparser::config_io::ConfigIoErrorCode::UnknownFormat));
     EXPECT_EQ(result.error().format, "not-a-format");
 }
 
 #if !defined(NEKO_PROTO_NO_JSON_SERIALIZER)
 TEST(ArgParserConfigIo, TextBackendUsesTheSamePublicApi) {
-    const auto original = sample_config();
+    const auto original = sampleConfig();
 
     auto encoded = argparser::config_io::encode(original, argparser::config_io::formats::json);
     ASSERT_TRUE(encoded.has_value()) << encoded.error().message;
@@ -102,7 +102,7 @@ TEST(ArgParserConfigIo, TextBackendUsesTheSamePublicApi) {
     auto decoded = argparser::config_io::decode<PublicConfigValue>(
         std::span<const char>{encoded->data(), encoded->size()}, "json");
     ASSERT_TRUE(decoded.has_value()) << decoded.error().message;
-    expect_config_eq(*decoded, original);
+    expectConfigEq(*decoded, original);
 }
 #endif
 

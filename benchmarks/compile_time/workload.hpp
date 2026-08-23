@@ -19,28 +19,28 @@ namespace neko_compile_bench {
 
 struct CompileTagA {
     template <typename T, auto Tags>
-    static consteval bool constexpr_check() {
+    static consteval bool constexprCheck() {
         return true;
     }
 };
 
 struct CompileTagB {
     template <typename T, auto Tags>
-    static consteval bool constexpr_check() {
+    static consteval bool constexprCheck() {
         return true;
     }
 };
 
 struct CompileTagC {
     template <typename T, auto Tags>
-    static consteval bool constexpr_check() {
+    static consteval bool constexprCheck() {
         return true;
     }
 };
 
 struct CompileTagD {
     template <typename T, auto Tags>
-    static consteval bool constexpr_check() {
+    static consteval bool constexprCheck() {
         return true;
     }
 };
@@ -56,23 +56,23 @@ struct Nested {
 
 } // namespace neko_compile_bench
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 template <>
 struct Meta<neko_compile_bench::BenchEnum> {
     using T                     = neko_compile_bench::BenchEnum;
     static constexpr auto value = Enumerate{"Zero", T::Zero, "One", T::One, "Two", T::Two, "Three", T::Three};
 };
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
 namespace neko_compile_bench {
 
 #if NEKO_BENCH_TAG_DENSITY == 0
 #define NEKO_BENCH_FIELD(FIELD) FIELD
 #elif NEKO_BENCH_TAG_DENSITY == 1
-#define NEKO_BENCH_FIELD(FIELD) (NEKO_NAMESPACE::make_tags<CompileTagA{}>(FIELD))
+#define NEKO_BENCH_FIELD(FIELD) (nekoproto::makeTags<CompileTagA{}>(FIELD))
 #elif NEKO_BENCH_TAG_DENSITY == 2
 #define NEKO_BENCH_FIELD(FIELD)                                                                                        \
-    (NEKO_NAMESPACE::make_tags<CompileTagA{}, CompileTagB{}, CompileTagC{}, CompileTagD{}>(FIELD))
+    (nekoproto::makeTags<CompileTagA{}, CompileTagB{}, CompileTagC{}, CompileTagD{}>(FIELD))
 #else
 #error "NEKO_BENCH_TAG_DENSITY must be 0, 1, or 2"
 #endif

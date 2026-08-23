@@ -20,7 +20,7 @@
 #include <type_traits>
 #include <utility>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace sa {
 
@@ -51,9 +51,9 @@ enum class ErrorCode : std::uint8_t {
 
 class ErrorCategory : public std::error_category {
 public:
-    const char* name() const noexcept override { return "serialization"; }
+    auto name() const noexcept -> const char* override { return "serialization"; }
 
-    std::string message(int ev) const noexcept override {
+    auto message(int ev) const noexcept -> std::string override {
         switch (static_cast<ErrorCode>(ev)) {
         case ErrorCode::Ok:
             return "ok";
@@ -75,32 +75,37 @@ public:
     }
 };
 
-inline auto make_error_code(ErrorCode ec) noexcept -> std::error_code {
+inline auto makeErrorCode(ErrorCode ec) noexcept -> std::error_code {
     static ErrorCategory kCat;
     return {static_cast<int>(ec), kCat};
 }
 
+// Required by std::error_code's ADL customization protocol.
+inline auto make_error_code(ErrorCode ec) noexcept -> std::error_code { // NOLINT(readability-identifier-naming)
+    return makeErrorCode(ec);
+}
+
 inline auto error(std::error_code ec) -> Error { return {ec, ec.message()}; }
 
-inline auto error(std::string msg) -> Error { return {make_error_code(ErrorCode::Unknown), std::move(msg)}; }
+inline auto error(std::string msg) -> Error { return {makeErrorCode(ErrorCode::Unknown), std::move(msg)}; }
 
-inline auto error(ErrorCode ec, std::string msg) -> Error { return {make_error_code(ec), std::move(msg)}; }
+inline auto error(ErrorCode ec, std::string msg) -> Error { return {makeErrorCode(ec), std::move(msg)}; }
 
 template <typename T>
 using Result = expected::expected<T, Error>;
 
 using Unexpected = expected::unexpected<Error>;
 
-inline auto Err(Error error) -> Unexpected { return Unexpected(std::move(error)); }
+inline auto err(Error error) -> Unexpected { return Unexpected(std::move(error)); }
 
-inline auto Err(std::error_code ec) -> Unexpected { return Err(error(ec)); }
+inline auto err(std::error_code ec) -> Unexpected { return err(error(ec)); }
 
-inline auto Err(std::string msg) -> Unexpected { return Err(error(std::move(msg))); }
+inline auto err(std::string msg) -> Unexpected { return err(error(std::move(msg))); }
 
-inline auto Err(ErrorCode ec, std::string msg) -> Unexpected { return Err(error(ec, std::move(msg))); }
+inline auto err(ErrorCode ec, std::string msg) -> Unexpected { return err(error(ec, std::move(msg))); }
 
 template <typename T>
-inline auto error_ptr(const Result<T>& result) noexcept -> const Error* {
+inline auto errorPtr(const Result<T>& result) noexcept -> const Error* {
     if (result) {
         return nullptr;
     }
@@ -109,7 +114,7 @@ inline auto error_ptr(const Result<T>& result) noexcept -> const Error* {
 
 inline auto success() -> Result<void> { return {}; }
 } // namespace sa
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
 template <>
-struct std::is_error_code_enum<NEKO_NAMESPACE::sa::ErrorCode> : std::true_type {};
+struct std::is_error_code_enum<nekoproto::sa::ErrorCode> : std::true_type {};

@@ -9,39 +9,39 @@
 #include <iterator> // for iterator tags
 #include <type_traits>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 // --- 主模板声明 ---
 template <typename T, typename = void>
-class xor_list;
+class XorList;
 /**
  * @brief (核心) XOR 链表节点
  *
  * 这是所有侵入式节点的【唯一】基类。它只提供链接功能，不关心如何存储值。
  * 这就是实现多态和行为特化的基础。
  */
-class xor_node_base {
+class XorNodeBase {
 private:
     template <typename T, typename>
-    friend class xor_list;
+    friend class XorList;
 
     // 指针类型是 void* 以保持通用性，在 list 层面进行转换
-    xor_node_base* link_ = nullptr;
+    XorNodeBase* link_ = nullptr;
 
-    static xor_node_base* xor_ptr(const xor_node_base* a, const xor_node_base* b) {
-        return reinterpret_cast<xor_node_base*>(reinterpret_cast<uintptr_t>(a) ^ reinterpret_cast<uintptr_t>(b));
+    static auto xorPtr(const XorNodeBase* a, const XorNodeBase* b) -> XorNodeBase* {
+        return reinterpret_cast<XorNodeBase*>(reinterpret_cast<uintptr_t>(a) ^ reinterpret_cast<uintptr_t>(b));
     }
 
 public:
     // 返回类型也是基类指针
-    xor_node_base* next(const xor_node_base* pre) const { return xor_ptr(pre, link_); }
-    xor_node_base* pre(const xor_node_base* next) const { return xor_ptr(next, link_); }
-    xor_node_base* link() const { return link_; }
-    void set(const xor_node_base* pre, const xor_node_base* next) { link_ = xor_ptr(pre, next); }
-    void set(xor_node_base* link) { link_ = link; }
+    auto next(const XorNodeBase* pre) const -> XorNodeBase* { return xorPtr(pre, link_); }
+    auto pre(const XorNodeBase* next) const -> XorNodeBase* { return xorPtr(next, link_); }
+    auto link() const -> XorNodeBase* { return link_; }
+    void set(const XorNodeBase* pre, const XorNodeBase* next) { link_ = xorPtr(pre, next); }
+    void set(XorNodeBase* link) { link_ = link; }
 };
 
 template <typename Node>
-class xor_list_iterator;
+class XorListIterator;
 
 /**
  * @brief XOR 链表节点模板
@@ -50,76 +50,76 @@ class xor_list_iterator;
  * 用户自定义的类需要公有继承此类，以成为链表的一部分。
  */
 template <typename T>
-    requires(!std::derived_from<T, xor_node_base>)
-class xor_node final : public xor_node_base {
+    requires(!std::derived_from<T, XorNodeBase>)
+class XorNode final : public XorNodeBase {
 private:
     T value_;
 
 public:
     using value_type = T;
-    xor_node()       = default;
+    XorNode()       = default;
 
     // 带值的构造函数
-    explicit xor_node(const T& value) : xor_node_base(), value_(value) {}
-    explicit xor_node(T&& value) : xor_node_base(), value_(std::move(value)) {}
+    explicit XorNode(const T& value) : XorNodeBase(), value_(value) {}
+    explicit XorNode(T&& value) : XorNodeBase(), value_(std::move(value)) {}
 
     /**
      * @brief 获取节点存储的值的引用
      */
-    T& value() { return value_; }
+    auto value() -> T& { return value_; }
 
     /**
      * @brief 获取节点存储的值的 const 引用
      */
-    const T& value() const { return value_; }
+    auto value() const -> const T& { return value_; }
 };
 
 namespace detail {
 template <typename Node>
-struct is_xor_node_template : std::false_type {};
+struct IsXorNodeTemplate : std::false_type {};
 template <typename T>
-struct is_xor_node_template<xor_node<T>> : std::true_type {};
+struct IsXorNodeTemplate<XorNode<T>> : std::true_type {};
 
 template <typename Node>
-struct xor_node_trait {};
+struct XorNodeTrait {};
 
 template <typename Node>
-    requires(std::derived_from<Node, xor_node_base> && is_xor_node_template<Node>::value)
-struct xor_node_trait<Node> {
+    requires(std::derived_from<Node, XorNodeBase> && IsXorNodeTemplate<Node>::value)
+struct XorNodeTrait<Node> {
     using value_type = typename Node::value_type;
-    static value_type& value(Node* node) { return node->value(); }
-    static const value_type& value(const Node* node) { return node->value(); }
+    static auto value(Node* node) -> value_type& { return node->value(); }
+    static auto value(const Node* node) -> const value_type& { return node->value(); }
 };
 
 template <typename Node>
-    requires(std::derived_from<Node, xor_node_base> && !is_xor_node_template<Node>::value)
-struct xor_node_trait<Node> {
+    requires(std::derived_from<Node, XorNodeBase> && !IsXorNodeTemplate<Node>::value)
+struct XorNodeTrait<Node> {
     using value_type = Node;
-    static value_type& value(Node* node) { return *node; }
-    static const value_type& value(const Node* node) { return *node; }
+    static auto value(Node* node) -> value_type& { return *node; }
+    static auto value(const Node* node) -> const value_type& { return *node; }
 };
 
 template <typename Node>
-decltype(auto) xor_node_get_value(Node* node) {
-    return xor_node_trait<Node>::value(node);
+auto xorNodeGetValue(Node* node) -> decltype(auto) {
+    return XorNodeTrait<Node>::value(node);
 }
 
 template <typename Node>
-decltype(auto) xor_node_get_value(const Node* node) {
-    return xor_node_trait<Node>::value(node);
+auto xorNodeGetValue(const Node* node) -> decltype(auto) {
+    return XorNodeTrait<Node>::value(node);
 }
 } // namespace detail
 
 /**
  * @brief XOR 链表的双向迭代器
- * @tparam Node 节点类型 (即 xor_node<T> 或其派生类)
+ * @tparam Node 节点类型 (即 XorNode<T> 或其派生类)
  */
 template <typename Node>
-class xor_list_iterator {
+class XorListIterator {
 public:
     //--- 标准库兼容性所需的类型定义 ---
     using iterator_category = std::bidirectional_iterator_tag;
-    using raw_value_type    = std::decay_t<decltype(detail::xor_node_get_value(std::declval<Node*>()))>;
+    using raw_value_type    = std::decay_t<decltype(detail::xorNodeGetValue(std::declval<Node*>()))>;
     using value_type        = std::remove_const_t<raw_value_type>;
 
     using difference_type = std::ptrdiff_t;
@@ -134,22 +134,22 @@ private:
     Node* current_ = nullptr;
 
     template <typename T, typename>
-    friend class xor_list;
+    friend class XorList;
 
 public:
     // 构造函数
-    xor_list_iterator() = default;
-    xor_list_iterator(Node* prev, Node* current) : prev_(prev), current_(current) {}
+    XorListIterator() = default;
+    XorListIterator(Node* prev, Node* current) : prev_(prev), current_(current) {}
 
     //--- 迭代器核心操作 ---
 
     // 解引用
-    reference operator*() const { return detail::xor_node_get_value(current_); }
+    auto operator*() const -> reference { return detail::xorNodeGetValue(current_); }
 
-    pointer operator->() const { return &detail::xor_node_get_value(current_); }
+    auto operator->() const -> pointer { return &detail::xorNodeGetValue(current_); }
 
     // 前置递增
-    xor_list_iterator& operator++() {
+    auto operator++() -> XorListIterator& {
         Node* next = static_cast<Node*>(current_->next(prev_));
         prev_      = current_;
         current_   = next;
@@ -157,14 +157,14 @@ public:
     }
 
     // 后置递增
-    xor_list_iterator operator++(int) {
-        xor_list_iterator temp = *this;
+    auto operator++(int) -> XorListIterator {
+        XorListIterator temp = *this;
         ++(*this);
         return temp;
     }
 
     // 前置递减
-    xor_list_iterator& operator--() {
+    auto operator--() -> XorListIterator& {
         Node* prev_of_prev = static_cast<Node*>(prev_->pre(current_));
         current_           = prev_;
         prev_              = prev_of_prev;
@@ -172,57 +172,57 @@ public:
     }
 
     // 后置递减
-    xor_list_iterator operator--(int) {
-        xor_list_iterator temp = *this;
+    auto operator--(int) -> XorListIterator {
+        XorListIterator temp = *this;
         --(*this);
         return temp;
     }
 
     // 比较操作
-    bool operator==(const xor_list_iterator& other) const { return current_ == other.current_; }
+    auto operator==(const XorListIterator& other) const -> bool { return current_ == other.current_; }
 
-    bool operator!=(const xor_list_iterator& other) const { return current_ != other.current_; }
+    auto operator!=(const XorListIterator& other) const -> bool { return current_ != other.current_; }
 };
 
 // --- 偏特化 1: 侵入式版本 ---
-// 当 T 继承自 xor_node_base 时启用
+// 当 T 继承自 XorNodeBase 时启用
 template <typename Node>
-class xor_list<Node, std::enable_if_t<std::is_base_of_v<xor_node_base, Node>>> {
+class XorList<Node, std::enable_if_t<std::is_base_of_v<XorNodeBase, Node>>> {
 private:
     Node* head_  = nullptr;
     Node* tail_  = nullptr;
     size_t size_ = 0;
 
 public:
-    using iterator        = xor_list_iterator<Node>;
-    using const_iterator  = xor_list_iterator<const Node>; // 简单起见，这里可以用同样的实现
+    using iterator        = XorListIterator<Node>;
+    using const_iterator  = XorListIterator<const Node>; // 简单起见，这里可以用同样的实现
     using value_type      = typename iterator::value_type;
     using reference       = value_type&;
     using const_reference = const value_type&;
 
     // 构造函数和析构函数
-    xor_list() noexcept = default;
-    ~xor_list()         = default; // 不管理内存
+    XorList() noexcept = default;
+    ~XorList()         = default; // 不管理内存
 
     // 禁止拷贝和赋值，因为链表不拥有节点
-    xor_list(const xor_list&)            = delete;
-    xor_list& operator=(const xor_list&) = delete;
+    XorList(const XorList&)            = delete;
+    auto operator=(const XorList&) -> XorList& = delete;
 
     //--- 迭代器访问 ---
-    iterator begin() noexcept { return iterator(nullptr, head_); }
-    const_iterator begin() const noexcept { return const_iterator(nullptr, head_); }
+    auto begin() noexcept -> iterator { return iterator(nullptr, head_); }
+    auto begin() const noexcept -> const_iterator { return const_iterator(nullptr, head_); }
 
-    iterator end() noexcept { return iterator(tail_, nullptr); }
-    const_iterator end() const noexcept { return const_iterator(tail_, nullptr); }
+    auto end() noexcept -> iterator { return iterator(tail_, nullptr); }
+    auto end() const noexcept -> const_iterator { return const_iterator(tail_, nullptr); }
 
     //--- 容量查询 ---
-    bool empty() const noexcept { return head_ == nullptr; }
+    auto empty() const noexcept -> bool { return head_ == nullptr; }
 
-    size_t size() const noexcept { return size_; }
+    auto size() const noexcept -> size_t { return size_; }
 
     //--- 元素操作 ---
 
-    void push_front(Node* node) noexcept {
+    void pushFront(Node* node) noexcept {
         if (empty()) {
             head_ = tail_ = node;
             node->set(nullptr, nullptr);
@@ -242,7 +242,7 @@ public:
         size_++;
     }
 
-    void push_back(Node* node) noexcept {
+    void pushBack(Node* node) noexcept {
         if (empty()) {
             head_ = tail_ = node;
             node->set(nullptr, nullptr);
@@ -262,7 +262,7 @@ public:
         size_++;
     }
 
-    Node* pop_front() noexcept {
+    auto popFront() noexcept -> Node* {
         if (empty()) {
             return nullptr;
         }
@@ -283,7 +283,7 @@ public:
         return front;
     }
 
-    Node* pop_back() noexcept {
+    auto popBack() noexcept -> Node* {
         if (empty()) {
             return nullptr;
         }
@@ -304,18 +304,18 @@ public:
         return back;
     }
 
-    reference front() noexcept { return detail::xor_node_get_value(head_); }
-    const_reference front() const noexcept { return detail::xor_node_get_value(head_); }
+    auto front() noexcept -> reference { return detail::xorNodeGetValue(head_); }
+    auto front() const noexcept -> const_reference { return detail::xorNodeGetValue(head_); }
 
-    reference back() noexcept { return detail::xor_node_get_value(tail_); }
-    const_reference back() const noexcept { return detail::xor_node_get_value(tail_); }
+    auto back() noexcept -> reference { return detail::xorNodeGetValue(tail_); }
+    auto back() const noexcept -> const_reference { return detail::xorNodeGetValue(tail_); }
 
     /**
      * @brief 移除位于迭代器位置的节点
      * @param pos 指向要移除的节点的迭代器
      * @return 指向被移除节点之后节点的迭代器
      */
-    iterator erase(iterator pos) noexcept {
+    auto erase(iterator pos) noexcept -> iterator {
         Node* prev    = pos.prev_;
         Node* current = pos.current_;
         Node* next    = static_cast<Node*>(current->next(prev));
@@ -352,7 +352,7 @@ public:
 };
 
 template <typename T>
-class xor_list<T, std::enable_if_t<!std::is_base_of_v<xor_node_base, T>>> {
+class XorList<T, std::enable_if_t<!std::is_base_of_v<XorNodeBase, T>>> {
 public:
     // --- 类型定义 ---
     using value_type      = T;
@@ -360,15 +360,15 @@ public:
     using reference       = value_type&;
     using const_reference = const value_type&;
 
-    // 内部节点类型是 xor_node<T>
-    using Node = xor_node<T>;
+    // 内部节点类型是 XorNode<T>
+    using Node = XorNode<T>;
     // 迭代器直接复用 intrusive 版本的迭代器
-    using iterator       = xor_list_iterator<Node>;
-    using const_iterator = xor_list_iterator<const Node>;
+    using iterator       = XorListIterator<Node>;
+    using const_iterator = XorListIterator<const Node>;
 
 private:
     // 使用 intrusive list 作为底层引擎
-    using intrusive_list_type = xor_list<Node>;
+    using intrusive_list_type = XorList<Node>;
 
     // 需要一个 allocator 来管理 Node 的内存
     using NodeAllocator = typename std::allocator_traits<allocator_type>::template rebind_alloc<Node>;
@@ -379,54 +379,54 @@ private:
 public:
     // --- 构造函数和析构函数 ---
 
-    xor_list() noexcept = default;
+    XorList() noexcept = default;
 
-    ~xor_list() { clear(); }
+    ~XorList() { clear(); }
 
     // --- 元素访问 ---
-    iterator begin() noexcept { return list_impl_.begin(); }
-    const_iterator begin() const noexcept { return list_impl_.begin(); }
-    iterator end() noexcept { return list_impl_.end(); }
-    const_iterator end() const noexcept { return list_impl_.end(); }
-    reference front() noexcept { return list_impl_.front(); }
-    const_reference front() const noexcept { return list_impl_.front(); }
-    reference back() noexcept { return list_impl_.back(); }
-    const_reference back() const noexcept { return list_impl_.back(); }
+    auto begin() noexcept -> iterator { return list_impl_.begin(); }
+    auto begin() const noexcept -> const_iterator { return list_impl_.begin(); }
+    auto end() noexcept -> iterator { return list_impl_.end(); }
+    auto end() const noexcept -> const_iterator { return list_impl_.end(); }
+    auto front() noexcept -> reference { return list_impl_.front(); }
+    auto front() const noexcept -> const_reference { return list_impl_.front(); }
+    auto back() noexcept -> reference { return list_impl_.back(); }
+    auto back() const noexcept -> const_reference { return list_impl_.back(); }
 
     // --- 容量 ---
-    bool empty() const noexcept { return list_impl_.empty(); }
-    size_t size() const noexcept { return list_impl_.size(); }
+    auto empty() const noexcept -> bool { return list_impl_.empty(); }
+    auto size() const noexcept -> size_t { return list_impl_.size(); }
 
     // --- 修改器 ---
 
-    void push_back(const value_type& value) {
+    void pushBack(const value_type& value) {
         Node* new_node = std::allocator_traits<NodeAllocator>::allocate(node_alloc_, 1);
         std::allocator_traits<NodeAllocator>::construct(node_alloc_, new_node, value);
-        list_impl_.push_back(new_node);
+        list_impl_.pushBack(new_node);
     }
 
-    void push_back(value_type&& value) {
+    void pushBack(value_type&& value) {
         Node* new_node = std::allocator_traits<NodeAllocator>::allocate(node_alloc_, 1);
         std::allocator_traits<NodeAllocator>::construct(node_alloc_, new_node, std::move(value));
-        list_impl_.push_back(new_node);
+        list_impl_.pushBack(new_node);
     }
 
-    T pop_front() {
+    auto popFront() -> T {
         if (empty()) {
             throw std::runtime_error("pop_front() called on empty list");
         }
-        Node* front = list_impl_.pop_front();
+        Node* front = list_impl_.popFront();
         T value     = std::move(front->value());
         std::allocator_traits<NodeAllocator>::destroy(node_alloc_, front);
         std::allocator_traits<NodeAllocator>::deallocate(node_alloc_, front, 1);
         return value;
     }
 
-    T pop_back() {
+    auto popBack() -> T {
         if (empty()) {
             throw std::runtime_error("pop_back() called on empty list");
         }
-        Node* back = list_impl_.pop_back();
+        Node* back = list_impl_.popBack();
         T value    = std::move(back->value());
         std::allocator_traits<NodeAllocator>::destroy(node_alloc_, back);
         std::allocator_traits<NodeAllocator>::deallocate(node_alloc_, back, 1);
@@ -434,7 +434,7 @@ public:
     }
 
     template <typename... Args>
-    reference emplace_back(Args&&... args) {
+    auto emplaceBack(Args&&... args) -> reference {
         Node* new_node = std::allocator_traits<NodeAllocator>::allocate(node_alloc_, 1);
         // 直接在节点的 value_ 成员上构造对象
         std::allocator_traits<NodeAllocator>::construct(node_alloc_, new_node, std::forward<Args>(args)...);
@@ -442,13 +442,13 @@ public:
         return new_node->value();
     }
 
-    void push_front(const value_type& value) {
+    void pushFront(const value_type& value) {
         Node* new_node = std::allocator_traits<NodeAllocator>::allocate(node_alloc_, 1);
         std::allocator_traits<NodeAllocator>::construct(node_alloc_, new_node, value);
-        list_impl_.push_front(new_node);
+        list_impl_.pushFront(new_node);
     }
 
-    iterator erase(iterator pos) {
+    auto erase(iterator pos) -> iterator {
         Node* node_to_delete = pos.current_;
         iterator next_it     = list_impl_.erase(pos);
 
@@ -460,7 +460,7 @@ public:
 
     void clear() noexcept {
         while (!list_impl_.empty()) {
-            Node* node_to_delete = list_impl_.pop_front(); // 获取节点指针
+            Node* node_to_delete = list_impl_.popFront(); // 获取节点指针
 
             std::allocator_traits<NodeAllocator>::destroy(node_alloc_, node_to_delete);
             std::allocator_traits<NodeAllocator>::deallocate(node_alloc_, node_to_delete, 1);
@@ -468,4 +468,4 @@ public:
     }
 };
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

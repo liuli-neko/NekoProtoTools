@@ -11,7 +11,7 @@
 #endif
 #include "nekoproto/serialization/to_string.hpp"    // IWYU pragma: export
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 struct TestStruct1 {
     std::map<std::string, int> f0  = {};
     std::string f1                 = {};
@@ -244,7 +244,7 @@ struct TestStruct4 {
 #include "big_data_test_data_1.cpp"
 #include "big_data_test_data_2.cpp"
 
-std::vector<char> make_data(const char* data) { return std::vector<char>(data, data + std::strlen(data)); }
+auto makeData(const char* data) -> std::vector<char> { return std::vector<char>(data, data + std::strlen(data)); }
 
 TEST(BigProtoTest, Serializer) {
     NEKO_LOG_DEBUG("unit test", "{} size {}", ProtoFactory::protoName<TestStruct1>(), sizeof(TestStruct1));
@@ -264,7 +264,7 @@ TEST(BigProtoTest, Serializer) {
                    sizeof(TestStruct4::ProtoType));
 
     // 统计解析时长
-    auto data  = make_data(data_1);
+    auto data  = makeData(data_1);
     auto start = std::chrono::high_resolution_clock::now();
     auto end   = start;
     TestStruct4 proto1;
@@ -275,7 +275,7 @@ TEST(BigProtoTest, Serializer) {
             .count());
     NEKO_LOG_DEBUG("unit test", "Serializer f0 size: {}", proto1.f0.size());
     end  = std::chrono::high_resolution_clock::now();
-    data = make_data(data_2);
+    data = makeData(data_2);
     TestStruct4 proto2;
     proto2.makeProto().fromData(data.data(), data.size());
     NEKO_LOG_DEBUG(
@@ -302,7 +302,7 @@ TEST(BigProtoTest, SimdJsonSerializer) {
     NEKO_LOG_DEBUG("unit test", "Proto4 type size {}", sizeof(TestStruct4::ProtoType));
 
     // 统计解析时长
-    auto data  = make_data(data_1);
+    auto data  = makeData(data_1);
     auto start = std::chrono::high_resolution_clock::now();
     auto end   = start;
     TestStruct4 proto1;

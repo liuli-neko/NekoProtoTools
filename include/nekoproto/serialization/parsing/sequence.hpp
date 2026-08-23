@@ -13,16 +13,16 @@
 #include <utility>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace detail {
 
 template <typename>
 inline constexpr bool ParserSequenceDependentFalseV = false;
 
 template <typename T>
-parsing::schema::Type parser_sequence_schema(bool uniqueItems = false) {
+auto parserSequenceSchema(bool uniqueItems = false) -> parsing::schema::Type {
     parsing::schema::Type::Array schema;
-    schema.items = std::make_shared<parsing::schema::Type>(parser_schema<T>());
+    schema.items = std::make_shared<parsing::schema::Type>(parserSchema<T>());
     if (uniqueItems) {
         schema.uniqueItems = true;
     }
@@ -30,7 +30,7 @@ parsing::schema::Type parser_sequence_schema(bool uniqueItems = false) {
 }
 
 template <typename T>
-bool parser_insert_sequence_value(T& values, typename T::value_type&& value) {
+auto parserInsertSequenceValue(T& values, typename T::value_type&& value) -> bool {
     if constexpr (requires { values.push_back(std::move(value)); }) {
         values.push_back(std::move(value));
         return true;
@@ -52,13 +52,13 @@ bool parser_insert_sequence_value(T& values, typename T::value_type&& value) {
 }
 
 template <typename W, typename T, typename ParentType, typename Tags>
-ParserResult parser_write_sequence(W& writer, const T& values, const ParentType& parent, const Tags& tags) {
+auto parserWriteSequence(W& writer, const T& values, const ParentType& parent, const Tags& tags) -> ParserResult {
     auto array        = parsing::Parent<W>::addArray(writer, values.size(), parent, tags);
     std::size_t index = 0;
     for (const auto& value : values) {
-        auto result = parser_write<W>(writer, value, typename parsing::Parent<W>::Array{&array});
+        auto result = parserWrite<W>(writer, value, typename parsing::Parent<W>::Array{&array});
         if (!result) {
-            return parser_context(std::move(result),
+            return parserContext(std::move(result),
                                   "Failed to write sequence element " + std::to_string(index) + ": ");
         }
         ++index;
@@ -67,21 +67,21 @@ ParserResult parser_write_sequence(W& writer, const T& values, const ParentType&
 }
 
 template <typename R, typename T, typename Tags>
-ParserResult parser_read_sequence(typename R::InputValueType in, T& values, const Tags& tags) {
-    auto array = parsing::reader_to_array<R>(in, tags);
+auto parserReadSequence(typename R::InputValueType in, T& values, const Tags& tags) -> ParserResult {
+    auto array = parsing::readerToArray<R>(in, tags);
     if (!array) {
         return array.error();
     }
-    T parsed = parser_empty_container_like(values);
+    T parsed = parserEmptyContainerLike(values);
     const auto size = R::arraySize(array.value());
     for (std::size_t i = 0; i < size; ++i) {
         typename T::value_type item{};
-        auto result = parser_read<R>(R::arrayElement(array.value(), i), item);
+        auto result = parserRead<R>(R::arrayElement(array.value(), i), item);
         if (!result) {
-            return parser_context(std::move(result), "Failed to parse sequence element " + std::to_string(i) + ": ");
+            return parserContext(std::move(result), "Failed to parse sequence element " + std::to_string(i) + ": ");
         }
-        if (!parser_insert_sequence_value(parsed, std::move(item))) {
-            return parser_error(sa::ErrorCode::InvalidField,
+        if (!parserInsertSequenceValue(parsed, std::move(item))) {
+            return parserError(sa::ErrorCode::InvalidField,
                                 "Duplicate value at sequence element " + std::to_string(i));
         }
     }
@@ -94,8 +94,8 @@ struct SequenceWriteParser {
     using Container = Sequence;
 
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Container& value, const ParentType& parent, const Tags& tags) {
-        return parser_write_sequence<W>(writer, value, parent, tags);
+    static auto write(W& writer, const Container& value, const ParentType& parent, const Tags& tags) -> ParserResult {
+        return parserWriteSequence<W>(writer, value, parent, tags);
     }
 };
 
@@ -104,14 +104,14 @@ struct SequenceReadParser {
     using Container = Sequence;
 
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Container& value, const Tags& tags) {
-        return parser_read_sequence<R>(in, value, tags);
+    static auto read(typename R::InputValueType in, Container& value, const Tags& tags) -> ParserResult {
+        return parserReadSequence<R>(in, value, tags);
     }
 };
 
 template <typename T, bool UniqueItems = false>
 struct SequenceSchemaParser {
-    static parsing::schema::Type toSchema() { return parser_sequence_schema<T>(UniqueItems); }
+    static auto toSchema() -> parsing::schema::Type { return parserSequenceSchema<T>(UniqueItems); }
 };
 
 template <typename W, typename T, typename Alloc>
@@ -128,13 +128,13 @@ struct WriteParser<W, std::vector<bool, Alloc>, void> {
     using Vector = std::vector<bool, Alloc>;
 
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Vector& value, const ParentType& parent, const Tags& tags) {
+    static auto write(W& writer, const Vector& value, const ParentType& parent, const Tags& tags) -> ParserResult {
         auto array        = parsing::Parent<W>::addArray(writer, value.size(), parent, tags);
         std::size_t index = 0;
         for (bool item : value) {
-            auto result = parser_write<W>(writer, item, typename parsing::Parent<W>::Array{&array});
+            auto result = parserWrite<W>(writer, item, typename parsing::Parent<W>::Array{&array});
             if (!result) {
-                return parser_context(std::move(result),
+                return parserContext(std::move(result),
                                       "Failed to write vector<bool> element " + std::to_string(index) + ": ");
             }
             ++index;
@@ -148,19 +148,19 @@ struct ReadParser<R, std::vector<bool, Alloc>, void> {
     using Vector = std::vector<bool, Alloc>;
 
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Vector& value, const Tags& tags) {
-        auto array = parsing::reader_to_array<R>(in, tags);
+    static auto read(typename R::InputValueType in, Vector& value, const Tags& tags) -> ParserResult {
+        auto array = parsing::readerToArray<R>(in, tags);
         if (!array) {
             return array.error();
         }
-        Vector parsed = parser_empty_container_like(value);
+        Vector parsed = parserEmptyContainerLike(value);
         parsed.reserve(R::arraySize(array.value()));
         const auto size = R::arraySize(array.value());
         for (std::size_t i = 0; i < size; ++i) {
             bool item   = false;
-            auto result = parser_read<R>(R::arrayElement(array.value(), i), item);
+            auto result = parserRead<R>(R::arrayElement(array.value(), i), item);
             if (!result) {
-                return parser_context(std::move(result),
+                return parserContext(std::move(result),
                                       "Failed to parse vector<bool> element " + std::to_string(i) + ": ");
             }
             parsed.push_back(item);
@@ -172,7 +172,7 @@ struct ReadParser<R, std::vector<bool, Alloc>, void> {
 
 template <typename Alloc>
 struct SchemaParser<std::vector<bool, Alloc>, void> {
-    static parsing::schema::Type toSchema() { return parser_sequence_schema<bool>(); }
+    static auto toSchema() -> parsing::schema::Type { return parserSequenceSchema<bool>(); }
 };
 
 template <typename W, typename T, typename Alloc>
@@ -198,12 +198,12 @@ struct WriteParser<W, std::array<T, N>, void> {
     using Array = std::array<T, N>;
 
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Array& value, const ParentType& parent, const Tags& tags) {
+    static auto write(W& writer, const Array& value, const ParentType& parent, const Tags& tags) -> ParserResult {
         auto array = parsing::Parent<W>::addArray(writer, N, parent, tags);
         for (std::size_t i = 0; i < N; ++i) {
-            auto result = parser_write<W>(writer, value[i], typename parsing::Parent<W>::Array{&array});
+            auto result = parserWrite<W>(writer, value[i], typename parsing::Parent<W>::Array{&array});
             if (!result) {
-                return parser_context(std::move(result),
+                return parserContext(std::move(result),
                                       "Failed to write fixed array element " + std::to_string(i) + ": ");
             }
         }
@@ -216,20 +216,20 @@ struct ReadParser<R, std::array<T, N>, void> {
     using Array = std::array<T, N>;
 
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Array& value, const Tags& tags) {
-        auto array = parsing::reader_to_array<R>(in, tags);
+    static auto read(typename R::InputValueType in, Array& value, const Tags& tags) -> ParserResult {
+        auto array = parsing::readerToArray<R>(in, tags);
         if (!array) {
             return array.error();
         }
         const auto actualSize = R::arraySize(array.value());
         if (actualSize != N) {
-            return parser_error(sa::ErrorCode::InvalidLength, "Expected fixed array with " + std::to_string(N) +
+            return parserError(sa::ErrorCode::InvalidLength, "Expected fixed array with " + std::to_string(N) +
                                                                   " elements, got " + std::to_string(actualSize));
         }
         for (std::size_t i = 0; i < N; ++i) {
-            auto result = parser_read<R>(R::arrayElement(array.value(), i), value[i]);
+            auto result = parserRead<R>(R::arrayElement(array.value(), i), value[i]);
             if (!result) {
-                return parser_context(std::move(result),
+                return parserContext(std::move(result),
                                       "Failed to parse fixed array element " + std::to_string(i) + ": ");
             }
         }
@@ -239,8 +239,8 @@ struct ReadParser<R, std::array<T, N>, void> {
 
 template <typename T, std::size_t N>
 struct SchemaParser<std::array<T, N>, void> {
-    static parsing::schema::Type toSchema() {
-        auto schema    = parser_sequence_schema<T>();
+    static auto toSchema() -> parsing::schema::Type {
+        auto schema    = parserSequenceSchema<T>();
         auto& array    = std::get<parsing::schema::Type::Array>(schema.value);
         array.minItems = N;
         array.maxItems = N;
@@ -291,4 +291,4 @@ template <typename T, typename Hash, typename Eq, typename Alloc>
 struct SchemaParser<std::unordered_multiset<T, Hash, Eq, Alloc>, void> : SequenceSchemaParser<T> {};
 
 } // namespace detail
-NEKO_END_NAMESPACE
+} // namespace nekoproto

@@ -54,25 +54,6 @@ CheckOptions:
   - key: readability-identifier-naming.UnionCase
     value: CamelCase
 
-  # Allow STL-style trait/metafunction structs and type-level tag-property keys.
-  #
-  # Examples allowed:
-  #   is_tag_list
-  #   is_tagged_field
-  #   normalize_tags
-  #   resolve_member_type
-  #   tag_list_element
-  #   tag_property::comment
-  #   tag_property::raw_string
-  #   tag_property::fixed_length
-  #
-  # clang-tidy matches the identifier itself, so tag_property keys need an
-  # explicit allowlist.
-  - key: readability-identifier-naming.ClassIgnoredRegexp
-    value: '^(is_|has_|can_).*$|^.*_(trait|traits|impl|base|helper|adapter|policy|element|property)$|^(comment|name|skippable|raw_string|flat|unframed|fixed_length)$'
-  - key: readability-identifier-naming.StructIgnoredRegexp
-    value: '^(is_|has_|can_).*$|^.*_(trait|traits|impl|base|helper|adapter|policy|element|property)$|^(comment|name|skippable|raw_string|flat|unframed|fixed_length)$'
-
   # --------------------------------------------------------------------------
   # Enums
   # --------------------------------------------------------------------------
@@ -85,21 +66,17 @@ CheckOptions:
   # Functions and methods
   # --------------------------------------------------------------------------
   - key: readability-identifier-naming.FunctionCase
-    value: lower_case
+    value: camelBack
   - key: readability-identifier-naming.ConstexprFunctionCase
-    value: lower_case
+    value: camelBack
   - key: readability-identifier-naming.PublicMethodCase
     value: camelBack
   - key: readability-identifier-naming.ProtectedMethodCase
     value: camelBack
-  - key: readability-identifier-naming.ProtectedMethodPrefix
-    value: '_'
   - key: readability-identifier-naming.PrivateMethodCase
     value: camelBack
-  - key: readability-identifier-naming.PrivateMethodPrefix
-    value: '_'
   - key: readability-identifier-naming.ConstexprMethodCase
-    value: lower_case
+    value: camelBack
 
   # --------------------------------------------------------------------------
   # Variables

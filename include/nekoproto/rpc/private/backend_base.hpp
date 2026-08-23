@@ -23,7 +23,7 @@
 #include "nekoproto/serialization/reflection.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace rpc {
 
 enum class NekoRpcKind : std::uint8_t {
@@ -67,9 +67,9 @@ struct NekoRpcCompressionStats {
 };
 
 struct NekoRpcFrameLimits {
-    std::size_t max_frame_bytes = 16U * 1024U * 1024U;
-    std::size_t max_method_bytes = 64U * 1024U;
-    std::size_t max_payload_bytes = 16U * 1024U * 1024U;
+    std::size_t max_frame_bytes     = 16U * 1024U * 1024U;
+    std::size_t max_method_bytes    = 64U * 1024U;
+    std::size_t max_payload_bytes   = 16U * 1024U * 1024U;
     std::size_t max_extension_bytes = 64U * 1024U;
 };
 
@@ -82,8 +82,8 @@ public:
     using ExtensionValueType = std::span<const std::byte>;
     using ExtensionMapType   = std::map<ExtensionType, ExtensionValueType>;
 
-    static constexpr std::uint16_t Magic  = 0x4E52U;
-    static constexpr std::uint8_t Version = 1U;
+    static constexpr std::uint16_t Magic           = 0x4E52U;
+    static constexpr std::uint8_t Version          = 1U;
     static constexpr std::size_t MaxExtensionBytes = std::numeric_limits<std::uint16_t>::max();
 
     struct Header {
@@ -133,7 +133,7 @@ public:
 
 private:
     template <typename T>
-    static consteval auto wire_field_size() -> std::size_t {
+    static consteval auto wireFieldSize() -> std::size_t {
         using ValueType = std::remove_cvref_t<T>;
         if constexpr (std::is_enum_v<ValueType>) {
             return sizeof(std::underlying_type_t<ValueType>);
@@ -145,13 +145,13 @@ private:
     }
 
     template <typename Tuple, std::size_t... Is>
-    static consteval auto wire_tuple_size(std::index_sequence<Is...> /**/) -> std::size_t {
-        return (wire_field_size<std::tuple_element_t<Is, Tuple>>() + ... + 0U);
+    static consteval auto wireTupleSize(std::index_sequence<Is...> /**/) -> std::size_t {
+        return (wireFieldSize<std::tuple_element_t<Is, Tuple>>() + ... + 0U);
     }
 
-    static consteval auto header_size() -> std::size_t {
+    static consteval auto computedHeaderSize() -> std::size_t {
         using FieldsType = typename Reflect<Header>::value_types;
-        return wire_tuple_size<FieldsType>(std::make_index_sequence<std::tuple_size_v<FieldsType>>{});
+        return wireTupleSize<FieldsType>(std::make_index_sequence<std::tuple_size_v<FieldsType>>{});
     }
 
 public:
@@ -169,8 +169,7 @@ public:
     static auto knownKind(NekoRpcKind kind) -> bool;
     static auto headerBodySize(std::span<const std::byte> header, std::uint8_t codec)
         -> ilias::Result<std::size_t, std::error_code>;
-    static auto headerBodySize(std::span<const std::byte> header, std::uint8_t codec,
-                               const NekoRpcFrameLimits& limits)
+    static auto headerBodySize(std::span<const std::byte> header, std::uint8_t codec, const NekoRpcFrameLimits& limits)
         -> ilias::Result<std::size_t, std::error_code>;
     static auto parseFrame(std::span<const std::byte> data, std::uint8_t codec, FrameParts& parts) -> bool;
 };
@@ -188,7 +187,7 @@ public:
     static auto appendTlvs(MessageType& out, const ExtensionMapType& extensions) -> bool;
 
     template <typename Int>
-    static auto appendInteger(MessageType& out, Int value) -> void {
+    static void appendInteger(MessageType& out, Int value) {
         using ValueType = std::remove_cvref_t<Int>;
         static_assert(std::is_integral_v<ValueType> && !std::is_same_v<ValueType, bool>,
                       "appendInteger requires an integer wire value");
@@ -288,22 +287,21 @@ class NEKO_PROTO_API NekoRpcCompressionCodec {
 public:
     using MessageType = NekoRpcFrameCodec::MessageType;
 
-    static constexpr auto preferred_algorithm() noexcept -> NekoRpcCompressionAlgorithm {
+    static constexpr auto preferredAlgorithm() noexcept -> NekoRpcCompressionAlgorithm {
         return NekoRpcCompressionAlgorithm::RunLength;
     }
-    static constexpr bool supports(NekoRpcCompressionAlgorithm algorithm) noexcept {
+    static constexpr auto supports(NekoRpcCompressionAlgorithm algorithm) noexcept -> bool {
         return algorithm == NekoRpcCompressionAlgorithm::RunLength;
     }
 
     static auto compress(std::span<const std::byte> payload, NekoRpcCompressionAlgorithm algorithm)
         -> ilias::Result<MessageType, std::error_code>;
     static auto decompress(std::span<const std::byte> payload, NekoRpcCompressionAlgorithm algorithm,
-                           std::size_t max_output_bytes)
-        -> ilias::Result<MessageType, std::error_code>;
+                           std::size_t max_output_bytes) -> ilias::Result<MessageType, std::error_code>;
 
 private:
-    static auto _compressRunLength(std::span<const std::byte> payload) -> MessageType;
-    static auto _decompressRunLength(std::span<const std::byte> payload, std::size_t max_output_bytes)
+    static auto compressRunLength(std::span<const std::byte> payload) -> MessageType;
+    static auto decompressRunLength(std::span<const std::byte> payload, std::size_t max_output_bytes)
         -> ilias::Result<MessageType, std::error_code>;
 };
 
@@ -328,4 +326,4 @@ struct Meta<rpc::NekoRpcCompressionAlgorithm, void> {
                                             rpc::NekoRpcCompressionAlgorithm::RunLength);
 };
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

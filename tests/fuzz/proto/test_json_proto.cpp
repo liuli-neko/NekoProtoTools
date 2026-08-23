@@ -3,7 +3,7 @@
 #include "nekoproto/serialization/serializer_base.hpp"
 #include <string>
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 struct ZTypeTest {
     int a                   = 1;
     std::string b           = "field set test";

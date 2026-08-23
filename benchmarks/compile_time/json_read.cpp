@@ -7,6 +7,6 @@
 #endif
 
 void compile_json_read(const char* data, std::size_t size, neko_compile_bench::BenchmarkStruct& value) {
-    NEKO_NAMESPACE::JsonSerializer::InputSerializer input(data, size);
+    nekoproto::JsonSerializer::InputSerializer input(data, size);
     (void)input(value);
 }

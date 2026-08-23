@@ -5,7 +5,7 @@
 #include "nekoproto/proto/private/reflection_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 namespace {
 struct ReflectedValue {

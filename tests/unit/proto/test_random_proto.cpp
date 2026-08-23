@@ -6,7 +6,7 @@
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/to_string.hpp"
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 // struct test
 struct TestStruct1 {
@@ -849,7 +849,7 @@ TEST(RandomProtoTest, StructTest) {
     ASSERT_EQ(Reflect<TestStructProto>::name(2), "c");
 
     ProtoFactory factory;
-    int offset = NEKO_RESERVED_PROTO_TYPE_SIZE;
+    int offset = reserved_proto_type_size;
     EXPECT_EQ(factory.protoType<TestStruct1>(), 1 + offset);
     EXPECT_EQ(factory.protoType<TestStruct10>(), 2 + offset);
     EXPECT_EQ(factory.protoType<TestStruct11>(), 3 + offset);
@@ -874,7 +874,7 @@ TEST(RandomProtoTest, StructTest) {
 
     TestStructProto proto;
     proto.b.f0 = {4};
-    NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(proto));
+    NEKO_LOG_DEBUG("unit test", "{}", serializableToString(proto));
     auto data = proto.makeProto().toData();
     data.push_back('\0');
     EXPECT_STREQ(data.data(), StructProtoData);

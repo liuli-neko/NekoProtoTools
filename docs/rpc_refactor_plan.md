@@ -196,7 +196,7 @@ struct Api {
     B b;
 };
 
-namespace NekoProto {
+namespace nekoproto {
 template <>
 struct Meta<::A> {
     constexpr static auto value = Object("xxx", &::A::xxx);
@@ -211,7 +211,7 @@ template <>
 struct Meta<::Api> {
     constexpr static auto value = Object("a", &::Api::a, "b", &::Api::b);
 };
-} // namespace NekoProto
+} // namespace nekoproto
 
 RpcServer<JsonRpcBackend, Api> server(ctx);
 RpcClient<JsonRpcBackend, Api> client(ctx);
@@ -239,7 +239,7 @@ b.xxx
 
 ## RPC tags
 
-RPC 复用现有 `make_tags<Tag>(field)` 风格，将注册策略描述为字段 metadata，而不是写死进 protocol 类型。
+RPC 复用现有 `makeTags<Tag>(field)` 风格，将注册策略描述为字段 metadata，而不是写死进 protocol 类型。
 
 当前定义：
 
@@ -271,16 +271,16 @@ struct Api {
     Legacy legacy;
 };
 
-namespace NekoProto {
+namespace nekoproto {
 template <>
 struct Meta<::Api> {
     constexpr static auto value =
         Object("a", &::Api::a,                                      // 默认前缀 "a"
-               "b", make_tags<rpc_prefix<"service.b">>(&::Api::b),
-               "common", make_tags<rpc_no_prefix>(&::Api::common), // 不加前缀，但仍通过 client->common.xxx 调用
-               "legacy", make_tags<rpc_no_prefix>(&::Api::legacy)); // 不加前缀，但仍通过 client->legacy.xxx 调用
+               "b", makeTags<rpc_prefix<"service.b">>(&::Api::b),
+               "common", makeTags<rpc_no_prefix>(&::Api::common), // 不加前缀，但仍通过 client->common.xxx 调用
+               "legacy", makeTags<rpc_no_prefix>(&::Api::legacy)); // 不加前缀，但仍通过 client->legacy.xxx 调用
 };
-} // namespace NekoProto
+} // namespace nekoproto
 ```
 
 建议语义：
@@ -301,7 +301,7 @@ struct Api {
     Common common;
 };
 
-namespace NekoProto {
+namespace nekoproto {
 template <>
 struct Meta<::Common> {
     constexpr static auto value = Object("version", &::Common::version);
@@ -310,9 +310,9 @@ struct Meta<::Common> {
 template <>
 struct Meta<::Api> {
     constexpr static auto value =
-        Object("common", make_tags<rpc_no_prefix>(&::Api::common));
+        Object("common", makeTags<rpc_no_prefix>(&::Api::common));
 };
-} // namespace NekoProto
+} // namespace nekoproto
 
 auto v = co_await client->common.version();              // 发送远端方法名 "version"
 auto v2 = co_await client.callRemote<std::string>("version");
@@ -410,14 +410,14 @@ struct Api {
     B b;
 };
 
-namespace NekoProto {
+namespace nekoproto {
 template <>
 struct Meta<::Api> {
     constexpr static auto value =
         Object("a", &::Api::a,
-               "b", make_tags<rpc_prefix<"bee">>(&::Api::b));
+               "b", makeTags<rpc_prefix<"bee">>(&::Api::b));
 };
-} // namespace NekoProto
+} // namespace nekoproto
 ```
 
 生成：
@@ -434,13 +434,13 @@ struct Api {
     SystemRpc system;
 };
 
-namespace NekoProto {
+namespace nekoproto {
 template <>
 struct Meta<::Api> {
     constexpr static auto value =
-        Object("system", make_tags<rpc_no_prefix>(&::Api::system));
+        Object("system", makeTags<rpc_no_prefix>(&::Api::system));
 };
-} // namespace NekoProto
+} // namespace nekoproto
 ```
 
 生成：
@@ -493,7 +493,7 @@ struct Api {
     > add;
 
     NEKO_SERIALIZER(
-        (make_tags<
+        (makeTags<
             rpc_name<"math.add">,
             rpc_desc<"Override from reflection metadata">,
             rpc_args<"left", "right">

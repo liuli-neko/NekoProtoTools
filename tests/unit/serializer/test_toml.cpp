@@ -10,7 +10,7 @@
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/toml_serializer.hpp"
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 #if defined(NEKO_PROTO_ENABLE_TOMLPLUSPLUS)
 
@@ -20,7 +20,7 @@ struct TomlNested {
     int code = 0;
     std::string label;
 
-    NEKO_SERIALIZER((make_tags<rename_tag<"wire_code">>(code)), label)
+    NEKO_SERIALIZER((makeTags<rename_tag<"wire_code">>(code)), label)
 };
 
 struct TomlDocument {
@@ -30,7 +30,7 @@ struct TomlDocument {
     std::optional<std::string> missing;
     TomlNested nested;
 
-    NEKO_SERIALIZER(title, count, values, missing, (make_tags<TomlTag{.inline_table = true}>(nested)))
+    NEKO_SERIALIZER(title, count, values, missing, (makeTags<TomlTag{.inline_table = true}>(nested)))
 };
 
 struct BadNumber {

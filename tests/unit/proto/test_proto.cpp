@@ -7,10 +7,10 @@
 #include "nekoproto/serialization/to_string.hpp"
 #include "nekoproto/serialization/types/binary_data.hpp"
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 template <typename T>
-std::string make_enum_string(const std::string& fmt) {
+auto makeEnumString(const std::string& fmt) -> std::string {
     auto names  = Reflect<T>::names();
     auto values = Reflect<T>::values();
     std::string ret;
@@ -126,7 +126,7 @@ TEST_F(ProtoTest, Reflection) {
 }
 
 TEST_F(ProtoTest, StructSerialize) {
-    EXPECT_EQ(mFactory->protoType<TestP>(), NEKO_RESERVED_PROTO_TYPE_SIZE + 2);
+    EXPECT_EQ(mFactory->protoType<TestP>(), reserved_proto_type_size + 2);
     TestP testp;
     testp.a = 3;
     testp.b = "Struct test";
@@ -197,53 +197,53 @@ TEST_F(ProtoTest, StructDeserialize) {
 #endif
     TestP tp2;
     tp2.makeProto() = testp;
-    EXPECT_STREQ(serializable_to_string(testp).c_str(), serializable_to_string(tp2).c_str());
-    NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(testp));
+    EXPECT_STREQ(serializableToString(testp).c_str(), serializableToString(tp2).c_str());
+    NEKO_LOG_DEBUG("unit test", "{}", serializableToString(testp));
 }
 
 TEST_F(ProtoTest, Base64Covert) {
     const char* str   = "this is a test string";
-    auto base64string = Base64Covert::Encode(str);
+    auto base64string = Base64Covert::encode(str);
     base64string.push_back('\0');
     EXPECT_STREQ(base64string.data(), "dGhpcyBpcyBhIHRlc3Qgc3RyaW5n");
     base64string.pop_back();
-    auto str2 = Base64Covert::Decode(base64string);
+    auto str2 = Base64Covert::decode(base64string);
     str2.push_back('\0');
     EXPECT_STREQ(str2.data(), str);
 
     const char* str3   = "this is a test string2";
-    auto base64string2 = Base64Covert::Encode(str3);
+    auto base64string2 = Base64Covert::encode(str3);
     base64string2.push_back('\0');
     EXPECT_STREQ(base64string2.data(), "dGhpcyBpcyBhIHRlc3Qgc3RyaW5nMg==");
     base64string2.pop_back();
-    auto str4 = Base64Covert::Decode(base64string2);
+    auto str4 = Base64Covert::decode(base64string2);
     str4.push_back('\0');
     EXPECT_STREQ(str4.data(), str3);
 
     const char* str5   = "this is a test string21";
-    auto base64string3 = Base64Covert::Encode(str5);
+    auto base64string3 = Base64Covert::encode(str5);
     base64string3.push_back('\0');
     EXPECT_STREQ(base64string3.data(), "dGhpcyBpcyBhIHRlc3Qgc3RyaW5nMjE=");
     base64string3.pop_back();
-    auto str6 = Base64Covert::Decode(base64string3);
+    auto str6 = Base64Covert::decode(base64string3);
     str6.push_back('\0');
     EXPECT_STREQ(str6.data(), str5);
 
     const char* str7   = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    auto base64string4 = Base64Covert::Encode(str7);
+    auto base64string4 = Base64Covert::encode(str7);
     base64string4.push_back('\0');
     EXPECT_STREQ(base64string4.data(),
                  "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejAxMjM0NTY3ODkrLw==");
     base64string4.pop_back();
-    auto str8 = Base64Covert::Decode(base64string4);
+    auto str8 = Base64Covert::decode(base64string4);
     str8.push_back('\0');
     EXPECT_STREQ(str8.data(), str7);
 
-    auto str9 = Base64Covert::Decode(str7);
+    auto str9 = Base64Covert::decode(str7);
     str9.push_back('\0');
     EXPECT_STREQ(str9.data(), "");
 
-    auto str10 = Base64Covert::Decode("");
+    auto str10 = Base64Covert::decode("");
     str10.push_back('\0');
     EXPECT_STREQ(str10.data(), "");
 }
@@ -310,7 +310,7 @@ TEST_F(ProtoTest, JsonProtoRef) {
     EXPECT_EQ(rawp->i.h, TEnum::TEnum_A);
     EXPECT_EQ(std::get<0>(rawp->j), 1);
     EXPECT_STREQ(std::get<1>(rawp->j).c_str(), "hello");
-    NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(*rawp));
+    NEKO_LOG_DEBUG("unit test", "{}", serializableToString(*rawp));
 }
 
 TEST_F(ProtoTest, InvalidParams) {
@@ -331,9 +331,9 @@ TEST_F(ProtoTest, InvalidParams) {
           "\"g\":\"TEnum_A\",\"j\":[1,\"hello\",true,3.141592654,[1,2,3],"
           "\"TEnum_A\"],\"i\":[1,\"hello\"],\"l\":23}";
     EXPECT_FALSE(proto.makeProto().fromData(str.data(), str.length()));
-    auto dest = TestP::ProtoType::Serialize(proto);
+    auto dest = TestP::ProtoType::serialize(proto);
     EXPECT_FALSE(dest.empty());
-    EXPECT_FALSE(TestP::ProtoType::Deserialize(str.data(), str.length(), proto));
+    EXPECT_FALSE(TestP::ProtoType::deserialize(str.data(), str.length(), proto));
 }
 
 TEST_F(ProtoTest, BinaryProto) {
@@ -342,7 +342,7 @@ TEST_F(ProtoTest, BinaryProto) {
     proto.b   = "hello Neko Proto";
     proto.c   = 0x3f3f3f;
     auto data = proto.makeProto().toData();
-    NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(proto));
+    NEKO_LOG_DEBUG("unit test", "{}", serializableToString(proto));
 
     BinaryProto proto2;
     EXPECT_TRUE(proto2.makeProto().fromData(data.data(), data.size()));

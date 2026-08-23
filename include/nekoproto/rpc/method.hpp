@@ -14,7 +14,7 @@
 #include "nekoproto/rpc/tags.hpp"
 #include "nekoproto/rpc/traits.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace detail {
 
 template <typename T, class enable = void>
@@ -22,10 +22,10 @@ class RpcMethodTraits;
 
 template <typename Callable>
 class RpcMethodTraits<Callable,
-                      std::void_t<typename traits::function_traits<std::remove_cvref_t<Callable>>::return_type>>
+                      std::void_t<typename traits::FunctionTraits<std::remove_cvref_t<Callable>>::return_type>>
     : public traits::RpcMethodTraitsUnpacker<std::remove_cvref_t<Callable>> {
 private:
-    using Traits = traits::function_traits<std::remove_cvref_t<Callable>>;
+    using Traits = traits::FunctionTraits<std::remove_cvref_t<Callable>>;
     using Base   = traits::RpcMethodTraitsUnpacker<std::remove_cvref_t<Callable>>;
 
 public:
@@ -78,7 +78,7 @@ public:
                      bool isNotification = false)
         : mMetadata(argNames, name) {
         this->mIsNotification = isNotification;
-        _updateSignature();
+        updateSignature();
     }
 
     template <size_t N>
@@ -99,7 +99,7 @@ public:
 
     template <typename U>
         requires std::is_convertible_v<U, FunctionType> && (!std::is_convertible_v<U, CoroutinesFuncType>)
-    RpcMethodDynamic& operator=(U&& func) {
+    auto operator=(U&& func) -> RpcMethodDynamic& {
         if constexpr (std::is_bind_expression_v<U>) {
             return set(std::move(func));
         } else {
@@ -109,7 +109,7 @@ public:
 
     template <typename U>
         requires std::is_convertible_v<U, CoroutinesFuncType>
-    RpcMethodDynamic& operator=(U&& func) {
+    auto operator=(U&& func) -> RpcMethodDynamic& {
         if constexpr (std::is_bind_expression_v<U>) {
             return set(std::move(func));
         } else {
@@ -117,7 +117,7 @@ public:
         }
     }
 
-    RpcMethodDynamic& set(FunctionType&& func) {
+    auto set(FunctionType&& func) -> RpcMethodDynamic& {
         this->mCoFunction = [func = std::move(func)](auto... args) mutable -> ilias::IoTask<RawReturnType> {
             if constexpr (std::is_void_v<RawReturnType>) {
                 func(args...);
@@ -129,31 +129,31 @@ public:
         return *this;
     }
 
-    RpcMethodDynamic& set(CoroutinesFuncType&& func) {
+    auto set(CoroutinesFuncType&& func) -> RpcMethodDynamic& {
         this->mCoFunction = std::move(func);
         return *this;
     }
 
     operator bool() const noexcept { return this->mCoFunction != nullptr; }
-    bool operator==(std::nullptr_t) const noexcept { return this->mCoFunction == nullptr; }
+    auto operator==(std::nullptr_t) const noexcept -> bool { return this->mCoFunction == nullptr; }
     void clear() noexcept { this->mCoFunction = nullptr; }
 
-    const std::string& name() const noexcept { return mMetadata.remote_name; }
-    std::string_view name() noexcept { return mMetadata.remote_name; }
-    std::string_view declaredName() const noexcept { return mMetadata.declared_name; }
-    std::string_view rpcPrefix() const noexcept { return mMetadata.rpc_prefix; }
-    bool rpcNoPrefix() const noexcept { return mMetadata.rpc_no_prefix; }
-    std::string_view description() const noexcept { return mMetadata.description; }
-    std::string_view rpcVersion() const noexcept { return mMetadata.rpc_version; }
+    auto name() const noexcept -> const std::string& { return mMetadata.remote_name; }
+    auto name() noexcept -> std::string_view { return mMetadata.remote_name; }
+    auto declaredName() const noexcept -> std::string_view { return mMetadata.declared_name; }
+    auto rpcPrefix() const noexcept -> std::string_view { return mMetadata.rpc_prefix; }
+    auto rpcNoPrefix() const noexcept -> bool { return mMetadata.rpc_no_prefix; }
+    auto description() const noexcept -> std::string_view { return mMetadata.description; }
+    auto rpcVersion() const noexcept -> std::string_view { return mMetadata.rpc_version; }
 
     void setDeclaredName(std::string_view name) {
         mMetadata.declared_name = name;
-        _updateSignature();
+        updateSignature();
     }
 
     void setRemoteName(std::string_view name) {
         mMetadata.remote_name = name;
-        _updateSignature();
+        updateSignature();
     }
 
     void setDescription(std::string_view description) { mMetadata.description = description; }
@@ -165,7 +165,7 @@ public:
         if (!std::equal(names.begin(), names.end(), mMetadata.arg_names.begin(), mMetadata.arg_names.end(),
                         [](const std::string_view& aa, const std::string_view& bb) { return aa == bb; })) {
             mMetadata.arg_names.assign(names.begin(), names.end());
-            _updateSignature();
+            updateSignature();
         }
     }
 
@@ -192,19 +192,19 @@ public:
         }
     }
 
-    const std::vector<std::string>& rpcArgNames() const noexcept { return mMetadata.arg_names; }
+    auto rpcArgNames() const noexcept -> const std::vector<std::string>& { return mMetadata.arg_names; }
 
     std::string signature;
 
 private:
     void setRpcNotification(bool isNotification = true) noexcept { this->mIsNotification = isNotification; }
-    static auto _build(std::string_view name, const RpcMethodData& metadata) -> std::string {
-        auto parameter_string = traits::parameter_to_string<RawParamsType>(
+    static auto build(std::string_view name, const RpcMethodData& metadata) -> std::string {
+        auto parameter_string = traits::parameterToString<RawParamsType>(
             std::make_index_sequence<std::tuple_size_v<RawParamsType>>{}, metadata.arg_names);
         return std::string(traits::TypeName<RawReturnType>::name()) + " " + std::string(name) + "(" + parameter_string +
                ")";
     }
-    void _updateSignature() { signature = _build(name(), mMetadata); }
+    void updateSignature() { signature = build(name(), mMetadata); }
 
 private:
     RpcMethodData mMetadata;
@@ -225,7 +225,7 @@ public:
                               is_notification) {}
     using RpcMethodDynamic<T>::operator=;
     operator bool() const noexcept { return this->mCoFunction != nullptr; }
-    bool operator==(std::nullptr_t) const noexcept { return this->mCoFunction == nullptr; }
+    auto operator==(std::nullptr_t) const noexcept -> bool { return this->mCoFunction == nullptr; }
 };
 
 // Verbose metadata-first declaration. This keeps the compact RpcMethod API
@@ -234,42 +234,42 @@ public:
 template <RpcMethodT T, auto... Specs>
 class RpcMethodSpecImpl : public RpcMethodDynamic<T> {
     constexpr static auto SpecTags = normalize_tags_v<Specs...>;
-    static_assert(!(tag_query::has<tag_property::rpc_prefix>(SpecTags) &&
-                    tag_query::has<tag_property::rpc_no_prefix>(SpecTags)),
+    static_assert(!(tag_query::has<tag_property::RpcPrefix>(SpecTags) &&
+                    tag_query::has<tag_property::RpcNoPrefix>(SpecTags)),
                   "RpcMethodSpec cannot use rpc_prefix<...> and rpc_no_prefix together.");
 
     using Base = RpcMethodDynamic<T>;
 
 public:
-    RpcMethodSpecImpl() : Base(std::array<std::string_view, 0>{}, _methodName(), _notification()) {
-        _applySpecMetadata();
+    RpcMethodSpecImpl() : Base(std::array<std::string_view, 0>{}, methodName(), defaultNotification()) {
+        applySpecMetadata();
     }
     explicit RpcMethodSpecImpl(bool isNotification)
-        : Base(std::array<std::string_view, 0>{}, _methodName(), isNotification) {
-        _applySpecMetadata();
+        : Base(std::array<std::string_view, 0>{}, methodName(), isNotification) {
+        applySpecMetadata();
     }
     using Base::operator=;
     operator bool() const noexcept { return this->mCoFunction != nullptr; }
-    bool operator==(std::nullptr_t) const noexcept { return this->mCoFunction == nullptr; }
+    auto operator==(std::nullptr_t) const noexcept -> bool { return this->mCoFunction == nullptr; }
 
 private:
-    static constexpr auto _methodName() -> std::string_view {
-        if constexpr (tag_query::has<tag_property::rpc_name>(SpecTags)) {
-            return tag_query::get<tag_property::rpc_name>(SpecTags);
+    static constexpr auto methodName() -> std::string_view {
+        if constexpr (tag_query::has<tag_property::RpcName>(SpecTags)) {
+            return tag_query::get<tag_property::RpcName>(SpecTags);
         } else {
             return {};
         }
     }
 
-    static constexpr auto _notification() -> bool {
-        if constexpr (tag_query::has<tag_property::rpc_notification_flag>(SpecTags)) {
-            return tag_query::get<tag_property::rpc_notification_flag>(SpecTags);
+    static constexpr auto defaultNotification() -> bool {
+        if constexpr (tag_query::has<tag_property::RpcNotificationFlag>(SpecTags)) {
+            return tag_query::get<tag_property::RpcNotificationFlag>(SpecTags);
         } else {
             return false;
         }
     }
 
-    void _applySpecMetadata() { this->applyRpcProperties(collect_rpc_properties(SpecTags)); }
+    void applySpecMetadata() { this->applyRpcProperties(collectRpcProperties(SpecTags)); }
 };
 
 template <RpcMethodT T, auto... Specs>
@@ -331,13 +331,13 @@ public:
 };
 
 template <typename T, class enable = void>
-struct is_rpc_method : std::false_type {};
+struct IsRpcMethod : std::false_type {};
 
 template <typename T>
-struct is_rpc_method<T, std::void_t<typename std::remove_cvref_t<T>::RpcMethodMarker>> : std::true_type {};
+struct IsRpcMethod<T, std::void_t<typename std::remove_cvref_t<T>::RpcMethodMarker>> : std::true_type {};
 
 template <typename T>
-concept RpcMethodObject = is_rpc_method<T>::value;
+concept RpcMethodObject = IsRpcMethod<T>::value;
 
 } // namespace detail
 
@@ -346,4 +346,4 @@ using detail::RpcMethodF;
 using detail::RpcMethodFN;
 using detail::RpcMethodSpec;
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

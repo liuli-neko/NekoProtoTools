@@ -205,13 +205,6 @@ option("enable_jsonrpc")
     end)
 option_end()
 
-option("custom_namespace")
-    set_default("NekoProto")
-    set_showmenu(true)
-    set_description("Custom namespace for generated code")
-    set_category("advanced")
-option_end()
-
 option("use_io_uring")
     set_default(false)
     set_showmenu(true)
@@ -312,10 +305,7 @@ target("NekoSerializer")
                 "enable_tomlplusplus",
                 "enable_protocol",
                 "enable_communication",
-                "enable_jsonrpc",
-                "custom_namespace")
-
-    set_configvar("NEKO_NAMESPACE", "$(custom_namespace)")
+                "enable_jsonrpc")
     on_load(function (target)
         import("lua.auto", {rootdir = os.projectdir()})
         auto().auto_add_packages(target, {uses_expected = true})
@@ -338,10 +328,7 @@ target("NekoArgParser")
                 "enable_simdjson",
                 "enable_libfyaml",
                 "enable_yamlcpp",
-                "enable_tomlplusplus",
-                "custom_namespace")
-
-    set_configvar("NEKO_NAMESPACE", "$(custom_namespace)")
+                "enable_tomlplusplus")
     on_load(function (target)
         import("lua.auto", {rootdir = os.projectdir()})
         auto().auto_add_packages(target, {uses_expected = true})

@@ -24,7 +24,7 @@ NekoProtoTools 是一个纯 C++ 实现的协议辅助库，旨在**简化 C++ �
 
 *   **简化消息定义**：业务类型只需定义字段；推荐通过非侵入 `template<> struct Meta<T>` 声明反射元数据，即可将自定义 C++ 类型用作可序列化对象或协议消息。
 *   **统一 Parser 序列化层**：JSON、Binary、XML、YAML、TOML 与 schema 生成共享同一套类型规则；具体格式只提供 Reader/Writer 与少量格式能力。
-*   **字段级元数据 tags**：`make_tags<Tag>(field)` 用于描述字段或调用点，而不是给类型永久打标签，便于同一类型在不同上下文中使用不同布局。
+*   **字段级元数据 tags**：`makeTags<Tag>(field)` 用于描述字段或调用点，而不是给类型永久打标签，便于同一类型在不同上下文中使用不同布局。
 *   **反射驱动 ArgParser**：复用对象反射和 tags 定义命令行选项，支持嵌套选项、子命令、默认值、环境变量、别名、互斥/依赖关系和 help/version 输出。
 *   **基础静态反射能力**：提供简单的静态反射机制，帮助在编译期进行类型检查和元数据提取。
 *   **通用 RPC 前端与可替换后端**：RPC 方法声明、注册和调用不绑定具体 wire protocol；当前内置 JSON-RPC 后端和精简二进制 `BinaryRpcBackend`。
@@ -277,7 +277,7 @@ int main() {
 
 ### 5.2. 字段 tags 与调用点元数据
 
-`make_tags<Tag>(value_or_accessor)` 用于描述“这个字段在当前绑定关系中如何被处理”。它不是类型自己的永久属性，因此同一个类型可以在不同结构、不同后端或不同顶层调用中使用不同 tags。
+`makeTags<Tag>(value_or_accessor)` 用于描述“这个字段在当前绑定关系中如何被处理”。它不是类型自己的永久属性，因此同一个类型可以在不同结构、不同后端或不同顶层调用中使用不同 tags。
 
 ```cpp
 #include <nekoproto/serialization/reflection.hpp>
@@ -294,15 +294,15 @@ template <>
 struct Meta<::Header> {
     constexpr static auto value =
         Object("length",
-               make_tags<BinaryTag{.fixed_length = sizeof(std::uint32_t)}>(&::Header::length),
+               makeTags<BinaryTag{.fixed_length = sizeof(std::uint32_t)}>(&::Header::length),
                "type",
-               make_tags<BinaryTag{.fixed_length = sizeof(std::uint16_t)}>(&::Header::type));
+               makeTags<BinaryTag{.fixed_length = sizeof(std::uint16_t)}>(&::Header::type));
 };
 } // namespace NekoProto
 
 std::vector<char> buffer;
 BinarySerializer::OutputSerializer out(buffer);
-out(make_tags<BinaryTag{.unframed = true}>(Header{12, 3}));
+out(makeTags<BinaryTag{.unframed = true}>(Header{12, 3}));
 out.end();
 ```
 
@@ -340,19 +340,19 @@ template <>
 struct Meta<::BuildOptions> {
     constexpr static auto value =
         Object("verbose",
-               make_tags<argparser::arg_name<"verbose", 'v'>,
+               makeTags<argparser::arg_name<"verbose", 'v'>,
                          argparser::arg_help<"enable verbose logs">,
                          argparser::ArgTags{.flag = true}>(&::BuildOptions::verbose),
                "jobs",
-               make_tags<argparser::arg_name<"jobs", 'j'>,
+               makeTags<argparser::arg_name<"jobs", 'j'>,
                          argparser::arg_default<4>,
                          argparser::arg_help<"parallel jobs">,
                          argparser::ArgTags{.range_min = 1, .range_max = 65}>(&::BuildOptions::jobs),
                "mode",
-               make_tags<argparser::arg_name<"mode", 'm'>,
+               makeTags<argparser::arg_name<"mode", 'm'>,
                          argparser::arg_choices<"debug", "release">>(&::BuildOptions::mode),
                "include",
-               make_tags<argparser::arg_name<"include", 'I'>,
+               makeTags<argparser::arg_name<"include", 'I'>,
                          argparser::arg_help<"include path">,
                          argparser::ArgTags{.repeatable = true}>(&::BuildOptions::include));
 };
@@ -442,7 +442,7 @@ ArgParser 的字段类型是拥有结果的值类型：文本请使用 `std::str
 #include <string>
 #include <chrono> // 用于时间戳
 
-NEKO_USE_NAMESPACE // 使用 nekoproto 命名空间
+using namespace nekoproto;
 using namespace ilias; // 使用 ilias 命名空间
 
 // 定义要传输的消息协议
@@ -587,7 +587,7 @@ RPC 模块已经拆成“通用前端 + 可替换后端”的结构。`RpcMethod
 #include <string>
 #include <vector>
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 struct CalculatorApi {
     RpcMethod<int(int, int), "add", "lhs", "rhs"> add;
@@ -620,7 +620,7 @@ struct Meta<::AppApi> {
     // common 保留 C++ 访问路径 client->common.version()，但远端方法名是 "version"。
     constexpr static auto value =
         Object("calc", &::AppApi::calc,
-               "common", make_tags<rpc_no_prefix_tag>(&::AppApi::common));
+               "common", makeTags<rpc_no_prefix_tag>(&::AppApi::common));
 };
 } // namespace NekoProto
 
@@ -698,7 +698,7 @@ template <>
 struct Meta<::Api> {
     constexpr static auto value =
         Object("admin", &::Api::admin,                                      // 远端名 "admin.reload"
-               "user", make_tags<rpc_prefix_tag<"account">>(&::Api::user)); // 远端名 "account.name"
+               "user", makeTags<rpc_prefix_tag<"account">>(&::Api::user)); // 远端名 "account.name"
 };
 } // namespace NekoProto
 ```
@@ -914,7 +914,7 @@ server->calc.add = [](int lhs, int rhs) -> ilias::IoTask<int> {
 
 *   **通用性**：RPC 前端只保留方法元数据、注册、绑定、调用和完整消息端点；JSON-RPC 的 id、batch、request/response 壳已下沉到 `JsonRpcBackend`。
 *   **最小接口**：当前后端接口是按 `RpcDispatcher` / `RpcClient` 的实际使用点形成的最小能力集合，未额外引入 listener、session、transport 或继承层次；stream 支持通过可选 `makeEndpoint` 静态 hook 接入。
-*   **非侵入扩展**：协议 struct 只需要 `RpcMethod` 字段和反射信息；命名策略通过 `make_tags<rpc_prefix_tag>` / `make_tags<rpc_no_prefix_tag>` 附着在字段使用点。
+*   **非侵入扩展**：协议 struct 只需要 `RpcMethod` 字段和反射信息；命名策略通过 `makeTags<rpc_prefix_tag>` / `makeTags<rpc_no_prefix_tag>` 附着在字段使用点。
 *   **和序列化扩展一致**：序列化类型用 `CustomParser<T>` 扩展，RPC 后端用静态函数和 concept 约束扩展；两者都避免要求业务类型继承框架基类。
 *   **后续可改进点**：常见的 `invoke` / tuple 参数展开可以做成默认 helper，进一步缩小后端需要手写的代码。
 

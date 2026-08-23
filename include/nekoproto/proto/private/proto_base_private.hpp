@@ -12,32 +12,33 @@
 #include <cstring>
 #include <functional>
 #include <map>
+#include <type_traits>
 #include <vector>
 
 #include "nekoproto/global/global.hpp"
 #include "reflection_serializer.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 class NEKO_PROTO_API ProtoFactory;
 namespace detail {
 class NEKO_PROTO_API AbstractProto;
 NEKO_PROTO_API
-auto static_init_funcs(const NEKO_STRING_VIEW&, std::function<void(ProtoFactory*)>)
-    -> std::map<NEKO_STRING_VIEW, std::function<void(ProtoFactory*)>>&;
+auto staticInitFuncs(const std::string_view&, std::function<void(ProtoFactory*)>)
+    -> std::map<std::string_view, std::function<void(ProtoFactory*)>>&;
 } // namespace detail
 
 namespace detail {
 class NEKO_PROTO_API AbstractProto {
 public:
-    virtual ~AbstractProto()                                                = default;
-    virtual std::vector<char> toData() const NEKO_NOEXCEPT                  = 0;
-    virtual bool toData(std::vector<char>& buffer) const NEKO_NOEXCEPT      = 0;
-    virtual bool fromData(const char* data, std::size_t size) NEKO_NOEXCEPT = 0;
-    virtual int type() const NEKO_NOEXCEPT                                  = 0;
-    virtual NEKO_STRING_VIEW protoName() const NEKO_NOEXCEPT                = 0;
-    virtual AbstractProto* clone() const                                    = 0;
-    virtual detail::ReflectionObject* getReflectionObject() NEKO_NOEXCEPT   = 0;
-    virtual void* data() NEKO_NOEXCEPT                                      = 0;
+    virtual ~AbstractProto()                                                   = default;
+    virtual auto toData() const noexcept -> std::vector<char>                  = 0;
+    virtual auto toData(std::vector<char>& buffer) const noexcept -> bool      = 0;
+    virtual auto fromData(const char* data, std::size_t size) noexcept -> bool = 0;
+    virtual auto type() const noexcept -> int                                  = 0;
+    virtual auto protoName() const noexcept -> std::string_view                = 0;
+    virtual auto clone() const -> AbstractProto*                               = 0;
+    virtual auto getReflectionObject() noexcept -> detail::ReflectionObject*   = 0;
+    virtual auto data() noexcept -> void*                                      = 0;
 };
 
 template <typename ProtoT, typename SerializerT>
@@ -53,72 +54,62 @@ public:
     explicit ProtoBase(ProtoT* /*proto*/);
     ProtoBase(ProtoBase&& other);
     virtual ~ProtoBase();
-    ProtoBase& operator=(ProtoBase&& other) NEKO_NOEXCEPT;
-    ProtoBase& operator=(const ProtoT& other) NEKO_NOEXCEPT;
-    ProtoBase& operator=(ProtoT&& other) NEKO_NOEXCEPT;
+    auto operator=(ProtoBase&& other) noexcept -> ProtoBase&;
+    auto operator=(const ProtoT& other) noexcept -> ProtoBase&;
+    auto operator=(ProtoT&& other) noexcept -> ProtoBase&;
 
-    ProtoT& operator*() NEKO_NOEXCEPT { return *mData; }
-    ProtoT* operator->() NEKO_NOEXCEPT { return mData; }
-    const ProtoT& operator*() const NEKO_NOEXCEPT { return *mData; }
-    const ProtoT* operator->() const NEKO_NOEXCEPT { return mData; }
-    operator const ProtoT&() const NEKO_NOEXCEPT { return *mData; }
-    operator ProtoT&() NEKO_NOEXCEPT { return *mData; }
+    auto operator*() noexcept -> ProtoT& { return *mData; }
+    auto operator->() noexcept -> ProtoT* { return mData; }
+    auto operator*() const noexcept -> const ProtoT& { return *mData; }
+    auto operator->() const noexcept -> const ProtoT* { return mData; }
+    operator const ProtoT&() const noexcept { return *mData; }
+    operator ProtoT&() noexcept { return *mData; }
 
-    AbstractProto* clone() const override;
-    bool toData(std::vector<char>& buffer) const NEKO_NOEXCEPT override;
-    std::vector<char> toData() const NEKO_NOEXCEPT override;
-    int type() const NEKO_NOEXCEPT override;
-    bool fromData(const char* data, std::size_t size) NEKO_NOEXCEPT override;
-    NEKO_STRING_VIEW protoName() const NEKO_NOEXCEPT override;
-    static NEKO_STRING_VIEW name() NEKO_NOEXCEPT;
-    static std::vector<char> Serialize(const ProtoT& proto);                    // NOLINT(readability-identifier-naming)
-    static bool Serialize(const ProtoT& proto, std::vector<char>& buffer);      // NOLINT(readability-identifier-naming)
-    static bool Deserialize(const char* data, std::size_t size, ProtoT& proto); // NOLINT(readability-identifier-naming)
-    ReflectionObject* getReflectionObject() NEKO_NOEXCEPT override;
-    virtual void* data() NEKO_NOEXCEPT override;
+    auto clone() const -> AbstractProto* override;
+    auto toData(std::vector<char>& buffer) const noexcept -> bool override;
+    auto toData() const noexcept -> std::vector<char> override;
+    auto type() const noexcept -> int override;
+    auto fromData(const char* data, std::size_t size) noexcept -> bool override;
+    auto protoName() const noexcept -> std::string_view override;
+    static auto name() noexcept -> std::string_view;
+    static auto serialize(const ProtoT& proto) -> std::vector<char>; // NOLINT(readability-identifier-naming)
+    static auto serialize(const ProtoT& proto, std::vector<char>& buffer)
+        -> bool; // NOLINT(readability-identifier-naming)
+    static auto deserialize(const char* data, std::size_t size, ProtoT& proto)
+        -> bool; // NOLINT(readability-identifier-naming)
+    auto getReflectionObject() noexcept -> ReflectionObject* override;
+    virtual auto data() noexcept -> void* override;
 
 protected:
-    ProtoBase(const ProtoBase& other)            = delete;
-    ProtoBase& operator=(const ProtoBase& other) = delete;
+    ProtoBase(const ProtoBase& other)                    = delete;
+    auto operator=(const ProtoBase& other) -> ProtoBase& = delete;
 
 private:
     std::unique_ptr<ReflectionSerializer> mReflectionSerializer = {};
     std::unique_ptr<ProtoT, void (*)(ProtoT*)> mData            = {};
-    static NEKO_STRING_VIEW gProtoName;
+    static std::string_view gProtoName;
 };
-class proto_method_access {
+class ProtoMethodAccess {
 public:
     template <typename T>
-    static auto static_method_specify_type() NEKO_NOEXCEPT -> decltype(T::specifyType()) { // NOLINT
+    static auto staticMethodSpecifyType() noexcept -> decltype(T::specifyType()) {
         return T::specifyType();
     }
 };
-#define NEKO_MAKE_HAS_STATIC_METHOD_TEST1(name, test_name)                                                             \
-    namespace detail {                                                                                                 \
-    template <class T, class ResultT>                                                                                  \
-    struct has_method_##test_name##_impl {                                                                             \
-        template <class TT, class AA>                                                                                  \
-        static auto test(int)                                                                                          \
-            -> decltype(std::is_same<decltype(proto_method_access::static_method_##name<TT>()), AA>::value,            \
-                        std::true_type());                                                                             \
-        template <class, class>                                                                                        \
-        static std::false_type test(...);                                                                              \
-        static const bool value = std::is_same<decltype(test<T, ResultT>(0)), std::true_type>::value;                  \
-    };                                                                                                                 \
-    } /* end namespace detail */                                                                                       \
-    template <class T, class A>                                                                                        \
-    struct has_method_##test_name : std::integral_constant<bool, detail::has_method_##test_name##_impl<T, A>::value> { \
-    };
 
-NEKO_MAKE_HAS_STATIC_METHOD_TEST1(specify_type, specify_type)
-#undef NEKO_MAKE_HAS_STATIC_METHOD_TEST1
+template <typename T, typename ResultT, typename = void>
+struct HasSpecifyTypeMethod : std::false_type {};
+
+template <typename T, typename ResultT>
+struct HasSpecifyTypeMethod<T, ResultT, std::void_t<decltype(ProtoMethodAccess::staticMethodSpecifyType<T>())>>
+    : std::bool_constant<std::is_same_v<decltype(ProtoMethodAccess::staticMethodSpecifyType<T>()), ResultT>> {};
 
 template <typename ProtoT, typename SerializerT>
-inline void* ProtoBase<ProtoT, SerializerT>::data() NEKO_NOEXCEPT {
+inline auto ProtoBase<ProtoT, SerializerT>::data() noexcept -> void* {
     return mData.get();
 }
 template <typename ProtoT, typename SerializerT>
-inline AbstractProto* ProtoBase<ProtoT, SerializerT>::clone() const {
+inline auto ProtoBase<ProtoT, SerializerT>::clone() const -> AbstractProto* {
     return new ProtoBase<ProtoT, SerializerT>(*mData);
 }
 
@@ -149,7 +140,7 @@ inline ProtoBase<ProtoT, SerializerT>::~ProtoBase() {
 }
 
 template <typename T, typename SerializerT>
-ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, SerializerT>&& other) NEKO_NOEXCEPT {
+auto ProtoBase<T, SerializerT>::operator=(ProtoBase<T, SerializerT>&& other) noexcept -> ProtoBase<T, SerializerT>& {
     mReflectionSerializer = std::move(other.mReflectionSerializer);
     mData                 = std::move(other.mData);
     other.mData           = nullptr;
@@ -157,29 +148,29 @@ ProtoBase<T, SerializerT>& ProtoBase<T, SerializerT>::operator=(ProtoBase<T, Ser
 }
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>& ProtoBase<ProtoT, SerializerT>::operator=(const ProtoT& other) NEKO_NOEXCEPT {
+inline auto ProtoBase<ProtoT, SerializerT>::operator=(const ProtoT& other) noexcept -> ProtoBase<ProtoT, SerializerT>& {
     (*mData) = other;
     return *this;
 }
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>& ProtoBase<ProtoT, SerializerT>::operator=(ProtoT&& other) NEKO_NOEXCEPT {
+inline auto ProtoBase<ProtoT, SerializerT>::operator=(ProtoT&& other) noexcept -> ProtoBase<ProtoT, SerializerT>& {
     (*mData) = std::move(other);
     return *this;
 }
 
 template <typename T, typename SerializerT>
-NEKO_STRING_VIEW ProtoBase<T, SerializerT>::protoName() const NEKO_NOEXCEPT {
+auto ProtoBase<T, SerializerT>::protoName() const noexcept -> std::string_view {
     return gProtoName;
 }
 
 template <typename T, typename SerializerT>
-NEKO_STRING_VIEW ProtoBase<T, SerializerT>::name() NEKO_NOEXCEPT {
+auto ProtoBase<T, SerializerT>::name() noexcept -> std::string_view {
     return gProtoName;
 }
 
 template <typename ProtoT, typename SerializerT>
-inline ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() NEKO_NOEXCEPT {
+inline auto ProtoBase<ProtoT, SerializerT>::getReflectionObject() noexcept -> ReflectionObject* {
     NEKO_ASSERT(mData != nullptr, "ReflectionSerializer", "mData is nullptr");
     if (mReflectionSerializer != nullptr) {
         return mReflectionSerializer->getObject();
@@ -189,7 +180,7 @@ inline ReflectionObject* ProtoBase<ProtoT, SerializerT>::getReflectionObject() N
 }
 
 template <typename ProtoT, typename SerializerT>
-bool ProtoBase<ProtoT, SerializerT>::Serialize(const ProtoT& proto, std::vector<char>& buffer) {
+auto ProtoBase<ProtoT, SerializerT>::serialize(const ProtoT& proto, std::vector<char>& buffer) -> bool {
     typename SerializerT::OutputSerializer serializer(buffer);
     auto ret = serializer(proto);
     if (!ret || !serializer.end()) {
@@ -199,16 +190,16 @@ bool ProtoBase<ProtoT, SerializerT>::Serialize(const ProtoT& proto, std::vector<
     return ret;
 }
 template <typename ProtoT, typename SerializerT>
-std::vector<char> ProtoBase<ProtoT, SerializerT>::Serialize(const ProtoT& proto) {
+auto ProtoBase<ProtoT, SerializerT>::serialize(const ProtoT& proto) -> std::vector<char> {
     std::vector<char> data;
-    if (!Serialize(proto, data)) {
+    if (!serialize(proto, data)) {
         return std::vector<char>();
     }
     return data;
 }
 
 template <typename ProtoT, typename SerializerT>
-bool ProtoBase<ProtoT, SerializerT>::Deserialize(const char* data, std::size_t size, ProtoT& proto) {
+auto ProtoBase<ProtoT, SerializerT>::deserialize(const char* data, std::size_t size, ProtoT& proto) -> bool {
     typename SerializerT::InputSerializer serializer(data, size);
     if (!serializer) {
 #if defined(NEKO_VERBOSE_LOGS)
@@ -224,22 +215,22 @@ bool ProtoBase<ProtoT, SerializerT>::Deserialize(const char* data, std::size_t s
     return true;
 }
 template <typename T, typename SerializerT>
-bool ProtoBase<T, SerializerT>::toData(std::vector<char>& buffer) const NEKO_NOEXCEPT {
+auto ProtoBase<T, SerializerT>::toData(std::vector<char>& buffer) const noexcept -> bool {
     NEKO_ASSERT(mData != nullptr, "ReflectionSerializer", "mData is nullptr");
-    return Serialize(*mData.get(), buffer);
+    return serialize(*mData.get(), buffer);
 }
 
 template <typename T, typename SerializerT>
-std::vector<char> ProtoBase<T, SerializerT>::toData() const NEKO_NOEXCEPT {
+auto ProtoBase<T, SerializerT>::toData() const noexcept -> std::vector<char> {
     NEKO_ASSERT(mData != nullptr, "ReflectionSerializer", "mData is nullptr");
-    return Serialize(*mData.get());
+    return serialize(*mData.get());
 }
 
 template <typename T, typename SerializerT>
-bool ProtoBase<T, SerializerT>::fromData(const char* data, std::size_t size) NEKO_NOEXCEPT {
+auto ProtoBase<T, SerializerT>::fromData(const char* data, std::size_t size) noexcept -> bool {
     NEKO_ASSERT(mData != nullptr, "ReflectionSerializer", "mData is nullptr");
-    return Deserialize(data, size, *mData.get());
+    return deserialize(data, size, *mData.get());
 }
 } // namespace detail
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

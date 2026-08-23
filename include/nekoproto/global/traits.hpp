@@ -29,13 +29,13 @@
 #include <variant>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace traits {
 template <typename T, class enable = void>
-struct has_monostate : std::false_type {};
+struct HasMonostate : std::false_type {};
 
 template <typename... Ts>
-struct has_monostate<std::variant<Ts...>, std::enable_if_t<(std::is_same_v<std::monostate, Ts> || ...)>>
+struct HasMonostate<std::variant<Ts...>, std::enable_if_t<(std::is_same_v<std::monostate, Ts> || ...)>>
     : std::true_type {};
 
 template <typename T>
@@ -50,41 +50,41 @@ concept optional_like = requires(T t, typename T::value_type v) {
 };
 
 template <typename T, class enable = void>
-struct optional_like_type {
+struct OptionalLikeType {
     constexpr static bool value = false;
 };
 
 template <typename T>
     requires optional_like<std::remove_cvref_t<T>>
-struct optional_like_type<T, void> {
+struct OptionalLikeType<T, void> {
     constexpr static bool value = true;
     using type = std::remove_cvref_t<T>::value_type;
 
-    static bool has_value(const T& val) { return val.has_value(); }
-    static void set_null(T& val) { val.reset(); }
+    static auto hasValue(const T& val) -> bool { return val.has_value(); }
+    static void setNull(T& val) { val.reset(); }
     template <typename U>
-    static decltype(auto) get_value(U&& self) {
+    static auto getValue(U&& self) -> decltype(auto) {
         return self.value();
     }
     template <typename U>
-    static void set_value(T& self, U&& val) {
+    static void setValue(T& self, U&& val) {
         self.emplace(std::forward<U>(val));
     }
 };
 
 template <typename T>
-struct optional_like_type<T, std::enable_if_t<has_monostate<std::remove_cvref_t<T>>::value>> {
+struct OptionalLikeType<T, std::enable_if_t<HasMonostate<std::remove_cvref_t<T>>::value>> {
     constexpr static bool value = true;
     using type = std::remove_cvref_t<T>;
 
-    static bool has_value(const T& val) { return !std::holds_alternative<std::monostate>(val); }
-    static void set_null(T& val) { val = std::monostate{}; }
+    static auto hasValue(const T& val) -> bool { return !std::holds_alternative<std::monostate>(val); }
+    static void setNull(T& val) { val = std::monostate{}; }
     template <typename U>
-    static decltype(auto) get_value(U&& self) {
+    static auto getValue(U&& self) -> decltype(auto) {
         return std::forward<U>(self);
     }
     template <typename U>
-    static void set_value(T& self, U&& val) {
+    static void setValue(T& self, U&& val) {
         self = std::forward<U>(val);
     }
 };
@@ -99,66 +99,66 @@ inline constexpr bool is_string_like_v = // NOLINT
     std::is_same_v<std::remove_cvref_t<T>, std::string> || std::is_same_v<std::remove_cvref_t<T>, std::string_view> ||
     std::is_convertible_v<std::remove_cvref_t<T>, std::string_view>;
 
-template <typename T, bool OptionalLike = optional_like_type<std::remove_cvref_t<T>>::value>
-struct unwrapped_optional_like_type {
+template <typename T, bool OptionalLike = OptionalLikeType<std::remove_cvref_t<T>>::value>
+struct UnwrappedOptionalLikeType {
     using type = std::remove_cvref_t<T>;
 };
 
 template <typename T>
-struct unwrapped_optional_like_type<T, true> {
-    using type = typename optional_like_type<std::remove_cvref_t<T>>::type;
+struct UnwrappedOptionalLikeType<T, true> {
+    using type = typename OptionalLikeType<std::remove_cvref_t<T>>::type;
 };
 
 template <typename T>
-using unwrapped_optional_like_type_t = std::remove_cvref_t<typename unwrapped_optional_like_type<T>::type>;
+using unwrapped_optional_like_type_t = std::remove_cvref_t<typename UnwrappedOptionalLikeType<T>::type>;
 
 template <typename T>
-struct is_known_collection : std::false_type {};
+struct IsKnownCollection : std::false_type {};
 
 template <typename T, typename Alloc>
-struct is_known_collection<std::vector<T, Alloc>> : std::true_type {};
+struct IsKnownCollection<std::vector<T, Alloc>> : std::true_type {};
 
 template <typename T, typename Alloc>
-struct is_known_collection<std::deque<T, Alloc>> : std::true_type {};
+struct IsKnownCollection<std::deque<T, Alloc>> : std::true_type {};
 
 template <typename T, typename Alloc>
-struct is_known_collection<std::list<T, Alloc>> : std::true_type {};
+struct IsKnownCollection<std::list<T, Alloc>> : std::true_type {};
 
 template <typename T, typename Compare, typename Alloc>
-struct is_known_collection<std::set<T, Compare, Alloc>> : std::true_type {};
+struct IsKnownCollection<std::set<T, Compare, Alloc>> : std::true_type {};
 
 template <typename T, typename Compare, typename Alloc>
-struct is_known_collection<std::multiset<T, Compare, Alloc>> : std::true_type {};
+struct IsKnownCollection<std::multiset<T, Compare, Alloc>> : std::true_type {};
 
 template <typename T, typename Hash, typename Eq, typename Alloc>
-struct is_known_collection<std::unordered_set<T, Hash, Eq, Alloc>> : std::true_type {};
+struct IsKnownCollection<std::unordered_set<T, Hash, Eq, Alloc>> : std::true_type {};
 
 template <typename T, typename Hash, typename Eq, typename Alloc>
-struct is_known_collection<std::unordered_multiset<T, Hash, Eq, Alloc>> : std::true_type {};
+struct IsKnownCollection<std::unordered_multiset<T, Hash, Eq, Alloc>> : std::true_type {};
 
 template <typename T, std::size_t N>
-struct is_known_collection<std::array<T, N>> : std::true_type {};
+struct IsKnownCollection<std::array<T, N>> : std::true_type {};
 
 template <typename K, typename V, typename Compare, typename Alloc>
-struct is_known_collection<std::map<K, V, Compare, Alloc>> : std::true_type {};
+struct IsKnownCollection<std::map<K, V, Compare, Alloc>> : std::true_type {};
 
 template <typename K, typename V, typename Compare, typename Alloc>
-struct is_known_collection<std::multimap<K, V, Compare, Alloc>> : std::true_type {};
+struct IsKnownCollection<std::multimap<K, V, Compare, Alloc>> : std::true_type {};
 
 template <typename K, typename V, typename Hash, typename Eq, typename Alloc>
-struct is_known_collection<std::unordered_map<K, V, Hash, Eq, Alloc>> : std::true_type {};
+struct IsKnownCollection<std::unordered_map<K, V, Hash, Eq, Alloc>> : std::true_type {};
 
 template <typename K, typename V, typename Hash, typename Eq, typename Alloc>
-struct is_known_collection<std::unordered_multimap<K, V, Hash, Eq, Alloc>> : std::true_type {};
+struct IsKnownCollection<std::unordered_multimap<K, V, Hash, Eq, Alloc>> : std::true_type {};
 
 template <typename... Ts>
-struct is_known_collection<std::tuple<Ts...>> : std::true_type {};
+struct IsKnownCollection<std::tuple<Ts...>> : std::true_type {};
 
 template <typename K, typename V>
-struct is_known_collection<std::pair<K, V>> : std::true_type {};
+struct IsKnownCollection<std::pair<K, V>> : std::true_type {};
 
 template <typename T>
-inline constexpr bool is_known_collection_v = is_known_collection<std::remove_cvref_t<T>>::value; // NOLINT
+inline constexpr bool is_known_collection_v = IsKnownCollection<std::remove_cvref_t<T>>::value; // NOLINT
 
 template <typename T>
 inline constexpr bool is_scalar_like_v = []() consteval { // NOLINT
@@ -180,4 +180,4 @@ inline constexpr bool is_collection_like_v = []() consteval { // NOLINT
 }();
 
 } // namespace traits
-NEKO_END_NAMESPACE
+} // namespace nekoproto

@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace rpc {
 enum class NekoRpcExtensionType : std::uint16_t {
     // Client Hello advertises MethodId support. Server Hello includes this only when MethodId is enabled for the
@@ -31,4 +31,4 @@ enum class NekoRpcExtensionType : std::uint16_t {
     CompressionMinPayloadSize = 18U,
 };
 }
-NEKO_END_NAMESPACE
+} // namespace nekoproto

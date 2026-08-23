@@ -7,7 +7,7 @@
 #include <system_error>
 #include <utility>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace argparser {
 
 enum class ArgParserError {
@@ -29,14 +29,14 @@ struct ArgParserErrorDetail {
 };
 
 namespace detail {
-inline ArgParserErrorDetail& current_argparser_error_detail() {
+inline auto currentArgparserErrorDetail() -> ArgParserErrorDetail& {
     static thread_local ArgParserErrorDetail detail;
     return detail;
 }
 
-inline void clear_argparser_error_detail() { current_argparser_error_detail() = {}; }
+inline void clearArgparserErrorDetail() { currentArgparserErrorDetail() = {}; }
 
-inline std::string argparser_error_message(ArgParserError error) {
+inline auto argparserErrorMessage(ArgParserError error) -> std::string {
     switch (error) {
     case ArgParserError::Success:
         return "success";
@@ -64,29 +64,29 @@ inline std::string argparser_error_message(ArgParserError error) {
 
 class ArgParserErrorCategory final : public std::error_category {
 public:
-    [[nodiscard]] const char* name() const noexcept override { return "nekoproto.argparser"; }
-    [[nodiscard]] std::string message(int condition) const override {
+    [[nodiscard]] auto name() const noexcept -> const char* override { return "nekoproto.argparser"; }
+    [[nodiscard]] auto message(int condition) const -> std::string override {
         const auto error = static_cast<ArgParserError>(condition);
-        return argparser_error_message(error);
+        return argparserErrorMessage(error);
     }
 };
 
-inline const std::error_category& argparser_error_category() {
+inline auto argparserErrorCategory() -> const std::error_category& {
     static ArgParserErrorCategory s_category;
     return s_category;
 }
 
-inline std::error_code make_argparser_error(ArgParserError error, std::string detail) {
-    current_argparser_error_detail() = {.error = error, .message = std::move(detail)};
-    return {static_cast<int>(error), argparser_error_category()};
+inline auto makeArgparserError(ArgParserError error, std::string detail) -> std::error_code {
+    currentArgparserErrorDetail() = {.error = error, .message = std::move(detail)};
+    return {static_cast<int>(error), argparserErrorCategory()};
 }
 
-inline std::error_code make_argparser_error(ArgParserError error, std::string_view detail) {
-    return make_argparser_error(error, std::string(detail));
+inline auto makeArgparserError(ArgParserError error, std::string_view detail) -> std::error_code {
+    return makeArgparserError(error, std::string(detail));
 }
 
-inline std::error_code make_argparser_error(ArgParserError error, const char* detail) {
-    return make_argparser_error(error, std::string(detail == nullptr ? "" : detail));
+inline auto makeArgparserError(ArgParserError error, const char* detail) -> std::error_code {
+    return makeArgparserError(error, std::string(detail == nullptr ? "" : detail));
 }
 } // namespace detail
 
@@ -96,16 +96,21 @@ inline std::error_code make_argparser_error(ArgParserError error, const char* de
  * The returned value owns its message, so it remains valid after later parser calls. Use
  * std::error_code for stable programmatic handling and this function for user-facing context.
  */
-[[nodiscard]] inline ArgParserErrorDetail last_error() { return detail::current_argparser_error_detail(); }
+[[nodiscard]] inline auto lastError() -> ArgParserErrorDetail { return detail::currentArgparserErrorDetail(); }
+
+inline auto makeErrorCode(ArgParserError error) -> std::error_code {
+    return {static_cast<int>(error), detail::argparserErrorCategory()};
+}
+
+// Required by std::error_code's ADL customization protocol.
+inline auto make_error_code(ArgParserError error) -> std::error_code { // NOLINT(readability-identifier-naming)
+    return makeErrorCode(error);
+}
 
 } // namespace argparser
-NEKO_END_NAMESPACE
-
-inline std::error_code make_error_code(NEKO_NAMESPACE::argparser::ArgParserError error) {
-    return {static_cast<int>(error), NEKO_NAMESPACE::argparser::detail::argparser_error_category()};
-}
+} // namespace nekoproto
 
 namespace std {
 template <>
-struct is_error_code_enum<NEKO_NAMESPACE::argparser::ArgParserError> : true_type {};
+struct is_error_code_enum<nekoproto::argparser::ArgParserError> : true_type {};
 } // namespace std

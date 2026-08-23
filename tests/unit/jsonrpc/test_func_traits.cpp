@@ -10,7 +10,7 @@
 #include "nekoproto/serialization/reflection.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 template <typename T>
 struct JsonRpcCompatTraits : detail::JsonRpcMethodTraits<detail::RpcMethodTraits<T>> {
@@ -46,7 +46,7 @@ struct TestStructWithSub {
     NEKO_SERIALIZER(aMember, cMember, dMember)
 };
 
-void test_func(int aMember) {
+void testFunc(int aMember) {
     std::cout << "test_func : " << aMember << std::endl;
     (void)aMember;
 };
@@ -68,23 +68,23 @@ struct TestStructWithFunc {
     void testFunc(int aMember) { this->aMember = aMember; }
 
     void testFuncNoArgs() {}
-    int constTestFunc(int val) const { return aMember + val; }
+    auto constTestFunc(int val) const -> int { return aMember + val; }
 };
 
-void test_func_with_struct(TestStructWithFunc& aMember) { (void)aMember; }
-void free_func_void() {}
-int free_func_one_arg(int ii) { return ii; }
-void free_func_multi_args(int /*unused*/, const std::string& /*unused*/) {}
-void free_func_auto_expand(TestStruct ss) { (void)ss; }
-void free_func_tuple_arg(std::tuple<int, bool> tt) { (void)tt; }
+void testFuncWithStruct(TestStructWithFunc& aMember) { (void)aMember; }
+void freeFuncVoid() {}
+auto freeFuncOneArg(int ii) -> int { return ii; }
+void freeFuncMultiArgs(int /*unused*/, const std::string& /*unused*/) {}
+void freeFuncAutoExpand(TestStruct ss) { (void)ss; }
+void freeFuncTupleArg(std::tuple<int, bool> tt) { (void)tt; }
 
 struct MyFunctor {
-    bool operator()(int /*unused*/, const std::string& /*unused*/) { return true; }
+    auto operator()(int /*unused*/, const std::string& /*unused*/) -> bool { return true; }
 };
 
 TEST(RefectNames, Test) { // NOLINT
-    std::cout << detail::mangled_name<detail::NekoReflector::nekoStaticFunc>() << std::endl;
-    std::cout << detail::mangled_name<test_func>() << std::endl;
+    std::cout << detail::mangledName<detail::NekoReflector::nekoStaticFunc>() << std::endl;
+    std::cout << detail::mangledName<testFunc>() << std::endl;
     ASSERT_EQ(detail::class_nameof<TestStruct>, "TestStruct");
     auto names = Reflect<TestStruct>::names();
     ASSERT_EQ(names.size(), 4);
@@ -107,17 +107,17 @@ TEST(RefectNames, Test) { // NOLINT
     EXPECT_EQ(names1[0], "aMember");
     EXPECT_EQ(names1[1], "cMember");
     EXPECT_EQ(names1[2], "dMember");
-    std::string name = std::string(detail::func_nameof<test_func>);
+    std::string name = std::string(detail::func_nameof<testFunc>);
     EXPECT_STREQ(name.c_str(), "test_func");
-    call<test_func>(1);
-    name = std::string(detail::func_nameof<test_func_with_struct>);
-    EXPECT_STREQ(name.c_str(), "test_func_with_struct");
+    call<testFunc>(1);
+    name = std::string(detail::func_nameof<testFuncWithStruct>);
+    EXPECT_STREQ(name.c_str(), "testFuncWithStruct");
     TestStructWithFunc aa;
-    call<test_func_with_struct>(aa);
+    call<testFuncWithStruct>(aa);
     name = std::string(detail::func_nameof<TestStructWithFunc::staticTestFunc>);
     EXPECT_STREQ(name.c_str(), "staticTestFunc");
     call<TestStructWithFunc::staticTestFunc>(1);
-    std::cout << detail::mangled_name<&TestStructWithFunc::testFunc>() << std::endl;
+    std::cout << detail::mangledName<&TestStructWithFunc::testFunc>() << std::endl;
 }
 
 TEST(RpcMethodTraitsTest, FunctionType) {
@@ -289,7 +289,7 @@ TEST(RpcMethodTraitsTest, MapTypeNameIsCompleteAndUserReadable) {
 TEST(RpcMethodTraitsTest, FreeFunctions) {
     // Case 1: 无参，void 返回
     {
-        using Traits = JsonRpcCompatTraits<decltype(&free_func_void)>;
+        using Traits = JsonRpcCompatTraits<decltype(&freeFuncVoid)>;
         static_assert(std::is_same_v<Traits::RawReturnType, void>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<>>);
         static_assert(std::is_same_v<Traits::ParamsTupleType, std::tuple<>>);
@@ -300,7 +300,7 @@ TEST(RpcMethodTraitsTest, FreeFunctions) {
     }
     // Case 2: 单参数，非 void 返回
     {
-        using Traits = JsonRpcCompatTraits<decltype(&free_func_one_arg)>;
+        using Traits = JsonRpcCompatTraits<decltype(&freeFuncOneArg)>;
         static_assert(std::is_same_v<Traits::RawReturnType, int>);
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<int>>);
         static_assert(std::is_same_v<Traits::ParamsTupleType, std::tuple<int>>);
@@ -311,7 +311,7 @@ TEST(RpcMethodTraitsTest, FreeFunctions) {
     }
     // Case 3: 多参数
     {
-        using Traits = JsonRpcCompatTraits<decltype(&free_func_multi_args)>;
+        using Traits = JsonRpcCompatTraits<decltype(&freeFuncMultiArgs)>;
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<int, const std::string&>>);
         static_assert(std::is_same_v<Traits::ParamsTupleType, std::tuple<int, std::string>>); // 检查是否移除了 const&
         static_assert(Traits::NumParams == 2);
@@ -321,7 +321,7 @@ TEST(RpcMethodTraitsTest, FreeFunctions) {
     }
     // Case 4: 可自动展开的结构体参数
     {
-        using Traits = JsonRpcCompatTraits<decltype(&free_func_auto_expand)>;
+        using Traits = JsonRpcCompatTraits<decltype(&freeFuncAutoExpand)>;
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<TestStruct>>);
         static_assert(std::is_same_v<Traits::ParamsTupleType, TestStruct>);
         static_assert(Traits::NumParams == 1);
@@ -331,7 +331,7 @@ TEST(RpcMethodTraitsTest, FreeFunctions) {
     }
     // Case 5: 单个 tuple 参数
     {
-        using Traits = JsonRpcCompatTraits<decltype(&free_func_tuple_arg)>;
+        using Traits = JsonRpcCompatTraits<decltype(&freeFuncTupleArg)>;
         static_assert(std::is_same_v<Traits::RawParamsType, std::tuple<std::tuple<int, bool>>>);
         static_assert(std::is_same_v<Traits::ParamsTupleType, std::tuple<int, bool>>);
         static_assert(Traits::NumParams == 1);

@@ -28,7 +28,7 @@
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/rpc/endpoint.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace detail {
 using ilias::IoTask;
@@ -42,26 +42,26 @@ using IliasLengthPrefixedMessageEndpoint = LengthPrefixedStreamMessageEndpoint<I
 using IliasChunkedDatagramMessageEndpoint = ChunkedDatagramMessageEndpoint<IliasUdpSocket, IPEndpoint>;
 
 NEKO_PROTO_API
-auto make_tcp_stream_client(IPEndpoint ipendpoint) -> IoTask<IliasLengthPrefixedMessageEndpoint>;
+auto makeTcpStreamClient(IPEndpoint ipendpoint) -> IoTask<IliasLengthPrefixedMessageEndpoint>;
 // tcp://127.0.0.1:8080
 // 127.0.0.1:8080
 NEKO_PROTO_API
-auto make_tcp_stream_client(std::string_view url) -> IoTask<IliasLengthPrefixedMessageEndpoint>;
+auto makeTcpStreamClient(std::string_view url) -> IoTask<IliasLengthPrefixedMessageEndpoint>;
 NEKO_PROTO_API
-auto make_tcp_stream_client(const char* url) -> IoTask<IliasLengthPrefixedMessageEndpoint>;
+auto makeTcpStreamClient(const char* url) -> IoTask<IliasLengthPrefixedMessageEndpoint>;
 NEKO_PROTO_API
-auto make_tcp_stream_client(const std::string& url) -> IoTask<IliasLengthPrefixedMessageEndpoint>;
+auto makeTcpStreamClient(const std::string& url) -> IoTask<IliasLengthPrefixedMessageEndpoint>;
 NEKO_PROTO_API
-auto make_udp_stream_client(IPEndpoint bindIpendpoint, IPEndpoint remoteIpendpoint)
+auto makeUdpStreamClient(IPEndpoint bindIpendpoint, IPEndpoint remoteIpendpoint)
     -> IoTask<IliasChunkedDatagramMessageEndpoint>;
 // like udp://127.0.0.1:12345-127.0.0.1:12346
 // 127.0.0.1:12345-127.0.0.1:12346
 NEKO_PROTO_API
-auto make_udp_stream_client(std::string_view url) -> IoTask<IliasChunkedDatagramMessageEndpoint>;
+auto makeUdpStreamClient(std::string_view url) -> IoTask<IliasChunkedDatagramMessageEndpoint>;
 NEKO_PROTO_API
-auto make_udp_stream_client(const char* url) -> IoTask<IliasChunkedDatagramMessageEndpoint>;
+auto makeUdpStreamClient(const char* url) -> IoTask<IliasChunkedDatagramMessageEndpoint>;
 NEKO_PROTO_API
-auto make_udp_stream_client(const std::string& url) -> IoTask<IliasChunkedDatagramMessageEndpoint>;
+auto makeUdpStreamClient(const std::string& url) -> IoTask<IliasChunkedDatagramMessageEndpoint>;
 } // namespace detail
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

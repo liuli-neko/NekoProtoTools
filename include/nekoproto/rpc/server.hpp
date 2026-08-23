@@ -25,7 +25,7 @@
 #include "nekoproto/rpc/endpoint.hpp"
 #include "nekoproto/rpc/registry.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 template <RpcBackend Backend, typename... ProtocolSets>
 class RpcServer : public ProtocolSets... {
@@ -49,9 +49,9 @@ public:
 
     explicit RpcServer(ilias::IoContext& ctx, typename Backend::Options options)
         : ProtocolSets()..., mRpc(), mDispatcher(ctx), mBackendContext(), mScope() {
-        _init();
+        init();
         mBackendContext = Backend::makeServerContext(std::move(options), methodDatas());
-        _configureExecution();
+        configureExecution();
     }
     ~RpcServer() {
         try {
@@ -64,8 +64,8 @@ public:
     auto operator->() noexcept -> RpcServer* { return this; }
     auto operator->() const noexcept -> const RpcServer* { return this; }
 
-    auto close() -> void {
-        auto endpoints = _beginClose();
+    void close() {
+        auto endpoints = beginClose();
         // Cancel endpoint and request tasks before destroying their streams.
         // Closing a stream concurrently with a just-started read can race in
         // some endpoint implementations; framed reads are cancellation-aware.
@@ -77,7 +77,7 @@ public:
     }
 
     auto flush() -> ilias::IoTask<void> {
-        auto endpoints = _snapshotEndpoints();
+        auto endpoints = snapshotEndpoints();
         for (auto& slot : endpoints) {
             auto guard = co_await slot->sendMutex.lock();
             if (auto ret = co_await slot->endpoint->flush(); !ret) {
@@ -88,7 +88,7 @@ public:
     }
 
     auto shutdown() -> ilias::Task<void> {
-        auto endpoints = _beginClose();
+        auto endpoints = beginClose();
         for (auto& slot : endpoints) {
             auto guard = co_await slot->sendMutex.lock();
             if (auto ret = co_await slot->endpoint->flush(); !ret) {
@@ -111,27 +111,27 @@ public:
     }
 
     auto wait() -> ilias::Task<void> { co_await mScope.waitAll(); }
-    auto cancel(const typename Backend::Id& id) -> void { mDispatcher.cancel(id); }
-    auto cancelAll() -> void { mDispatcher.cancelAll(); }
+    void cancel(const typename Backend::Id& id) { mDispatcher.cancel(id); }
+    void cancelAll() { mDispatcher.cancelAll(); }
     auto getCurrentIds() const -> std::vector<typename Backend::Id> { return mDispatcher.getCurrentIds(); }
     auto metrics() const noexcept -> RpcMetricsSnapshot { return mDispatcher.metrics(); }
 
     template <MessageEndpoint EndpointT>
-    auto addEndpoint(EndpointT endpoint, RpcPeerInfo peer = {}) -> void {
-        auto slot = std::make_shared<EndpointSlot>();
+    void addEndpoint(EndpointT endpoint, RpcPeerInfo peer = {}) {
+        auto slot  = std::make_shared<EndpointSlot>();
         slot->peer = std::move(peer);
-        if constexpr (detail::is_message_endpoint<EndpointT>::value) {
+        if constexpr (detail::IsMessageEndpoint<EndpointT>::value) {
             slot->endpoint = std::make_unique<EndpointT>(std::move(endpoint));
         } else {
             using Wrapper  = detail::MessageEndpointWrapper<EndpointT>;
             slot->endpoint = std::make_unique<Wrapper>(std::move(endpoint));
         }
-        _handleEndpoint(slot);
+        handleEndpoint(slot);
     }
 
     template <typename StreamT>
         requires detail::RpcStreamBackend<Backend, StreamT>
-    auto addEndpoint(StreamT stream, RpcPeerInfo peer = {}) -> void {
+    void addEndpoint(StreamT stream, RpcPeerInfo peer = {}) {
         if constexpr (requires(StreamT value, std::vector<MethodData> methods) {
                           {
                               Backend::makeServerEndpoint(std::move(value), std::move(methods), mBackendContext.options)
@@ -161,12 +161,12 @@ public:
     // Use this when the protocol surface is not expressed as a reflected
     // RpcMethod field, or when a method is added after construction.
     template <ConstexprString... ArgNames, typename RetT, typename... Args>
-    auto bindMethod(std::string_view name, traits::FunctionT<RetT(Args...)> func) -> void {
+    void bindMethod(std::string_view name, traits::FunctionT<RetT(Args...)> func) {
         static_assert(sizeof...(ArgNames) == 0 || sizeof...(ArgNames) == sizeof...(Args),
                       "bindMethod: The number of parameters and names do not match.");
         mDispatcher.bindRpcMethod(name, std::move(func),
                                   std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...});
-        _refreshBackendMethodCatalog();
+        refreshBackendMethodCatalog();
     }
 
     // Function-pointer binding API:
@@ -175,35 +175,34 @@ public:
     // static RpcMethodF declaration form used inside protocol structs.
     template <auto Ptr, ConstexprString... ArgNames>
         requires detail::RpcMethodFuncT<Ptr>
-    auto bindMethod() -> void {
+    void bindMethod() {
         mDispatcher.bindRpcMethod(detail::func_nameof<Ptr>,
                                   traits::FunctionT<std::remove_pointer_t<decltype(Ptr)>>(Ptr),
                                   std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...});
-        _refreshBackendMethodCatalog();
+        refreshBackendMethodCatalog();
     }
 
     // Coroutine overload for runtime-name binding. It shares the same metadata
     // shape as the synchronous overload; only the stored callable differs.
     template <ConstexprString... ArgNames, typename RetT, typename... Args>
-    auto bindMethod(std::string_view name, traits::FunctionT<ilias::IoTask<RetT>(Args...)> func) -> void {
+    void bindMethod(std::string_view name, traits::FunctionT<ilias::IoTask<RetT>(Args...)> func) {
         static_assert(sizeof...(ArgNames) == 0 || sizeof...(ArgNames) == sizeof...(Args),
                       "bindMethod: The number of parameters and names do not match.");
         mDispatcher.bindRpcMethod(name, std::move(func),
                                   std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...});
-        _refreshBackendMethodCatalog();
+        refreshBackendMethodCatalog();
     }
 
     // Context-aware binding keeps RpcRequestContext out of the public wire
     // signature and parameter serializer. Only the server handler sees it.
     template <ConstexprString... ArgNames, typename RetT, typename... Args>
-    auto bindMethodWithContext(
-        std::string_view name,
-        traits::FunctionT<ilias::IoTask<RetT>(const RpcRequestContext&, Args...)> func) -> void {
+    void bindMethodWithContext(std::string_view name,
+                               traits::FunctionT<ilias::IoTask<RetT>(const RpcRequestContext&, Args...)> func) {
         static_assert(sizeof...(ArgNames) == 0 || sizeof...(ArgNames) == sizeof...(Args),
                       "bindMethodWithContext: The number of public parameters and names do not match.");
-        mDispatcher.bindRpcMethodWithContext(
-            name, std::move(func), std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...});
-        _refreshBackendMethodCatalog();
+        mDispatcher.bindRpcMethodWithContext(name, std::move(func),
+                                             std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...});
+        refreshBackendMethodCatalog();
     }
 
     auto processMessage(std::span<const std::byte> message) -> ilias::Task<typename Backend::Message> {
@@ -224,7 +223,7 @@ public:
     static constexpr int BuiltinMethodsCount = Reflect<RpcBuiltinMethods>::value_count;
 
 private:
-    auto _configureExecution() -> void {
+    void configureExecution() {
         std::size_t maxActive = 4096U;
         std::size_t maxQueued = 4096U;
         std::optional<std::chrono::nanoseconds> requestTimeout;
@@ -240,7 +239,7 @@ private:
         mDispatcher.configureExecution(maxActive, maxQueued, requestTimeout);
     }
 
-    auto _maxInflightRequests() const noexcept -> std::size_t {
+    auto maxInflightRequests() const noexcept -> std::size_t {
         if constexpr (requires { mBackendContext.options.max_inflight_requests_per_connection; }) {
             return mBackendContext.options.max_inflight_requests_per_connection;
         }
@@ -248,11 +247,11 @@ private:
     }
 
     template <typename Protocol>
-    void _registerProtocol(Protocol& protocol, std::string_view prefix = {}) {
-        detail::for_each_rpc_method(protocol, [this](auto& method) { mDispatcher.registerRpcMethod(method); }, prefix);
+    void registerProtocol(Protocol& protocol, std::string_view prefix = {}) {
+        detail::forEachRpcMethod(protocol, [this](auto& method) { mDispatcher.registerRpcMethod(method); }, prefix);
     }
 
-    auto _buildMethodInfo(const MethodData& methodData) -> std::string {
+    auto buildMethodInfo(const MethodData& methodData) -> std::string {
         std::string method_info;
         method_info.reserve(256);
         method_info += "name: " + std::string(methodData.name) + "\n";
@@ -279,7 +278,7 @@ private:
         return method_info;
     }
 
-    auto _handleEndpoint(std::shared_ptr<EndpointSlot> slot) -> void {
+    void handleEndpoint(std::shared_ptr<EndpointSlot> slot) {
         slot->session = Backend::makeServerPeerSession(mBackendContext);
         bool rejected = false;
         {
@@ -296,7 +295,7 @@ private:
         }
         try {
             auto cleanup = [this, slot]() -> ilias::Task<void> {
-                _eraseEndpoint(slot);
+                eraseEndpoint(slot);
                 mDispatcher.cancelSession(std::addressof(slot->session));
                 slot->requests->stop();
                 co_await slot->requests->waitAll(); // wait for all requests to finish
@@ -305,19 +304,19 @@ private:
             };
             mScope.spawn([this, slot, cleanup]() -> ilias::Task<void> {
                 NEKO_LOG_INFO("rpc", "rpc server endpoint loop start");
-                co_await ilias::finally(_handleClient(slot), cleanup);
+                co_await ilias::finally(handleClient(slot), cleanup);
                 // Don't do anything here; once the coroutine is canceled, the following code won't run. You can only
                 // use RAII to clean up.
                 co_return;
             });
         } catch (...) {
-            _eraseEndpoint(slot);
+            eraseEndpoint(slot);
             slot->endpoint->close();
             throw;
         }
     }
 
-    auto _handleClient(std::shared_ptr<EndpointSlot> slot) -> ilias::Task<void> {
+    auto handleClient(std::shared_ptr<EndpointSlot> slot) -> ilias::Task<void> {
         while (slot->endpoint != nullptr) {
             std::vector<std::byte> buffer;
             if (auto ret = co_await slot->endpoint->recv(buffer); !ret) {
@@ -360,11 +359,10 @@ private:
                 continue;
             }
 
-            if (slot->requests->size() >= _maxInflightRequests()) {
+            if (slot->requests->size() >= maxInflightRequests()) {
                 NEKO_LOG_WARN("rpc", "rpc server connection exceeded in-flight request limit");
-                (void)co_await mDispatcher.processMessage(buffer, mBackendContext, slot->session,
-                                                          slot->endpoint.get(), &slot->sendMutex, true,
-                                                          std::addressof(slot->peer));
+                (void)co_await mDispatcher.processMessage(buffer, mBackendContext, slot->session, slot->endpoint.get(),
+                                                          &slot->sendMutex, true, std::addressof(slot->peer));
                 continue;
             }
             slot->requests->spawn([this, slot, message = std::move(buffer)]() mutable -> ilias::Task<void> {
@@ -377,19 +375,19 @@ private:
         co_return;
     }
 
-    auto _init() -> void {
-        (_registerProtocol(static_cast<ProtocolSets&>(*this)), ...);
-        _registerProtocol(mRpc, "rpc");
+    void init() {
+        (registerProtocol(static_cast<ProtocolSets&>(*this)), ...);
+        registerProtocol(mRpc, "rpc");
         mRpc.getMethodInfo = [this](std::string method_name) -> ilias::IoTask<std::string> {
             if (auto ret = mDispatcher.methodDatas(method_name); !ret.name.empty()) {
-                co_return _buildMethodInfo(ret);
+                co_return buildMethodInfo(ret);
             }
             co_return std::string("Method not found!");
         };
         mRpc.getMethodInfoList = [this]() -> ilias::IoTask<std::vector<std::string>> {
             std::vector<std::string> method_des_list;
             for (const auto& item : methodDatas()) {
-                method_des_list.emplace_back(_buildMethodInfo(item));
+                method_des_list.emplace_back(buildMethodInfo(item));
             }
             co_return method_des_list;
         };
@@ -411,16 +409,15 @@ private:
         };
         mDispatcher.bindRpcMethodWithContext(
             mRpc.getExecutionPolicy,
-            traits::FunctionT<ilias::IoTask<std::map<std::string, std::string>>(
-                const RpcRequestContext&)>([this](const RpcRequestContext& requestContext)
-                                               -> ilias::IoTask<std::map<std::string, std::string>> {
-                co_return _publicExecutionPolicy(requestContext);
-            }));
+            traits::FunctionT<ilias::IoTask<std::map<std::string, std::string>>(const RpcRequestContext&)>(
+                [this](const RpcRequestContext& requestContext) -> ilias::IoTask<std::map<std::string, std::string>> {
+                    co_return publicExecutionPolicy(requestContext);
+                }));
         mDispatcher.bindRpcMethodWithContext(
             mRpc.setConnectionTimeout,
             traits::FunctionT<ilias::IoTask<std::uint64_t>(const RpcRequestContext&, std::uint64_t)>(
-                [this](const RpcRequestContext& requestContext, std::uint64_t timeoutNanoseconds)
-                    -> ilias::IoTask<std::uint64_t> {
+                [this](const RpcRequestContext& requestContext,
+                       std::uint64_t timeoutNanoseconds) -> ilias::IoTask<std::uint64_t> {
                     auto result = mDispatcher.setConnectionTimeout(requestContext, timeoutNanoseconds);
                     if (!result) {
                         co_return ilias::Err(result.error());
@@ -429,33 +426,29 @@ private:
                 }));
         mDispatcher.bindRpcMethodWithContext(
             mRpc.getConnectionStatus,
-            traits::FunctionT<ilias::IoTask<std::map<std::string, std::uint64_t>>(
-                const RpcRequestContext&)>([this](const RpcRequestContext& requestContext)
-                                               -> ilias::IoTask<std::map<std::string, std::uint64_t>> {
-                co_return mDispatcher.connectionStatus(requestContext);
-            }));
+            traits::FunctionT<ilias::IoTask<std::map<std::string, std::uint64_t>>(const RpcRequestContext&)>(
+                [this](const RpcRequestContext& requestContext) -> ilias::IoTask<std::map<std::string, std::uint64_t>> {
+                    co_return mDispatcher.connectionStatus(requestContext);
+                }));
         mDispatcher.bindRpcMethodWithContext(
             mRpc.getConnectionTasks,
-            traits::FunctionT<ilias::IoTask<std::map<std::string, std::string>>(
-                const RpcRequestContext&)>([this](const RpcRequestContext& requestContext)
-                                               -> ilias::IoTask<std::map<std::string, std::string>> {
-                co_return mDispatcher.connectionTasks(requestContext);
-            }));
+            traits::FunctionT<ilias::IoTask<std::map<std::string, std::string>>(const RpcRequestContext&)>(
+                [this](const RpcRequestContext& requestContext) -> ilias::IoTask<std::map<std::string, std::string>> {
+                    co_return mDispatcher.connectionTasks(requestContext);
+                }));
     }
 
-    auto _publicExecutionPolicy(const RpcRequestContext& requestContext) const
-        -> std::map<std::string, std::string> {
+    auto publicExecutionPolicy(const RpcRequestContext& requestContext) const -> std::map<std::string, std::string> {
         std::map<std::string, std::string> policy;
-        policy["privacy_scope"] = "per_client_contract_only";
-        policy["deadline.effective_rule"] = "minimum_connection_timeout_and_server_limit";
-        policy["deadline.covers"] = "queue_and_handler";
-        policy["deadline.propagation"] = "connection_timeout_builtin_and_client_cancel";
-        policy["status.connection"] = "active_queued_in_flight";
-        policy["status.tasks"] = "current_only_no_history";
-        policy["status.global"] = "not_disclosed";
+        policy["privacy_scope"]                              = "per_client_contract_only";
+        policy["deadline.effective_rule"]                    = "minimum_connection_timeout_and_server_limit";
+        policy["deadline.covers"]                            = "queue_and_handler";
+        policy["deadline.propagation"]                       = "connection_timeout_builtin_and_client_cancel";
+        policy["status.connection"]                          = "active_queued_in_flight";
+        policy["status.tasks"]                               = "current_only_no_history";
+        policy["status.global"]                              = "not_disclosed";
         policy["limits.connection_timeout_min_inclusive_ns"] = "1";
-        if (auto connectionTimeout = mDispatcher.connectionTimeout(requestContext);
-            connectionTimeout.has_value()) {
+        if (auto connectionTimeout = mDispatcher.connectionTimeout(requestContext); connectionTimeout.has_value()) {
             policy["limits.connection_timeout_ns"] = std::to_string(connectionTimeout->count());
         } else {
             policy["limits.connection_timeout_ns"] = "none";
@@ -470,8 +463,7 @@ private:
             } else if (options.request_timeout->count() <= 0) {
                 policy["limits.connection_timeout_max_exclusive_ns"] = "unavailable";
             } else {
-                policy["limits.connection_timeout_max_exclusive_ns"] =
-                    std::to_string(options.request_timeout->count());
+                policy["limits.connection_timeout_max_exclusive_ns"] = std::to_string(options.request_timeout->count());
             }
         }
         if constexpr (requires { options.max_inflight_requests_per_connection; }) {
@@ -479,19 +471,18 @@ private:
                 std::to_string(options.max_inflight_requests_per_connection);
         }
         if constexpr (requires { options.frame_limits.max_frame_bytes; }) {
-            policy["limits.max_frame_bytes"] = std::to_string(options.frame_limits.max_frame_bytes);
-            policy["limits.max_method_bytes"] = std::to_string(options.frame_limits.max_method_bytes);
-            policy["limits.max_payload_bytes"] = std::to_string(options.frame_limits.max_payload_bytes);
+            policy["limits.max_frame_bytes"]     = std::to_string(options.frame_limits.max_frame_bytes);
+            policy["limits.max_method_bytes"]    = std::to_string(options.frame_limits.max_method_bytes);
+            policy["limits.max_payload_bytes"]   = std::to_string(options.frame_limits.max_payload_bytes);
             policy["limits.max_extension_bytes"] = std::to_string(options.frame_limits.max_extension_bytes);
         }
         if constexpr (requires { options.max_decompressed_payload_bytes; }) {
-            policy["limits.max_decompressed_payload_bytes"] =
-                std::to_string(options.max_decompressed_payload_bytes);
+            policy["limits.max_decompressed_payload_bytes"] = std::to_string(options.max_decompressed_payload_bytes);
         }
         return policy;
     }
 
-    auto _methodMetadata() -> std::vector<detail::RpcMethodMetadata> {
+    auto methodMetadata() -> std::vector<detail::RpcMethodMetadata> {
         std::vector<detail::RpcMethodMetadata> methods;
         for (const auto& item : methodDatas()) {
             methods.push_back({
@@ -507,14 +498,14 @@ private:
         return methods;
     }
 
-    auto _refreshBackendMethodCatalog() -> void { Backend::refreshMethodCatalog(mBackendContext, _methodMetadata()); }
+    void refreshBackendMethodCatalog() { Backend::refreshMethodCatalog(mBackendContext, methodMetadata()); }
 
-    auto _snapshotEndpoints() const -> std::vector<std::shared_ptr<EndpointSlot>> {
+    auto snapshotEndpoints() const -> std::vector<std::shared_ptr<EndpointSlot>> {
         std::scoped_lock lock(mEndpointMutex);
         return {mEndpoints.begin(), mEndpoints.end()};
     }
 
-    auto _beginClose() -> std::list<std::shared_ptr<EndpointSlot>> {
+    auto beginClose() -> std::list<std::shared_ptr<EndpointSlot>> {
         std::list<std::shared_ptr<EndpointSlot>> endpoints;
         std::scoped_lock lock(mEndpointMutex);
         mClosing = true;
@@ -522,7 +513,7 @@ private:
         return endpoints;
     }
 
-    auto _eraseEndpoint(const std::shared_ptr<EndpointSlot>& slot) -> void {
+    void eraseEndpoint(const std::shared_ptr<EndpointSlot>& slot) {
         std::scoped_lock lock(mEndpointMutex);
         mEndpoints.remove(slot);
     }
@@ -535,4 +526,4 @@ private:
     ilias::TaskGroup<void> mScope;
 };
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

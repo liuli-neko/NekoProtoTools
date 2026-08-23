@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace argparser {
 
 enum class CompletionShell {
@@ -58,7 +58,7 @@ struct CompletionModel {
     bool valid = true;
 };
 
-inline CompletionOption completion_option_from_spec(const ArgSpec& spec) {
+inline auto completionOptionFromSpec(const ArgSpec& spec) -> CompletionOption {
     CompletionOption option;
     if (!spec.short_name.empty()) {
         option.names.push_back("-" + spec.short_name);
@@ -85,17 +85,17 @@ inline CompletionOption completion_option_from_spec(const ArgSpec& spec) {
     return option;
 }
 
-inline void append_builtin_completion_option(CompletionNode& node, const ArgSchema& schema, bool enabled,
+inline void appendBuiltinCompletionOption(CompletionNode& node, const ArgSchema& schema, bool enabled,
                                              std::string_view short_name, std::string_view long_name,
                                              std::string_view help) {
     if (!enabled) {
         return;
     }
     CompletionOption option;
-    if (!schema.find_short_index(short_name).has_value()) {
+    if (!schema.findShortIndex(short_name).has_value()) {
         option.names.push_back("-" + std::string(short_name));
     }
-    if (!schema.find_long_index(long_name).has_value()) {
+    if (!schema.findLongIndex(long_name).has_value()) {
         option.names.push_back("--" + std::string(long_name));
     }
     if (!option.names.empty()) {
@@ -105,15 +105,15 @@ inline void append_builtin_completion_option(CompletionNode& node, const ArgSche
     }
 }
 
-inline CompletionNode make_completion_node(ArgSchema schema, const ArgParserConfig& config, bool& valid) {
+inline auto makeCompletionNode(ArgSchema schema, const ArgParserConfig& config, bool& valid) -> CompletionNode {
     CompletionNode node;
-    if (auto error = validate_schema_definition(schema, config)) {
+    if (auto error = validateSchemaDefinition(schema, config)) {
         valid = false;
         return node;
     }
 
-    append_builtin_completion_option(node, schema, config.addHelp, "h", "help", "show help");
-    append_builtin_completion_option(node, schema, config.addVersion && !config.version.empty(), "V", "version",
+    appendBuiltinCompletionOption(node, schema, config.addHelp, "h", "help", "show help");
+    appendBuiltinCompletionOption(node, schema, config.addVersion && !config.version.empty(), "V", "version",
                                      "show version");
     for (const auto& spec : schema.specs) {
         if (spec.hidden) {
@@ -128,13 +128,13 @@ inline CompletionNode make_completion_node(ArgSchema schema, const ArgParserConf
             positional.repeatable = spec.repeatable;
             node.positionals.push_back(std::move(positional));
         } else {
-            node.options.push_back(completion_option_from_spec(spec));
+            node.options.push_back(completionOptionFromSpec(spec));
         }
     }
     return node;
 }
 
-inline std::string shell_single_quote(std::string_view value) {
+inline auto shellSingleQuote(std::string_view value) -> std::string {
     std::string result{"'"};
     for (const char ch : value) {
         if (ch == '\'') {
@@ -149,7 +149,7 @@ inline std::string shell_single_quote(std::string_view value) {
     return result;
 }
 
-inline std::string completion_function_id(std::string_view command_name) {
+inline auto completionFunctionId(std::string_view command_name) -> std::string {
     std::string result{"_neko_"};
     std::uint32_t hash = 2166136261U;
     for (const unsigned char ch : command_name) {
@@ -165,7 +165,7 @@ inline std::string completion_function_id(std::string_view command_name) {
     return result;
 }
 
-inline bool valid_completion_command_name(std::string_view command_name) {
+inline auto validCompletionCommandName(std::string_view command_name) -> bool {
     const auto is_alnum = [](const unsigned char ch) {
         return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9');
     };
@@ -177,7 +177,7 @@ inline bool valid_completion_command_name(std::string_view command_name) {
     });
 }
 
-inline void append_bash_name_test(std::string& out, std::string_view variable, const std::vector<std::string>& names) {
+inline void appendBashNameTest(std::string& out, std::string_view variable, const std::vector<std::string>& names) {
     for (std::size_t index = 0; index < names.size(); ++index) {
         if (index != 0U) {
             out.append(" || ");
@@ -185,12 +185,12 @@ inline void append_bash_name_test(std::string& out, std::string_view variable, c
         out.append("[[ \"");
         out.append(variable);
         out.append("\" == ");
-        out.append(shell_single_quote(names[index]));
+        out.append(shellSingleQuote(names[index]));
         out.append(" ]]");
     }
 }
 
-inline void append_bash_candidates(std::string& out, std::string_view function_id, std::string_view value_prefix,
+inline void appendBashCandidates(std::string& out, std::string_view function_id, std::string_view value_prefix,
                                    std::string_view display_prefix, const std::vector<std::string>& choices,
                                    ArgValueCompletion completion, std::string_view indent) {
     if (!choices.empty()) {
@@ -199,10 +199,10 @@ inline void append_bash_candidates(std::string& out, std::string_view function_i
         out.append("_words \"");
         out.append(value_prefix);
         out.append("\" ");
-        out.append(shell_single_quote(display_prefix));
+        out.append(shellSingleQuote(display_prefix));
         for (const auto& choice : choices) {
             out.push_back(' ');
-            out.append(shell_single_quote(choice));
+            out.append(shellSingleQuote(choice));
         }
         out.push_back('\n');
     } else if (completion != ArgValueCompletion::None) {
@@ -213,20 +213,20 @@ inline void append_bash_candidates(std::string& out, std::string_view function_i
         out.append(" \"");
         out.append(value_prefix);
         out.append("\" ");
-        out.append(shell_single_quote(display_prefix));
+        out.append(shellSingleQuote(display_prefix));
         out.push_back('\n');
     }
 }
 
-inline void append_bash_value_completion(std::string& out, const CompletionNode& node, std::string_view function_id) {
+inline void appendBashValueCompletion(std::string& out, const CompletionNode& node, std::string_view function_id) {
     for (const auto& option : node.options) {
         if (option.flag || option.names.empty()) {
             continue;
         }
         out.append("    if ");
-        append_bash_name_test(out, "$prev", option.names);
+        appendBashNameTest(out, "$prev", option.names);
         out.append("; then\n");
-        append_bash_candidates(out, function_id, "$cur", {}, option.choices, option.completion, "      ");
+        appendBashCandidates(out, function_id, "$cur", {}, option.choices, option.completion, "      ");
         out.append("      return\n    fi\n");
 
         for (const auto& name : option.names) {
@@ -236,11 +236,11 @@ inline void append_bash_value_completion(std::string& out, const CompletionNode&
                 continue;
             }
             out.append("    if [[ \"$cur\" == ");
-            out.append(shell_single_quote(name + (long_name ? "=" : "")));
+            out.append(shellSingleQuote(name + (long_name ? "=" : "")));
             out.append("*");
             if (short_name) {
                 out.append(" && \"$cur\" != ");
-                out.append(shell_single_quote(name));
+                out.append(shellSingleQuote(name));
             }
             out.append(" ]]; then\n      local value_prefix=\"${cur#");
             out.append(name);
@@ -248,14 +248,14 @@ inline void append_bash_value_completion(std::string& out, const CompletionNode&
                 out.push_back('=');
             }
             out.append("}\"\n");
-            append_bash_candidates(out, function_id, "$value_prefix", name + (long_name ? "=" : ""), option.choices,
+            appendBashCandidates(out, function_id, "$value_prefix", name + (long_name ? "=" : ""), option.choices,
                                    option.completion, "      ");
             out.append("      return\n    fi\n");
         }
     }
 }
 
-inline void append_bash_value_option_test(std::string& out, const CompletionNode& node, bool implicit) {
+inline void appendBashValueOptionTest(std::string& out, const CompletionNode& node, bool implicit) {
     bool first = true;
     for (const auto& option : node.options) {
         if (option.flag || option.has_implicit != implicit) {
@@ -267,7 +267,7 @@ inline void append_bash_value_option_test(std::string& out, const CompletionNode
             }
             first = false;
             out.append("[[ \"$token\" == ");
-            out.append(shell_single_quote(name));
+            out.append(shellSingleQuote(name));
             out.append(" ]]");
         }
     }
@@ -276,7 +276,7 @@ inline void append_bash_value_option_test(std::string& out, const CompletionNode
     }
 }
 
-inline void append_bash_option_candidates(std::string& out, const CompletionNode& node, std::string_view function_id) {
+inline void appendBashOptionCandidates(std::string& out, const CompletionNode& node, std::string_view function_id) {
     std::vector<std::string> names;
     for (const auto& option : node.options) {
         names.insert(names.end(), option.names.begin(), option.names.end());
@@ -287,14 +287,14 @@ inline void append_bash_option_candidates(std::string& out, const CompletionNode
         out.append("_words \"$cur\" ''");
         for (const auto& name : names) {
             out.push_back(' ');
-            out.append(shell_single_quote(name));
+            out.append(shellSingleQuote(name));
         }
         out.push_back('\n');
     }
 }
 
-inline void append_bash_node(std::string& out, const CompletionNode& node, std::string_view function_id) {
-    append_bash_value_completion(out, node, function_id);
+inline void appendBashNode(std::string& out, const CompletionNode& node, std::string_view function_id) {
+    appendBashValueCompletion(out, node, function_id);
     out.append("    local positional_index=0 expect_value=0 force_positional=0\n");
     out.append("    for ((i = command_index ? command_index + 1 : 1; i<COMP_CWORD; ++i)); do\n");
     out.append("      token=\"${COMP_WORDS[i]}\"\n");
@@ -308,15 +308,15 @@ inline void append_bash_node(std::string& out, const CompletionNode& node, std::
     out.append("      if (( !force_positional )); then\n");
     out.append("        if [[ \"$token\" == --*=* ]]; then\n          continue\n        fi\n");
     out.append("        if ");
-    append_bash_value_option_test(out, node, false);
+    appendBashValueOptionTest(out, node, false);
     out.append("; then\n          expect_value=1\n          continue\n        fi\n");
     out.append("        if ");
-    append_bash_value_option_test(out, node, true);
+    appendBashValueOptionTest(out, node, true);
     out.append("; then\n          expect_value=2\n          continue\n        fi\n");
     out.append("        [[ \"$token\" == -* ]] && continue\n");
     out.append("      fi\n      ((++positional_index))\n    done\n");
     out.append("    if (( !force_positional )) && [[ \"$cur\" == -* ]]; then\n");
-    append_bash_option_candidates(out, node, function_id);
+    appendBashOptionCandidates(out, node, function_id);
     out.append("      return\n    fi\n");
 
     bool has_positional_completion = false;
@@ -334,15 +334,15 @@ inline void append_bash_node(std::string& out, const CompletionNode& node, std::
         }
         out.append(std::to_string(index));
         out.append(" )); then\n");
-        append_bash_candidates(out, function_id, "$cur", {}, positional.choices, positional.completion, "      ");
+        appendBashCandidates(out, function_id, "$cur", {}, positional.choices, positional.completion, "      ");
     }
     if (has_positional_completion) {
         out.append("    fi\n");
     }
 }
 
-inline std::string format_bash_completion(const CompletionModel& model) {
-    const auto function_id = completion_function_id(model.command_name);
+inline auto formatBashCompletion(const CompletionModel& model) -> std::string {
+    const auto function_id = completionFunctionId(model.command_name);
     std::string out;
     out.append(function_id);
     out.append("_words() {\n  local value_prefix=\"$1\" display_prefix=\"$2\" candidate\n  shift 2\n");
@@ -362,13 +362,13 @@ inline std::string format_bash_completion(const CompletionModel& model) {
         out.append(
             "    token=\"${COMP_WORDS[i]}\"\n    if (( root_expect_value )); then root_expect_value=0; continue; fi\n");
         out.append("    if [[ \"$token\" == --*=* ]]; then continue; fi\n    if ");
-        append_bash_value_option_test(out, model.root, false);
+        appendBashValueOptionTest(out, model.root, false);
         out.append("; then root_expect_value=1; continue; fi\n");
         for (const auto& command : model.commands) {
             out.append("    if [[ \"$token\" == ");
-            out.append(shell_single_quote(command.name));
+            out.append(shellSingleQuote(command.name));
             out.append(" ]]; then command=");
-            out.append(shell_single_quote(command.name));
+            out.append(shellSingleQuote(command.name));
             out.append("; command_index=$i; break; fi\n");
         }
         out.append("  done\n");
@@ -377,36 +377,36 @@ inline std::string format_bash_completion(const CompletionModel& model) {
     out.append("  case \"$command\" in\n");
     for (const auto& command : model.commands) {
         out.append("  ");
-        out.append(shell_single_quote(command.name));
+        out.append(shellSingleQuote(command.name));
         out.append(")\n");
-        append_bash_node(out, command.node, function_id);
+        appendBashNode(out, command.node, function_id);
         out.append("    ;;\n");
     }
     out.append("  '')\n");
     if (!model.commands.empty()) {
-        append_bash_value_completion(out, model.root, function_id);
+        appendBashValueCompletion(out, model.root, function_id);
         out.append("    if [[ \"$cur\" == -* ]]; then\n");
-        append_bash_option_candidates(out, model.root, function_id);
+        appendBashOptionCandidates(out, model.root, function_id);
         out.append("    else\n      ");
         out.append(function_id);
         out.append("_words \"$cur\" ''");
         for (const auto& command : model.commands) {
             out.push_back(' ');
-            out.append(shell_single_quote(command.name));
+            out.append(shellSingleQuote(command.name));
         }
         out.append("\n    fi\n");
     } else {
-        append_bash_node(out, model.root, function_id);
+        appendBashNode(out, model.root, function_id);
     }
     out.append("    ;;\n  esac\n}\n\ncomplete -F ");
     out.append(function_id);
     out.append(" -- ");
-    out.append(shell_single_quote(model.command_name));
+    out.append(shellSingleQuote(model.command_name));
     out.push_back('\n');
     return out;
 }
 
-inline std::string zsh_description_escape(std::string_view value) {
+inline auto zshDescriptionEscape(std::string_view value) -> std::string {
     std::string result;
     for (const char ch : value) {
         if (ch == '\n' || ch == '\r') {
@@ -421,7 +421,7 @@ inline std::string zsh_description_escape(std::string_view value) {
     return result;
 }
 
-inline std::string zsh_action_word_escape(std::string_view value) {
+inline auto zshActionWordEscape(std::string_view value) -> std::string {
     std::string result;
     for (const char ch : value) {
         if (ch == '\\' || ch == ' ' || ch == '\t' || ch == '(' || ch == ')' || ch == '[' || ch == ']' || ch == '{' ||
@@ -433,14 +433,14 @@ inline std::string zsh_action_word_escape(std::string_view value) {
     return result;
 }
 
-inline std::string zsh_value_action(const std::vector<std::string>& choices, ArgValueCompletion completion) {
+inline auto zshValueAction(const std::vector<std::string>& choices, ArgValueCompletion completion) -> std::string {
     if (!choices.empty()) {
         std::string result{"("};
         for (std::size_t index = 0; index < choices.size(); ++index) {
             if (index != 0U) {
                 result.push_back(' ');
             }
-            result.append(zsh_action_word_escape(choices[index]));
+            result.append(zshActionWordEscape(choices[index]));
         }
         result.push_back(')');
         return result;
@@ -454,7 +454,7 @@ inline std::string zsh_value_action(const std::vector<std::string>& choices, Arg
     return {};
 }
 
-inline std::vector<std::string> zsh_argument_specs(const CompletionNode& node) {
+inline auto zshArgumentSpecs(const CompletionNode& node) -> std::vector<std::string> {
     std::vector<std::string> specs;
     for (const auto& option : node.options) {
         for (const auto& name : option.names) {
@@ -465,14 +465,14 @@ inline std::vector<std::string> zsh_argument_specs(const CompletionNode& node) {
             spec.append(name);
             if (!option.help.empty()) {
                 spec.push_back('[');
-                spec.append(zsh_description_escape(option.help));
+                spec.append(zshDescriptionEscape(option.help));
                 spec.push_back(']');
             }
             if (!option.flag) {
                 spec.push_back(':');
-                spec.append(zsh_description_escape(option.value_name));
+                spec.append(zshDescriptionEscape(option.value_name));
                 spec.push_back(':');
-                spec.append(zsh_value_action(option.choices, option.completion));
+                spec.append(zshValueAction(option.choices, option.completion));
             }
             specs.push_back(std::move(spec));
         }
@@ -486,31 +486,31 @@ inline std::vector<std::string> zsh_argument_specs(const CompletionNode& node) {
             spec.append(std::to_string(index + 1U));
         }
         spec.push_back(':');
-        spec.append(zsh_description_escape(positional.value_name));
+        spec.append(zshDescriptionEscape(positional.value_name));
         spec.push_back(':');
-        spec.append(zsh_value_action(positional.choices, positional.completion));
+        spec.append(zshValueAction(positional.choices, positional.completion));
         specs.push_back(std::move(spec));
     }
     return specs;
 }
 
-inline void append_zsh_arguments(std::string& out, const CompletionNode& node,
+inline void appendZshArguments(std::string& out, const CompletionNode& node,
                                  const std::vector<std::string>& extra_specs = {}) {
-    const auto specs = zsh_argument_specs(node);
+    const auto specs = zshArgumentSpecs(node);
     out.append("    _arguments -s");
     for (const auto& spec : specs) {
         out.append(" \\\n      ");
-        out.append(shell_single_quote(spec));
+        out.append(shellSingleQuote(spec));
     }
     for (const auto& spec : extra_specs) {
         out.append(" \\\n      ");
-        out.append(shell_single_quote(spec));
+        out.append(shellSingleQuote(spec));
     }
     out.push_back('\n');
 }
 
-inline std::string format_zsh_completion(const CompletionModel& model) {
-    const auto function_id = completion_function_id(model.command_name);
+inline auto formatZshCompletion(const CompletionModel& model) -> std::string {
+    const auto function_id = completionFunctionId(model.command_name);
     std::string out{"#compdef "};
     out.append(model.command_name);
     out.append("\n\n");
@@ -521,13 +521,13 @@ inline std::string format_zsh_completion(const CompletionModel& model) {
     if (!model.commands.empty()) {
         out.append("  for ((i=2; i<CURRENT; ++i)); do\n    token=\"${words[i]}\"\n    if (( root_expect_value )); then "
                    "root_expect_value=0; continue; fi\n    [[ \"$token\" == --*=* ]] && continue\n    if ");
-        append_bash_value_option_test(out, model.root, false);
+        appendBashValueOptionTest(out, model.root, false);
         out.append("; then root_expect_value=1; continue; fi\n");
         for (const auto& command : model.commands) {
             out.append("    if [[ \"$token\" == ");
-            out.append(shell_single_quote(command.name));
+            out.append(shellSingleQuote(command.name));
             out.append(" ]]; then command=");
-            out.append(shell_single_quote(command.name));
+            out.append(shellSingleQuote(command.name));
             out.append("; command_index=$i; break; fi\n");
         }
         out.append("  done\n  if (( command_index )); then\n    local -i remove_count=$((command_index - 1))\n    "
@@ -535,46 +535,46 @@ inline std::string format_zsh_completion(const CompletionModel& model) {
                    "\"$command\" in\n");
         for (const auto& command : model.commands) {
             out.append("    ");
-            out.append(shell_single_quote(command.name));
+            out.append(shellSingleQuote(command.name));
             out.append(")\n");
-            append_zsh_arguments(out, command.node);
+            appendZshArguments(out, command.node);
             out.append("      return\n      ;;\n");
         }
         out.append("    esac\n  fi\n\n");
 
         std::vector<std::string> root_extra{"1:command:->command", "*::arg:->command"};
-        append_zsh_arguments(out, model.root, root_extra);
+        appendZshArguments(out, model.root, root_extra);
         out.append("    case \"$state\" in\n    command)\n      local -a commands\n      commands=(\n");
         for (const auto& command : model.commands) {
             out.append("        ");
-            out.append(shell_single_quote(command.name + ":" + zsh_description_escape(command.help)));
+            out.append(shellSingleQuote(command.name + ":" + zshDescriptionEscape(command.help)));
             out.push_back('\n');
         }
         out.append("      )\n      _describe 'command' commands\n      ;;\n    esac\n");
     } else {
-        append_zsh_arguments(out, model.root);
+        appendZshArguments(out, model.root);
     }
     out.append("}\n\ncompdef ");
     out.append(function_id);
     out.push_back(' ');
-    out.append(shell_single_quote(model.command_name));
+    out.append(shellSingleQuote(model.command_name));
     out.push_back('\n');
     return out;
 }
 
-inline std::string format_completion_model(const CompletionModel& model, CompletionShell shell) {
-    if (!model.valid || !valid_completion_command_name(model.command_name)) {
+inline auto formatCompletionModel(const CompletionModel& model, CompletionShell shell) -> std::string {
+    if (!model.valid || !validCompletionCommandName(model.command_name)) {
         return {};
     }
     switch (shell) {
     case CompletionShell::Bash:
-        return format_bash_completion(model);
+        return formatBashCompletion(model);
     case CompletionShell::Zsh:
-        return format_zsh_completion(model);
+        return formatZshCompletion(model);
     }
     return {};
 }
 
 } // namespace detail
 } // namespace argparser
-NEKO_END_NAMESPACE
+} // namespace nekoproto

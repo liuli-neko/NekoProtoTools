@@ -9,12 +9,12 @@
 #include <simdjson.h>
 #include <string_view>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace detail::simd {
 
 class Writer : public json::TextWriter {
 public:
-    static bool parseRawValue(std::string_view text, RawValueType& value) {
+    static auto parseRawValue(std::string_view text, RawValueType& value) -> bool {
         simdjson::dom::parser parser;
         simdjson::padded_string padded{text};
         auto parsed = parser.parse(padded);
@@ -27,6 +27,6 @@ public:
 };
 
 } // namespace detail::simd
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
 #endif

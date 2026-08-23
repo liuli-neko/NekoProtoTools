@@ -15,7 +15,7 @@
 
 #include "nekoproto/serialization/xml_serializer.hpp"
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 namespace {
 
@@ -62,9 +62,9 @@ struct XmlCommentedDocument {
 
     struct Neko {
         constexpr static auto value =
-            Object("values", make_tags<comment_tag<"values comment">>(&XmlCommentedDocument::values), "maybe",
-                   make_tags<comment_tag<"optional comment">>(&XmlCommentedDocument::maybe), "empty",
-                   make_tags<comment_tag<"empty comment">>(&XmlCommentedDocument::empty)); // NOLINT
+            Object("values", makeTags<comment_tag<"values comment">>(&XmlCommentedDocument::values), "maybe",
+                   makeTags<comment_tag<"optional comment">>(&XmlCommentedDocument::maybe), "empty",
+                   makeTags<comment_tag<"empty comment">>(&XmlCommentedDocument::empty)); // NOLINT
     };
 };
 
@@ -74,8 +74,8 @@ struct XmlPositionalComments {
 
     struct Neko {
         constexpr static auto value =
-            Array(make_tags<comment_tag<"first element">>(&XmlPositionalComments::first),
-                  make_tags<comment_tag<"second element">>(&XmlPositionalComments::second)); // NOLINT
+            Array(makeTags<comment_tag<"first element">>(&XmlPositionalComments::first),
+                  makeTags<comment_tag<"second element">>(&XmlPositionalComments::second)); // NOLINT
     };
 };
 
@@ -158,20 +158,20 @@ TEST(PugiXmlBackend, MapsXmlContentFieldToNodeText) {
 
 TEST(PugiXmlBackend, WritesCommentTagsForObjectsAndArrays) {
     static_assert(parsing::supports_comments<xml::Writer>);
-    static_assert(tag_query::get<tag_property::leading_comment>(TagList<comment_tag<"values comment">>{}) ==
+    static_assert(tag_query::get<tag_property::LeadingComment>(TagList<comment_tag<"values comment">>{}) ==
                   std::string_view{"values comment"});
-    static_assert(tag_query::get<tag_property::comment>(TagList<comment_tag<"values comment">>{}) ==
+    static_assert(tag_query::get<tag_property::Comment>(TagList<comment_tag<"values comment">>{}) ==
                   std::string_view{"values comment"});
-    static_assert(tag_query::get<tag_property::leading_comment>(TagList<leading_comment_tag<"lead">>{}) ==
+    static_assert(tag_query::get<tag_property::LeadingComment>(TagList<leading_comment_tag<"lead">>{}) ==
                   std::string_view{"lead"});
-    static_assert(tag_query::get<tag_property::trailing_comment>(TagList<trailing_comment_tag<"tail">>{}) ==
+    static_assert(tag_query::get<tag_property::TrailingComment>(TagList<trailing_comment_tag<"tail">>{}) ==
                   std::string_view{"tail"});
-    static_assert(!tag_query::has<tag_property::comment>(TagList<trailing_comment_tag<"tail">>{}));
+    static_assert(!tag_query::has<tag_property::Comment>(TagList<trailing_comment_tag<"tail">>{}));
     static_assert(
-        tag_query::get<tag_property::skippable>(TagList<comment_tag<"skip comment">, JsonTag{.skippable = true}>{}));
-    static_assert(tag_query::has<tag_property::name>(TagList<rename_tag<"value">, comment_tag<"inner comment">>{}));
+        tag_query::get<tag_property::Skippable>(TagList<comment_tag<"skip comment">, JsonTag{.skippable = true}>{}));
+    static_assert(tag_query::has<tag_property::Name>(TagList<rename_tag<"value">, comment_tag<"inner comment">>{}));
     static_assert(
-        tag_query::has<tag_property::leading_comment>(TagList<rename_tag<"value">, comment_tag<"inner comment">>{}));
+        tag_query::has<tag_property::LeadingComment>(TagList<rename_tag<"value">, comment_tag<"inner comment">>{}));
 
     XmlCommentedDocument source;
     source.values = {1, 2};
@@ -238,12 +238,12 @@ TEST(PugiXmlBackend, WritesCommentTagsForObjectsAndArrays) {
 struct Source {
     int source = 5;
     NEKO_SERIALIZER(
-        (make_tags<rename_tag<"value">, comment_tag<"inner comment">, trailing_comment_tag<"tail comment">>(source)));
+        (makeTags<rename_tag<"value">, comment_tag<"inner comment">, trailing_comment_tag<"tail comment">>(source)));
 };
 
 struct OuterSource { // same as Source, tag order will not effect the output
     int source = 5;
-    NEKO_SERIALIZER((make_tags<comment_tag<"outer comment">, rename_tag<"value">>(source)));
+    NEKO_SERIALIZER((makeTags<comment_tag<"outer comment">, rename_tag<"value">>(source)));
 };
 
 TEST(PugiXmlBackend, WriteModifierTagsCanBeLayered) {

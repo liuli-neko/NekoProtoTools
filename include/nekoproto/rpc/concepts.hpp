@@ -9,7 +9,7 @@
 
 #include "nekoproto/global/global.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 template <typename Backend>
 concept RpcBackend = requires(std::span<const std::byte> message, const typename Backend::DecodedRequest& request,
@@ -40,4 +40,4 @@ concept RpcBackend = requires(std::span<const std::byte> message, const typename
 template <typename Backend, typename T>
 concept BackendSerializable = std::is_void_v<T> || requires { requires Backend::template serializable<T>(); };
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

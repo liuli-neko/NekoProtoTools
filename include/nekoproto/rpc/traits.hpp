@@ -20,11 +20,11 @@
 #include "nekoproto/global/reflect.hpp"
 #include "nekoproto/rpc/error.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace detail {
 template <typename R, typename... Args>
-struct function_traits<ilias::IoTask<R> (*)(Args...), void> {
+struct FunctionTraits<ilias::IoTask<R> (*)(Args...), void> {
     using return_type = R;
     using arg_tuple   = std::tuple<Args...>;
     template <typename Ret, template <typename...> class T>
@@ -38,7 +38,7 @@ template <typename T, class enable = void>
 struct TypeName {
     using RawType = std::remove_cvref_t<T>;
 
-    static std::string name() {
+    static auto name() -> std::string {
         if constexpr (!std::is_same_v<T, RawType>) {
             return TypeName<RawType>::name();
         } else if constexpr (std::is_void_v<RawType>) {
@@ -71,12 +71,12 @@ struct TypeName {
             return result;
         } else if constexpr (std::is_enum_v<RawType>) {
             std::string result = "enum<";
-            result += NEKO_NAMESPACE::detail::class_nameof<RawType>;
+            result += nekoproto::detail::class_nameof<RawType>;
             result += ">";
             return result;
         } else {
             std::string result = "object<";
-            result += NEKO_NAMESPACE::detail::class_nameof<RawType>;
+            result += nekoproto::detail::class_nameof<RawType>;
             result += ">";
             return result;
         }
@@ -84,7 +84,7 @@ struct TypeName {
 };
 
 template <typename RawParamsType, std::size_t... Is>
-constexpr auto parameter_to_string(std::index_sequence<Is...> /*unused*/,
+constexpr auto parameterToString(std::index_sequence<Is...> /*unused*/,
                                    const std::vector<std::string>& names = {})
     -> std::string {
     if constexpr (sizeof...(Is) == 0) {
@@ -111,7 +111,7 @@ constexpr auto parameter_to_string(std::index_sequence<Is...> /*unused*/,
 
 template <typename T>
 struct TypeName<std::optional<T>, void> {
-    static std::string name() {
+    static auto name() -> std::string {
         std::string result = "optional<";
         result += TypeName<T>::name();
         result += ">";
@@ -120,16 +120,16 @@ struct TypeName<std::optional<T>, void> {
 };
 template <typename... Args>
 struct TypeName<std::variant<Args...>, void> {
-    static std::string name() {
+    static auto name() -> std::string {
         std::string result = "variant<";
-        result += parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{});
+        result += parameterToString<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{});
         result += ">";
         return result;
     }
 };
 template <typename T, std::size_t N>
 struct TypeName<std::array<T, N>, void> {
-    static std::string name() {
+    static auto name() -> std::string {
         std::string result = "array<";
         result += TypeName<T>::name();
         result += ", ";
@@ -140,16 +140,16 @@ struct TypeName<std::array<T, N>, void> {
 };
 template <typename... Args>
 struct TypeName<std::tuple<Args...>, void> {
-    static std::string name() {
+    static auto name() -> std::string {
         std::string result = "tuple<";
-        result += parameter_to_string<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{});
+        result += parameterToString<std::tuple<Args...>>(std::make_index_sequence<sizeof...(Args)>{});
         result += ">";
         return result;
     }
 };
 template <typename T, typename T2>
 struct TypeName<std::pair<T, T2>, void> {
-    static std::string name() {
+    static auto name() -> std::string {
         std::string result = "pair<";
         result += TypeName<T>::name();
         result += ", ";
@@ -160,7 +160,7 @@ struct TypeName<std::pair<T, T2>, void> {
 };
 template <typename Key, typename Value, typename Compare, typename Allocator>
 struct TypeName<std::map<Key, Value, Compare, Allocator>, void> {
-    static std::string name() {
+    static auto name() -> std::string {
         std::string result = "map<";
         result += TypeName<Key>::name();
         result += ", ";
@@ -171,7 +171,7 @@ struct TypeName<std::map<Key, Value, Compare, Allocator>, void> {
 };
 template <typename T>
 struct TypeName<std::vector<T>, void> {
-    static std::string name() {
+    static auto name() -> std::string {
         std::string result = "array<";
         result += TypeName<T>::name();
         result += ">";
@@ -187,7 +187,7 @@ template <typename... ArgsT>
 using FunctionT = std::function<ArgsT...>;
 #endif
 
-using NEKO_NAMESPACE::detail::function_traits;
+using nekoproto::detail::FunctionTraits;
 
 template <typename RetT, typename... Args>
 class RpcMethodExecutor {
@@ -237,9 +237,9 @@ public:
 
 template <typename Callable>
 using RpcMethodTraitsUnpacker =
-    typename function_traits<Callable>::template args_in<typename function_traits<Callable>::return_type,
+    typename FunctionTraits<Callable>::template args_in<typename FunctionTraits<Callable>::return_type,
                                                          RpcMethodMetadata>;
 
 } // namespace traits
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

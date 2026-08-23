@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 struct BinaryBackend {
     using Reader              = binary::Reader;
@@ -37,7 +37,7 @@ struct BinaryBackend {
     };
 
     template <typename BufferT, typename T>
-    static sa::Result<void> write(OutputState<BufferT>& state, const T& value) {
+    static auto write(OutputState<BufferT>& state, const T& value) -> sa::Result<void> {
         if (state.wroteRoot) {
             return sa::error(sa::ErrorCode::InvalidLength,
                              "Binary V2 accepts exactly one root value; wrap multiple values in a tuple or object");
@@ -45,7 +45,7 @@ struct BinaryBackend {
         state.wroteRoot = true;
         using ValueType = std::remove_cvref_t<T>;
         if constexpr (is_tagged_field_v<ValueType>) {
-            if constexpr (tag_query::get<tag_property::raw_fixed_data>(ValueType::tags)) {
+            if constexpr (tag_query::get<tag_property::RawFixedData>(ValueType::tags)) {
                 using RawType = std::remove_cvref_t<typename ValueType::accessor_type>;
                 if constexpr (!(detail::has_values_meta<RawType> && detail::has_names_meta<RawType>)) {
                     return sa::error(sa::ErrorCode::InvalidType,
@@ -55,15 +55,15 @@ struct BinaryBackend {
         }
         using WriterType = typename OutputState<BufferT>::WriterType;
         using Root       = typename parsing::Parent<WriterType>::Root;
-        auto result = parser_write<WriterType>(state.writer, value, Root{});
+        auto result = parserWrite<WriterType>(state.writer, value, Root{});
         return result ? state.writer.result() : result;
     }
 
     template <typename SourceT, typename T>
-    static sa::Result<void> read(InputState<SourceT>& state, T& value) {
+    static auto read(InputState<SourceT>& state, T& value) -> sa::Result<void> {
         using ValueType = std::remove_cvref_t<T>;
         if constexpr (is_tagged_field_v<ValueType>) {
-            if constexpr (tag_query::get<tag_property::raw_fixed_data>(ValueType::tags)) {
+            if constexpr (tag_query::get<tag_property::RawFixedData>(ValueType::tags)) {
                 using RawType = std::remove_cvref_t<typename ValueType::accessor_type>;
                 if constexpr (!(detail::has_values_meta<RawType> && detail::has_names_meta<RawType>)) {
                     return sa::error(sa::ErrorCode::InvalidType,
@@ -74,7 +74,7 @@ struct BinaryBackend {
         }
         if constexpr (std::is_copy_constructible_v<T> && std::is_move_assignable_v<T>) {
             T parsed = value;
-            auto result = parser_read<binary::Reader>(state.reader.root(), parsed);
+            auto result = parserRead<binary::Reader>(state.reader.root(), parsed);
             if (result) {
                 result = state.reader.finish();
             }
@@ -83,13 +83,13 @@ struct BinaryBackend {
             }
             return result;
         } else {
-            auto result = parser_read<binary::Reader>(state.reader.root(), value);
+            auto result = parserRead<binary::Reader>(state.reader.root(), value);
             return result ? state.reader.finish() : result;
         }
     }
 
     template <typename BufferT>
-    static sa::Result<void> finish(OutputState<BufferT>& state, sa::Result<void> result) {
+    static auto finish(OutputState<BufferT>& state, sa::Result<void> result) -> sa::Result<void> {
         if (!result) {
             return result;
         }
@@ -97,7 +97,7 @@ struct BinaryBackend {
     }
 
     template <typename SourceT>
-    static sa::Result<void> finish(InputState<SourceT>& state, sa::Result<void> result) {
+    static auto finish(InputState<SourceT>& state, sa::Result<void> result) -> sa::Result<void> {
         if (!result) {
             return result;
         }
@@ -105,12 +105,12 @@ struct BinaryBackend {
     }
 
     template <typename SourceT>
-    static sa::Result<void> inputResult(const InputState<SourceT>& state) {
+    static auto inputResult(const InputState<SourceT>& state) -> sa::Result<void> {
         return state.reader.inputResult();
     }
 
     template <typename SourceT>
-    static std::size_t offset(const InputState<SourceT>& state) noexcept {
+    static auto offset(const InputState<SourceT>& state) noexcept -> std::size_t {
         return state.reader.offset();
     }
 };
@@ -127,4 +127,4 @@ struct BinarySerializer {
     using Writer               = binary::Writer<>;
 };
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

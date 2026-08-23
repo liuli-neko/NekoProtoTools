@@ -12,7 +12,7 @@
 
 #include "nekoproto/global/global.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace detail {
 struct RpcRequestContextAccess;
@@ -33,9 +33,9 @@ class RpcRequestContext {
 public:
     using Clock = std::chrono::steady_clock;
 
-    RpcRequestContext(const RpcRequestContext&) = delete;
-    auto operator=(const RpcRequestContext&) -> RpcRequestContext& = delete;
-    RpcRequestContext(RpcRequestContext&&) noexcept = default;
+    RpcRequestContext(const RpcRequestContext&)                        = delete;
+    auto operator=(const RpcRequestContext&) -> RpcRequestContext&     = delete;
+    RpcRequestContext(RpcRequestContext&&) noexcept                    = default;
     auto operator=(RpcRequestContext&&) noexcept -> RpcRequestContext& = default;
 
     auto method() const noexcept -> std::string_view { return mMethod; }
@@ -63,7 +63,7 @@ private:
     std::optional<Clock::time_point> mDeadline;
     std::stop_token mCancellationToken;
     const RpcPeerInfo* mPeer = nullptr;
-    const void* mSession = nullptr;
+    const void* mSession     = nullptr;
 
     friend struct detail::RpcRequestContextAccess;
 };
@@ -76,16 +76,16 @@ struct RpcRequestContextAccess {
                      std::optional<RpcRequestContext::Clock::time_point> deadline, const RpcPeerInfo* peer,
                      const void* session) -> RpcRequestContext {
         RpcRequestContext context;
-        context.mMethod = method;
+        context.mMethod    = method;
         context.mRequestId = std::move(requestId);
-        context.mDeadline = deadline;
-        context.mPeer = peer;
-        context.mSession = session;
+        context.mDeadline  = deadline;
+        context.mPeer      = peer;
+        context.mSession   = session;
         return context;
     }
 
     static auto session(const RpcRequestContext& context) noexcept -> const void* { return context.mSession; }
-    static auto setCancellationToken(RpcRequestContext& context, std::stop_token token) noexcept -> void {
+    static void setCancellationToken(RpcRequestContext& context, std::stop_token token) noexcept {
         context.mCancellationToken = std::move(token);
     }
 };
@@ -105,12 +105,12 @@ struct RpcCallOptions {
 // A point-in-time, lock-free snapshot. active/queued are gauges; the other
 // fields are monotonic counters for the lifetime of the client or server.
 struct RpcMetricsSnapshot {
-    std::size_t active = 0;
-    std::size_t queued = 0;
+    std::size_t active      = 0;
+    std::size_t queued      = 0;
     std::uint64_t completed = 0;
     std::uint64_t timed_out = 0;
-    std::uint64_t canceled = 0;
-    std::uint64_t rejected = 0;
+    std::uint64_t canceled  = 0;
+    std::uint64_t rejected  = 0;
 };
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

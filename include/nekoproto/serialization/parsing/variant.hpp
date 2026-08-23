@@ -9,7 +9,7 @@
 #include <utility>
 #include <variant>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace detail {
 
 template <auto... Tags>
@@ -27,7 +27,7 @@ struct UnionPayloadTagList<Head, Tail...> {
         if constexpr (std::is_same_v<std::remove_cvref_t<decltype(Head)>, UnionTag>) {
             return tail;
         } else {
-            return concat_tag_lists(TagList<Head>{}, tail);
+            return concatTagLists(TagList<Head>{}, tail);
         }
     }();
 };
@@ -42,7 +42,7 @@ constexpr auto unionPayloadTags(const Tags& tags) {
     } else if constexpr (is_tag_list_v<RawTags>) {
         return []<auto... Values>(TagList<Values...>) consteval {
             using Filtered = std::remove_cvref_t<decltype(UnionPayloadTagList<Values...>::value)>;
-            return normalize_tag_list<Filtered>::value;
+            return NormalizeTagList<Filtered>::value;
         }(RawTags{});
     } else {
         return tags;
@@ -50,12 +50,12 @@ constexpr auto unionPayloadTags(const Tags& tags) {
 }
 
 template <>
-struct disable_reflect_parser<std::monostate> : std::true_type {};
+struct DisableReflectParser<std::monostate> : std::true_type {};
 
 template <typename W>
 struct WriteParser<W, std::monostate, void> {
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const std::monostate&, const ParentType& parent, const Tags& tags) {
+    static auto write(W& writer, const std::monostate&, const ParentType& parent, const Tags& tags) -> ParserResult {
         parsing::Parent<W>::addNull(writer, parent, tags);
         return sa::success();
     }
@@ -64,9 +64,9 @@ struct WriteParser<W, std::monostate, void> {
 template <typename R>
 struct ReadParser<R, std::monostate, void> {
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, std::monostate&, const Tags& tags) {
-        if (!parsing::reader_is_empty<R>(in, tags)) {
-            return parser_error(sa::ErrorCode::InvalidType, "Expected null for monostate");
+    static auto read(typename R::InputValueType in, std::monostate&, const Tags& tags) -> ParserResult {
+        if (!parsing::readerIsEmpty<R>(in, tags)) {
+            return parserError(sa::ErrorCode::InvalidType, "Expected null for monostate");
         }
         return sa::success();
     }
@@ -74,7 +74,7 @@ struct ReadParser<R, std::monostate, void> {
 
 template <>
 struct SchemaParser<std::monostate, void> {
-    static parsing::schema::Type toSchema() { return parsing::schema::Type::Null{}; }
+    static auto toSchema() -> parsing::schema::Type { return parsing::schema::Type::Null{}; }
 };
 
 template <typename W, typename... Ts>
@@ -82,28 +82,28 @@ struct WriteParser<W, std::variant<Ts...>, void> {
     using Variant = std::variant<Ts...>;
 
     template <std::size_t I = 0, typename ParentType, typename Tags>
-    static ParserResult writeActive(W& writer, const Variant& value, const ParentType& parent, const Tags& tags) {
+    static auto writeActive(W& writer, const Variant& value, const ParentType& parent, const Tags& tags) -> ParserResult {
         if constexpr (I >= sizeof...(Ts)) {
-            return parser_error(sa::ErrorCode::InvalidIndex, "Variant active index is out of range");
+            return parserError(sa::ErrorCode::InvalidIndex, "Variant active index is out of range");
         } else {
             if (value.index() == I) {
-                return parser_write<W>(writer, std::get<I>(value), parent, tags);
+                return parserWrite<W>(writer, std::get<I>(value), parent, tags);
             }
             return writeActive<I + 1>(writer, value, parent, tags);
         }
     }
 
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const Variant& value, const ParentType& parent, const Tags& tags) {
+    static auto write(W& writer, const Variant& value, const ParentType& parent, const Tags& tags) -> ParserResult {
         const auto payloadTags = unionPayloadTags(tags);
-        if (tag_query::get<tag_property::union_encoding>(tags) == UnionEncoding::Untagged) {
+        if (tag_query::get<tag_property::UnionEncodingProperty>(tags) == UnionEncoding::Untagged) {
             return writeActive(writer, value, parent, payloadTags);
         }
 
         auto array  = parsing::Parent<W>::addArray(writer, 2, parent, payloadTags);
-        auto result = parser_write<W>(writer, value.index(), typename parsing::Parent<W>::Array{&array});
+        auto result = parserWrite<W>(writer, value.index(), typename parsing::Parent<W>::Array{&array});
         if (!result) {
-            return parser_context(std::move(result), "Failed to write variant index: ");
+            return parserContext(std::move(result), "Failed to write variant index: ");
         }
         return writeActive(writer, value, typename parsing::Parent<W>::Array{&array}, payloadTags);
     }
@@ -114,21 +114,21 @@ struct ReadParser<R, std::variant<Ts...>, void> {
     using Variant = std::variant<Ts...>;
 
     template <typename Alt, typename Tags>
-    static ParserResult tryAlternative(typename R::InputValueType in, const Tags& tags) {
+    static auto tryAlternative(typename R::InputValueType in, const Tags& tags) -> ParserResult {
         Alt tmp{};
         if constexpr (requires {
                           R::checkpoint(in);
                           R::restore(R::checkpoint(in));
                       }) {
             auto checkpoint = R::checkpoint(in);
-            auto result     = parser_read<R>(in, tmp, tags);
+            auto result     = parserRead<R>(in, tmp, tags);
             R::restore(checkpoint);
             return result;
         } else {
             // Tree-backed readers do not mutate their input while converting a
             // value. A destructive custom reader should expose checkpoint and
             // restore with the same shape as binary::Reader.
-            return parser_read<R>(in, tmp, tags);
+            return parserRead<R>(in, tmp, tags);
         }
     }
 
@@ -146,31 +146,31 @@ struct ReadParser<R, std::variant<Ts...>, void> {
     }
 
     template <typename Tags>
-    static ParserResult readUntagged(typename R::InputValueType in, Variant& value, const Tags& tags) {
+    static auto readUntagged(typename R::InputValueType in, Variant& value, const Tags& tags) -> ParserResult {
         std::size_t matchCount = 0;
         std::size_t matchIndex = 0;
         findAlternatives(in, tags, matchCount, matchIndex);
         if (matchCount == 0U) {
-            return parser_error(sa::ErrorCode::ParseError, "No variant alternative matched the input value");
+            return parserError(sa::ErrorCode::ParseError, "No variant alternative matched the input value");
         }
         if (matchCount != 1U) {
-            return parser_error(sa::ErrorCode::ParseError, "Untagged variant input matches more than one alternative");
+            return parserError(sa::ErrorCode::ParseError, "Untagged variant input matches more than one alternative");
         }
         return readAlternative(matchIndex, in, value, tags);
     }
 
     template <std::size_t I = 0, typename Tags>
-    static ParserResult readAlternative(std::size_t index, typename R::InputValueType in, Variant& value,
-                                        const Tags& tags) {
+    static auto readAlternative(std::size_t index, typename R::InputValueType in, Variant& value,
+                                        const Tags& tags) -> ParserResult {
         if constexpr (I >= sizeof...(Ts)) {
-            return parser_error(sa::ErrorCode::InvalidIndex, "Variant alternative index is out of range");
+            return parserError(sa::ErrorCode::InvalidIndex, "Variant alternative index is out of range");
         } else {
             if (index == I) {
                 using Alt = std::variant_alternative_t<I, Variant>;
                 Alt tmp{};
-                auto result = parser_read<R>(in, tmp, tags);
+                auto result = parserRead<R>(in, tmp, tags);
                 if (!result) {
-                    return parser_context(std::move(result), "Failed to parse variant alternative: ");
+                    return parserContext(std::move(result), "Failed to parse variant alternative: ");
                 }
                 value = std::move(tmp);
                 return result;
@@ -180,23 +180,23 @@ struct ReadParser<R, std::variant<Ts...>, void> {
     }
 
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, Variant& value, const Tags& tags) {
+    static auto read(typename R::InputValueType in, Variant& value, const Tags& tags) -> ParserResult {
         const auto payloadTags = unionPayloadTags(tags);
-        if (tag_query::get<tag_property::union_encoding>(tags) == UnionEncoding::Untagged) {
+        if (tag_query::get<tag_property::UnionEncodingProperty>(tags) == UnionEncoding::Untagged) {
             return readUntagged(in, value, payloadTags);
         }
 
-        auto array = parsing::reader_to_array<R>(in, payloadTags);
+        auto array = parsing::readerToArray<R>(in, payloadTags);
         if (!array) {
-            return parser_context(array.error(), "Variant must be encoded as [index, value]: ");
+            return parserContext(array.error(), "Variant must be encoded as [index, value]: ");
         }
         if (R::arraySize(array.value()) != 2U) {
-            return parser_error(sa::ErrorCode::InvalidLength, "Variant array must contain exactly two elements");
+            return parserError(sa::ErrorCode::InvalidLength, "Variant array must contain exactly two elements");
         }
         std::size_t index = 0;
-        auto result       = parser_read<R>(R::arrayElement(array.value(), 0), index);
+        auto result       = parserRead<R>(R::arrayElement(array.value(), 0), index);
         if (!result) {
-            return parser_context(std::move(result), "Failed to parse variant index: ");
+            return parserContext(std::move(result), "Failed to parse variant index: ");
         }
         return readAlternative(index, R::arrayElement(array.value(), 1), value, payloadTags);
     }
@@ -204,13 +204,13 @@ struct ReadParser<R, std::variant<Ts...>, void> {
 
 template <typename... Ts>
 struct SchemaParser<std::variant<Ts...>, void> {
-    static parsing::schema::Type toSchema() { return toSchema(NoTags{}); }
+    static auto toSchema() -> parsing::schema::Type { return toSchema(NoTags{}); }
 
     template <typename Tags>
-    static parsing::schema::Type toSchema(const Tags& tags) {
+    static auto toSchema(const Tags& tags) -> parsing::schema::Type {
         const auto payloadTags = unionPayloadTags(tags);
-        auto alternatives      = parsing::schema::Type::AnyOf{{parser_schema<Ts>(payloadTags)...}};
-        if (tag_query::get<tag_property::union_encoding>(tags) == UnionEncoding::Untagged) {
+        auto alternatives      = parsing::schema::Type::AnyOf{{parserSchema<Ts>(payloadTags)...}};
+        if (tag_query::get<tag_property::UnionEncodingProperty>(tags) == UnionEncoding::Untagged) {
             return alternatives;
         }
 
@@ -228,4 +228,4 @@ struct SchemaParser<std::variant<Ts...>, void> {
 };
 
 } // namespace detail
-NEKO_END_NAMESPACE
+} // namespace nekoproto

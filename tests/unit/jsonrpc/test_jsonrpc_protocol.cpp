@@ -14,7 +14,7 @@
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 namespace {
 
@@ -41,7 +41,7 @@ static_assert(detail::JsonRpcMethodTraits<OptionalTraits>::IsNullAble);
 static_assert(std::is_same_v<detail::JsonRpcMethodTraits<PingTraits>::ParamsTupleType, std::tuple<>>);
 
 template <typename T>
-std::string writeJson(const T& value) {
+auto writeJson(const T& value) -> std::string {
     std::vector<char> buffer;
     JsonSerializer::OutputSerializer out(buffer);
     EXPECT_TRUE(out(value));
@@ -50,7 +50,7 @@ std::string writeJson(const T& value) {
 }
 
 template <typename T>
-bool readJson(std::string_view json, T& value) {
+auto readJson(std::string_view json, T& value) -> bool {
     JsonSerializer::InputSerializer in(json.data(), json.size());
     const bool parsed = in(value);
     return parsed && static_cast<bool>(in);
@@ -312,21 +312,21 @@ TEST(JsonRpcProtocol, DecodeResponseRequiresValidExclusiveEnvelope) {
 
     auto missingBoth = decode(R"({"jsonrpc":"2.0","id":7})");
     ASSERT_FALSE(missingBoth.has_value());
-    EXPECT_EQ(missingBoth.error(), make_error_code(JsonRpcError::InvalidRequest));
+    EXPECT_EQ(missingBoth.error(), makeErrorCode(JsonRpcError::InvalidRequest));
 
     auto both = decode(
         R"({"jsonrpc":"2.0","result":42,"error":{"code":-32603,"message":"bad"},"id":7})");
     ASSERT_FALSE(both.has_value());
-    EXPECT_EQ(both.error(), make_error_code(JsonRpcError::InvalidRequest));
+    EXPECT_EQ(both.error(), makeErrorCode(JsonRpcError::InvalidRequest));
 
     auto wrongVersion = decode(R"({"jsonrpc":"1.0","result":42,"id":7})");
     ASSERT_FALSE(wrongVersion.has_value());
-    EXPECT_EQ(wrongVersion.error(), make_error_code(JsonRpcError::InvalidRequest));
+    EXPECT_EQ(wrongVersion.error(), makeErrorCode(JsonRpcError::InvalidRequest));
 
     context.options.max_message_bytes = 1U;
     auto oversized = decode(R"({"jsonrpc":"2.0","result":42,"id":7})");
     ASSERT_FALSE(oversized.has_value());
-    EXPECT_EQ(oversized.error(), make_error_code(JsonRpcError::MessageToolLarge));
+    EXPECT_EQ(oversized.error(), makeErrorCode(JsonRpcError::MessageToolLarge));
 }
 
 #include "../common/common_main.cpp.in" // IWYU pragma: export

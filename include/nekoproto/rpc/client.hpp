@@ -6,8 +6,8 @@
 #include <ilias/platform.hpp>
 #include <ilias/sync/mutex.hpp>
 #include <ilias/sync/oneshot.hpp>
-#include <ilias/task/scope.hpp>
 #include <ilias/task.hpp>
+#include <ilias/task/scope.hpp>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -25,7 +25,7 @@
 #include "nekoproto/rpc/options.hpp"
 #include "nekoproto/rpc/registry.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 template <RpcBackend Backend, typename... ProtocolSets>
 class RpcClient : public ProtocolSets... {
@@ -39,8 +39,8 @@ public:
     explicit RpcClient(ilias::IoContext& /*unused*/, typename Backend::Options options)
         : ProtocolSets()..., rpc(), mBackendContext(Backend::makeClientContext(std::move(options))),
           mPeerSession(Backend::makeClientPeerSession(mBackendContext)) {
-        (_registerProtocol(static_cast<ProtocolSets&>(*this)), ...);
-        _registerProtocol(rpc, "rpc");
+        (registerProtocol(static_cast<ProtocolSets&>(*this)), ...);
+        registerProtocol(rpc, "rpc");
     }
     ~RpcClient() {
         try {
@@ -54,7 +54,7 @@ public:
     auto operator->() noexcept -> RpcClient* { return this; }
     auto operator->() const noexcept -> const RpcClient* { return this; }
 
-    auto close() -> void {
+    void close() {
         std::shared_ptr<detail::IMessageEndpoint> endpoint;
         std::shared_ptr<ilias::TaskScope> receiverScope;
         {
@@ -66,7 +66,7 @@ public:
         if (endpoint != nullptr) {
             endpoint->close();
         }
-        _failAllPending(Backend::clientNotInitError());
+        failAllPending(Backend::clientNotInitError());
         if (receiverScope != nullptr) {
             receiverScope->stop();
             receiverScope->waitAll().wait();
@@ -110,7 +110,7 @@ public:
                     mReceiverStarted = false;
                 }
             }
-            _failAllPending(error ? error : Backend::clientNotInitError());
+            failAllPending(error ? error : Backend::clientNotInitError());
             if (receiverScope != nullptr) {
                 receiverScope->stop();
                 co_await receiverScope->waitAll();
@@ -133,12 +133,12 @@ public:
             std::scoped_lock lock(mPendingMutex);
             pending = mPending.size();
         }
-        return {.active = pending,
-                .queued = 0,
+        return {.active    = pending,
+                .queued    = 0,
                 .completed = mCompleted.load(std::memory_order_relaxed),
                 .timed_out = mTimedOut.load(std::memory_order_relaxed),
-                .canceled = mCanceled.load(std::memory_order_relaxed),
-                .rejected = mRejected.load(std::memory_order_relaxed)};
+                .canceled  = mCanceled.load(std::memory_order_relaxed),
+                .rejected  = mRejected.load(std::memory_order_relaxed)};
     }
 
     auto cancelRemote(const typename Backend::Id& id) -> ilias::IoTask<void>
@@ -168,14 +168,14 @@ public:
         if (sent != message.size()) {
             co_return ilias::Err(ilias::IoError::WriteZero);
         }
-        _failPending(id, ilias::IoError::Canceled);
+        failPending(id, ilias::IoError::Canceled);
         co_return {};
     }
 
     template <MessageEndpoint EndpointT>
-    auto setEndpoint(EndpointT endpoint) -> void {
+    void setEndpoint(EndpointT endpoint) {
         std::shared_ptr<detail::IMessageEndpoint> replacement;
-        if constexpr (detail::is_message_endpoint<EndpointT>::value) {
+        if constexpr (detail::IsMessageEndpoint<EndpointT>::value) {
             replacement = std::make_shared<EndpointT>(std::move(endpoint));
         } else {
             replacement = std::make_shared<detail::MessageEndpointWrapper<EndpointT>>(std::move(endpoint));
@@ -190,7 +190,7 @@ public:
 
     template <typename StreamT>
         requires detail::RpcStreamBackend<Backend, StreamT>
-    auto setEndpoint(StreamT stream) -> void {
+    void setEndpoint(StreamT stream) {
         if constexpr (requires(StreamT value) {
                           { Backend::makeClientEndpoint(std::move(value), mBackendContext.options) } -> MessageEndpoint;
                       }) {
@@ -216,7 +216,7 @@ public:
         using CoroutinesFuncType = typename Metadata::CoroutinesFuncType;
         Metadata metadata(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...}, name,
                           (CoroutinesFuncType)(nullptr), false);
-        co_return co_await _callRemoteWithOptions(metadata, {}, std::forward<Args>(args)...);
+        co_return co_await callRemoteWithOptions(metadata, {}, std::forward<Args>(args)...);
     }
 
     template <typename RetT, ConstexprString... ArgNames, typename... Args>
@@ -225,35 +225,35 @@ public:
         using CoroutinesFuncType = typename Metadata::CoroutinesFuncType;
         Metadata metadata(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...}, name,
                           (CoroutinesFuncType)(nullptr), false);
-        co_return co_await _callRemoteWithOptions(metadata, std::move(options), std::forward<Args>(args)...);
+        co_return co_await callRemoteWithOptions(metadata, std::move(options), std::forward<Args>(args)...);
     }
 
     template <typename Method, typename... Args>
         requires requires { typename std::decay_t<Method>::RawReturnType; }
     auto callRemoteWithOptions(Method& metadata, RpcCallOptions options, Args... args)
         -> ilias::IoTask<typename std::decay_t<Method>::RawReturnType> {
-        co_return co_await _callRemoteWithOptions(metadata, std::move(options), std::forward<Args>(args)...);
+        co_return co_await callRemoteWithOptions(metadata, std::move(options), std::forward<Args>(args)...);
     }
 
     template <auto Ptr, ConstexprString... ArgNames, typename... Args>
         requires detail::RpcMethodFuncT<Ptr>
-    auto callRemote(Args... args) -> ilias::IoTask<typename traits::function_traits<decltype(Ptr)>::return_type> {
+    auto callRemote(Args... args) -> ilias::IoTask<typename traits::FunctionTraits<decltype(Ptr)>::return_type> {
         using Metadata           = detail::RpcMethodDynamic<decltype(Ptr)>;
         using CoroutinesFuncType = typename Metadata::CoroutinesFuncType;
         Metadata metadata(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
                           detail::func_nameof<Ptr>, (CoroutinesFuncType)(nullptr), false);
-        co_return co_await _callRemoteWithOptions(metadata, {}, std::forward<Args>(args)...);
+        co_return co_await callRemoteWithOptions(metadata, {}, std::forward<Args>(args)...);
     }
 
     template <auto Ptr, ConstexprString... ArgNames, typename... Args>
         requires detail::RpcMethodFuncT<Ptr>
     auto callRemoteWithOptions(RpcCallOptions options, Args... args)
-        -> ilias::IoTask<typename traits::function_traits<decltype(Ptr)>::return_type> {
+        -> ilias::IoTask<typename traits::FunctionTraits<decltype(Ptr)>::return_type> {
         using Metadata           = detail::RpcMethodDynamic<decltype(Ptr)>;
         using CoroutinesFuncType = typename Metadata::CoroutinesFuncType;
         Metadata metadata(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
                           detail::func_nameof<Ptr>, (CoroutinesFuncType)(nullptr), false);
-        co_return co_await _callRemoteWithOptions(metadata, std::move(options), std::forward<Args>(args)...);
+        co_return co_await callRemoteWithOptions(metadata, std::move(options), std::forward<Args>(args)...);
     }
 
     template <typename RetT, ConstexprString... ArgNames, typename... Args>
@@ -262,7 +262,7 @@ public:
         using CoroutinesFuncType = typename Metadata::CoroutinesFuncType;
         Metadata metadata(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...}, name,
                           (CoroutinesFuncType)(nullptr), true);
-        co_return co_await _callRemoteWithOptions(metadata, {}, std::forward<Args>(args)...);
+        co_return co_await callRemoteWithOptions(metadata, {}, std::forward<Args>(args)...);
     }
 
     template <typename RetT, ConstexprString... ArgNames, typename... Args>
@@ -271,47 +271,47 @@ public:
         using CoroutinesFuncType = typename Metadata::CoroutinesFuncType;
         Metadata metadata(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...}, name,
                           (CoroutinesFuncType)(nullptr), true);
-        co_return co_await _callRemoteWithOptions(metadata, std::move(options), std::forward<Args>(args)...);
+        co_return co_await callRemoteWithOptions(metadata, std::move(options), std::forward<Args>(args)...);
     }
 
     template <auto Ptr, ConstexprString... ArgNames, typename... Args>
         requires detail::RpcMethodFuncT<Ptr>
-    auto notifyRemote(Args... args) -> ilias::IoTask<typename traits::function_traits<decltype(Ptr)>::return_type> {
+    auto notifyRemote(Args... args) -> ilias::IoTask<typename traits::FunctionTraits<decltype(Ptr)>::return_type> {
         using Metadata           = detail::RpcMethodDynamic<decltype(Ptr)>;
         using CoroutinesFuncType = typename Metadata::CoroutinesFuncType;
         Metadata metadata(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
                           detail::func_nameof<Ptr>, (CoroutinesFuncType)(nullptr), true);
-        co_return co_await _callRemoteWithOptions(metadata, {}, std::forward<Args>(args)...);
+        co_return co_await callRemoteWithOptions(metadata, {}, std::forward<Args>(args)...);
     }
 
     template <auto Ptr, ConstexprString... ArgNames, typename... Args>
         requires detail::RpcMethodFuncT<Ptr>
     auto notifyRemoteWithOptions(RpcCallOptions options, Args... args)
-        -> ilias::IoTask<typename traits::function_traits<decltype(Ptr)>::return_type> {
+        -> ilias::IoTask<typename traits::FunctionTraits<decltype(Ptr)>::return_type> {
         using Metadata           = detail::RpcMethodDynamic<decltype(Ptr)>;
         using CoroutinesFuncType = typename Metadata::CoroutinesFuncType;
         Metadata metadata(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
                           detail::func_nameof<Ptr>, (CoroutinesFuncType)(nullptr), true);
-        co_return co_await _callRemoteWithOptions(metadata, std::move(options), std::forward<Args>(args)...);
+        co_return co_await callRemoteWithOptions(metadata, std::move(options), std::forward<Args>(args)...);
     }
 
 private:
     template <typename Protocol>
-    void _registerProtocol(Protocol& protocol, std::string_view prefix = {}) {
-        detail::for_each_rpc_method(protocol, [this](auto& method) { this->_registerRpcMethod(method); }, prefix);
+    void registerProtocol(Protocol& protocol, std::string_view prefix = {}) {
+        detail::forEachRpcMethod(protocol, [this](auto& method) { this->registerRpcMethod(method); }, prefix);
     }
 
     template <typename T>
-    void _registerRpcMethod(T& metadata) {
+    void registerRpcMethod(T& metadata) {
         metadata = (typename std::decay_t<T>::CoroutinesFuncType)[this, &metadata](auto... args)
                        ->ilias::IoTask<typename std::decay_t<T>::RawReturnType> {
-            return this->_callRemoteWithOptions<T, decltype(args)...>(metadata, {},
-                                                                      std::forward<decltype(args)>(args)...);
+            return this->callRemoteWithOptions<T, decltype(args)...>(metadata, {},
+                                                                     std::forward<decltype(args)>(args)...);
         };
     }
 
     template <typename T, typename... Args>
-    auto _callRemoteWithOptions(T& metadata, RpcCallOptions options, Args... args)
+    auto callRemoteWithOptions(T& metadata, RpcCallOptions options, Args... args)
         -> ilias::IoTask<typename std::decay_t<T>::RawReturnType> {
         struct CompletionGuard {
             std::atomic<std::uint64_t>& completed;
@@ -324,13 +324,13 @@ private:
             co_return ilias::Err(ilias::IoError::Canceled);
         }
 
-        auto remaining = _remainingWait(options, started);
+        auto remaining = remainingWait(options, started);
         if (remaining.has_value() && remaining->count() <= 0) {
             mTimedOut.fetch_add(1U, std::memory_order_relaxed);
             co_return ilias::Err(RpcError::DeadlineExceeded);
         }
 
-        auto call = _callRemote(metadata, std::forward<Args>(args)...);
+        auto call = callRemote(metadata, std::forward<Args>(args)...);
         if (remaining.has_value() && options.cancellation_token.stop_possible()) {
             auto [result, canceled, timedOut] =
                 co_await ilias::whenAny(std::move(call), options.cancellation_token, ilias::sleep(*remaining));
@@ -368,7 +368,7 @@ private:
         co_return co_await std::move(call);
     }
 
-    static auto _remainingWait(const RpcCallOptions& options, RpcCallOptions::Clock::time_point started)
+    static auto remainingWait(const RpcCallOptions& options, RpcCallOptions::Clock::time_point started)
         -> std::optional<std::chrono::nanoseconds> {
         const auto now = RpcCallOptions::Clock::now();
         std::optional<std::chrono::nanoseconds> remaining;
@@ -386,11 +386,11 @@ private:
     }
 
     template <typename T, typename... Args>
-    auto _callRemote(T& metadata, Args... args) -> ilias::IoTask<typename std::decay_t<T>::RawReturnType> {
+    auto callRemote(T& metadata, Args... args) -> ilias::IoTask<typename std::decay_t<T>::RawReturnType> {
         if constexpr (!requires(std::span<const std::byte> message) {
                           { Backend::responseId(message) } -> std::same_as<std::optional<typename Backend::Id>>;
                       }) {
-            co_return co_await _callRemoteSerial(metadata, std::forward<Args>(args)...);
+            co_return co_await callRemoteSerial(metadata, std::forward<Args>(args)...);
         }
 
         NEKO_LOG_TRACE("rpc", "rpc client call begin: method={} notification={}", metadata.name(),
@@ -408,12 +408,12 @@ private:
         // at insertion remains authoritative when callers race for capacity.
         if (!metadata.isNotification()) {
             std::scoped_lock lock(mPendingMutex);
-            if (mPending.size() >= _maxPendingCalls()) {
+            if (mPending.size() >= maxPendingCalls()) {
                 mRejected.fetch_add(1U, std::memory_order_relaxed);
                 co_return ilias::Err(ilias::IoError::WouldBlock);
             }
         }
-        ILIAS_CO_TRYV(co_await _ensureReceiver(endpoint));
+        ILIAS_CO_TRYV(co_await ensureReceiver(endpoint));
 
         std::size_t retry_count = 0;
         while (true) {
@@ -430,7 +430,7 @@ private:
                 auto channel = ilias::oneshot::channel<PendingResult>();
                 {
                     std::scoped_lock lock(mPendingMutex);
-                    if (mPending.size() >= _maxPendingCalls() || mPending.contains(request.id)) {
+                    if (mPending.size() >= maxPendingCalls() || mPending.contains(request.id)) {
                         mRejected.fetch_add(1U, std::memory_order_relaxed);
                         co_return ilias::Err(ilias::IoError::WouldBlock);
                     }
@@ -503,7 +503,7 @@ private:
     }
 
     template <typename T, typename... Args>
-    auto _callRemoteSerial(T& metadata, Args... args) -> ilias::IoTask<typename std::decay_t<T>::RawReturnType> {
+    auto callRemoteSerial(T& metadata, Args... args) -> ilias::IoTask<typename std::decay_t<T>::RawReturnType> {
         auto guard = co_await mFallbackMutex.lock();
         std::shared_ptr<detail::IMessageEndpoint> endpoint;
         {
@@ -564,7 +564,7 @@ private:
         }
     }
 
-    auto _ensureReceiver(const std::shared_ptr<detail::IMessageEndpoint>& endpoint) -> ilias::IoTask<void> {
+    auto ensureReceiver(const std::shared_ptr<detail::IMessageEndpoint>& endpoint) -> ilias::IoTask<void> {
         auto protocolGuard = co_await mProtocolMutex.lock();
         if (mResetPeerSession.exchange(false)) {
             mPeerSession = Backend::makeClientPeerSession(mBackendContext);
@@ -586,24 +586,24 @@ private:
             mReceiverStarted = true;
             receiverScope    = mReceiverScope;
         }
-        receiverScope->spawn([this, endpoint]() -> ilias::Task<void> { co_await _receiveLoop(endpoint); });
+        receiverScope->spawn([this, endpoint]() -> ilias::Task<void> { co_await receiveLoop(endpoint); });
         co_return {};
     }
 
-    auto _receiveLoop(std::shared_ptr<detail::IMessageEndpoint> endpoint) -> ilias::Task<void> {
+    auto receiveLoop(std::shared_ptr<detail::IMessageEndpoint> endpoint) -> ilias::Task<void> {
         while (true) {
             std::vector<std::byte> buffer;
             auto received = co_await endpoint->recv(buffer);
             if (!received || received.value() == 0U) {
                 const auto error = received ? make_error_code(ilias::IoError::UnexpectedEOF) : received.error();
-                _disconnect(endpoint, error);
+                disconnect(endpoint, error);
                 co_return;
             }
             if constexpr (requires { Backend::validateMessage(mBackendContext, buffer); }) {
                 auto validated = Backend::validateMessage(mBackendContext, buffer);
                 if (!validated) {
                     endpoint->close();
-                    _disconnect(endpoint, validated.error());
+                    disconnect(endpoint, validated.error());
                     co_return;
                 }
             }
@@ -631,26 +631,26 @@ private:
         }
     }
 
-    auto _maxPendingCalls() const noexcept -> std::size_t {
+    auto maxPendingCalls() const noexcept -> std::size_t {
         if constexpr (requires { mBackendContext.options.max_pending_calls; }) {
             return mBackendContext.options.max_pending_calls;
         }
         return 1024U;
     }
 
-    auto _erasePending(const typename Backend::Id& id) -> void {
+    void erasePending(const typename Backend::Id& id) {
         std::scoped_lock lock(mPendingMutex);
         mPending.erase(id);
     }
 
-    auto _abandonPending(const typename Backend::Id& id) noexcept -> void {
-        _erasePending(id);
+    void abandonPending(const typename Backend::Id& id) noexcept {
+        erasePending(id);
         if constexpr (requires { Backend::encodeCancel(id); }) {
             std::shared_ptr<detail::IMessageEndpoint> endpoint;
             std::shared_ptr<ilias::TaskScope> receiverScope;
             {
                 std::scoped_lock lock(mStateMutex);
-                endpoint = mEndpoint;
+                endpoint      = mEndpoint;
                 receiverScope = mReceiverScope;
             }
             if (endpoint == nullptr || receiverScope == nullptr) {
@@ -663,8 +663,8 @@ private:
                         co_return;
                     }
                     auto sendGuard = co_await mSendMutex.lock();
-                    auto sent = co_await endpoint->send(
-                        {reinterpret_cast<const std::byte*>(message.data()), message.size()});
+                    auto sent =
+                        co_await endpoint->send({reinterpret_cast<const std::byte*>(message.data()), message.size()});
                     if (!sent || sent.value() != message.size()) {
                         NEKO_LOG_WARN("rpc", "rpc client failed to send best-effort cancellation");
                     }
@@ -676,7 +676,7 @@ private:
         }
     }
 
-    auto _failAllPending(std::error_code error) -> void {
+    void failAllPending(std::error_code error) {
         decltype(mPending) pending;
         {
             std::scoped_lock lock(mPendingMutex);
@@ -688,7 +688,7 @@ private:
         }
     }
 
-    auto _failPending(const typename Backend::Id& id, std::error_code error) -> void {
+    void failPending(const typename Backend::Id& id, std::error_code error) {
         std::optional<PendingSender> sender;
         {
             std::scoped_lock lock(mPendingMutex);
@@ -702,7 +702,7 @@ private:
         }
     }
 
-    auto _disconnect(const std::shared_ptr<detail::IMessageEndpoint>& endpoint, std::error_code error) -> void {
+    void disconnect(const std::shared_ptr<detail::IMessageEndpoint>& endpoint, std::error_code error) {
         {
             std::scoped_lock lock(mStateMutex);
             if (mEndpoint == endpoint) {
@@ -710,7 +710,7 @@ private:
                 mReceiverStarted = false;
             }
         }
-        _failAllPending(error);
+        failAllPending(error);
     }
 
 private:
@@ -724,7 +724,7 @@ private:
 
         ~PendingEraseGuard() {
             if (active) {
-                client->_abandonPending(id);
+                client->abandonPending(id);
             }
         }
     };
@@ -747,4 +747,4 @@ private:
     bool mReceiverStarted = false;
 };
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

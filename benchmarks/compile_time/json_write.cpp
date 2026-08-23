@@ -7,7 +7,7 @@
 #endif
 
 void compile_json_write(const neko_compile_bench::BenchmarkStruct& value, std::vector<char>& buffer) {
-    NEKO_NAMESPACE::JsonSerializer::OutputSerializer output(buffer);
+    nekoproto::JsonSerializer::OutputSerializer output(buffer);
     (void)output(value);
     (void)output.end();
 }

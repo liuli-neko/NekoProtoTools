@@ -25,7 +25,7 @@
 #include <tuple>
 #endif
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace detail {
 #if defined(__GNUC__) || defined(__MINGW__) || defined(__clang__)
 #define NEKO_PRETTY_FUNCTION_NAME __PRETTY_FUNCTION__
@@ -36,30 +36,30 @@ namespace detail {
 #endif
 
 template <typename T, class enable = void>
-struct is_optional : std::false_type {}; // NOLINT(readability-identifier-naming)
+struct IsOptional : std::false_type {};
 
 template <typename T>
-struct is_optional<std::optional<T>, void> : std::true_type {};
+struct IsOptional<std::optional<T>, void> : std::true_type {};
 
 template <typename T>
-struct is_optional<std::optional<T>&, void> : std::true_type {};
+struct IsOptional<std::optional<T>&, void> : std::true_type {};
 
 template <typename T>
-struct is_optional<const std::optional<T>, void> : std::true_type {};
+struct IsOptional<const std::optional<T>, void> : std::true_type {};
 
 template <typename T>
-struct is_optional<const std::optional<T>&, void> : std::true_type {};
+struct IsOptional<const std::optional<T>&, void> : std::true_type {};
 
-struct any_type { // NOLINT(readability-identifier-naming)
-    template <typename T, typename = std::enable_if_t<!is_optional<std::decay_t<T>>::value>>
+struct AnyType {
+    template <typename T, typename = std::enable_if_t<!IsOptional<std::decay_t<T>>::value>>
     operator T() const noexcept {}
 };
 template <typename T, typename _Cond = void, typename... Args>
-struct can_aggregate_impl : std::false_type {}; // NOLINT(readability-identifier-naming)
+struct CanAggregateImpl : std::false_type {};
 template <typename T, typename... Args>
-struct can_aggregate_impl<T, std::void_t<decltype(T{std::declval<Args>()...})>, Args...> : std::true_type {};
+struct CanAggregateImpl<T, std::void_t<decltype(T{std::declval<Args>()...})>, Args...> : std::true_type {};
 template <typename T, typename... Args>
-struct can_aggregate : can_aggregate_impl<T, void, Args...> {}; // NOLINT(readability-identifier-naming)
+struct CanAggregate : CanAggregateImpl<T, void, Args...> {};
 
 /**
  * @brief Get the struct size at compile time
@@ -68,32 +68,32 @@ struct can_aggregate : can_aggregate_impl<T, void, Args...> {}; // NOLINT(readab
  * @return the size of the
  */
 template <typename T, typename... Args>
-constexpr auto member_count([[maybe_unused]] Args&&... args) noexcept {
-    if constexpr ((!can_aggregate<T, Args..., any_type>::value) &&
-                  (!can_aggregate<T, Args..., std::nullopt_t>::value)) {
+constexpr auto memberCount([[maybe_unused]] Args&&... args) noexcept {
+    if constexpr ((!CanAggregate<T, Args..., AnyType>::value) &&
+                  (!CanAggregate<T, Args..., std::nullopt_t>::value)) {
         return sizeof...(args);
-    } else if constexpr (can_aggregate<T, Args..., any_type>::value) {
-        return member_count<T>(std::forward<Args>(args)..., any_type{});
+    } else if constexpr (CanAggregate<T, Args..., AnyType>::value) {
+        return memberCount<T>(std::forward<Args>(args)..., AnyType{});
     } else {
-        return member_count<T>(std::forward<Args>(args)..., std::nullopt);
+        return memberCount<T>(std::forward<Args>(args)..., std::nullopt);
     }
 }
 
 template <typename T>
-static constexpr size_t member_count_v = member_count<T>(); // NOLINT(readability-identifier-naming)
+static constexpr size_t member_count_v = memberCount<T>(); // NOLINT(readability-identifier-naming)
 
 template <typename T>
-struct is_std_array : std::false_type {}; // NOLINT(readability-identifier-naming)
+struct IsStdArray : std::false_type {};
 
 template <typename T, size_t N>
-struct is_std_array<std::array<T, N>> : std::true_type {
+struct IsStdArray<std::array<T, N>> : std::true_type {
     using value_type             = T;
     constexpr static size_t size = N;
 };
 
 template <typename T>
 static constexpr bool can_unwrap_v = // NOLINT(readability-identifier-naming)
-    std::is_aggregate_v<std::remove_cv_t<T>> && !is_std_array<T>::value;
+    std::is_aggregate_v<std::remove_cv_t<T>> && !IsStdArray<T>::value;
 
 /**
  * @brief Convert the struct reference to tuple
@@ -103,34 +103,34 @@ static constexpr bool can_unwrap_v = // NOLINT(readability-identifier-naming)
  * @return constexpr auto
  */
 template <typename T>
-constexpr auto unwrap_struct(T& data) noexcept {
+constexpr auto unwrapStruct(T& data) noexcept {
     static_assert(can_unwrap_v<T>, "The struct must be aggregate");
     static_assert(member_count_v<T> > 0, "The struct must have at least one member");
     static_assert(member_count_v<T> <= max_unwrap_struct_size, "The struct is too large");
-    return unwrap_struct_impl<member_count_v<T>>(data);
+    return unwrapStructImpl<member_count_v<T>>(data);
 }
 
 template <class T>
 inline static T external; // NOLINT(readability-identifier-naming)
 
 template <class T>
-struct ptr_t final { // NOLINT
+struct PtrT final {
     const T* ptr;
 };
 
 template <size_t N, class T>
-constexpr auto get_ptr(T&& dt) noexcept {
-    auto& val = get<N>(unwrap_struct(dt));
-    return ptr_t<std::remove_cvref_t<decltype(val)>>{&val};
+constexpr auto getPtr(T&& dt) noexcept {
+    auto& val = get<N>(unwrapStruct(dt));
+    return PtrT<std::remove_cvref_t<decltype(val)>>{&val};
 }
 
 template <auto Ptr>
-[[nodiscard]] consteval auto mangled_name() {
+[[nodiscard]] consteval auto mangledName() {
     return NEKO_PRETTY_FUNCTION_NAME;
 }
 
 template <class T>
-[[nodiscard]] consteval auto mangled_name() {
+[[nodiscard]] consteval auto mangledName() {
     return NEKO_PRETTY_FUNCTION_NAME;
 }
 
@@ -139,14 +139,14 @@ template <class T>
 #pragma clang diagnostic ignored "-Weverything"
 template <auto N, class T>
 constexpr std::string_view get_name_impl = // NOLINT(readability-identifier-naming)
-    mangled_name<get_ptr<N>(external<std::remove_volatile_t<T>>)>();
+    mangledName<getPtr<N>(external<std::remove_volatile_t<T>>)>();
 #pragma clang diagnostic pop
 #elif __GNUC__
 template <auto N, class T>
-constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<std::remove_volatile_t<T>>)>();
+constexpr std::string_view get_name_impl = mangledName<getPtr<N>(external<std::remove_volatile_t<T>>)>();
 #else
 template <auto N, class T>
-constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<std::remove_volatile_t<T>>)>();
+constexpr std::string_view get_name_impl = mangledName<getPtr<N>(external<std::remove_volatile_t<T>>)>();
 #endif
 
 struct NekoReflector {
@@ -155,34 +155,34 @@ struct NekoReflector {
     void nekoFunc() {}
 };
 
-struct reflect_type {                                                       // NOLINT(readability-identifier-naming)
-    static constexpr std::string_view name = mangled_name<NekoReflector>(); // NOLINT(readability-identifier-naming)
+struct ReflectType {
+    static constexpr std::string_view name = mangledName<NekoReflector>(); // NOLINT(readability-identifier-naming)
     static constexpr auto end = name.substr(name.find("NekoReflector") + sizeof("NekoReflector") - 1); // NOLINT
 #if defined(__GNUC__) || defined(__clang__)
     static constexpr auto begin = std::string_view{"T = "}; // NOLINT
 #else
-    static constexpr auto begin = std::string_view{"mangled_name<"};
+    static constexpr auto begin = std::string_view{"mangledName<"};
 #endif
 };
 
-struct reflect_field {                                                                           // NOLINT
+struct ReflectField {
     static constexpr auto name  = get_name_impl<0, NekoReflector>;                               // NOLINT
     static constexpr auto end   = name.substr(name.find("nekoField") + sizeof("nekoField") - 1); // NOLINT
     static constexpr auto begin = name[name.find("nekoField") - 1];                              // NOLINT
 };
 
 template <std::size_t N, class T>
-struct member_nameof_impl {                                                                  // NOLINT
+struct MemberNameofImpl {
     static constexpr auto name     = get_name_impl<N, T>;                                    // NOLINT
-    static constexpr auto begin    = name.find(reflect_field::end);                          // NOLINT
+    static constexpr auto begin    = name.find(ReflectField::end);                          // NOLINT
     static constexpr auto tmp      = name.substr(0, begin);                                  // NOLINT
-    static constexpr auto stripped = tmp.substr(tmp.find_last_of(reflect_field::begin) + 1); // NOLINT
+    static constexpr auto stripped = tmp.substr(tmp.find_last_of(ReflectField::begin) + 1); // NOLINT
 
     static constexpr std::string_view stripped_literal = join_v<stripped>; // NOLINT
 };
 
 template <const std::string_view& str>
-constexpr std::string_view parser_class_name_with_type() {
+constexpr auto parserClassNameWithType() -> std::string_view {
     std::string_view string;
     string = str.find_last_of(' ') == std::string_view::npos ? str : str.substr(str.find_last_of(' ') + 1);
     string = string.find_last_of(':') == std::string_view::npos ? string : string.substr(string.find_last_of(':') + 1);
@@ -190,26 +190,26 @@ constexpr std::string_view parser_class_name_with_type() {
 }
 
 template <class T>
-struct class_nameof_impl {                                                     // NOLINT
-    static constexpr std::string_view name     = mangled_name<T>();            // NOLINT
-    static constexpr auto begin                = name.find(reflect_type::end); // NOLINT
+struct ClassNameofImpl {
+    static constexpr std::string_view name     = mangledName<T>();            // NOLINT
+    static constexpr auto begin                = name.find(ReflectType::end); // NOLINT
     static constexpr auto tmp                  = name.substr(0, begin);        // NOLINT
     static constexpr auto class_name_with_type =                               // NOLINT
-        tmp.substr(tmp.find(reflect_type::begin) + reflect_type::begin.size());
+        tmp.substr(tmp.find(ReflectType::begin) + ReflectType::begin.size());
     static constexpr auto stripped = // NOLINT
-        parser_class_name_with_type<class_name_with_type>();
+        parserClassNameWithType<class_name_with_type>();
 
     static constexpr std::string_view stripped_literal = join_v<stripped>; // NOLINT
 };
 
 template <std::size_t N, class T>
-inline constexpr auto member_nameof = []() constexpr { return member_nameof_impl<N, T>::stripped_literal; }(); // NOLINT
+inline constexpr auto member_nameof = []() constexpr { return MemberNameofImpl<N, T>::stripped_literal; }(); // NOLINT
 
 template <class T>
-inline constexpr auto class_nameof = []() constexpr { return class_nameof_impl<T>::stripped_literal; }(); // NOLINT
+inline constexpr auto class_nameof = []() constexpr { return ClassNameofImpl<T>::stripped_literal; }(); // NOLINT
 
 template <class T, std::size_t... Is>
-[[nodiscard]] constexpr auto member_names_impl(std::index_sequence<Is...> /*unused*/) {
+[[nodiscard]] constexpr auto memberNamesImpl(std::index_sequence<Is...> /*unused*/) {
     if constexpr (sizeof...(Is) == 0) {
         return std::array<std::string_view, 0>{};
     } else {
@@ -227,7 +227,7 @@ template <class T, std::size_t... Is>
 #endif
 #if defined(__GNUC__) || defined(__MINGW__) || defined(__clang__)
 template <typename T, T Value>
-constexpr auto neko_get_enum_name() noexcept {
+constexpr auto nekoGetEnumName() noexcept {
     // constexpr auto _Neko_GetEnumName() [with T = MyEnum; T Value = MyValues]
     // constexpr auto _Neko_GetEnumName() [with T = MyEnum; T Value =
     // (MyEnum)114514]"
@@ -242,9 +242,8 @@ constexpr auto neko_get_enum_name() noexcept {
     return body;
 }
 #elif defined(_MSC_VER)
-#define NEKO_ENUM_TO_NAME(enumType)
 template <typename T, T Value>
-constexpr auto neko_get_enum_name() noexcept {
+constexpr auto nekoGetEnumName() noexcept {
     // auto __cdecl _Neko_GetEnumName<enum main::MyEnum,(enum
     // main::MyEnum)0x2>(void) auto __cdecl _Neko_GetEnumName<enum
     // main::MyEnum,main::MyEnum::Wtf>(void)
@@ -260,25 +259,25 @@ constexpr auto neko_get_enum_name() noexcept {
 }
 #else
 template <typename T, T Value>
-constexpr auto neko_get_enum_name() noexcept {
+constexpr auto nekoGetEnumName() noexcept {
     // Unsupported
     return std::string_view();
 }
 #endif
 template <typename T, T Value>
-constexpr bool neko_is_valid_enum() noexcept {
-    return !neko_get_enum_name<T, Value>().empty();
+constexpr auto nekoIsValidEnum() noexcept -> bool {
+    return !nekoGetEnumName<T, Value>().empty();
 }
 template <typename T, std::size_t... N>
-constexpr std::size_t neko_get_valid_enum_count(std::index_sequence<N...> /*unused*/) noexcept {
-    return (... + neko_is_valid_enum<T, T(N)>());
+constexpr auto nekoGetValidEnumCount(std::index_sequence<N...> /*unused*/) noexcept -> std::size_t {
+    return (... + nekoIsValidEnum<T, T(N)>());
 }
 template <typename T, std::size_t... N>
-constexpr auto neko_get_valid_enum_names(std::index_sequence<N...> seq) noexcept {
-    constexpr auto ValidCount = neko_get_valid_enum_count<T>(seq);
+constexpr auto nekoGetValidEnumNames(std::index_sequence<N...> seq) noexcept {
+    constexpr auto ValidCount = nekoGetValidEnumCount<T>(seq);
 
     std::array<std::pair<T, std::string_view>, ValidCount> arr;
-    std::string_view vstr[sizeof...(N)]{neko_get_enum_name<T, T(N)>()...};
+    std::string_view vstr[sizeof...(N)]{nekoGetEnumName<T, T(N)>()...};
 
     std::size_t ns   = 0;
     std::size_t left = ValidCount;
@@ -309,11 +308,11 @@ constexpr auto neko_get_valid_enum_names(std::index_sequence<N...> seq) noexcept
 // shared by names(), values(), maps, and enum metadata traversal instead of
 // being reevaluated independently by every consumer.
 template <typename T>
-struct enum_reflection_table {
+struct EnumReflectionTable {
     static_assert(std::is_enum_v<T>);
 
     static constexpr auto entries =
-        neko_get_valid_enum_names<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>{}); // NOLINT
+        nekoGetValidEnumNames<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>{}); // NOLINT
     static constexpr std::size_t size = entries.size();                                   // NOLINT
     static constexpr auto names       = [] {                                              // NOLINT
         std::array<std::string_view, size> result{};
@@ -333,11 +332,11 @@ struct enum_reflection_table {
 
 // MARK: function traits
 template <typename T, class Enable = void>
-struct function_traits; // 主模板
+struct FunctionTraits; // 主模板
 
 // 特化：普通函数指针
 template <typename R, typename... Args>
-struct function_traits<R (*)(Args...), void> {
+struct FunctionTraits<R (*)(Args...), void> {
     using return_type = R;
     using arg_tuple   = std::tuple<Args...>;
     template <typename Ret, template <typename...> class T>
@@ -348,29 +347,29 @@ struct function_traits<R (*)(Args...), void> {
 
 // 特化：普通函数类型
 template <typename R, typename... Args>
-struct function_traits<R(Args...), void> : function_traits<R (*)(Args...)> {};
+struct FunctionTraits<R(Args...), void> : FunctionTraits<R (*)(Args...)> {};
 
 // 特化：std::function
 template <typename R, typename... Args>
-struct function_traits<std::function<R(Args...)>, void> : function_traits<R (*)(Args...)> {};
+struct FunctionTraits<std::function<R(Args...)>, void> : FunctionTraits<R (*)(Args...)> {};
 
 #if __cpp_lib_move_only_function >= 202110L
 // 特化：std::move_only_function
 template <typename R, typename... Args>
-struct function_traits<std::move_only_function<R(Args...)>, void> : function_traits<R (*)(Args...)> {};
+struct FunctionTraits<std::move_only_function<R(Args...)>, void> : FunctionTraits<R (*)(Args...)> {};
 #endif
 
 // 特化：成员函数指针
 template <typename C, typename R, typename... Args>
-struct function_traits<R (C::*)(Args...), void> : function_traits<R (*)(Args...)> {};
+struct FunctionTraits<R (C::*)(Args...), void> : FunctionTraits<R (*)(Args...)> {};
 
 template <typename Functor>
-struct function_traits<Functor, std::void_t<decltype(&std::remove_cvref_t<Functor>::operator())>>
-    : function_traits<decltype(&std::remove_cvref_t<Functor>::operator())> {};
+struct FunctionTraits<Functor, std::void_t<decltype(&std::remove_cvref_t<Functor>::operator())>>
+    : FunctionTraits<decltype(&std::remove_cvref_t<Functor>::operator())> {};
 
 #define MEMBER_FUNCTION_TRAITS_QUALIFIER(QUAL)                                                                         \
     template <typename C, typename R, typename... Args>                                                                \
-    struct function_traits<R (C::*)(Args...) QUAL> : function_traits<R (C::*)(Args...)> {};
+    struct FunctionTraits<R (C::*)(Args...) QUAL> : FunctionTraits<R (C::*)(Args...)> {};
 
 MEMBER_FUNCTION_TRAITS_QUALIFIER(const)
 MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile)
@@ -403,40 +402,40 @@ template <typename T>
     requires requires(T tt) {
         { tt.operator()() };
     }
-struct function_traits<T> : function_traits<decltype(&std::remove_cvref_t<T>::operator())> {};
+struct FunctionTraits<T> : FunctionTraits<decltype(&std::remove_cvref_t<T>::operator())> {};
 
 /**
  * @brief reflect function name
  * in linux
- * consteval auto NekoProto::detail::mangled_name() [with auto Ptr = NekoReflector::nekoStaticFunc]
- * consteval auto NekoProto::detail::mangled_name() [with auto Ptr = test_func_with_struct]
+ * consteval auto nekoproto::detail::mangledName() [with auto Ptr = NekoReflector::nekoStaticFunc]
+ * consteval auto nekoproto::detail::mangledName() [with auto Ptr = testFuncWithStruct]
  * in windows
- * auto __cdecl NekoProto::detail::mangled_name<void __cdecl
- * NekoProto::detail::NekoReflector::nekoStaticFunc(void)>(void)
- * auto __cdecl NekoProto::detail::mangled_name<int __cdecl free_func_one_arg(int)>(void)
+ * auto __cdecl nekoproto::detail::mangledName<void __cdecl
+ * nekoproto::detail::NekoReflector::nekoStaticFunc(void)>(void)
+ * auto __cdecl nekoproto::detail::mangledName<int __cdecl freeFuncOneArg(int)>(void)
  * in clang
- * auto NekoProto::detail::mangled_name() [Ptr = &NekoProto::detail::NekoReflector::nekoStaticFunc]
- * auto NekoProto::detail::mangled_name() [Ptr = &test_func]
+ * auto nekoproto::detail::mangledName() [Ptr = &nekoproto::detail::NekoReflector::nekoStaticFunc]
+ * auto nekoproto::detail::mangledName() [Ptr = &test_func]
  */
 template <auto Ptr>
     requires(std::is_pointer_v<decltype(Ptr)>)
-struct func_nameof_impl {                                         // NOLINT
-    static constexpr std::string_view name = mangled_name<Ptr>(); // NOLINT
+struct FuncNameofImpl {
+    static constexpr std::string_view name = mangledName<Ptr>(); // NOLINT
 #if defined(__clang__)
-    // auto NekoProto::detail::mangled_name() [Ptr = &NekoProto::detail::NekoReflector::nekoStaticFunc]
-    // auto NekoProto::detail::mangled_name() [Ptr = &test_func]
+    // auto nekoproto::detail::mangledName() [Ptr = &nekoproto::detail::NekoReflector::nekoStaticFunc]
+    // auto nekoproto::detail::mangledName() [Ptr = &test_func]
     static constexpr std::string_view characteristicString =                                         // NOLINT
-        "auto NekoProto::detail::mangled_name() [Ptr = &";                                           // NOLINT
+        "auto nekoproto::detail::mangledName() [Ptr = &";                                           // NOLINT
     static constexpr auto full_function_name =                                                       // NOLINT
         name.substr(characteristicString.size(), name.size() - characteristicString.size() - 1);     // NOLINT
     static constexpr auto begin     = full_function_name.find_last_of("::");                         // NOLINT
     static constexpr auto func_name =                                                                // NOLINT
         begin == std::string_view::npos ? full_function_name : full_function_name.substr(begin + 1); // NOLINT
 #elif defined(__GNUC__)
-    // consteval auto NekoProto::detail::mangled_name() [with auto Ptr = NekoReflector::nekoStaticFunc]
-    // consteval auto NekoProto::detail::mangled_name() [with auto Ptr = test_func_with_struct]
+    // consteval auto nekoproto::detail::mangledName() [with auto Ptr = NekoReflector::nekoStaticFunc]
+    // consteval auto nekoproto::detail::mangledName() [with auto Ptr = testFuncWithStruct]
     static constexpr std::string_view characteristicString =
-        "consteval auto NekoProto::detail::mangled_name() [with auto Ptr = ";                    // NOLINT
+        "consteval auto nekoproto::detail::mangledName() [with auto Ptr = ";                    // NOLINT
     static constexpr auto full_function_name =                                                   // NOLINT
         name.substr(characteristicString.size(), name.size() - characteristicString.size() - 1); // NOLINT
     static_assert(full_function_name.size() > 0, "can not find a valid function name");
@@ -445,9 +444,9 @@ struct func_nameof_impl {                                         // NOLINT
     static constexpr auto func_name =
         is_member_func ? full_function_name.substr(seq + 1) : full_function_name; // NOLINT
 #elif defined(_MSC_VER)
-    static constexpr std::string_view characteristicString = "auto __cdecl NekoProto::detail::mangled_name<"; // NOLINT
-    // void __cdecl NekoProto::detail::NekoReflector::nekoStaticFunc(void)>(void)
-    // int __cdecl free_func_one_arg(int)>(void)
+    static constexpr std::string_view characteristicString = "auto __cdecl nekoproto::detail::mangledName<"; // NOLINT
+    // void __cdecl nekoproto::detail::NekoReflector::nekoStaticFunc(void)>(void)
+    // int __cdecl freeFuncOneArg(int)>(void)
     static constexpr auto full_function_name =                                                   // NOLINT
         name.substr(characteristicString.size(), name.size() - characteristicString.size() - 6); // NOLINT
     static constexpr auto end = full_function_name.find_last_of('(');                            // NOLINT
@@ -470,10 +469,10 @@ struct func_nameof_impl {                                         // NOLINT
 };
 
 template <auto Ptr>
-inline constexpr auto func_nameof = []() constexpr { return func_nameof_impl<Ptr>::func_name; }(); // NOLINT
+inline constexpr auto func_nameof = []() constexpr { return FuncNameofImpl<Ptr>::func_name; }(); // NOLINT
 
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
 } // namespace detail
-NEKO_END_NAMESPACE
+} // namespace nekoproto

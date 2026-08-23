@@ -12,7 +12,7 @@
 #include <type_traits>
 #include <utility>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace argparser::detail {
 
 enum class ConfigIoDirection {
@@ -89,7 +89,7 @@ using ConfigIoBackendRegistry =
     std::tuple<JsonConfigIoBackend, YamlConfigIoBackend, BinaryConfigIoBackend, TomlConfigIoBackend>;
 
 template <typename Backend>
-constexpr bool config_io_format_matches(std::string_view format) {
+constexpr auto configIoFormatMatches(std::string_view format) -> bool {
     if (format == Backend::format) {
         return true;
     }
@@ -102,18 +102,18 @@ constexpr bool config_io_format_matches(std::string_view format) {
 }
 
 template <typename Fn, typename... Backends>
-void for_each_config_io_backend_impl(Fn&& fn, std::tuple<Backends...>) {
+void forEachConfigIoBackendImpl(Fn&& fn, std::tuple<Backends...>) {
     (fn(std::type_identity<Backends>{}), ...);
 }
 
 template <typename Fn>
-void for_each_config_io_backend(Fn&& fn) {
-    for_each_config_io_backend_impl(std::forward<Fn>(fn), ConfigIoBackendRegistry{});
+void forEachConfigIoBackend(Fn&& fn) {
+    forEachConfigIoBackendImpl(std::forward<Fn>(fn), ConfigIoBackendRegistry{});
 }
 
-inline std::string_view config_io_direction_name(ConfigIoDirection direction) {
+inline auto configIoDirectionName(ConfigIoDirection direction) -> std::string_view {
     return direction == ConfigIoDirection::Import ? "import" : "export";
 }
 
 } // namespace argparser::detail
-NEKO_END_NAMESPACE
+} // namespace nekoproto

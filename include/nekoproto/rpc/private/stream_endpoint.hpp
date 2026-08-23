@@ -18,7 +18,7 @@
 #include "nekoproto/rpc/error.hpp"
 #include "nekoproto/rpc/private/backend_base.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace rpc {
 
 template <ilias::Stream StreamT, typename Codec, std::uint8_t CodecId>
@@ -30,21 +30,21 @@ public:
         : mStream(std::move(stream)), mLimits(limits) {}
 
     auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t> {
-        ILIAS_CO_TRYV(co_await _readFrame(buffer));
+        ILIAS_CO_TRYV(co_await readFrame(buffer));
         co_return buffer.size();
     }
 
     auto send(std::span<const std::byte> buffer) -> ilias::IoTask<std::size_t> {
-        ILIAS_CO_TRYV(co_await _writeFrame(buffer));
+        ILIAS_CO_TRYV(co_await writeFrame(buffer));
         co_return buffer.size();
     }
 
-    auto close() -> void { detail::close_stream(mStream); }
-    auto shutdown() -> ilias::IoTask<void> { co_return co_await detail::shutdown_stream(mStream); }
-    auto flush() -> ilias::IoTask<void> { co_return co_await detail::flush_stream(mStream); }
+    void close() { detail::closeStream(mStream); }
+    auto shutdown() -> ilias::IoTask<void> { co_return co_await detail::shutdownStream(mStream); }
+    auto flush() -> ilias::IoTask<void> { co_return co_await detail::flushStream(mStream); }
 
 private:
-    auto _readFrame(Message& buffer) -> ilias::IoTask<void> {
+    auto readFrame(Message& buffer) -> ilias::IoTask<void> {
         const auto header_size = Codec::headerSize();
         std::vector<std::byte> header_bytes(header_size);
         ILIAS_CO_TRY(auto header_ret, co_await ilias::io::readAll(
@@ -77,7 +77,7 @@ private:
         co_return {};
     }
 
-    auto _writeFrame(std::span<const std::byte> frame) -> ilias::IoTask<void> {
+    auto writeFrame(std::span<const std::byte> frame) -> ilias::IoTask<void> {
         const auto header_size = Codec::headerSize();
         if (frame.size() < header_size || frame.size() > mLimits.max_frame_bytes) {
             co_return ilias::Err(ilias::IoError::MessageTooLarge);
@@ -92,7 +92,7 @@ private:
         if (ret != frame.size()) {
             co_return ilias::Err(ilias::IoError::WriteZero);
         }
-        ILIAS_CO_TRYV(co_await detail::flush_stream(mStream));
+        ILIAS_CO_TRYV(co_await detail::flushStream(mStream));
         co_return {};
     }
 
@@ -102,4 +102,4 @@ private:
 };
 
 } // namespace rpc
-NEKO_END_NAMESPACE
+} // namespace nekoproto

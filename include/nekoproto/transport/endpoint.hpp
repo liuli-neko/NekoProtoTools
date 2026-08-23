@@ -24,7 +24,7 @@
 
 #include "nekoproto/global/global.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 template <typename T>
 concept CommunicationStream = ilias::Stream<T>;
@@ -65,14 +65,14 @@ concept MessageEndpoint =
 namespace detail {
 
 template <typename StreamT>
-auto close_stream(StreamT& stream) -> void {
+void closeStream(StreamT& stream) {
     if constexpr (requires(StreamT& value) { value.close(); }) {
         stream.close();
     }
 }
 
 template <typename StreamT>
-auto flush_stream(StreamT& stream) -> ilias::IoTask<void> {
+auto flushStream(StreamT& stream) -> ilias::IoTask<void> {
     if constexpr (requires(StreamT& value) {
                       { value.flush() } -> std::same_as<ilias::IoTask<void>>;
                   }) {
@@ -83,22 +83,22 @@ auto flush_stream(StreamT& stream) -> ilias::IoTask<void> {
 }
 
 template <typename StreamT>
-auto shutdown_stream(StreamT& stream) -> ilias::IoTask<void> {
+auto shutdownStream(StreamT& stream) -> ilias::IoTask<void> {
     if constexpr (requires(StreamT& value) {
                       { value.shutdown() } -> std::same_as<ilias::IoTask<void>>;
                   }) {
-        if (auto ret = co_await flush_stream(stream); !ret) {
+        if (auto ret = co_await flushStream(stream); !ret) {
             co_return ilias::Err(ret.error());
         }
         co_return co_await stream.shutdown();
     } else {
-        close_stream(stream);
+        closeStream(stream);
         co_return {};
     }
 }
 
 template <typename T>
-auto recv_message_endpoint(T& endpoint, std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t> {
+auto recvMessageEndpoint(T& endpoint, std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t> {
     if constexpr (MessageEndpointRecvSize<T>) {
         auto ret = co_await endpoint.recv(buffer);
         if (!ret) {
@@ -115,7 +115,7 @@ auto recv_message_endpoint(T& endpoint, std::vector<std::byte>& buffer) -> ilias
 }
 
 template <typename T>
-auto send_message_endpoint(T& endpoint, std::span<const std::byte> buffer) -> ilias::IoTask<std::size_t> {
+auto sendMessageEndpoint(T& endpoint, std::span<const std::byte> buffer) -> ilias::IoTask<std::size_t> {
     if constexpr (MessageEndpointSendSize<T>) {
         auto ret = co_await endpoint.send(buffer);
         if (!ret) {
@@ -138,7 +138,7 @@ public:
 
     virtual auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t>    = 0;
     virtual auto send(std::span<const std::byte> buffer) -> ilias::IoTask<std::size_t> = 0;
-    virtual auto close() -> void                                                       = 0;
+    virtual void close()                                                               = 0;
     virtual auto shutdown() -> ilias::IoTask<void>                                     = 0;
     virtual auto flush() -> ilias::IoTask<void>                                        = 0;
 };
@@ -152,10 +152,10 @@ public:
     explicit MessageEndpointWrapper(T&& endpoint) : mEndpoint(std::move(endpoint)) {}
 
     auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t> override {
-        co_return co_await recv_message_endpoint(mEndpoint, buffer);
+        co_return co_await recvMessageEndpoint(mEndpoint, buffer);
     }
     auto send(std::span<const std::byte> buffer) -> ilias::IoTask<std::size_t> override {
-        co_return co_await send_message_endpoint(mEndpoint, buffer);
+        co_return co_await sendMessageEndpoint(mEndpoint, buffer);
     }
     auto close() -> void override { return mEndpoint.close(); }
     auto shutdown() -> ilias::IoTask<void> override { return mEndpoint.shutdown(); }
@@ -168,10 +168,10 @@ private:
 };
 
 template <typename T, class enable = void>
-struct is_message_endpoint : std::false_type {};
+struct IsMessageEndpoint : std::false_type {};
 
 template <MessageEndpoint T>
-struct is_message_endpoint<T, std::enable_if_t<std::is_base_of_v<IMessageEndpoint, T>>> : std::true_type {};
+struct IsMessageEndpoint<T, std::enable_if_t<std::is_base_of_v<IMessageEndpoint, T>>> : std::true_type {};
 
 template <CommunicationStream StreamT>
 class LengthPrefixedStreamMessageEndpoint {
@@ -181,7 +181,7 @@ public:
     = default;
     explicit LengthPrefixedStreamMessageEndpoint(StreamT&& stream,
                                                  std::error_code messageTooLarge = ilias::IoError::MessageTooLarge,
-                                                 std::size_t maxMessageBytes = 16U * 1024U * 1024U)
+                                                 std::size_t maxMessageBytes     = 16U * 1024U * 1024U)
         : mStream(std::move(stream)), mMessageTooLarge(messageTooLarge), mMaxMessageBytes(maxMessageBytes) {}
 
     auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t> {
@@ -219,18 +219,18 @@ public:
         co_return buffer.size();
     }
 
-    auto close() -> void { close_stream(mStream); }
-    auto shutdown() -> ilias::IoTask<void> { co_return co_await shutdown_stream(mStream); }
-    auto flush() -> ilias::IoTask<void> { co_return co_await flush_stream(mStream); }
+    void close() { closeStream(mStream); }
+    auto shutdown() -> ilias::IoTask<void> { co_return co_await shutdownStream(mStream); }
+    auto flush() -> ilias::IoTask<void> { co_return co_await flushStream(mStream); }
 
 protected:
-    auto _stream() noexcept -> StreamT& { return mStream; }
-    auto _stream() const noexcept -> const StreamT& { return mStream; }
+    auto stream() noexcept -> StreamT& { return mStream; }
+    auto stream() const noexcept -> const StreamT& { return mStream; }
 
 private:
     StreamT mStream;
-    std::error_code mMessageTooLarge = ilias::IoError::MessageTooLarge;
-    std::size_t mMaxMessageBytes = 16U * 1024U * 1024U;
+    std::error_code mMessageTooLarge          = ilias::IoError::MessageTooLarge;
+    std::size_t mMaxMessageBytes              = 16U * 1024U * 1024U;
     std::unique_ptr<ilias::Mutex> mWriteMutex = std::make_unique<ilias::Mutex>();
 };
 
@@ -291,13 +291,13 @@ public:
         co_return sent;
     }
 
-    auto close() -> void { mDatagram.close(); }
+    void close() { mDatagram.close(); }
     auto shutdown() -> ilias::IoTask<void> { co_return {}; }
     auto flush() -> ilias::IoTask<void> { co_return {}; }
 
 protected:
-    auto _datagram() noexcept -> DatagramT& { return mDatagram; }
-    auto _endpoint() noexcept -> EndpointT& { return mEndpoint; }
+    auto datagram() noexcept -> DatagramT& { return mDatagram; }
+    auto endpoint() noexcept -> EndpointT& { return mEndpoint; }
 
 private:
     DatagramT mDatagram;
@@ -307,4 +307,4 @@ private:
 
 } // namespace detail
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

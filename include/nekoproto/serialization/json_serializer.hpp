@@ -15,39 +15,39 @@
 #include "nekoproto/serialization/serializer_base.hpp"
 #if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
 #include "json/rapid_json_serializer.hpp"
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 using JsonSerializer = RapidJsonSerializer;
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 #elif defined(NEKO_PROTO_ENABLE_SIMDJSON)
 #include "json/simd_json_serializer.hpp"
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 using JsonSerializer = SimdJsonSerializer;
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 #else
 #define NEKO_PROTO_NO_JSON_SERIALIZER
 #endif
 
 #if !defined(NEKO_PROTO_NO_JSON_SERIALIZER)
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 template <typename T>
-auto to_json_value(const T& obj) -> sa::Result<typename JsonSerializer::JsonValue> {
+auto toJsonValue(const T& obj) -> sa::Result<typename JsonSerializer::JsonValue> {
     JsonSerializer::JsonValue json;
     std::vector<char> buffer;
     JsonSerializer::OutputSerializer out(buffer);
     if (!out(obj) || !out.end()) {
         if (const auto* error = out.error()) {
-            return sa::Err(*error);
+            return sa::err(*error);
         }
-        return sa::Err(sa::ErrorCode::ParseError, "Failed to serialize JSON value");
+        return sa::err(sa::ErrorCode::ParseError, "Failed to serialize JSON value");
     }
     JsonSerializer::InputSerializer in(buffer.data(), buffer.size());
     if (!in(json)) {
         if (const auto* error = in.error()) {
-            return sa::Err(*error);
+            return sa::err(*error);
         }
-        return sa::Err(sa::ErrorCode::ParseError, "Failed to parse serialized JSON value");
+        return sa::err(sa::ErrorCode::ParseError, "Failed to parse serialized JSON value");
     }
     return json;
 }
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 #endif

@@ -16,18 +16,13 @@
 
 #include "config.h"
 
-#ifndef NEKO_NAMESPACE
-#define NEKO_NAMESPACE NekoProto
-#endif
+#include <string>
+#include <string_view>
 
-#define NEKO_BEGIN_NAMESPACE namespace NEKO_NAMESPACE {
-#define NEKO_END_NAMESPACE   }
-#define NEKO_USE_NAMESPACE   using namespace NEKO_NAMESPACE;
-
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 template <typename>
 inline constexpr bool always_false_v = false;
-NEKO_END_NAMESPACE
+} // namespace nekoproto
 
 #if defined(_MSVC_LANG) && _MSVC_LANG > __cplusplus
     #define _NEKO_CPP_RAW_VER _MSVC_LANG
@@ -37,40 +32,8 @@ NEKO_END_NAMESPACE
 #define _NEKO_CPP_RAW_VER_YEAR ((_NEKO_CPP_RAW_VER / 100) % 100)
 #if _NEKO_CPP_RAW_VER >= 201103L
     #define NEKO_CPP_PLUS (_NEKO_CPP_RAW_VER_YEAR - (_NEKO_CPP_RAW_VER_YEAR % 3) + 2)
-    #define NEKO_CPP_PRELIMARY (_NEKO_CPP_RAW_VER_YEAR % 3 != 2)
 #else
     #define NEKO_CPP_PLUS 1
-    #define NEKO_CPP_PRELIMARY 1
-#endif
-
-#if defined(__GNUC__) || defined(__MINGW32__)
-#define NEKO_USED [[gnu::used]]
-#elif defined(_WIN32)
-#define NEKO_USED
-#endif
-#if NEKO_CPP_PLUS >= 20
-#define NEKO_IF_LIKELY   [[likely]]
-#define NEKO_IF_UNLIKELY [[unlikely]]
-#else
-#define NEKO_IF_IS_LIKELY
-#define NEKO_IF_UNLIKELY
-#endif
-#if NEKO_CPP_PLUS >= 17
-#include <string>
-#define NEKO_CONSTEXPR_FUNC         constexpr
-#define NEKO_CONSTEXPR_IF           if constexpr
-#define NEKO_CONSTEXPR_VAR          constexpr
-#define NEKO_STRING_VIEW            std::string_view
-#define NEKO_MAKE_UNIQUE(type, ...) std::make_unique<type>(__VA_ARGS__)
-#define NEKO_NOEXCEPT               noexcept
-#else
-#include <string>
-#define NEKO_CONSTEXPR_FUNC
-#define NEKO_CONSTEXPR_IF           if
-#define NEKO_CONSTEXPR_VAR          constexpr
-#define NEKO_STRING_VIEW            std::string
-#define NEKO_MAKE_UNIQUE(type, ...) std::unique_ptr<type>(new type(__VA_ARGS__))
-#define NEKO_NOEXCEPT               noexcept
 #endif
 
 #ifdef _WIN32

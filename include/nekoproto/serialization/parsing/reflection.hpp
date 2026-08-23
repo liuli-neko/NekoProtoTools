@@ -12,17 +12,17 @@
 #include <type_traits>
 #include <utility>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace detail {
 
 template <typename T>
-struct disable_reflect_parser : std::false_type {};
+struct DisableReflectParser : std::false_type {};
 
 template <typename FieldT, typename Tags>
-bool parser_should_skip_empty_field(const FieldT& field, const Tags& /*tags*/) {
+auto parserShouldSkipEmptyField(const FieldT& field, const Tags& /*tags*/) -> bool {
     using ValueType = std::decay_t<FieldT>;
-    if constexpr (traits::optional_like_type<ValueType>::value) {
-        if (!traits::optional_like_type<ValueType>::has_value(field)) {
+    if constexpr (traits::OptionalLikeType<ValueType>::value) {
+        if (!traits::OptionalLikeType<ValueType>::hasValue(field)) {
 #if defined(NEKO_WRITE_NULL_FOR_EMPTY_OPTIONAL)
             return false;
 #else
@@ -34,175 +34,175 @@ bool parser_should_skip_empty_field(const FieldT& field, const Tags& /*tags*/) {
 }
 
 template <typename FieldT, typename Tags>
-ParserResult parser_read_missing_field(FieldT& field, std::string_view name, const Tags& tags) {
-    if (tag_query::get<tag_property::skippable>(tags)) {
+auto parserReadMissingField(FieldT& field, std::string_view name, const Tags& tags) -> ParserResult {
+    if (tag_query::get<tag_property::Skippable>(tags)) {
         return sa::success();
     }
     using ValueType = std::decay_t<FieldT>;
-    if constexpr (traits::optional_like_type<ValueType>::value) {
-        traits::optional_like_type<ValueType>::set_null(field);
+    if constexpr (traits::OptionalLikeType<ValueType>::value) {
+        traits::OptionalLikeType<ValueType>::setNull(field);
         return sa::success();
     }
-    return parser_error(sa::ErrorCode::InvalidField, "Required field '" + std::string(name) + "' is missing");
+    return parserError(sa::ErrorCode::InvalidField, "Required field '" + std::string(name) + "' is missing");
 }
 
 template <typename W, typename ObjectType, typename T>
-ParserResult parser_write_reflect_fields(W& writer, ObjectType& object, const T& value);
+auto parserWriteReflectFields(W& writer, ObjectType& object, const T& value) -> ParserResult;
 
 template <typename R, typename T, typename Tags = NoTags>
-ParserResult parser_read_reflect_fields(typename R::InputValueType in, T& value, const Tags& tags = {});
+auto parserReadReflectFields(typename R::InputValueType in, T& value, const Tags& tags = {}) -> ParserResult;
 
 template <typename Tags>
-constexpr bool parser_should_ignore_reflect_field(const Tags& tags) {
-    return tag_query::get<tag_property::ignore>(tags);
+constexpr auto parserShouldIgnoreReflectField(const Tags& tags) -> bool {
+    return tag_query::get<tag_property::Ignore>(tags);
 }
 
 template <typename T, std::size_t... Is>
-consteval std::size_t parser_reflect_field_count_impl(std::index_sequence<Is...> /*unused*/) {
+consteval auto parserReflectFieldCountImpl(std::index_sequence<Is...> /*unused*/) -> std::size_t {
     return (std::size_t{0} + ... +
-            (tag_query::get<tag_property::ignore>(std::get<Is>(Reflect<std::decay_t<T>>::field_tags))
+            (tag_query::get<tag_property::Ignore>(std::get<Is>(Reflect<std::decay_t<T>>::field_tags))
                  ? std::size_t{0}
                  : std::size_t{1}));
 }
 
 template <typename T>
-consteval std::size_t parser_reflect_field_count() {
-    return parser_reflect_field_count_impl<std::decay_t<T>>(
+consteval auto parserReflectFieldCount() -> std::size_t {
+    return parserReflectFieldCountImpl<std::decay_t<T>>(
         std::make_index_sequence<Reflect<std::decay_t<T>>::value_count>{});
 }
 
 template <typename T>
-std::size_t parser_reflect_emitted_field_count(const T& value);
+auto parserReflectEmittedFieldCount(const T& value) -> std::size_t;
 
 template <typename FieldT, typename Tags>
-std::size_t parser_reflect_emitted_field_count_one(const FieldT& field, const Tags& tags) {
+auto parserReflectEmittedFieldCountOne(const FieldT& field, const Tags& tags) -> std::size_t {
     using FieldType = std::decay_t<FieldT>;
-    if (parser_should_ignore_reflect_field(tags) || parser_should_skip_empty_field(field, tags)) {
+    if (parserShouldIgnoreReflectField(tags) || parserShouldSkipEmptyField(field, tags)) {
         return 0;
     }
     if constexpr (has_values_meta<FieldType> && has_names_meta<FieldType> &&
-                  !disable_reflect_parser<FieldType>::value) {
-        if (tag_query::get<tag_property::flat<FieldType>>(tags)) {
-            return parser_reflect_emitted_field_count(field);
+                  !DisableReflectParser<FieldType>::value) {
+        if (tag_query::get<tag_property::Flat<FieldType>>(tags)) {
+            return parserReflectEmittedFieldCount(field);
         }
     }
     return 1;
 }
 
 template <typename T>
-std::size_t parser_reflect_emitted_field_count(const T& value) {
+auto parserReflectEmittedFieldCount(const T& value) -> std::size_t {
     std::size_t count = 0;
     Reflect<std::decay_t<T>>::forEachFull(value,
                                           [&count](const auto& field, std::string_view /*name*/, const auto& tags) {
-                                              count += parser_reflect_emitted_field_count_one(field, tags);
+                                              count += parserReflectEmittedFieldCountOne(field, tags);
                                           });
     return count;
 }
 
-inline void parser_schema_add_required(parsing::schema::Type::Object& object, std::string name) {
+inline void parserSchemaAddRequired(parsing::schema::Type::Object& object, std::string name) {
     if (std::find(object.required.begin(), object.required.end(), name) == object.required.end()) {
         object.required.push_back(std::move(name));
     }
 }
 
 template <typename FieldT, typename Tags>
-void parser_schema_add_reflect_field(parsing::schema::Type::Object& object, std::string_view name, const Tags& tags) {
-    if (parser_should_ignore_reflect_field(tags)) {
+void parserSchemaAddReflectField(parsing::schema::Type::Object& object, std::string_view name, const Tags& tags) {
+    if (parserShouldIgnoreReflectField(tags)) {
         return;
     }
-    auto fieldSchema = parser_schema<std::decay_t<FieldT>>(tags);
-    if (tag_query::has<tag_property::fixed_length<void>>(tags)) {
-        fieldSchema.fixed_length = tag_query::get<tag_property::fixed_length<std::decay_t<FieldT>>>(tags);
+    auto fieldSchema = parserSchema<std::decay_t<FieldT>>(tags);
+    if (tag_query::has<tag_property::FixedLength<void>>(tags)) {
+        fieldSchema.fixed_length = tag_query::get<tag_property::FixedLength<std::decay_t<FieldT>>>(tags);
     }
-    if (tag_query::get<tag_property::flat<std::decay_t<FieldT>>>(tags)) {
+    if (tag_query::get<tag_property::Flat<std::decay_t<FieldT>>>(tags)) {
         const auto& unwrapped = parsing::schema::unwrapOptional(fieldSchema);
         if (const auto* nested = std::get_if<parsing::schema::Type::Object>(&unwrapped.value)) {
             object.properties.insert(nested->properties.begin(), nested->properties.end());
             for (const auto& required : nested->required) {
-                parser_schema_add_required(object, required);
+                parserSchemaAddRequired(object, required);
             }
             return;
         }
     }
 
     auto fieldName = std::string(name);
-    if constexpr (tag_query::has<tag_property::name>(Tags{})) {
-        fieldName = std::string(tag_query::get<tag_property::name>(tags));
+    if constexpr (tag_query::has<tag_property::Name>(Tags{})) {
+        fieldName = std::string(tag_query::get<tag_property::Name>(tags));
     }
     object.properties.insert_or_assign(fieldName, std::move(fieldSchema));
-    if constexpr (!traits::optional_like_type<std::decay_t<FieldT>>::value) {
-        if (!tag_query::get<tag_property::skippable>(tags)) {
-            parser_schema_add_required(object, std::move(fieldName));
+    if constexpr (!traits::OptionalLikeType<std::decay_t<FieldT>>::value) {
+        if (!tag_query::get<tag_property::Skippable>(tags)) {
+            parserSchemaAddRequired(object, std::move(fieldName));
         }
     }
 }
 
 template <typename W, typename ParentType, typename Tags>
-void parser_write_leading_comment(W& writer, const ParentType& parent, const Tags& tags) {
-    if constexpr (tag_query::has<tag_property::leading_comment>(Tags{})) {
-        parsing::Parent<W>::addComment(writer, tag_query::get<tag_property::leading_comment>(tags), parent);
+void parserWriteLeadingComment(W& writer, const ParentType& parent, const Tags& tags) {
+    if constexpr (tag_query::has<tag_property::LeadingComment>(Tags{})) {
+        parsing::Parent<W>::addComment(writer, tag_query::get<tag_property::LeadingComment>(tags), parent);
     }
 }
 
 template <typename W, typename ParentType, typename Tags>
-void parser_write_trailing_comment(W& writer, const ParentType& parent, const Tags& tags) {
-    if constexpr (tag_query::has<tag_property::trailing_comment>(Tags{})) {
-        parsing::Parent<W>::addComment(writer, tag_query::get<tag_property::trailing_comment>(tags), parent);
+void parserWriteTrailingComment(W& writer, const ParentType& parent, const Tags& tags) {
+    if constexpr (tag_query::has<tag_property::TrailingComment>(Tags{})) {
+        parsing::Parent<W>::addComment(writer, tag_query::get<tag_property::TrailingComment>(tags), parent);
     }
 }
 
 template <typename T>
-parsing::schema::Type parser_schema_named_reflection() {
+auto parserSchemaNamedReflection() -> parsing::schema::Type {
     parsing::schema::Type::Object object;
     Reflect<T>::forEachMetaFull(
         [&]<typename Field>(std::type_identity<Field>, std::string_view name, const auto& tags) {
-            parser_schema_add_reflect_field<Field>(object, name, tags);
+            parserSchemaAddReflectField<Field>(object, name, tags);
         });
     return object;
 }
 
 template <typename T>
-parsing::schema::Type parser_schema_positional_reflection() {
+auto parserSchemaPositionalReflection() -> parsing::schema::Type {
     parsing::schema::Type::Array array;
     Reflect<T>::forEachMetaTyped([&]<typename Field>(std::type_identity<Field>, const auto& tags) {
-        if (parser_should_ignore_reflect_field(tags)) {
+        if (parserShouldIgnoreReflectField(tags)) {
             return;
         }
-        auto fieldSchema = parser_schema<Field>(tags);
-        if (tag_query::has<tag_property::fixed_length<void>>(tags)) {
-            fieldSchema.fixed_length = tag_query::get<tag_property::fixed_length<std::decay_t<Field>>>(tags);
+        auto fieldSchema = parserSchema<Field>(tags);
+        if (tag_query::has<tag_property::FixedLength<void>>(tags)) {
+            fieldSchema.fixed_length = tag_query::get<tag_property::FixedLength<std::decay_t<Field>>>(tags);
         }
         array.prefixItems.emplace_back(std::move(fieldSchema));
     });
-    array.minItems        = parser_reflect_field_count<T>();
-    array.maxItems        = parser_reflect_field_count<T>();
+    array.minItems        = parserReflectFieldCount<T>();
+    array.maxItems        = parserReflectFieldCount<T>();
     array.additionalItems = false;
     return array;
 }
 
 template <typename W, typename ObjectType, typename T, typename Tags>
-ParserResult parser_write_reflect_field(W& writer, ObjectType& object, const T& field, std::string_view name,
-                                        const Tags& tags) {
+auto parserWriteReflectField(W& writer, ObjectType& object, const T& field, std::string_view name,
+                                        const Tags& tags) -> ParserResult {
     using FieldType = std::decay_t<T>;
-    if (parser_should_ignore_reflect_field(tags)) {
+    if (parserShouldIgnoreReflectField(tags)) {
         return sa::success();
     }
     if constexpr (has_values_meta<FieldType> && has_names_meta<FieldType> &&
-                  !disable_reflect_parser<FieldType>::value) {
-        if (tag_query::get<tag_property::flat<FieldType>>(tags)) {
-            return parser_write_reflect_fields<W>(writer, object, field);
+                  !DisableReflectParser<FieldType>::value) {
+        if (tag_query::get<tag_property::Flat<FieldType>>(tags)) {
+            return parserWriteReflectFields<W>(writer, object, field);
         }
     }
-    if (parser_should_skip_empty_field(field, tags)) {
+    if (parserShouldSkipEmptyField(field, tags)) {
         return sa::success();
     }
 #if defined(NEKO_WRITE_NULL_FOR_EMPTY_OPTIONAL)
-    if constexpr (traits::optional_like_type<FieldType>::value) {
-        if (!traits::optional_like_type<FieldType>::has_value(field)) {
+    if constexpr (traits::OptionalLikeType<FieldType>::value) {
+        if (!traits::OptionalLikeType<FieldType>::hasValue(field)) {
             const auto writeNull = [&](const auto& parent) {
-                parser_write_leading_comment(writer, parent, tags);
+                parserWriteLeadingComment(writer, parent, tags);
                 parsing::Parent<W>::addNull(writer, parent, tags);
-                parser_write_trailing_comment(writer, parent, tags);
+                parserWriteTrailingComment(writer, parent, tags);
             };
             if constexpr (std::is_same_v<ObjectType, typename W::OutputObjectType>) {
                 writeNull(typename parsing::Parent<W>::Object{name, &object});
@@ -214,15 +214,15 @@ ParserResult parser_write_reflect_field(W& writer, ObjectType& object, const T& 
     }
 #endif
     std::string_view fieldName = name;
-    if constexpr (tag_query::has<tag_property::name>(Tags{})) {
-        fieldName = tag_query::get<tag_property::name>(tags);
+    if constexpr (tag_query::has<tag_property::Name>(Tags{})) {
+        fieldName = tag_query::get<tag_property::Name>(tags);
     }
     const auto writeField = [&](const auto& parent) {
-        parser_write_leading_comment(writer, parent, tags);
-        auto result = parser_context(parser_write<W>(writer, field, parent, tags),
+        parserWriteLeadingComment(writer, parent, tags);
+        auto result = parserContext(parserWrite<W>(writer, field, parent, tags),
                                      "Failed to write field '" + std::string(fieldName) + "': ");
         if (result) {
-            parser_write_trailing_comment(writer, parent, tags);
+            parserWriteTrailingComment(writer, parent, tags);
         }
         return result;
     };
@@ -234,64 +234,64 @@ ParserResult parser_write_reflect_field(W& writer, ObjectType& object, const T& 
 }
 
 template <typename R, typename T, typename Tags>
-ParserResult parser_read_reflect_field(typename R::InputValueType in, T& field, std::string_view name,
-                                       const Tags& tags) {
+auto parserReadReflectField(typename R::InputValueType in, T& field, std::string_view name,
+                                       const Tags& tags) -> ParserResult {
     using FieldType = std::decay_t<T>;
-    if (parser_should_ignore_reflect_field(tags)) {
+    if (parserShouldIgnoreReflectField(tags)) {
         return sa::success();
     }
     if constexpr (has_values_meta<FieldType> && has_names_meta<FieldType> &&
-                  !disable_reflect_parser<FieldType>::value) {
-        if (tag_query::get<tag_property::flat<FieldType>>(tags)) {
-            return parser_read_reflect_fields<R>(in, field);
+                  !DisableReflectParser<FieldType>::value) {
+        if (tag_query::get<tag_property::Flat<FieldType>>(tags)) {
+            return parserReadReflectFields<R>(in, field);
         }
     }
     // Field tags describe the field boundary and child node, not the
     // containing reflected object.
-    auto object = parsing::reader_to_object<R>(in, NoTags{});
+    auto object = parsing::readerToObject<R>(in, NoTags{});
     if (!object) {
         return object.error();
     }
     std::string_view fieldName = name;
-    if constexpr (tag_query::has<tag_property::name>(Tags{})) {
-        fieldName = tag_query::get<tag_property::name>(tags);
+    if constexpr (tag_query::has<tag_property::Name>(Tags{})) {
+        fieldName = tag_query::get<tag_property::Name>(tags);
     }
-    auto fieldValue = parsing::reader_object_field<R>(object.value(), fieldName, tags);
+    auto fieldValue = parsing::readerObjectField<R>(object.value(), fieldName, tags);
     if (!fieldValue) {
-        return parser_read_missing_field(field, fieldName, tags);
+        return parserReadMissingField(field, fieldName, tags);
     }
-    if (parsing::reader_is_empty<R>(fieldValue.value(), tags)) {
-        if constexpr (traits::optional_like_type<FieldType>::value) {
-            traits::optional_like_type<FieldType>::set_null(field);
+    if (parsing::readerIsEmpty<R>(fieldValue.value(), tags)) {
+        if constexpr (traits::OptionalLikeType<FieldType>::value) {
+            traits::OptionalLikeType<FieldType>::setNull(field);
             return sa::success();
         }
     }
-    return parser_context(parser_read<R>(fieldValue.value(), field, tags),
+    return parserContext(parserRead<R>(fieldValue.value(), field, tags),
                           "Failed to parse field '" + std::string(fieldName) + "': ");
 }
 
 template <typename W, typename ObjectType, typename T>
-ParserResult parser_write_reflect_fields(W& writer, ObjectType& object, const T& value) {
+auto parserWriteReflectFields(W& writer, ObjectType& object, const T& value) -> ParserResult {
     ParserResult result;
     Reflect<std::decay_t<T>>::forEachFull(
         value, [&result, &writer, &object](auto&& field, std::string_view name, const auto& tags) {
             if (result) {
-                result = parser_write_reflect_field<W>(writer, object, field, name, tags);
+                result = parserWriteReflectField<W>(writer, object, field, name, tags);
             }
         });
     return result;
 }
 
 template <typename R, typename T, typename Tags>
-ParserResult parser_read_reflect_fields(typename R::InputValueType in, T& value, const Tags& tags) {
-    auto object = parsing::reader_to_object<R>(in, tags);
+auto parserReadReflectFields(typename R::InputValueType in, T& value, const Tags& tags) -> ParserResult {
+    auto object = parsing::readerToObject<R>(in, tags);
     if (!object) {
         return object.error();
     }
     ParserResult result;
     Reflect<std::decay_t<T>>::forEachFull(value, [&result, in](auto&& field, std::string_view name, const auto& tags) {
         if (result) {
-            result = parser_read_reflect_field<R>(in, field, name, tags);
+            result = parserReadReflectField<R>(in, field, name, tags);
         }
     });
     return result;
@@ -300,27 +300,27 @@ ParserResult parser_read_reflect_fields(typename R::InputValueType in, T& value,
 template <typename W, typename T>
 struct WriteParser<W, T,
                    std::enable_if_t<has_values_meta<T> && (!is_tagged_field_v<T>) && (!std::is_enum_v<T>) &&
-                                    (!disable_reflect_parser<T>::value)>> {
+                                    (!DisableReflectParser<T>::value)>> {
     template <typename ParentType, typename Tags>
-    static ParserResult write(W& writer, const T& value, const ParentType& parent, const Tags& tags) {
+    static auto write(W& writer, const T& value, const ParentType& parent, const Tags& tags) -> ParserResult {
         if constexpr (has_names_meta<T>) {
             if constexpr (requires { writer.beginRawFixedDataAsRoot(); }) {
-                if (tag_query::get<tag_property::raw_fixed_data>(tags)) {
+                if (tag_query::get<tag_property::RawFixedData>(tags)) {
                     using ParentTypeValue = std::remove_cvref_t<ParentType>;
                     if constexpr (!std::is_same_v<ParentTypeValue, typename parsing::Parent<W>::Root>) {
-                        return parser_error(sa::ErrorCode::InvalidType,
+                        return parserError(sa::ErrorCode::InvalidType,
                                             "raw_fixed_data is only valid for a binary root value");
                     } else {
                         parsing::Parent<W>::beginRawFixedData(writer, parent);
                         ParserResult result;
                         Reflect<T>::forEachFull(value, [&writer, &result](const auto& field, std::string_view name,
                                                                           const auto& fieldTags) {
-                            if (!result || parser_should_ignore_reflect_field(fieldTags)) {
+                            if (!result || parserShouldIgnoreReflectField(fieldTags)) {
                                 return;
                             }
                             using FieldType = std::remove_cvref_t<decltype(field)>;
-                            if (!tag_query::has<tag_property::fixed_length<void>>(fieldTags)) {
-                                result = parser_error(sa::ErrorCode::InvalidLength, "raw_fixed_data field '" +
+                            if (!tag_query::has<tag_property::FixedLength<void>>(fieldTags)) {
+                                result = parserError(sa::ErrorCode::InvalidLength, "raw_fixed_data field '" +
                                                                                         std::string(name) +
                                                                                         "' requires fixed_length");
                                 return;
@@ -328,16 +328,16 @@ struct WriteParser<W, T,
                             if constexpr (std::is_enum_v<FieldType>) {
                                 using Underlying = std::underlying_type_t<FieldType>;
                                 result =
-                                    parser_context(parser_write<W>(writer, static_cast<Underlying>(field),
+                                    parserContext(parserWrite<W>(writer, static_cast<Underlying>(field),
                                                                    typename parsing::Parent<W>::Root{}, fieldTags),
                                                    "Failed to write raw fixed field '" + std::string(name) + "': ");
                             } else if constexpr (std::is_arithmetic_v<FieldType>) {
-                                result = parser_context(
-                                    parser_write<W>(writer, field, typename parsing::Parent<W>::Root{}, fieldTags),
+                                result = parserContext(
+                                    parserWrite<W>(writer, field, typename parsing::Parent<W>::Root{}, fieldTags),
                                     "Failed to write raw fixed field '" + std::string(name) + "': ");
                             } else {
                                 result =
-                                    parser_error(sa::ErrorCode::InvalidType,
+                                    parserError(sa::ErrorCode::InvalidType,
                                                  "raw_fixed_data field '" + std::string(name) +
                                                      "' must be an arithmetic or enum value with a fixed wire width");
                             }
@@ -347,47 +347,47 @@ struct WriteParser<W, T,
                 }
             }
             if constexpr (parsing::supports_unframed_object_writer<W>) {
-                if (tag_query::get<tag_property::unframed<std::decay_t<T>>>(tags)) {
+                if (tag_query::get<tag_property::Unframed<std::decay_t<T>>>(tags)) {
                     parsing::Parent<W>::beginUnframedObject(writer, parent);
                     ParserResult result;
                     Reflect<T>::forEachFull(
                         value, [&writer, &result](const auto& field, std::string_view name, const auto& tags) {
                             if (result) {
-                                if (parser_should_ignore_reflect_field(tags)) {
+                                if (parserShouldIgnoreReflectField(tags)) {
                                     return;
                                 }
-                                result = parser_context(
-                                    parser_write<W>(writer, field, typename parsing::Parent<W>::Root{}, tags),
+                                result = parserContext(
+                                    parserWrite<W>(writer, field, typename parsing::Parent<W>::Root{}, tags),
                                     "Failed to write field '" + std::string(name) + "': ");
                             }
                         });
                     return result;
                 }
             }
-            const auto fieldCount = parser_reflect_emitted_field_count(value);
+            const auto fieldCount = parserReflectEmittedFieldCount(value);
             if constexpr (requires { typename W::OutputIdObjectType; }) {
                 auto object = parsing::Parent<W>::addIdObject(writer, fieldCount, parent, tags);
-                return parser_write_reflect_fields<W>(writer, object, value);
+                return parserWriteReflectFields<W>(writer, object, value);
             } else {
                 auto object = parsing::Parent<W>::addObject(writer, fieldCount, parent, tags);
-                return parser_write_reflect_fields<W>(writer, object, value);
+                return parserWriteReflectFields<W>(writer, object, value);
             }
         } else {
-            auto array = parsing::Parent<W>::addArray(writer, parser_reflect_field_count<T>(), parent, tags);
+            auto array = parsing::Parent<W>::addArray(writer, parserReflectFieldCount<T>(), parent, tags);
             ParserResult result;
             std::size_t index = 0;
             Reflect<T>::forEachTagged(value, [&writer, &array, &result, &index](auto&& field, const auto& tags) {
                 if (result) {
-                    if (parser_should_ignore_reflect_field(tags)) {
+                    if (parserShouldIgnoreReflectField(tags)) {
                         ++index;
                         return;
                     }
                     const auto parent = typename parsing::Parent<W>::Array{&array};
-                    parser_write_leading_comment(writer, parent, tags);
-                    result = parser_context(parser_write<W>(writer, field, parent, tags),
+                    parserWriteLeadingComment(writer, parent, tags);
+                    result = parserContext(parserWrite<W>(writer, field, parent, tags),
                                             "Failed to write reflected element " + std::to_string(index) + ": ");
                     if (result) {
-                        parser_write_trailing_comment(writer, parent, tags);
+                        parserWriteTrailingComment(writer, parent, tags);
                     }
                 }
                 ++index;
@@ -400,9 +400,9 @@ struct WriteParser<W, T,
 template <typename R, typename T>
 struct ReadParser<R, T,
                   std::enable_if_t<has_values_meta<T> && (!is_tagged_field_v<T>) && (!std::is_enum_v<T>) &&
-                                   (!disable_reflect_parser<T>::value)>> {
+                                   (!DisableReflectParser<T>::value)>> {
     template <typename Tags>
-    static ParserResult read(typename R::InputValueType in, T& value, const Tags& tags) {
+    static auto read(typename R::InputValueType in, T& value, const Tags& tags) -> ParserResult {
         if constexpr (std::is_move_assignable_v<T> && std::is_copy_constructible_v<T>) {
             T parsed    = value;
             auto result = readInPlace(in, parsed, tags);
@@ -424,40 +424,40 @@ struct ReadParser<R, T,
 
 private:
     template <typename Tags>
-    static ParserResult readInPlace(typename R::InputValueType in, T& value, const Tags& tags) {
+    static auto readInPlace(typename R::InputValueType in, T& value, const Tags& tags) -> ParserResult {
         if constexpr (has_names_meta<T>) {
             if constexpr (requires { R::isRaw(in); }) {
-                if (tag_query::get<tag_property::raw_fixed_data>(tags)) {
+                if (tag_query::get<tag_property::RawFixedData>(tags)) {
                     if (!R::isRaw(in)) {
-                        return parser_error(sa::ErrorCode::InvalidType,
+                        return parserError(sa::ErrorCode::InvalidType,
                                             "raw_fixed_data requires a raw binary input segment");
                     }
                     ParserResult result;
                     auto current = in;
                     Reflect<T>::forEachFull(value, [&current, &result](auto& field, std::string_view name,
                                                                        const auto& fieldTags) {
-                        if (!result || parser_should_ignore_reflect_field(fieldTags)) {
+                        if (!result || parserShouldIgnoreReflectField(fieldTags)) {
                             return;
                         }
                         using FieldType = std::remove_cvref_t<decltype(field)>;
-                        if (!tag_query::has<tag_property::fixed_length<void>>(fieldTags)) {
+                        if (!tag_query::has<tag_property::FixedLength<void>>(fieldTags)) {
                             result =
-                                parser_error(sa::ErrorCode::InvalidLength,
+                                parserError(sa::ErrorCode::InvalidLength,
                                              "raw_fixed_data field '" + std::string(name) + "' requires fixed_length");
                             return;
                         }
                         if constexpr (std::is_enum_v<FieldType>) {
                             std::underlying_type_t<FieldType> raw{};
-                            result = parser_context(parser_read<R>(current, raw, fieldTags),
+                            result = parserContext(parserRead<R>(current, raw, fieldTags),
                                                     "Failed to parse raw fixed field '" + std::string(name) + "': ");
                             if (result) {
                                 field = static_cast<FieldType>(raw);
                             }
                         } else if constexpr (std::is_arithmetic_v<FieldType>) {
-                            result = parser_context(parser_read<R>(current, field, fieldTags),
+                            result = parserContext(parserRead<R>(current, field, fieldTags),
                                                     "Failed to parse raw fixed field '" + std::string(name) + "': ");
                         } else {
-                            result = parser_error(sa::ErrorCode::InvalidType,
+                            result = parserError(sa::ErrorCode::InvalidType,
                                                   "raw_fixed_data field '" + std::string(name) +
                                                       "' must be an arithmetic or enum value with a fixed wire width");
                         }
@@ -469,10 +469,10 @@ private:
                 }
             }
             if constexpr (parsing::supports_unframed_object_reader<R>) {
-                if (tag_query::get<tag_property::unframed<std::decay_t<T>>>(tags)) {
+                if (tag_query::get<tag_property::Unframed<std::decay_t<T>>>(tags)) {
                     if constexpr (requires { R::isFramedObject(in); }) {
                         if (R::isFramedObject(in)) {
-                            return parser_read_reflect_fields<R>(in, value, tags);
+                            return parserReadReflectFields<R>(in, value, tags);
                         }
                     }
                     ParserResult result;
@@ -480,10 +480,10 @@ private:
                     Reflect<T>::forEachFull(
                         value, [&current, &result](auto& field, std::string_view name, const auto& tags) {
                             if (result) {
-                                if (parser_should_ignore_reflect_field(tags)) {
+                                if (parserShouldIgnoreReflectField(tags)) {
                                     return;
                                 }
-                                result  = parser_context(parser_read<R>(current, field, tags),
+                                result  = parserContext(parserRead<R>(current, field, tags),
                                                          "Failed to parse field '" + std::string(name) + "': ");
                                 current = R::next(current);
                             }
@@ -491,16 +491,16 @@ private:
                     return result;
                 }
             }
-            return parser_read_reflect_fields<R>(in, value, tags);
+            return parserReadReflectFields<R>(in, value, tags);
         } else {
-            auto array = parsing::reader_to_array<R>(in, tags);
+            auto array = parsing::readerToArray<R>(in, tags);
             if (!array) {
                 return array.error();
             }
             const auto actualSize   = R::arraySize(array.value());
-            const auto expectedSize = parser_reflect_field_count<T>();
+            const auto expectedSize = parserReflectFieldCount<T>();
             if (actualSize != expectedSize) {
-                return parser_error(sa::ErrorCode::InvalidLength, "Expected reflected array with " +
+                return parserError(sa::ErrorCode::InvalidLength, "Expected reflected array with " +
                                                                       std::to_string(expectedSize) + " elements, got " +
                                                                       std::to_string(actualSize));
             }
@@ -509,11 +509,11 @@ private:
             std::size_t elementIndex = 0;
             Reflect<T>::forEachTagged(value, [&array, &result, &index, &elementIndex](auto&& field, const auto& tags) {
                 if (result) {
-                    if (parser_should_ignore_reflect_field(tags)) {
+                    if (parserShouldIgnoreReflectField(tags)) {
                         ++index;
                         return;
                     }
-                    result = parser_context(parser_read<R>(R::arrayElement(array.value(), elementIndex), field, tags),
+                    result = parserContext(parserRead<R>(R::arrayElement(array.value(), elementIndex), field, tags),
                                             "Failed to parse reflected element " + std::to_string(index) + ": ");
                     ++elementIndex;
                 }
@@ -526,17 +526,17 @@ private:
 
 template <typename T>
 struct SchemaParser<T, std::enable_if_t<has_values_meta<T> && (!is_tagged_field_v<T>) && (!std::is_enum_v<T>) &&
-                                        (!disable_reflect_parser<T>::value)>> {
-    static parsing::schema::Type toSchema() {
+                                        (!DisableReflectParser<T>::value)>> {
+    static auto toSchema() -> parsing::schema::Type {
         parsing::schema::Type schema;
         if constexpr (has_names_meta<T>) {
-            schema = parser_schema_named_reflection<T>();
+            schema = parserSchemaNamedReflection<T>();
         } else {
-            schema = parser_schema_positional_reflection<T>();
+            schema = parserSchemaPositionalReflection<T>();
         }
         return schema;
     }
 };
 
 } // namespace detail
-NEKO_END_NAMESPACE
+} // namespace nekoproto

@@ -8,57 +8,57 @@
 #include "nekoproto/global/reflection_tags.hpp"
 #include "nekoproto/global/string_literal.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace tag_detail {
 template <ConstexprString Prefix>
-struct rpc_prefix_impl {
+struct RpcPrefixImpl {
     constexpr static auto prefix = Prefix.view();
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() {
+    constexpr static auto constexprCheck() -> bool {
         return true;
     }
 };
 
-struct rpc_no_prefix_impl {
+struct RpcNoPrefixImpl {
     constexpr static bool no_prefix = true;
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() {
+    constexpr static auto constexprCheck() -> bool {
         return true;
     }
 };
 
 template <ConstexprString Name>
-struct rpc_name_impl {
+struct RpcNameImpl {
     constexpr static auto method_name = Name.view(); // NOLINT
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() {
+    constexpr static auto constexprCheck() -> bool {
         return true;
     }
 };
 
 template <ConstexprString Description>
-struct rpc_desc_impl {
+struct RpcDescImpl {
     constexpr static auto description = Description.view(); // NOLINT
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() {
+    constexpr static auto constexprCheck() -> bool {
         return true;
     }
 };
 
 template <ConstexprString Version>
-struct rpc_version_impl {
+struct RpcVersionImpl {
     constexpr static auto version = Version.view(); // NOLINT
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() {
+    constexpr static auto constexprCheck() -> bool {
         return true;
     }
 };
 
 template <ConstexprString... Names>
-struct rpc_args_impl {
+struct RpcArgsImpl {
     constexpr static std::array<std::string_view, sizeof...(Names)> arg_names = {Names.view()...}; // NOLINT
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() {
+    constexpr static auto constexprCheck() -> bool {
         if constexpr (requires { T::NumParams; }) {
             return static_cast<std::size_t>(T::NumParams) == sizeof...(Names);
         } else {
@@ -67,42 +67,42 @@ struct rpc_args_impl {
     }
 };
 
-struct rpc_notification_impl {
+struct RpcNotificationImpl {
     constexpr static bool notification = true; // NOLINT
     template <typename T, auto /*tags*/>
-    constexpr static bool constexpr_check() {
+    constexpr static auto constexprCheck() -> bool {
         return true;
     }
 };
 } // namespace tag_detail
 
 template <ConstexprString Prefix>
-inline constexpr auto rpc_prefix = tag_detail::rpc_prefix_impl<Prefix>{};
+inline constexpr auto rpc_prefix = tag_detail::RpcPrefixImpl<Prefix>{};
 
-inline constexpr auto rpc_no_prefix = tag_detail::rpc_no_prefix_impl{};
+inline constexpr auto rpc_no_prefix = tag_detail::RpcNoPrefixImpl{};
 
 template <ConstexprString Name>
-inline constexpr auto rpc_name = tag_detail::rpc_name_impl<Name>{};
+inline constexpr auto rpc_name = tag_detail::RpcNameImpl<Name>{};
 
 template <ConstexprString Description>
-inline constexpr auto rpc_desc = tag_detail::rpc_desc_impl<Description>{};
+inline constexpr auto rpc_desc = tag_detail::RpcDescImpl<Description>{};
 
 template <ConstexprString Version>
-inline constexpr auto rpc_version = tag_detail::rpc_version_impl<Version>{};
+inline constexpr auto rpc_version = tag_detail::RpcVersionImpl<Version>{};
 
 template <ConstexprString... Names>
-inline constexpr auto rpc_args = tag_detail::rpc_args_impl<Names...>{};
+inline constexpr auto rpc_args = tag_detail::RpcArgsImpl<Names...>{};
 
-inline constexpr auto rpc_notification = tag_detail::rpc_notification_impl{};
+inline constexpr auto rpc_notification = tag_detail::RpcNotificationImpl{};
 
 namespace tag_property {
-NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, prefix, rpc_prefix);               // NOLINT
-NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, no_prefix, rpc_no_prefix);                     // NOLINT
-NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, method_name, rpc_name);            // NOLINT
-NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, description, rpc_desc);            // NOLINT
-NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, version, rpc_version);             // NOLINT
-NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::vector<std::string_view>, arg_names, rpc_args); // NOLINT
-NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, notification, rpc_notification_flag);          // NOLINT
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, prefix, RpcPrefix);
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, no_prefix, RpcNoPrefix);
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, method_name, RpcName);
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, description, RpcDesc);
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::string_view, version, RpcVersion);
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(std::vector<std::string_view>, arg_names, RpcArgs);
+NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, notification, RpcNotificationFlag);
 } // namespace tag_property
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

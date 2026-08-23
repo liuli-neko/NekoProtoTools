@@ -19,7 +19,7 @@
 #include <utility>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace binary {
 
 struct ParseLimits {
@@ -101,14 +101,14 @@ public:
         std::vector<Entry> entries;
     };
 
-    static Checkpoint checkpoint(const InputValueType& input) {
+    static auto checkpoint(const InputValueType& input) -> Checkpoint {
         Checkpoint result;
         result.state = input.state;
         if (input.state != nullptr) {
             result.offset              = input.state->offset;
             result.remainingAllocation = input.state->remainingAllocation;
         }
-        _captureCheckpoint(input.node, result);
+        captureCheckpoint(input.node, result);
         return result;
     }
 
@@ -145,7 +145,7 @@ public:
         }
     }
 
-    sa::Result<void> inputResult() const {
+    auto inputResult() const -> sa::Result<void> {
         return mState.error ? sa::Result<void>{*mState.error} : sa::success();
     }
 
@@ -154,7 +154,7 @@ public:
         mState.offset = 0;
     }
 
-    sa::Result<void> finish() const {
+    auto finish() const -> sa::Result<void> {
         if (mState.error) return *mState.error;
         if (mState.offset != mState.size) {
             return sa::error(sa::ErrorCode::ParseError, "Binary input contains trailing or unconsumed bytes");
@@ -162,115 +162,115 @@ public:
         return sa::success();
     }
 
-    InputValueType root() {
-        if (mState.error) return _errorValue(mState, *mState.error);
-        if (!mState.framed) return _rawValue(mState);
+    auto root() -> InputValueType {
+        if (mState.error) return errorValue(mState, *mState.error);
+        if (!mState.framed) return rawValue(mState);
         auto cursor = mState.offset;
-        auto parsed = _parseNode(mState, cursor, mState.size, 0);
-        if (!parsed) return _errorValue(mState, parsed.error());
+        auto parsed = parseNode(mState, cursor, mState.size, 0);
+        if (!parsed) return errorValue(mState, parsed.error());
         mState.offset = cursor;
         return {&mState, std::move(parsed.value())};
     }
 
-    static InputValueType next(const InputValueType& input) {
-        if (auto error = _validateHandle(input); error) return _errorValue(input.state, *error);
-        if (input.node->raw) return _rawValue(*input.state);
+    static auto next(const InputValueType& input) -> InputValueType {
+        if (auto error = validateHandle(input); error) return errorValue(input.state, *error);
+        if (input.node->raw) return rawValue(*input.state);
         auto cursor = input.node->end;
-        auto parsed = _parseNode(*input.state, cursor, input.state->size, input.node->depth);
-        if (!parsed) return _errorValue(input.state, parsed.error());
+        auto parsed = parseNode(*input.state, cursor, input.state->size, input.node->depth);
+        if (!parsed) return errorValue(input.state, parsed.error());
         input.state->offset = cursor;
         return {input.state, std::move(parsed.value())};
     }
 
-    std::size_t offset() const noexcept { return mState.offset; }
-    std::size_t size() const noexcept { return mState.size; }
+    auto offset() const noexcept -> std::size_t { return mState.offset; }
+    auto size() const noexcept -> std::size_t { return mState.size; }
 
-    static bool isRaw(const InputValueType& input) noexcept {
+    static auto isRaw(const InputValueType& input) noexcept -> bool {
         return input.state != nullptr && input.node != nullptr && input.node->raw;
     }
 
-    static bool isFramedObject(const InputValueType& input) noexcept {
+    static auto isFramedObject(const InputValueType& input) noexcept -> bool {
         return input.state != nullptr && input.node != nullptr && !input.node->raw &&
                (input.node->tag == ValueTag::NamedObject || input.node->tag == ValueTag::IdObject);
     }
 
-    static std::size_t arraySize(const InputArrayType& array) noexcept {
+    static auto arraySize(const InputArrayType& array) noexcept -> std::size_t {
         return array.node == nullptr ? 0U : array.node->elements.size();
     }
 
-    static InputValueType arrayElement(const InputArrayType& array, std::size_t index) {
-        if (auto error = _validateHandle(array); error) return _errorValue(array.state, *error);
+    static auto arrayElement(const InputArrayType& array, std::size_t index) -> InputValueType {
+        if (auto error = validateHandle(array); error) return errorValue(array.state, *error);
         if (array.node->tag != ValueTag::Array || index >= array.node->elements.size()) {
-            return _errorValue(array.state, sa::error(sa::ErrorCode::InvalidIndex, "Binary array index is out of range"));
+            return errorValue(array.state, sa::error(sa::ErrorCode::InvalidIndex, "Binary array index is out of range"));
         }
         return {array.state, array.node->elements[index]};
     }
 
-    static std::size_t objectSize(const InputObjectType& object) noexcept {
+    static auto objectSize(const InputObjectType& object) noexcept -> std::size_t {
         return object.node == nullptr ? 0U : object.node->members.size();
     }
 
-    static sa::Result<InputValueType> objectField(const InputObjectType& object, std::string_view name) {
-        if (auto error = _validateHandle(object); error) return *error;
+    static auto objectField(const InputObjectType& object, std::string_view name) -> sa::Result<InputValueType> {
+        if (auto error = validateHandle(object); error) return *error;
         std::size_t index = 0;
         if (object.node->tag == ValueTag::NamedObject) {
             const auto item = object.node->namedIndex.find(name);
-            if (item == object.node->namedIndex.end()) return _missingField(name);
+            if (item == object.node->namedIndex.end()) return missingField(name);
             index = item->second;
         } else if (object.node->tag == ValueTag::IdObject) {
             if (useHashedFieldId(name)) {
                 const auto item = object.node->idIndex.find(fieldId(name));
-                if (item == object.node->idIndex.end()) return _missingField(name);
+                if (item == object.node->idIndex.end()) return missingField(name);
                 index = item->second;
             } else {
                 const auto item = object.node->namedIndex.find(name);
-                if (item == object.node->namedIndex.end()) return _missingField(name);
+                if (item == object.node->namedIndex.end()) return missingField(name);
                 index = item->second;
             }
         } else {
-            return _typeError<InputValueType>("object");
+            return typeError<InputValueType>("object");
         }
         return InputValueType{object.state, object.node->members[index].value};
     }
 
     template <typename Fn>
-    static bool forEachObjectMember(const InputObjectType& object, Fn&& fn) {
-        if (_validateHandle(object) || object.node->tag != ValueTag::NamedObject) return false;
+    static auto forEachObjectMember(const InputObjectType& object, Fn&& fn) -> bool {
+        if (validateHandle(object) || object.node->tag != ValueTag::NamedObject) return false;
         for (const auto& member : object.node->members) {
             if (!fn(member.name, InputValueType{object.state, member.value})) return false;
         }
         return true;
     }
 
-    static bool isEmpty(const InputValueType& input) {
-        if (_validate(input) || input.node->raw || input.node->tag != ValueTag::Null) return false;
+    static auto isEmpty(const InputValueType& input) -> bool {
+        if (validate(input) || input.node->raw || input.node->tag != ValueTag::Null) return false;
         input.node->consumed = true;
         return true;
     }
 
     template <typename T>
-    static sa::Result<T> toBasicType(const InputValueType& input) {
-        if (auto error = _validate(input); error) return *error;
+    static auto toBasicType(const InputValueType& input) -> sa::Result<T> {
+        if (auto error = validate(input); error) return *error;
         using U = std::remove_cvref_t<T>;
-        if (input.node->raw) return _readRaw<U>(input);
+        if (input.node->raw) return readRaw<U>(input);
         if constexpr (std::is_same_v<U, std::string>) {
-            if (input.node->tag != ValueTag::String) return _typeError<U>("string");
+            if (input.node->tag != ValueTag::String) return typeError<U>("string");
             const auto size = input.node->dataEnd - input.node->dataBegin;
-            if (auto error = _charge(*input.state, size); error) return *error;
+            if (auto error = charge(*input.state, size); error) return *error;
             input.node->consumed = true;
             return std::string{input.state->data + input.node->dataBegin, size};
         } else if constexpr (std::is_same_v<U, bool>) {
-            if (input.node->tag != ValueTag::False && input.node->tag != ValueTag::True) return _typeError<U>("bool");
+            if (input.node->tag != ValueTag::False && input.node->tag != ValueTag::True) return typeError<U>("bool");
             input.node->consumed = true;
             return input.node->tag == ValueTag::True;
         } else if constexpr (std::is_integral_v<U>) {
             const auto expected = std::is_signed_v<U> ? ValueTag::SignedInteger : ValueTag::UnsignedInteger;
             if (input.node->tag != expected) {
-                return _typeError<U>(std::is_signed_v<U> ? "signed integer" : "unsigned integer");
+                return typeError<U>(std::is_signed_v<U> ? "signed integer" : "unsigned integer");
             }
             auto cursor = input.node->dataBegin;
             using Unsigned = std::make_unsigned_t<U>;
-            auto decoded = _readUleb<Unsigned>(*input.state, cursor, input.node->dataEnd);
+            auto decoded = readUleb<Unsigned>(*input.state, cursor, input.node->dataEnd);
             if (!decoded) return decoded.error();
             input.node->consumed = true;
             if constexpr (std::is_signed_v<U>) {
@@ -279,36 +279,36 @@ public:
                 const bool negative = (encoded & Unsigned{1}) != 0;
                 if (negative) {
                     const auto minimumMagnitude = static_cast<Unsigned>(std::numeric_limits<U>::max()) + Unsigned{1};
-                    if (magnitude > minimumMagnitude) return _rangeError<U>();
+                    if (magnitude > minimumMagnitude) return rangeError<U>();
                     if (magnitude == minimumMagnitude) return std::numeric_limits<U>::min();
                     return static_cast<U>(-static_cast<U>(magnitude));
                 }
-                if (magnitude > static_cast<Unsigned>(std::numeric_limits<U>::max())) return _rangeError<U>();
+                if (magnitude > static_cast<Unsigned>(std::numeric_limits<U>::max())) return rangeError<U>();
                 return static_cast<U>(magnitude);
             } else {
                 return static_cast<U>(decoded.value());
             }
         } else if constexpr (std::is_floating_point_v<U>) {
-            return _readFloating<U>(input);
+            return readFloating<U>(input);
         } else {
             static_assert(std::is_same_v<U, void>, "Unsupported binary basic type");
         }
     }
 
     template <typename T>
-    static sa::Result<T> toFixedBasicType(const InputValueType& input, std::size_t size) {
+    static auto toFixedBasicType(const InputValueType& input, std::size_t size) -> sa::Result<T> {
         return readFixed<T>(input, size);
     }
 
     template <typename T>
-    static sa::Result<T> readFixed(const InputValueType& input, std::size_t size) {
-        if (auto error = _validate(input); error) return *error;
+    static auto readFixed(const InputValueType& input, std::size_t size) -> sa::Result<T> {
+        if (auto error = validate(input); error) return *error;
         using U = std::remove_cvref_t<T>;
-        if (input.node->raw) return _readRawFixed<U>(input, size);
+        if (input.node->raw) return readRawFixed<U>(input, size);
         if constexpr (std::is_same_v<U, bool>) {
             return toBasicType<U>(input);
         } else if constexpr (std::is_integral_v<U>) {
-            if (size != sizeof(U) || input.node->tag != _fixedTag<U>()) return _typeError<U>("fixed-width integer");
+            if (size != sizeof(U) || input.node->tag != fixedTag<U>()) return typeError<U>("fixed-width integer");
             U value{};
             std::memcpy(&value, input.state->data + input.node->dataBegin, sizeof(U));
             if constexpr (sizeof(U) > 1) value = betoh(value);
@@ -316,37 +316,37 @@ public:
             return value;
         } else if constexpr (std::is_floating_point_v<U>) {
             if (size != sizeof(U)) return sa::error(sa::ErrorCode::InvalidLength, "Invalid fixed floating-point width");
-            return _readFloating<U>(input);
+            return readFloating<U>(input);
         } else {
             static_assert(std::is_same_v<U, void>, "Unsupported fixed binary type");
         }
     }
 
-    static sa::Result<InputArrayType> toArray(const InputValueType& input) {
-        if (auto error = _validate(input); error) return *error;
-        if (input.node->raw || input.node->tag != ValueTag::Array) return _typeError<InputArrayType>("array");
+    static auto toArray(const InputValueType& input) -> sa::Result<InputArrayType> {
+        if (auto error = validate(input); error) return *error;
+        if (input.node->raw || input.node->tag != ValueTag::Array) return typeError<InputArrayType>("array");
         return input;
     }
 
-    static sa::Result<InputObjectType> toObject(const InputValueType& input) {
-        if (auto error = _validate(input); error) return *error;
-        if (!isFramedObject(input)) return _typeError<InputObjectType>("object");
+    static auto toObject(const InputValueType& input) -> sa::Result<InputObjectType> {
+        if (auto error = validate(input); error) return *error;
+        if (!isFramedObject(input)) return typeError<InputObjectType>("object");
         return input;
     }
 
 private:
-    static void _captureCheckpoint(const std::shared_ptr<Node>& node, Checkpoint& checkpoint) {
+    static void captureCheckpoint(const std::shared_ptr<Node>& node, Checkpoint& checkpoint) {
         if (node == nullptr) return;
         checkpoint.entries.push_back({node, node->consumed, node->end});
         for (const auto& element : node->elements) {
-            _captureCheckpoint(element, checkpoint);
+            captureCheckpoint(element, checkpoint);
         }
         for (const auto& member : node->members) {
-            _captureCheckpoint(member.value, checkpoint);
+            captureCheckpoint(member.value, checkpoint);
         }
     }
 
-    static std::optional<sa::Error> _validateHandle(const InputValueType& input) {
+    static auto validateHandle(const InputValueType& input) -> std::optional<sa::Error> {
         if (input.state == nullptr || input.node == nullptr || input.state->data == nullptr) {
             return sa::error(sa::ErrorCode::ParseError, "Binary input handle is null");
         }
@@ -355,22 +355,22 @@ private:
         return std::nullopt;
     }
 
-    static std::optional<sa::Error> _validate(const InputValueType& input) {
-        if (auto error = _validateHandle(input); error) return error;
+    static auto validate(const InputValueType& input) -> std::optional<sa::Error> {
+        if (auto error = validateHandle(input); error) return error;
         if (input.node->consumed) return sa::error(sa::ErrorCode::ParseError, "Binary value was already consumed");
         return std::nullopt;
     }
 
-    static InputValueType _errorValue(State* state, sa::Error error) {
+    static auto errorValue(State* state, sa::Error error) -> InputValueType {
         InputValueType value;
         value.state = state;
         value.node = std::make_shared<Node>();
         value.node->error = std::move(error);
         return value;
     }
-    static InputValueType _errorValue(State& state, sa::Error error) { return _errorValue(&state, std::move(error)); }
+    static auto errorValue(State& state, sa::Error error) -> InputValueType { return errorValue(&state, std::move(error)); }
 
-    static InputValueType _rawValue(State& state) {
+    static auto rawValue(State& state) -> InputValueType {
         InputValueType value;
         value.state = &state;
         value.node = std::make_shared<Node>();
@@ -385,15 +385,15 @@ private:
         return value;
     }
 
-    static sa::Result<std::shared_ptr<Node>> _parseNode(State& state, std::size_t& cursor, std::size_t limit,
-                                                        std::size_t depth) {
+    static auto parseNode(State& state, std::size_t& cursor, std::size_t limit,
+                                                        std::size_t depth) -> sa::Result<std::shared_ptr<Node>> {
         if (depth > state.limits.max_depth) {
             return sa::error(sa::ErrorCode::InvalidLength, "Binary nesting exceeds configured depth limit");
         }
         if (cursor >= limit || limit > state.size) {
             return sa::error(sa::ErrorCode::ParseError, "Unexpected end of binary value");
         }
-        if (auto error = _charge(state, sizeof(Node)); error) return *error;
+        if (auto error = charge(state, sizeof(Node)); error) return *error;
         auto node = std::make_shared<Node>();
         node->begin = cursor;
         node->depth = depth;
@@ -410,19 +410,19 @@ private:
         case ValueTag::SignedInteger:
         case ValueTag::UnsignedInteger: {
             node->dataBegin = cursor;
-            auto ignored = _readUleb<std::uint64_t>(state, cursor, limit);
+            auto ignored = readUleb<std::uint64_t>(state, cursor, limit);
             if (!ignored) return ignored.error();
             node->dataEnd = cursor;
             break;
         }
         case ValueTag::Float32:
-            if (!_takeFixed(*node, cursor, limit, sizeof(std::uint32_t))) return _truncatedFixed();
+            if (!takeFixed(*node, cursor, limit, sizeof(std::uint32_t))) return truncatedFixed();
             break;
         case ValueTag::Float64:
-            if (!_takeFixed(*node, cursor, limit, sizeof(std::uint64_t))) return _truncatedFixed();
+            if (!takeFixed(*node, cursor, limit, sizeof(std::uint64_t))) return truncatedFixed();
             break;
         case ValueTag::String: {
-            auto size = _readUleb<std::uint64_t>(state, cursor, limit);
+            auto size = readUleb<std::uint64_t>(state, cursor, limit);
             if (!size) return size.error();
             if (size.value() > state.limits.max_string_bytes || size.value() > limit - cursor) {
                 return sa::error(sa::ErrorCode::InvalidLength, "Binary string exceeds configured byte limit");
@@ -433,12 +433,12 @@ private:
             break;
         }
         case ValueTag::Array: {
-            auto count = _readCount(state, cursor, limit, state.limits.max_container_elements, "array");
+            auto count = readCount(state, cursor, limit, state.limits.max_container_elements, "array");
             if (!count) return count.error();
-            if (auto error = _chargeProduct(state, count.value(), sizeof(std::shared_ptr<Node>)); error) return *error;
+            if (auto error = chargeProduct(state, count.value(), sizeof(std::shared_ptr<Node>)); error) return *error;
             node->elements.reserve(count.value());
             for (std::size_t ix = 0; ix < count.value(); ++ix) {
-                auto child = _parseNode(state, cursor, limit, depth + 1U);
+                auto child = parseNode(state, cursor, limit, depth + 1U);
                 if (!child) return child.error();
                 node->elements.push_back(std::move(child.value()));
             }
@@ -446,9 +446,9 @@ private:
         }
         case ValueTag::NamedObject:
         case ValueTag::IdObject: {
-            auto count = _readCount(state, cursor, limit, state.limits.max_object_fields, "object");
+            auto count = readCount(state, cursor, limit, state.limits.max_object_fields, "object");
             if (!count) return count.error();
-            if (auto error = _chargeProduct(state, count.value(), sizeof(Member) + sizeof(std::size_t)); error) {
+            if (auto error = chargeProduct(state, count.value(), sizeof(Member) + sizeof(std::size_t)); error) {
                 return *error;
             }
             node->members.reserve(count.value());
@@ -460,7 +460,7 @@ private:
             for (std::size_t ix = 0; ix < count.value(); ++ix) {
                 Member member;
                 if (node->tag == ValueTag::NamedObject) {
-                    auto size = _readUleb<std::uint64_t>(state, cursor, limit);
+                    auto size = readUleb<std::uint64_t>(state, cursor, limit);
                     if (!size) return size.error();
                     if (size.value() > state.limits.max_string_bytes || size.value() > limit - cursor) {
                         return sa::error(sa::ErrorCode::InvalidLength, "Binary field name exceeds configured limit");
@@ -471,7 +471,7 @@ private:
                         return sa::error(sa::ErrorCode::InvalidField, "Binary object contains a duplicate field name");
                     }
                 } else {
-                    auto key = _readUleb<std::uint64_t>(state, cursor, limit);
+                    auto key = readUleb<std::uint64_t>(state, cursor, limit);
                     if (!key) return key.error();
                     if ((key.value() & 1U) == 0U) {
                         const auto nameSize64 = key.value() >> 1U;
@@ -497,7 +497,7 @@ private:
                         }
                     }
                 }
-                auto child = _parseNode(state, cursor, limit, depth + 1U);
+                auto child = parseNode(state, cursor, limit, depth + 1U);
                 if (!child) return child.error();
                 member.value = std::move(child.value());
                 const auto memberIndex = node->members.size();
@@ -509,8 +509,8 @@ private:
             break;
         }
         default: {
-            const auto width = _fixedWidth(node->tag);
-            if (width == 0U || !_takeFixed(*node, cursor, limit, width)) return _truncatedFixed();
+            const auto width = fixedWidth(node->tag);
+            if (width == 0U || !takeFixed(*node, cursor, limit, width)) return truncatedFixed();
             break;
         }
         }
@@ -518,7 +518,7 @@ private:
         return node;
     }
 
-    static bool _takeFixed(Node& node, std::size_t& cursor, std::size_t limit, std::size_t width) {
+    static auto takeFixed(Node& node, std::size_t& cursor, std::size_t limit, std::size_t width) -> bool {
         if (width > limit - cursor) return false;
         node.dataBegin = cursor;
         cursor += width;
@@ -526,7 +526,7 @@ private:
         return true;
     }
 
-    static std::size_t _fixedWidth(ValueTag tag) noexcept {
+    static auto fixedWidth(ValueTag tag) noexcept -> std::size_t {
         switch (tag) {
         case ValueTag::FixedSigned8:
         case ValueTag::FixedUnsigned8: return 1;
@@ -541,7 +541,7 @@ private:
     }
 
     template <typename UInt>
-    static sa::Result<UInt> _readUleb(const State& state, std::size_t& cursor, std::size_t limit) {
+    static auto readUleb(const State& state, std::size_t& cursor, std::size_t limit) -> sa::Result<UInt> {
         static_assert(std::is_unsigned_v<UInt>);
         const auto begin = cursor;
         UInt value = 0;
@@ -564,9 +564,9 @@ private:
         return sa::error(sa::ErrorCode::ParseError, "Truncated binary varint");
     }
 
-    static sa::Result<std::size_t> _readCount(const State& state, std::size_t& cursor, std::size_t limit,
-                                               std::size_t maximum, std::string_view kind) {
-        auto count = _readUleb<std::uint64_t>(state, cursor, limit);
+    static auto readCount(const State& state, std::size_t& cursor, std::size_t limit,
+                                               std::size_t maximum, std::string_view kind) -> sa::Result<std::size_t> {
+        auto count = readUleb<std::uint64_t>(state, cursor, limit);
         if (!count) return count.error();
         if (count.value() > maximum || count.value() > std::numeric_limits<std::size_t>::max()) {
             return sa::error(sa::ErrorCode::InvalidLength,
@@ -576,34 +576,34 @@ private:
     }
 
     template <typename U>
-    static sa::Result<U> _readRaw(const InputValueType& input) {
+    static auto readRaw(const InputValueType& input) -> sa::Result<U> {
         if constexpr (std::is_same_v<U, std::string>) {
             auto cursor = input.state->offset;
-            auto size = _readUleb<std::uint64_t>(*input.state, cursor, input.state->size);
+            auto size = readUleb<std::uint64_t>(*input.state, cursor, input.state->size);
             if (!size) return size.error();
             if (size.value() > input.state->limits.max_string_bytes || size.value() > input.state->size - cursor) {
                 return sa::error(sa::ErrorCode::InvalidLength, "Raw binary string exceeds configured limit");
             }
-            if (auto error = _charge(*input.state, static_cast<std::size_t>(size.value())); error) return *error;
+            if (auto error = charge(*input.state, static_cast<std::size_t>(size.value())); error) return *error;
             std::string value{input.state->data + cursor, static_cast<std::size_t>(size.value())};
             cursor += static_cast<std::size_t>(size.value());
-            _consumeRaw(input, cursor);
+            consumeRaw(input, cursor);
             return value;
         } else if constexpr (std::is_arithmetic_v<U>) {
-            return _readRawFixed<U>(input, sizeof(U));
+            return readRawFixed<U>(input, sizeof(U));
         } else {
             static_assert(std::is_same_v<U, void>, "Unsupported raw binary type");
         }
     }
 
     template <typename U>
-    static sa::Result<U> _readRawFixed(const InputValueType& input, std::size_t size) {
+    static auto readRawFixed(const InputValueType& input, std::size_t size) -> sa::Result<U> {
         if (size != sizeof(U) || size > input.state->size - input.state->offset) {
             return sa::error(sa::ErrorCode::ParseError, "Unexpected end of raw fixed binary data");
         }
         if constexpr (std::is_same_v<U, bool>) {
             const auto byte = static_cast<std::uint8_t>(input.state->data[input.state->offset]);
-            _consumeRaw(input, input.state->offset + 1U);
+            consumeRaw(input, input.state->offset + 1U);
             if (byte > 1U) return sa::error(sa::ErrorCode::ParseError, "Raw binary bool must be 0 or 1");
             return byte != 0U;
         } else if constexpr (std::is_floating_point_v<U> && !std::is_same_v<U, float> &&
@@ -614,7 +614,7 @@ private:
         U value{};
         std::memcpy(&value, input.state->data + input.state->offset, size);
         const auto end = input.state->offset + size;
-        _consumeRaw(input, end);
+        consumeRaw(input, end);
         if constexpr (std::is_integral_v<U> && sizeof(U) > 1) {
             value = betoh(value);
         } else if constexpr (std::is_same_v<U, float>) {
@@ -627,23 +627,23 @@ private:
         return value;
     }
 
-    static void _consumeRaw(const InputValueType& input, std::size_t end) {
+    static void consumeRaw(const InputValueType& input, std::size_t end) {
         input.state->offset = end;
         input.node->end = end;
         input.node->consumed = true;
     }
 
     template <typename U>
-    static sa::Result<U> _readFloating(const InputValueType& input) {
+    static auto readFloating(const InputValueType& input) -> sa::Result<U> {
         static_assert(std::numeric_limits<U>::is_iec559, "Binary floating-point requires IEEE-754");
         if constexpr (std::is_same_v<U, float>) {
-            if (input.node->tag != ValueTag::Float32) return _typeError<U>("float32");
+            if (input.node->tag != ValueTag::Float32) return typeError<U>("float32");
             std::uint32_t bits{};
             std::memcpy(&bits, input.state->data + input.node->dataBegin, sizeof(bits));
             input.node->consumed = true;
             return std::bit_cast<float>(betoh(bits));
         } else if constexpr (std::is_same_v<U, double>) {
-            if (input.node->tag != ValueTag::Float64) return _typeError<U>("float64");
+            if (input.node->tag != ValueTag::Float64) return typeError<U>("float64");
             std::uint64_t bits{};
             std::memcpy(&bits, input.state->data + input.node->dataBegin, sizeof(bits));
             input.node->consumed = true;
@@ -654,7 +654,7 @@ private:
     }
 
     template <typename U>
-    static consteval ValueTag _fixedTag() {
+    static consteval auto fixedTag() -> ValueTag {
         if constexpr (std::is_signed_v<U>) {
             if constexpr (sizeof(U) == 1) return ValueTag::FixedSigned8;
             else if constexpr (sizeof(U) == 2) return ValueTag::FixedSigned16;
@@ -670,33 +670,33 @@ private:
         }
     }
 
-    static std::optional<sa::Error> _charge(State& state, std::size_t bytes) {
+    static auto charge(State& state, std::size_t bytes) -> std::optional<sa::Error> {
         if (bytes > state.remainingAllocation) {
             return sa::error(sa::ErrorCode::InvalidLength, "Binary parse allocation budget exceeded");
         }
         state.remainingAllocation -= bytes;
         return std::nullopt;
     }
-    static std::optional<sa::Error> _chargeProduct(State& state, std::size_t count, std::size_t elementSize) {
+    static auto chargeProduct(State& state, std::size_t count, std::size_t elementSize) -> std::optional<sa::Error> {
         if (count != 0U && elementSize > std::numeric_limits<std::size_t>::max() / count) {
             return sa::error(sa::ErrorCode::InvalidLength, "Binary parse allocation size overflow");
         }
-        return _charge(state, count * elementSize);
+        return charge(state, count * elementSize);
     }
 
     template <typename T>
-    static sa::Result<T> _typeError(std::string_view expected) {
+    static auto typeError(std::string_view expected) -> sa::Result<T> {
         return sa::error(sa::ErrorCode::InvalidType, "Binary value is not a " + std::string(expected));
     }
     template <typename T>
-    static sa::Result<T> _rangeError() {
+    static auto rangeError() -> sa::Result<T> {
         return sa::error(sa::ErrorCode::InvalidType, "Binary integer is out of range");
     }
-    static sa::Result<InputValueType> _missingField(std::string_view name) {
+    static auto missingField(std::string_view name) -> sa::Result<InputValueType> {
         return sa::error(sa::ErrorCode::InvalidField,
                          "Binary object does not contain field '" + std::string(name) + "'");
     }
-    static sa::Error _truncatedFixed() {
+    static auto truncatedFixed() -> sa::Error {
         return sa::error(sa::ErrorCode::ParseError, "Truncated fixed-width binary value");
     }
 
@@ -705,4 +705,4 @@ private:
 };
 
 } // namespace binary
-NEKO_END_NAMESPACE
+} // namespace nekoproto

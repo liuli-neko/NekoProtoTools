@@ -9,7 +9,7 @@
 #include <string_view>
 #include <type_traits>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace parsing {
 namespace detail {
@@ -51,14 +51,14 @@ struct Parent {
         std::string_view name;
         OutputObjectType* object;
         bool isAttribute = false;
-        Object asAttribute() { return {name, object, true}; }
+        auto asAttribute() -> Object { return {name, object, true}; }
     };
 
     struct IdObject {
         std::string_view name;
         OutputIdObjectType* object;
         bool isAttribute = false;
-        IdObject asAttribute() { return {name, object, true}; }
+        auto asAttribute() -> IdObject { return {name, object, true}; }
     };
 
     template <typename T>
@@ -70,8 +70,8 @@ struct Parent {
     struct Root {};
 
     template <class ParentType, typename Tags = NoTags>
-    static OutputArrayType addArray(W& writer, const std::size_t size, const ParentType& parent,
-                                    const Tags& tags = Tags{}) {
+    static auto addArray(W& writer, const std::size_t size, const ParentType& parent,
+                                    const Tags& tags = Tags{}) -> OutputArrayType {
         using Type = std::remove_cvref_t<ParentType>;
         if constexpr (std::is_same<Type, Array>()) {
             NEKO_RETURN_TAGGED(writer.addArrayToArray(size, parent.array, tags),
@@ -101,8 +101,8 @@ struct Parent {
     }
 
     template <class ParentType, typename Tags = NoTags>
-    static OutputIdObjectType addIdObject(W& writer, const std::size_t size, const ParentType& parent,
-                                          const Tags& tags = Tags{})
+    static auto addIdObject(W& writer, const std::size_t size, const ParentType& parent,
+                                          const Tags& tags = Tags{}) -> OutputIdObjectType
         requires requires { typename W::OutputIdObjectType; }
     {
         using Type = std::remove_cvref_t<ParentType>;
@@ -133,8 +133,8 @@ struct Parent {
     }
 
     template <class ParentType, typename Tags = NoTags>
-    static OutputObjectType addObject(W& writer, const size_t size, const ParentType& parent,
-                                      const Tags& tags = Tags{}) {
+    static auto addObject(W& writer, const size_t size, const ParentType& parent,
+                                      const Tags& tags = Tags{}) -> OutputObjectType {
         using Type = std::remove_cvref_t<ParentType>;
         if constexpr (std::is_same<Type, Array>()) {
             NEKO_RETURN_TAGGED(writer.addObjectToArray(size, parent.array, tags),
@@ -188,7 +188,7 @@ struct Parent {
     }
 
     template <class ParentType, typename Tags = NoTags>
-    static OutputValueType addNull(W& writer, const ParentType& parent, const Tags& tags = Tags{}) {
+    static auto addNull(W& writer, const ParentType& parent, const Tags& tags = Tags{}) -> OutputValueType {
         using Type = std::remove_cvref_t<ParentType>;
         if constexpr (std::is_same<Type, Array>()) {
             NEKO_RETURN_TAGGED(writer.addNullToArray(parent.array, tags), writer.addNullToArray(parent.array));
@@ -226,7 +226,7 @@ struct Parent {
     }
 
     template <class ParentType, class T, typename Tags = NoTags>
-    static OutputValueType addValue(W& writer, const T& var, const ParentType& parent, const Tags& tags = Tags{}) {
+    static auto addValue(W& writer, const T& var, const ParentType& parent, const Tags& tags = Tags{}) -> OutputValueType {
         using Type = std::remove_cvref_t<ParentType>;
         if constexpr (std::is_same<Type, Array>()) {
             NEKO_RETURN_TAGGED(writer.addValueToArray(var, parent.array, tags),
@@ -265,8 +265,8 @@ struct Parent {
     }
 
     template <class ParentType, class T, typename Tags = NoTags>
-    static OutputValueType addFixedValue(W& writer, const T& var, std::size_t size, const ParentType& parent,
-                                         const Tags& tags = Tags{}) {
+    static auto addFixedValue(W& writer, const T& var, std::size_t size, const ParentType& parent,
+                                         const Tags& tags = Tags{}) -> OutputValueType {
         using Type = std::remove_cvref_t<ParentType>;
         if constexpr (std::is_same<Type, Array>()) {
             NEKO_RETURN_TAGGED(writer.addFixedValueToArray(var, size, parent.array, tags),
@@ -290,4 +290,4 @@ struct Parent {
 #undef NEKO_RETURN_TAGGED
 } // namespace parsing
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

@@ -24,7 +24,7 @@
  *     std::string address;
  * };
  *
- * namespace NekoProto {
+ * namespace nekoproto {
  * template <>
  * struct Meta<::MyClass> {
  *     constexpr static auto value =
@@ -32,7 +32,7 @@
  *                "age", &::MyClass::age,
  *                "address", &::MyClass::address);
  * };
- * } // namespace NekoProto
+ * } // namespace nekoproto
  *
  * int main()
  *     MyClass obj;
@@ -69,23 +69,22 @@
 #include "nekoproto/global/string_literal.hpp"
 #include "nekoproto/serialization/private/tags.hpp"
 
-NEKO_BEGIN_NAMESPACE
-// NOLINTBEGIN
+namespace nekoproto {
 namespace detail {
 
-constexpr bool _is_space(char c) noexcept { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
+constexpr auto isSpace(char c) noexcept -> bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
 
-constexpr std::string_view _trim(std::string_view s) noexcept {
-    while (!s.empty() && _is_space(s.front())) {
+constexpr auto trim(std::string_view s) noexcept -> std::string_view {
+    while (!s.empty() && isSpace(s.front())) {
         s.remove_prefix(1);
     }
-    while (!s.empty() && _is_space(s.back())) {
+    while (!s.empty() && isSpace(s.back())) {
         s.remove_suffix(1);
     }
     return s;
 }
 
-constexpr bool _starts_with(std::string_view s, std::string_view prefix) noexcept {
+constexpr auto startsWith(std::string_view s, std::string_view prefix) noexcept -> bool {
     if (s.size() < prefix.size()) {
         return false;
     }
@@ -97,7 +96,7 @@ constexpr bool _starts_with(std::string_view s, std::string_view prefix) noexcep
     return true;
 }
 
-constexpr std::size_t _find_outer_call_open(std::string_view s) noexcept {
+constexpr auto findOuterCallOpen(std::string_view s) noexcept -> std::size_t {
     int angle   = 0;
     int brace   = 0;
     int bracket = 0;
@@ -161,7 +160,7 @@ constexpr std::size_t _find_outer_call_open(std::string_view s) noexcept {
     return std::string_view::npos;
 }
 
-constexpr std::size_t _find_matching_paren(std::string_view s, std::size_t open) noexcept {
+constexpr auto findMatchingParen(std::string_view s, std::size_t open) noexcept -> std::size_t {
     int paren   = 0;
     char quote  = 0;
     bool escape = false;
@@ -198,28 +197,28 @@ constexpr std::size_t _find_matching_paren(std::string_view s, std::size_t open)
     return std::string_view::npos;
 }
 
-constexpr std::string_view _strip_enclosing_parens(std::string_view token) noexcept {
-    token = _trim(token);
+constexpr auto stripEnclosingParens(std::string_view token) noexcept -> std::string_view {
+    token = trim(token);
     while (token.size() >= 2 && token.front() == '(') {
-        const auto close = _find_matching_paren(token, 0);
+        const auto close = findMatchingParen(token, 0);
         if (close != token.size() - 1) {
             break;
         }
-        token = _trim(token.substr(1, token.size() - 2));
+        token = trim(token.substr(1, token.size() - 2));
     }
     return token;
 }
 
-constexpr std::string_view _serializer_arg_name(std::string_view token) noexcept {
-    token = _strip_enclosing_parens(token);
+constexpr auto serializerArgName(std::string_view token) noexcept -> std::string_view {
+    token = stripEnclosingParens(token);
 
-    // make_tags<...>(code) 的元数据名仍然取 code
-    if (_starts_with(token, "make_tags")) {
-        const auto open = _find_outer_call_open(token);
+    // makeTags<...>(code) 的元数据名仍然取 code
+    if (startsWith(token, "makeTags")) {
+        const auto open = findOuterCallOpen(token);
         if (open != std::string_view::npos) {
-            const auto close = _find_matching_paren(token, open);
+            const auto close = findMatchingParen(token, open);
             if (close != std::string_view::npos) {
-                return _serializer_arg_name(token.substr(open + 1, close - open - 1));
+                return serializerArgName(token.substr(open + 1, close - open - 1));
             }
         }
     }
@@ -228,7 +227,7 @@ constexpr std::string_view _serializer_arg_name(std::string_view token) noexcept
 }
 
 template <int N>
-inline constexpr std::array<std::string_view, N> _parse_names(std::string_view names) NEKO_NOEXCEPT {
+inline constexpr auto parseNames(std::string_view names) noexcept -> std::array<std::string_view, N> {
     std::array<std::string_view, N> result{};
 
     if constexpr (N == 0) {
@@ -298,7 +297,7 @@ inline constexpr std::array<std::string_view, N> _parse_names(std::string_view n
                 break;
             case ',':
                 if (angle == 0 && paren == 0 && brace == 0 && bracket == 0) {
-                    result[index++] = _serializer_arg_name(names.substr(begin, i - begin));
+                    result[index++] = serializerArgName(names.substr(begin, i - begin));
                     begin           = i + 1;
                 }
                 break;
@@ -307,46 +306,44 @@ inline constexpr std::array<std::string_view, N> _parse_names(std::string_view n
             }
         }
 
-        result[index] = _serializer_arg_name(names.substr(begin));
+        result[index] = serializerArgName(names.substr(begin));
         return result;
     }
 }
 
 template <ConstexprString NamesStr, size_t N>
-struct _make_names_impl {
-    constexpr static std::array names = _parse_names<N>(NamesStr.view());
+struct MakeNamesImpl {
+    constexpr static std::array names = parseNames<N>(NamesStr.view());
 };
 
 template <typename T>
-constexpr decltype(auto) _serializer_unwrap_member_ref(T&& value) noexcept {
-    return NEKO_NAMESPACE::field_accessor(std::forward<T>(value));
+constexpr auto serializerUnwrapMemberRef(T&& value) noexcept -> decltype(auto) {
+    return nekoproto::fieldAccessor(std::forward<T>(value));
 }
 
 template <typename... Args>
-constexpr auto _serializer_member_tuple(Args&&... args) noexcept {
-    return std::forward_as_tuple(_serializer_unwrap_member_ref(std::forward<Args>(args))...);
+constexpr auto serializerMemberTuple(Args&&... args) noexcept {
+    return std::forward_as_tuple(serializerUnwrapMemberRef(std::forward<Args>(args))...);
 }
 
 template <std::size_t N, typename... Args>
-constexpr decltype(auto) _serializer_get_n_member_reference(Args&&... args) noexcept {
-    auto tuple = _serializer_member_tuple(std::forward<Args>(args)...);
+constexpr auto serializerGetMemberReference(Args&&... args) noexcept -> decltype(auto) {
+    auto tuple = serializerMemberTuple(std::forward<Args>(args)...);
     return std::get<N>(tuple);
 }
 
 template <typename Spec, std::size_t /*I*/, typename Accessor>
-constexpr auto _serializer_make_accessor(Accessor accessor) noexcept {
+constexpr auto serializerMakeAccessor(Accessor accessor) noexcept {
     return accessor;
 }
 
 template <typename Spec>
-constexpr auto _serializer_make_tags() noexcept {
-    return NEKO_NAMESPACE::field_tags_v<Spec>;
+constexpr auto serializerMakeTags() noexcept {
+    return nekoproto::field_tags_v<Spec>;
 }
 } // namespace detail
 
-NEKO_END_NAMESPACE
-// NOLINTEND
-
+} // namespace nekoproto
 /**
  * @brief Generate reflection metadata for a class.
  *
@@ -371,36 +368,32 @@ NEKO_END_NAMESPACE
  */
 #define NEKO_SERIALIZER(...)                                                                                           \
 public:                                                                                                                \
-    constexpr auto _neko_member_tuple() noexcept {                                                                     \
-        return NEKO_NAMESPACE::detail::_serializer_member_tuple(__VA_ARGS__);                                          \
-    }                                                                                                                  \
-    constexpr auto _neko_member_tuple() const noexcept {                                                               \
-        return NEKO_NAMESPACE::detail::_serializer_member_tuple(__VA_ARGS__);                                          \
-    }                                                                                                                  \
+    constexpr auto nekoMemberTuple() noexcept { return nekoproto::detail::serializerMemberTuple(__VA_ARGS__); }        \
+    constexpr auto nekoMemberTuple() const noexcept { return nekoproto::detail::serializerMemberTuple(__VA_ARGS__); }  \
     template <int N>                                                                                                   \
-    decltype(auto) _neko_get_n_member_reference() noexcept {                                                           \
-        auto members = _neko_member_tuple();                                                                           \
+    auto nekoGetMemberReference() noexcept -> decltype(auto) {                                                         \
+        auto members = nekoMemberTuple();                                                                              \
         return std::get<N>(members);                                                                                   \
     }                                                                                                                  \
     template <int N>                                                                                                   \
-    decltype(auto) _neko_get_n_member_reference() const noexcept {                                                     \
-        auto members = _neko_member_tuple();                                                                           \
+    auto nekoGetMemberReference() const noexcept -> decltype(auto) {                                                   \
+        auto members = nekoMemberTuple();                                                                              \
         return std::get<N>(members);                                                                                   \
     }                                                                                                                  \
-    struct _neko_serializer_args_helper {                                                                              \
+    struct NekoSerializerArgsHelper {                                                                                  \
         using tuple = decltype(std::forward_as_tuple(__VA_ARGS__));                                                    \
     };                                                                                                                 \
     struct Neko {                                                                                                      \
-        using _neko_serializer_args_tuple = typename _neko_serializer_args_helper::tuple;                              \
+        using NekoSerializerArgsTuple = typename NekoSerializerArgsHelper::tuple;                                      \
         constexpr static std::array names =                                                                            \
-            NEKO_NAMESPACE::detail::_make_names_impl<#__VA_ARGS__, NEKO_VA_ARGS_SIZE(__VA_ARGS__)>::names;             \
+            nekoproto::detail::MakeNamesImpl<#__VA_ARGS__, NEKO_VA_ARGS_SIZE(__VA_ARGS__)>::names;                     \
         constexpr static auto values = []<std::size_t... Is>(std::index_sequence<Is...>) {                             \
-            return std::tuple{NEKO_NAMESPACE::detail::_serializer_make_accessor<                                       \
-                std::tuple_element_t<Is, _neko_serializer_args_tuple>, Is>(                                            \
-                [](auto&& self) -> decltype(auto) { return self.template _neko_get_n_member_reference<Is>(); })...};   \
+            return std::tuple{                                                                                         \
+                nekoproto::detail::serializerMakeAccessor<std::tuple_element_t<Is, NekoSerializerArgsTuple>, Is>(      \
+                    [](auto&& self) -> decltype(auto) { return self.template nekoGetMemberReference<Is>(); })...};     \
         }(std::make_index_sequence<NEKO_VA_ARGS_SIZE(__VA_ARGS__)>{});                                                 \
         constexpr static auto field_tags = []<std::size_t... Is>(std::index_sequence<Is...>) {                         \
-            return std::tuple{NEKO_NAMESPACE::detail::_serializer_make_tags<                                           \
-                std::tuple_element_t<Is, _neko_serializer_args_tuple>>()...};                                          \
+            return std::tuple{                                                                                         \
+                nekoproto::detail::serializerMakeTags<std::tuple_element_t<Is, NekoSerializerArgsTuple>>()...};        \
         }(std::make_index_sequence<NEKO_VA_ARGS_SIZE(__VA_ARGS__)>{});                                                 \
     };

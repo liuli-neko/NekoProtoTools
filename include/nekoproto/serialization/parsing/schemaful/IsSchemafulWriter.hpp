@@ -7,7 +7,7 @@
 #include <string>
 #include <string_view>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace parsing::schemaful {
 template <typename W>
@@ -43,4 +43,4 @@ concept IsSchemafulWriter =
     };
 }
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

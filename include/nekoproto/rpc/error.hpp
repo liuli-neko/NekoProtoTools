@@ -6,7 +6,7 @@
 
 #include "nekoproto/global/global.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 enum class RpcError {
     Ok                                = 0,
@@ -30,7 +30,7 @@ enum class RpcError {
 
 class RpcErrorCategory : public std::error_category {
 public:
-    static RpcErrorCategory& instance() {
+    static auto instance() -> RpcErrorCategory& {
         static RpcErrorCategory kInstance;
         return kInstance;
     }
@@ -79,11 +79,16 @@ public:
     auto name() const noexcept -> const char* override { return "rpc"; }
 };
 
-inline auto make_error_code(RpcError value) noexcept -> std::error_code {
+inline auto makeErrorCode(RpcError value) noexcept -> std::error_code {
     return std::error_code(static_cast<int>(value), RpcErrorCategory::instance());
 }
 
-NEKO_END_NAMESPACE
+// Required by std::error_code's ADL customization protocol.
+inline auto make_error_code(RpcError value) noexcept -> std::error_code { // NOLINT(readability-identifier-naming)
+    return makeErrorCode(value);
+}
+
+} // namespace nekoproto
 
 template <>
-struct std::is_error_code_enum<NEKO_NAMESPACE::RpcError> : std::true_type {};
+struct std::is_error_code_enum<nekoproto::RpcError> : std::true_type {};

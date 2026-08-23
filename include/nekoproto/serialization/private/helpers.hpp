@@ -10,17 +10,17 @@
 #include <utility>
 #include <vector>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 template <class T>
 struct NameValuePair;
 
 namespace detail {
 template <typename T>
-struct is_name_value_pair : std::false_type {};
+struct IsNameValuePair : std::false_type {};
 
 template <typename T>
-struct is_name_value_pair<NameValuePair<T>> : std::true_type {};
+struct IsNameValuePair<NameValuePair<T>> : std::true_type {};
 } // namespace detail
 
 template <class T>
@@ -32,9 +32,9 @@ private:
         std::is_array<typename std::remove_reference<T>::type>::value, typename std::remove_cv<T>::type,
         typename std::conditional<std::is_lvalue_reference<T>::value, T, typename std::decay<T>::type>::type>::type;
     // prevent nested name value pair
-    static_assert(!detail::is_name_value_pair<std::remove_cvref_t<T>>::value,
+    static_assert(!detail::IsNameValuePair<std::remove_cvref_t<T>>::value,
                   "Cannot pair a name to a NameValuePair");
-    NameValuePair& operator=(NameValuePair const&) = delete;
+    auto operator=(NameValuePair const&) -> NameValuePair& = delete;
 
 public:
     //! Constructs a new NameValuePair
@@ -45,11 +45,11 @@ public:
                 only pass right-values in cases where this makes sense, such as the result of some
                 size() call.
         @internal */
-    NameValuePair(const char* name, const std::size_t nameLen, T&& value) NEKO_NOEXCEPT
+    NameValuePair(const char* name, const std::size_t nameLen, T&& value) noexcept
         : name(name),
           nameLen(nameLen),
           value(std::forward<T>(value)) {}
-    NameValuePair(std::string_view name, T&& value) NEKO_NOEXCEPT : name(name.data()),
+    NameValuePair(std::string_view name, T&& value) noexcept : name(name.data()),
                                                                     nameLen(name.size()),
                                                                     value(std::forward<T>(value)) {}
     const char* name;
@@ -58,40 +58,40 @@ public:
 };
 
 template <class T>
-inline NameValuePair<T> make_name_value_pair(const char* name, T&& value) NEKO_NOEXCEPT {
+inline auto makeNameValuePair(const char* name, T&& value) noexcept -> NameValuePair<T> {
     return {name, std::strlen(name), std::forward<T>(value)};
 }
 
 template <class T>
-inline NameValuePair<T> make_name_value_pair(const char* name, std::size_t len, T&& value) NEKO_NOEXCEPT {
+inline auto makeNameValuePair(const char* name, std::size_t len, T&& value) noexcept -> NameValuePair<T> {
     return {name, len, std::forward<T>(value)};
 }
 
 template <class T>
-inline NameValuePair<T> make_name_value_pair(const std::string& name, T&& value) NEKO_NOEXCEPT {
+inline auto makeNameValuePair(const std::string& name, T&& value) noexcept -> NameValuePair<T> {
     return {name.c_str(), name.size(), std::forward<T>(value)};
 }
 
 template <class T>
-inline NameValuePair<T> make_name_value_pair(const std::string_view& name, T&& value) NEKO_NOEXCEPT {
+inline auto makeNameValuePair(const std::string_view& name, T&& value) noexcept -> NameValuePair<T> {
     return {name, std::forward<T>(value)};
 }
 
-#define NEKO_PROTO_NAME_VALUE_PAIR(value) make_name_value_pair(#value, value)
+#define NEKO_PROTO_NAME_VALUE_PAIR(value) makeNameValuePair(#value, value)
 
 namespace detail {
 class OutBufferWrapper {
 public:
     using Ch = char;
 
-    explicit OutBufferWrapper() NEKO_NOEXCEPT;
-    explicit OutBufferWrapper(std::vector<Ch>& vec) NEKO_NOEXCEPT;
-    void setVector(std::vector<Ch>* vec) NEKO_NOEXCEPT;
-    void Put(Ch ch) NEKO_NOEXCEPT;             // NOLINT(readability-identifier-naming)
-    void Flush() NEKO_NOEXCEPT;                // NOLINT(readability-identifier-naming)
-    const Ch* GetString() const NEKO_NOEXCEPT; // NOLINT(readability-identifier-naming)
-    std::size_t GetSize() const NEKO_NOEXCEPT; // NOLINT(readability-identifier-naming)
-    void Clear() NEKO_NOEXCEPT;                // NOLINT(readability-identifier-naming)
+    explicit OutBufferWrapper() noexcept;
+    explicit OutBufferWrapper(std::vector<Ch>& vec) noexcept;
+    void setVector(std::vector<Ch>* vec) noexcept;
+    void Put(Ch ch) noexcept;             // NOLINT(readability-identifier-naming)
+    void Flush() noexcept;                // NOLINT(readability-identifier-naming)
+    auto GetString() const noexcept -> const Ch*; // NOLINT(readability-identifier-naming)
+    auto GetSize() const noexcept -> std::size_t; // NOLINT(readability-identifier-naming)
+    void Clear() noexcept;                // NOLINT(readability-identifier-naming)
 
 private:
     std::vector<Ch>* mVec;
@@ -102,24 +102,24 @@ class ByteOutBufferWrapper {
 public:
     using Ch = char;
 
-    explicit ByteOutBufferWrapper(std::vector<std::byte>& vec) NEKO_NOEXCEPT : mVec(&vec) {}
-    void Put(Ch ch) NEKO_NOEXCEPT { // NOLINT(readability-identifier-naming)
+    explicit ByteOutBufferWrapper(std::vector<std::byte>& vec) noexcept : mVec(&vec) {}
+    void Put(Ch ch) noexcept { // NOLINT(readability-identifier-naming)
         mVec->push_back(static_cast<std::byte>(static_cast<unsigned char>(ch)));
     }
-    void Flush() NEKO_NOEXCEPT {} // NOLINT(readability-identifier-naming)
-    const Ch* GetString() const NEKO_NOEXCEPT { // NOLINT(readability-identifier-naming)
+    void Flush() noexcept {} // NOLINT(readability-identifier-naming)
+    auto GetString() const noexcept -> const Ch* { // NOLINT(readability-identifier-naming)
         return reinterpret_cast<const Ch*>(mVec->data());
     }
-    std::size_t GetSize() const NEKO_NOEXCEPT { return mVec->size(); } // NOLINT(readability-identifier-naming)
-    void Clear() NEKO_NOEXCEPT { mVec->clear(); }                      // NOLINT(readability-identifier-naming)
+    auto GetSize() const noexcept -> std::size_t { return mVec->size(); } // NOLINT(readability-identifier-naming)
+    void Clear() noexcept { mVec->clear(); }                      // NOLINT(readability-identifier-naming)
 
 private:
     std::vector<std::byte>* mVec;
 };
 
-inline OutBufferWrapper::OutBufferWrapper() NEKO_NOEXCEPT : mVec(&mVecUnique) {}
-inline OutBufferWrapper::OutBufferWrapper(std::vector<Ch>& vec) NEKO_NOEXCEPT : mVec(&vec) {}
-inline void OutBufferWrapper::setVector(std::vector<Ch>* vec) NEKO_NOEXCEPT {
+inline OutBufferWrapper::OutBufferWrapper() noexcept : mVec(&mVecUnique) {}
+inline OutBufferWrapper::OutBufferWrapper(std::vector<Ch>& vec) noexcept : mVec(&vec) {}
+inline void OutBufferWrapper::setVector(std::vector<Ch>* vec) noexcept {
     if (vec != nullptr) {
         mVec = vec;
     } else {
@@ -127,11 +127,11 @@ inline void OutBufferWrapper::setVector(std::vector<Ch>* vec) NEKO_NOEXCEPT {
         mVec->clear();
     }
 }
-inline void OutBufferWrapper::Put(Ch ch) NEKO_NOEXCEPT { mVec->push_back(ch); }
-inline void OutBufferWrapper::Flush() NEKO_NOEXCEPT {}
-inline const OutBufferWrapper::Ch* OutBufferWrapper::GetString() const NEKO_NOEXCEPT { return mVec->data(); }
-inline std::size_t OutBufferWrapper::GetSize() const NEKO_NOEXCEPT { return mVec->size(); }
-inline void OutBufferWrapper::Clear() NEKO_NOEXCEPT { mVec->clear(); }
+inline void OutBufferWrapper::Put(Ch ch) noexcept { mVec->push_back(ch); }
+inline void OutBufferWrapper::Flush() noexcept {}
+inline auto OutBufferWrapper::GetString() const noexcept -> const OutBufferWrapper::Ch* { return mVec->data(); }
+inline auto OutBufferWrapper::GetSize() const noexcept -> std::size_t { return mVec->size(); }
+inline void OutBufferWrapper::Clear() noexcept { mVec->clear(); }
 } // namespace detail
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

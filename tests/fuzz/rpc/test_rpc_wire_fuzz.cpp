@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 namespace {
 

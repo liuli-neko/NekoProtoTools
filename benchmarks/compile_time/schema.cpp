@@ -2,6 +2,6 @@
 
 #include "nekoproto/serialization/parsing/parsers.hpp"
 
-NEKO_NAMESPACE::parsing::schema::Type compile_schema() {
-    return NEKO_NAMESPACE::parser_schema<neko_compile_bench::BenchmarkStruct>();
+nekoproto::parsing::schema::Type compile_schema() {
+    return nekoproto::parserSchema<neko_compile_bench::BenchmarkStruct>();
 }

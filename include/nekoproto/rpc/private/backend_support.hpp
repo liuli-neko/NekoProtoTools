@@ -11,7 +11,7 @@
 #include "nekoproto/rpc/error.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace rpc {
 
 template <typename Tuple>
@@ -40,4 +40,4 @@ struct NekoRpcByteOutputSerializerAvailable<SerializerT, BufferT,
     : std::bool_constant<std::is_constructible_v<typename SerializerT::ByteOutputSerializer, BufferT&>> {};
 
 } // namespace rpc
-NEKO_END_NAMESPACE
+} // namespace nekoproto

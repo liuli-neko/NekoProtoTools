@@ -21,31 +21,31 @@
 #include "nekoproto/global/log.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 
 namespace detail {
 class ReflectionFieldBase {
 public:
-    ReflectionFieldBase() NEKO_NOEXCEPT                          = default;
-    virtual ~ReflectionFieldBase() NEKO_NOEXCEPT                 = default;
-    virtual const NEKO_STRING_VIEW& name() const NEKO_NOEXCEPT   = 0;
-    virtual const std::type_info& typeInfo() const NEKO_NOEXCEPT = 0;
+    ReflectionFieldBase() noexcept                          = default;
+    virtual ~ReflectionFieldBase() noexcept                 = default;
+    virtual auto name() const noexcept -> const std::string_view&   = 0;
+    virtual auto typeInfo() const noexcept -> const std::type_info& = 0;
 };
 
 template <typename T>
 class ReflectionField : public ReflectionFieldBase {
 public:
-    explicit ReflectionField(const NEKO_STRING_VIEW& name, T* value) : mValue(value), mName(name) {
+    explicit ReflectionField(const std::string_view& name, T* value) : mValue(value), mName(name) {
         NEKO_ASSERT(value != nullptr, "ReflectionSerializer", "can not make reflection object {} for nullptr", name);
     }
-    const T& getField() const NEKO_NOEXCEPT { return *mValue; }
-    void setField(const T& value) NEKO_NOEXCEPT { (*mValue) = value; }
-    const NEKO_STRING_VIEW& name() const NEKO_NOEXCEPT override { return mName; }
-    const std::type_info& typeInfo() const NEKO_NOEXCEPT override { return typeid(T); }
+    auto getField() const noexcept -> const T& { return *mValue; }
+    void setField(const T& value) noexcept { (*mValue) = value; }
+    auto name() const noexcept -> const std::string_view& override { return mName; }
+    auto typeInfo() const noexcept -> const std::type_info& override { return typeid(T); }
 
 private:
     T* const mValue;
-    const NEKO_STRING_VIEW mName;
+    const std::string_view mName;
 };
 
 class ReflectionObject {
@@ -53,8 +53,8 @@ public:
     ReflectionObject()                        = default;
     ReflectionObject(const ReflectionObject&) = delete;
     ReflectionObject(ReflectionObject&& other) : mFields(std::move(other.mFields)) {}
-    ReflectionObject& operator=(const ReflectionObject&) = delete;
-    ReflectionObject& operator=(ReflectionObject&& other) {
+    auto operator=(const ReflectionObject&) -> ReflectionObject& = delete;
+    auto operator=(ReflectionObject&& other) -> ReflectionObject& {
         if (this != &other) {
             mFields = std::move(other.mFields);
         }
@@ -62,10 +62,10 @@ public:
     }
 
     inline ~ReflectionObject() { clear(); }
-    inline void clear() NEKO_NOEXCEPT { mFields.clear(); }
+    inline void clear() noexcept { mFields.clear(); }
 
     template <typename T>
-    T getField(const NEKO_STRING_VIEW& name, const T& defaultValue) const NEKO_NOEXCEPT {
+    auto getField(const std::string_view& name, const T& defaultValue) const noexcept -> T {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             NEKO_LOG_ERROR("ReflectionSerializer", "field {} not found.", name);
@@ -89,7 +89,7 @@ public:
     }
 
     template <typename T>
-    bool getField(const NEKO_STRING_VIEW& name, T* result) const NEKO_NOEXCEPT {
+    auto getField(const std::string_view& name, T* result) const noexcept -> bool {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             NEKO_LOG_ERROR("ReflectionSerializer", "field {} not found.", name);
@@ -113,7 +113,7 @@ public:
         return true;
     }
     template <typename T>
-    bool setField(const NEKO_STRING_VIEW& name, const T& value) NEKO_NOEXCEPT {
+    auto setField(const std::string_view& name, const T& value) noexcept -> bool {
         auto it = mFields.find(name);
         if (it == mFields.end()) {
             NEKO_LOG_ERROR("ReflectionSerializer", "field {} not found.", name);
@@ -135,13 +135,13 @@ public:
     }
 
     template <typename T>
-    ReflectionField<T>* bindField(const NEKO_STRING_VIEW& name, T* value) {
+    auto bindField(const std::string_view& name, T* value) -> ReflectionField<T>* {
         if (value == nullptr) {
             return nullptr;
         }
         auto it = mFields.find(name);
         if (it == mFields.end()) {
-            mFields.insert(std::make_pair<const NEKO_STRING_VIEW&, std::unique_ptr<ReflectionFieldBase>>(
+            mFields.insert(std::make_pair<const std::string_view&, std::unique_ptr<ReflectionFieldBase>>(
                 name, std::make_unique<ReflectionField<T>>(name, value)));
             return static_cast<ReflectionField<T>*>(mFields.find(name)->second.get());
         }
@@ -151,7 +151,7 @@ public:
     }
 
 private:
-    std::map<NEKO_STRING_VIEW, std::unique_ptr<ReflectionFieldBase>> mFields;
+    std::map<std::string_view, std::unique_ptr<ReflectionFieldBase>> mFields;
 };
 } // namespace detail
 
@@ -159,9 +159,9 @@ class ReflectionSerializer {
 public:
     ReflectionSerializer()                                       = default;
     ReflectionSerializer(const ReflectionSerializer&)            = delete;
-    ReflectionSerializer& operator=(const ReflectionSerializer&) = delete;
+    auto operator=(const ReflectionSerializer&) -> ReflectionSerializer& = delete;
     ReflectionSerializer(ReflectionSerializer&& other) : mObject(std::move(other.mObject)) {}
-    ReflectionSerializer& operator=(ReflectionSerializer&& other) {
+    auto operator=(ReflectionSerializer&& other) -> ReflectionSerializer& {
         mObject = std::move(other.mObject);
         return *this;
     }
@@ -169,7 +169,7 @@ public:
 
     template <typename T>
         requires detail::has_values_meta<std::remove_cvref_t<T>> && detail::has_names_meta<std::remove_cvref_t<T>>
-    static ReflectionSerializer reflection(T& obj) {
+    static auto reflection(T& obj) -> ReflectionSerializer {
         ReflectionSerializer rs;
         Reflect<std::remove_cvref_t<T>>::forEachFull(
             obj, [&rs](auto& field, std::string_view name, const auto& /*tags*/) {
@@ -179,10 +179,10 @@ public:
         return rs;
     }
 
-    inline detail::ReflectionObject* getObject() { return &mObject; }
+    inline auto getObject() -> detail::ReflectionObject* { return &mObject; }
 
 private:
     detail::ReflectionObject mObject;
 };
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

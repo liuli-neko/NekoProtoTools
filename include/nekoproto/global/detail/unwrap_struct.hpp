@@ -7,153 +7,153 @@
 #include <type_traits>
 #include <utility>
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace detail {
 
 inline constexpr std::size_t max_unwrap_struct_size = 128;
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 0>, T& /*data*/) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 0>, T& /*data*/) noexcept {
     return std::tuple<>{};
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 1>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 1>, T& data) noexcept {
     auto& [m1] = data;
     return std::forward_as_tuple(m1);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 2>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 2>, T& data) noexcept {
     auto& [m1, m2] = data;
     return std::forward_as_tuple(m1, m2);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 3>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 3>, T& data) noexcept {
     auto& [m1, m2, m3] = data;
     return std::forward_as_tuple(m1, m2, m3);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 4>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 4>, T& data) noexcept {
     auto& [m1, m2, m3, m4] = data;
     return std::forward_as_tuple(m1, m2, m3, m4);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 5>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 5>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 6>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 6>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 7>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 7>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 8>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 8>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 9>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 9>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 10>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 10>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 11>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 11>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 12>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 12>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 13>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 13>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 14>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 14>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 15>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 15>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 16>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 16>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 17>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 17>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 18>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 18>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 19>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 19>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 20>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 20>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
                                  m20);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 21>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 21>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
                                  m20, m21);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 22>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 22>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
                                  m20, m21, m22);
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 23>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 23>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23] =
         data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -161,7 +161,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 23>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 24>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 24>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -169,7 +169,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 24>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 25>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 25>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -177,7 +177,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 25>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 26>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 26>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -185,7 +185,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 26>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 27>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 27>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -193,7 +193,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 27>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 28>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 28>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -201,7 +201,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 28>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 29>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 29>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -209,7 +209,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 29>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 30>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 30>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -217,7 +217,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 30>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 31>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 31>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -225,7 +225,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 31>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 32>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 32>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -233,7 +233,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 32>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 33>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 33>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -241,7 +241,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 33>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 34>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 34>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -249,7 +249,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 34>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 35>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 35>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -257,7 +257,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 35>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 36>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 36>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -265,7 +265,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 36>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 37>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 37>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -274,7 +274,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 37>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 38>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 38>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -283,7 +283,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 38>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 39>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 39>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -292,7 +292,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 39>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 40>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 40>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -301,7 +301,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 40>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 41>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 41>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -310,7 +310,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 41>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 42>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 42>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -319,7 +319,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 42>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 43>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 43>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43] = data;
     return std::forward_as_tuple(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19,
@@ -328,7 +328,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 43>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 44>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 44>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44] =
         data;
@@ -338,7 +338,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 44>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 45>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 45>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44,
            m45] = data;
@@ -348,7 +348,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 45>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 46>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 46>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46] = data;
@@ -358,7 +358,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 46>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 47>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 47>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47] = data;
@@ -368,7 +368,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 47>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 48>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 48>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48] = data;
@@ -378,7 +378,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 48>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 49>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 49>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49] = data;
@@ -388,7 +388,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 49>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 50>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 50>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50] = data;
@@ -398,7 +398,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 50>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 51>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 51>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51] = data;
@@ -408,7 +408,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 51>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 52>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 52>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52] = data;
@@ -418,7 +418,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 52>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 53>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 53>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53] = data;
@@ -428,7 +428,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 53>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 54>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 54>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54] = data;
@@ -439,7 +439,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 54>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 55>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 55>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55] = data;
@@ -450,7 +450,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 55>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 56>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 56>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56] = data;
@@ -461,7 +461,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 56>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 57>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 57>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57] = data;
@@ -472,7 +472,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 57>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 58>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 58>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58] = data;
@@ -483,7 +483,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 58>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 59>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 59>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59] = data;
@@ -494,7 +494,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 59>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 60>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 60>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60] = data;
@@ -505,7 +505,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 60>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 61>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 61>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61] = data;
@@ -516,7 +516,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 61>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 62>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 62>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62] = data;
@@ -527,7 +527,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 62>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 63>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 63>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63] = data;
@@ -538,7 +538,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 63>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 64>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 64>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64] = data;
@@ -549,7 +549,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 64>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 65>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 65>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65] = data;
@@ -560,7 +560,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 65>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 66>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 66>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66] =
@@ -572,7 +572,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 66>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 67>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 67>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66,
@@ -584,7 +584,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 67>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 68>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 68>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -596,7 +596,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 68>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 69>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 69>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -608,7 +608,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 69>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 70>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 70>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -620,7 +620,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 70>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 71>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 71>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -633,7 +633,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 71>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 72>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 72>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -646,7 +646,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 72>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 73>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 73>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -659,7 +659,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 73>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 74>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 74>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -672,7 +672,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 74>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 75>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 75>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -685,7 +685,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 75>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 76>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 76>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -698,7 +698,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 76>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 77>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 77>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -711,7 +711,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 77>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 78>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 78>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -724,7 +724,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 78>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 79>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 79>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -737,7 +737,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 79>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 80>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 80>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -750,7 +750,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 80>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 81>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 81>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -763,7 +763,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 81>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 82>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 82>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -776,7 +776,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 82>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 83>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 83>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -789,7 +789,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 83>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 84>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 84>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -802,7 +802,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 84>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 85>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 85>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -815,7 +815,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 85>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 86>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 86>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -828,7 +828,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 86>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 87>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 87>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -841,7 +841,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 87>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 88>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 88>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -855,7 +855,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 88>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 89>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 89>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -869,7 +869,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 89>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 90>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 90>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -883,7 +883,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 90>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 91>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 91>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -898,7 +898,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 91>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 92>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 92>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -913,7 +913,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 92>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 93>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 93>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -928,7 +928,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 93>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 94>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 94>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -943,7 +943,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 94>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 95>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 95>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -958,7 +958,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 95>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 96>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 96>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -973,7 +973,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 96>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 97>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 97>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -988,7 +988,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 97>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 98>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 98>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1003,7 +1003,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 98>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 99>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 99>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1018,7 +1018,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 99>, 
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 100>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 100>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1033,7 +1033,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 100>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 101>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 101>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1048,7 +1048,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 101>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 102>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 102>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1063,7 +1063,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 102>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 103>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 103>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1078,7 +1078,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 103>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 104>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 104>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1093,7 +1093,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 104>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 105>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 105>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1108,7 +1108,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 105>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 106>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 106>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1123,7 +1123,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 106>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 107>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 107>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1138,7 +1138,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 107>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 108>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 108>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1154,7 +1154,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 108>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 109>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 109>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1170,7 +1170,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 109>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 110>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 110>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1186,7 +1186,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 110>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 111>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 111>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1203,7 +1203,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 111>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 112>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 112>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1220,7 +1220,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 112>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 113>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 113>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1237,7 +1237,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 113>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 114>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 114>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1254,7 +1254,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 114>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 115>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 115>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1271,7 +1271,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 115>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 116>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 116>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1288,7 +1288,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 116>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 117>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 117>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1305,7 +1305,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 117>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 118>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 118>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1322,7 +1322,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 118>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 119>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 119>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1339,7 +1339,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 119>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 120>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 120>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1356,7 +1356,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 120>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 121>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 121>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1373,7 +1373,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 121>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 122>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 122>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1390,7 +1390,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 122>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 123>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 123>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1407,7 +1407,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 123>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 124>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 124>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1424,7 +1424,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 124>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 125>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 125>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1441,7 +1441,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 125>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 126>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 126>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1458,7 +1458,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 126>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 127>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 127>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1476,7 +1476,7 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 127>,
 }
 
 template <typename T>
-constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 128>, T& data) noexcept {
+constexpr auto unwrapStructFromSize(std::integral_constant<std::size_t, 128>, T& data) noexcept {
     auto& [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23,
            m24, m25, m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43, m44, m45,
            m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m56, m57, m58, m59, m60, m61, m62, m63, m64, m65, m66, m67,
@@ -1495,9 +1495,9 @@ constexpr auto unwrap_struct_from_size(std::integral_constant<std::size_t, 128>,
 
 template <std::size_t N, typename T>
     requires(N <= max_unwrap_struct_size)
-constexpr auto unwrap_struct_impl(T& data) noexcept {
-    return unwrap_struct_from_size(std::integral_constant<std::size_t, N>{}, data);
+constexpr auto unwrapStructImpl(T& data) noexcept {
+    return unwrapStructFromSize(std::integral_constant<std::size_t, N>{}, data);
 }
 
 } // namespace detail
-NEKO_END_NAMESPACE
+} // namespace nekoproto

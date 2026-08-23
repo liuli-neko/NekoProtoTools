@@ -8,7 +8,7 @@
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/to_string.hpp"
 
-NEKO_USE_NAMESPACE
+using namespace nekoproto;
 
 enum class TEnum : uint32_t { TEnum_A = 1, TEnum_B = 2, TEnum_C = 3 };
 
@@ -84,7 +84,7 @@ struct ZTypeTest3 {
     // NEKO_SERIALIZER(value)
 };
 
-int main(int argc, char** argv) {
+auto main(int argc, char** argv) -> int {
     std::cout << "NEKO_CPP_PLUS: " << NEKO_CPP_PLUS << std::endl;
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_INFO);
     NEKO_LOG_SET_LEVEL(NEKO_LOG_LEVEL_DEBUG);
@@ -139,8 +139,8 @@ int main(int argc, char** argv) {
     // EXPECT_DOUBLE_EQ(std::get<2>(testp.l), 1.114514);
     TestP tp2;
     tp2.makeProto() = testp;
-    EXPECT_STREQ(serializable_to_string(testp).c_str(), serializable_to_string(tp2).c_str());
-    NEKO_LOG_DEBUG("unit test", "{}", serializable_to_string(testp));
+    EXPECT_STREQ(serializableToString(testp).c_str(), serializableToString(tp2).c_str());
+    NEKO_LOG_DEBUG("unit test", "{}", serializableToString(testp));
 
     std::vector<char> outbuf;
     {
@@ -162,7 +162,7 @@ int main(int argc, char** argv) {
         JsonSerializer::InputSerializer in(outbuf.data(), outbuf.size() - 1);
 #endif
         EXPECT_TRUE(in(tp3));
-        EXPECT_STREQ(serializable_to_string(tp3).c_str(), serializable_to_string(tp2).c_str());
+        EXPECT_STREQ(serializableToString(tp3).c_str(), serializableToString(tp2).c_str());
     }
     ZTypeTest1 zt;
     zt.a = {{1, 1}, {2, 2}};

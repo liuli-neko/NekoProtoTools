@@ -12,12 +12,12 @@
 #include "nekoproto/serialization/reflection.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace traits {
 
 template <typename T>
 concept Serializable =
-    NEKO_NAMESPACE::detail::parser_serializable<JsonSerializer::Reader, JsonSerializer::Writer, std::decay_t<T>>;
+    nekoproto::detail::parser_serializable<JsonSerializer::Reader, JsonSerializer::Writer, std::decay_t<T>>;
 
 template <typename T, class enable = void>
 struct IsSerializable : std::false_type {};
@@ -43,7 +43,7 @@ struct JsonRpcSerializerHelperObject {
 };
 
 template <typename... Args>
-constexpr bool jsonrpc_automatic_expansion_able() {
+constexpr auto jsonrpcAutomaticExpansionAble() -> bool {
     if constexpr (sizeof...(Args) == 1) {
         return has_values_meta<std::remove_cvref_t<std::tuple_element_t<0, std::tuple<Args...>>>> &&
                has_names_meta<std::remove_cvref_t<std::tuple_element_t<0, std::tuple<Args...>>>>;
@@ -53,40 +53,40 @@ constexpr bool jsonrpc_automatic_expansion_able() {
 }
 
 template <typename T, class enable = void>
-struct jsonrpc_first_type_in_tuple {
+struct JsonrpcFirstTypeInTuple {
     using type = void;
 };
 
 template <typename T, typename... Ts>
-struct jsonrpc_first_type_in_tuple<std::tuple<T, Ts...>> {
+struct JsonrpcFirstTypeInTuple<std::tuple<T, Ts...>> {
     using type = T;
 };
 
 template <typename T, class enable = void>
-struct jsonrpc_is_null_able_object_helper;
+struct JsonrpcIsNullAbleObjectHelper;
 
 template <typename T>
-consteval bool jsonrpc_is_null_able_object() {
-    if constexpr (NEKO_NAMESPACE::detail::is_optional<T>::value) {
+consteval auto jsonrpcIsNullAbleObject() -> bool {
+    if constexpr (nekoproto::detail::IsOptional<T>::value) {
         return true;
-    } else if constexpr (jsonrpc_automatic_expansion_able<T>()) {
+    } else if constexpr (jsonrpcAutomaticExpansionAble<T>()) {
         using types = Reflect<T>::value_types;
-        return jsonrpc_is_null_able_object_helper<types>::value;
+        return JsonrpcIsNullAbleObjectHelper<types>::value;
     } else if constexpr (is_std_tuple_v<T>) {
-        return jsonrpc_is_null_able_object_helper<T>::value;
+        return JsonrpcIsNullAbleObjectHelper<T>::value;
     } else {
         return false;
     }
 }
 
 template <typename T, class enable>
-struct jsonrpc_is_null_able_object_helper {
-    static constexpr bool value = jsonrpc_is_null_able_object<T>();
+struct JsonrpcIsNullAbleObjectHelper {
+    static constexpr bool value = jsonrpcIsNullAbleObject<T>();
 };
 
 template <typename... Ts>
-struct jsonrpc_is_null_able_object_helper<std::tuple<Ts...>> {
-    static constexpr bool value = (jsonrpc_is_null_able_object<Ts>() && ...);
+struct JsonrpcIsNullAbleObjectHelper<std::tuple<Ts...>> {
+    static constexpr bool value = (jsonrpcIsNullAbleObject<Ts>() && ...);
 };
 
 template <typename MethodTraits>
@@ -100,15 +100,15 @@ struct JsonRpcMethodTraits {
     template <typename... Args>
     struct Impl<std::tuple<Args...>> {
         using DecayTuple = std::tuple<std::remove_cvref_t<Args>...>;
-        using FirstType  = typename jsonrpc_first_type_in_tuple<DecayTuple>::type;
+        using FirstType  = typename JsonrpcFirstTypeInTuple<DecayTuple>::type;
 
-        constexpr static bool is_auto_expand = jsonrpc_automatic_expansion_able<Args...>();
+        constexpr static bool is_auto_expand = jsonrpcAutomaticExpansionAble<Args...>();
 
         template <char ch = 0>
-        static constexpr bool _is_single_optional_auto_expand_arg() {
+        static constexpr auto isSingleOptionalAutoExpandArg() -> bool {
             if constexpr (sizeof...(Args) == 1) {
-                if constexpr (traits::optional_like_type<FirstType>::value && !std::is_void_v<FirstType>) {
-                    return jsonrpc_automatic_expansion_able<typename traits::optional_like_type<FirstType>::type>();
+                if constexpr (traits::OptionalLikeType<FirstType>::value && !std::is_void_v<FirstType>) {
+                    return jsonrpcAutomaticExpansionAble<typename traits::OptionalLikeType<FirstType>::type>();
                 } else {
                     return false;
                 }
@@ -117,10 +117,10 @@ struct JsonRpcMethodTraits {
             }
         }
 
-        constexpr static bool is_single_optional_auto_expand_arg = _is_single_optional_auto_expand_arg();
+        constexpr static bool is_single_optional_auto_expand_arg = isSingleOptionalAutoExpandArg();
 
         template <char ch = 0>
-        static constexpr bool _is_single_tuple_arg() {
+        static constexpr auto isSingleTupleArg() -> bool {
             if constexpr (sizeof...(Args) == 1) {
                 return is_std_tuple_v<FirstType>;
             } else {
@@ -128,7 +128,7 @@ struct JsonRpcMethodTraits {
             }
         }
 
-        constexpr static bool is_single_tuple_arg = _is_single_tuple_arg();
+        constexpr static bool is_single_tuple_arg = isSingleTupleArg();
 
         using ParamsTupleType = decltype([] {
             if constexpr (is_auto_expand || is_single_optional_auto_expand_arg) {
@@ -141,11 +141,11 @@ struct JsonRpcMethodTraits {
         }());
 
         template <char ch = 0>
-        constexpr static int _params_size() {
+        constexpr static auto paramsSize() -> int {
             if constexpr (is_auto_expand) {
                 return Reflect<FirstType>::size();
             } else if constexpr (is_single_optional_auto_expand_arg && !std::is_void_v<FirstType>) {
-                return Reflect<typename traits::optional_like_type<FirstType>::type>::size();
+                return Reflect<typename traits::OptionalLikeType<FirstType>::type>::size();
             } else if constexpr (is_single_tuple_arg) {
                 return std::tuple_size_v<FirstType>;
             } else {
@@ -153,8 +153,8 @@ struct JsonRpcMethodTraits {
             }
         }
 
-        constexpr static int ParamsSize                = _params_size();
-        constexpr static bool IsNullAble               = jsonrpc_is_null_able_object<ParamsTupleType>();
+        constexpr static int ParamsSize                = paramsSize();
+        constexpr static bool IsNullAble               = jsonrpcIsNullAbleObject<ParamsTupleType>();
         constexpr static bool IsAutomaticExpansionAble = is_auto_expand || is_single_optional_auto_expand_arg;
         constexpr static bool IsTopTuple               = is_single_tuple_arg;
     };
@@ -171,4 +171,4 @@ struct JsonRpcMethodTraits {
 };
 
 } // namespace detail
-NEKO_END_NAMESPACE
+} // namespace nekoproto

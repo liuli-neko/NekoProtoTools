@@ -16,7 +16,7 @@
 #endif
 #endif
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace detail {
 #if !defined(NEKO_HAS_STD_SPAN)
 template <typename T = char>
@@ -121,4 +121,4 @@ using Span = std::span<T>;
 #endif
 } // namespace detail
 
-NEKO_END_NAMESPACE
+} // namespace nekoproto

@@ -18,7 +18,7 @@
     #include <zeus/expected.hpp>
 #endif
 
-NEKO_BEGIN_NAMESPACE
+namespace nekoproto {
 namespace expected {
 
 #if NEKO_PROTO_USE_STD_EXPECTED
@@ -52,4 +52,4 @@ using bad_expected_access = zeus::bad_expected_access<E>;
 #endif
 
 } // namespace expected
-NEKO_END_NAMESPACE
+} // namespace nekoproto
