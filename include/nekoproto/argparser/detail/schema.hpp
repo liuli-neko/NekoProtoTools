@@ -510,7 +510,7 @@ void collectSchemaInto(std::string_view prefix, const ArgParserConfig& config, A
     static_assert(nekoproto::detail::has_values_meta<std::remove_cvref_t<T>>,
                   "argparser requires a reflected options type");
 
-    Reflect<std::remove_cvref_t<T>>::forEachMetaFull(
+    Reflect<std::remove_cvref_t<T>>::visitMetaFull(
         [&]<typename FieldT>(std::type_identity<FieldT>, std::string_view reflected_name, const auto& tags) {
             if constexpr (shouldIgnoreArgField(decltype(tags){})) {
                 return;

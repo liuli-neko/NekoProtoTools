@@ -783,7 +783,18 @@ struct ReflectProvider {
 
     template <std::size_t I, typename Values, typename U>
     static constexpr auto getFrom(Values&& values, U&& obj) -> decltype(auto) {
-        return valueRef(ReflectAccessorAt<I, std::decay_t<Values>>::get(std::forward<Values>(values)), obj);
+        if constexpr (is_std_tuple_v<std::decay_t<Values>>) {
+            decltype(auto) acc = std::get<I>(std::forward<Values>(values));
+            using AccType      = std::decay_t<decltype(acc)>;
+            if constexpr (std::is_reference_v<decltype(acc)> && !std::is_member_object_pointer_v<AccType> &&
+                          !is_member_ref_function<AccType, std::remove_reference_t<U>>) {
+                return std::forward<decltype(acc)>(acc);
+            } else {
+                return valueRef(acc, obj);
+            }
+        } else {
+            return valueRef(std::forward<Values>(values), obj);
+        }
     }
 
     static constexpr auto tags() {
@@ -1045,46 +1056,68 @@ public:
     }
 
     template <typename U, typename CallAbleT>
-    static constexpr auto forEachFull(U&& obj, CallAbleT&& func) {
+    static constexpr auto forEachFull(U&& obj, CallAbleT&& func) -> decltype(auto) {
         static_assert(Provider::has_values, "type has no values meta");
         static_assert(Provider::has_names, "type has no names meta or names size mismatch");
         decltype(auto) accessors  = Provider::accessors(obj);
         constexpr auto fieldNames = Provider::names();
-        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            return std::tuple{detail::removeVoidToMonostate(func, Provider::template getFrom<Is>(accessors, obj),
-                                                               fieldNames[Is], std::get<Is>(field_tags))...};
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> decltype(auto) {
+            if constexpr ((std::is_void_v<decltype(func(Provider::template getFrom<Is>(accessors, obj),
+                                                        fieldNames[Is], std::get<Is>(field_tags)))> &&
+                           ...)) {
+                (func(Provider::template getFrom<Is>(accessors, obj), fieldNames[Is], std::get<Is>(field_tags)), ...);
+            } else {
+                return std::tuple{detail::removeVoidToMonostate(func, Provider::template getFrom<Is>(accessors, obj),
+                                                                 fieldNames[Is], std::get<Is>(field_tags))...};
+            }
         }(std::make_index_sequence<Provider::value_count>{});
     }
 
     template <typename U, typename CallAbleT>
-    static constexpr auto forEachTagged(U&& obj, CallAbleT&& func) {
+    static constexpr auto forEachTagged(U&& obj, CallAbleT&& func) -> decltype(auto) {
         static_assert(Provider::has_values, "type has no values meta");
         decltype(auto) accessors = Provider::accessors(obj);
-        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            return std::tuple{detail::removeVoidToMonostate(func, Provider::template getFrom<Is>(accessors, obj),
-                                                               std::get<Is>(field_tags))...};
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> decltype(auto) {
+            if constexpr ((std::is_void_v<decltype(func(Provider::template getFrom<Is>(accessors, obj),
+                                                        std::get<Is>(field_tags)))> &&
+                           ...)) {
+                (func(Provider::template getFrom<Is>(accessors, obj), std::get<Is>(field_tags)), ...);
+            } else {
+                return std::tuple{detail::removeVoidToMonostate(func, Provider::template getFrom<Is>(accessors, obj),
+                                                                 std::get<Is>(field_tags))...};
+            }
         }(std::make_index_sequence<Provider::value_count>{});
     }
 
     template <typename U, typename CallAbleT>
-    static constexpr auto forEachNamed(U&& obj, CallAbleT&& func) {
+    static constexpr auto forEachNamed(U&& obj, CallAbleT&& func) -> decltype(auto) {
         static_assert(Provider::has_values, "type has no values meta");
         static_assert(Provider::has_names, "type has no names meta or names size mismatch");
         decltype(auto) accessors  = Provider::accessors(obj);
         constexpr auto fieldNames = Provider::names();
-        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            return std::tuple{detail::removeVoidToMonostate(func, Provider::template getFrom<Is>(accessors, obj),
-                                                               fieldNames[Is])...};
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> decltype(auto) {
+            if constexpr ((std::is_void_v<decltype(func(Provider::template getFrom<Is>(accessors, obj),
+                                                        fieldNames[Is]))> &&
+                           ...)) {
+                (func(Provider::template getFrom<Is>(accessors, obj), fieldNames[Is]), ...);
+            } else {
+                return std::tuple{detail::removeVoidToMonostate(func, Provider::template getFrom<Is>(accessors, obj),
+                                                                 fieldNames[Is])...};
+            }
         }(std::make_index_sequence<Provider::value_count>{});
     }
 
     template <typename U, typename CallAbleT>
-    static constexpr auto forEachValue(U&& obj, CallAbleT&& func) {
+    static constexpr auto forEachValue(U&& obj, CallAbleT&& func) -> decltype(auto) {
         static_assert(Provider::has_values, "type has no values meta");
         decltype(auto) accessors = Provider::accessors(obj);
-        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            return std::tuple{
-                detail::removeVoidToMonostate(func, Provider::template getFrom<Is>(accessors, obj))...};
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> decltype(auto) {
+            if constexpr ((std::is_void_v<decltype(func(Provider::template getFrom<Is>(accessors, obj)))> && ...)) {
+                (func(Provider::template getFrom<Is>(accessors, obj)), ...);
+            } else {
+                return std::tuple{
+                    detail::removeVoidToMonostate(func, Provider::template getFrom<Is>(accessors, obj))...};
+            }
         }(std::make_index_sequence<Provider::value_count>{});
     }
 
@@ -1186,43 +1219,167 @@ public:
     }
 
     template <typename CallAbleT>
-    static constexpr auto forEachMetaFull(CallAbleT&& func) {
+    static constexpr auto forEachMetaFull(CallAbleT&& func) -> decltype(auto) {
         static_assert(Provider::has_values, "type has no values meta");
         static_assert(Provider::has_names, "type has no names meta or names size mismatch");
         constexpr auto fieldNames = names();
-        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            return std::tuple{
-                detail::removeVoidToMonostate(func, std::type_identity<std::tuple_element_t<Is, value_types>>{},
-                                                 fieldNames[Is], std::get<Is>(field_tags))...};
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> decltype(auto) {
+            if constexpr ((std::is_void_v<decltype(func(std::type_identity<std::tuple_element_t<Is, value_types>>{},
+                                                        fieldNames[Is], std::get<Is>(field_tags)))> &&
+                           ...)) {
+                (func(std::type_identity<std::tuple_element_t<Is, value_types>>{}, fieldNames[Is],
+                      std::get<Is>(field_tags)),
+                 ...);
+            } else {
+                return std::tuple{
+                    detail::removeVoidToMonostate(func, std::type_identity<std::tuple_element_t<Is, value_types>>{},
+                                                     fieldNames[Is], std::get<Is>(field_tags))...};
+            }
         }(std::make_index_sequence<value_count>{});
     }
 
     template <typename CallAbleT>
-    static constexpr auto forEachMetaNamed(CallAbleT&& func) {
+    static constexpr auto forEachMetaNamed(CallAbleT&& func) -> decltype(auto) {
         static_assert(Provider::has_values, "type has no values meta");
         static_assert(Provider::has_names, "type has no names meta or names size mismatch");
         constexpr auto fieldNames = names();
-        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            return std::tuple{detail::removeVoidToMonostate(func, fieldNames[Is], std::get<Is>(field_tags))...};
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> decltype(auto) {
+            if constexpr ((std::is_void_v<decltype(func(fieldNames[Is], std::get<Is>(field_tags)))> && ...)) {
+                (func(fieldNames[Is], std::get<Is>(field_tags)), ...);
+            } else {
+                return std::tuple{detail::removeVoidToMonostate(func, fieldNames[Is], std::get<Is>(field_tags))...};
+            }
         }(std::make_index_sequence<value_count>{});
     }
 
     template <typename CallAbleT>
-    static constexpr auto forEachMetaTyped(CallAbleT&& func) {
+    static constexpr auto forEachMetaTyped(CallAbleT&& func) -> decltype(auto) {
         static_assert(Provider::has_values, "type has no values meta");
-        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            return std::tuple{detail::removeVoidToMonostate(
-                func, std::type_identity<std::tuple_element_t<Is, value_types>>{}, std::get<Is>(field_tags))...};
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> decltype(auto) {
+            if constexpr ((std::is_void_v<decltype(func(std::type_identity<std::tuple_element_t<Is, value_types>>{},
+                                                        std::get<Is>(field_tags)))> &&
+                           ...)) {
+                (func(std::type_identity<std::tuple_element_t<Is, value_types>>{}, std::get<Is>(field_tags)), ...);
+            } else {
+                return std::tuple{detail::removeVoidToMonostate(
+                    func, std::type_identity<std::tuple_element_t<Is, value_types>>{}, std::get<Is>(field_tags))...};
+            }
         }(std::make_index_sequence<value_count>{});
     }
 
     template <typename CallAbleT>
-    static constexpr auto forEachMetaTagged(CallAbleT&& func) {
+    static constexpr auto forEachMetaTagged(CallAbleT&& func) -> decltype(auto) {
         static_assert(Provider::has_values, "type has no values meta");
-        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            return std::tuple{detail::removeVoidToMonostate(func, std::get<Is>(field_tags))...};
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) -> decltype(auto) {
+            if constexpr ((std::is_void_v<decltype(func(std::get<Is>(field_tags)))> && ...)) {
+                (func(std::get<Is>(field_tags)), ...);
+            } else {
+                return std::tuple{detail::removeVoidToMonostate(func, std::get<Is>(field_tags))...};
+            }
         }(std::make_index_sequence<value_count>{});
     }
+
+    template <typename U, typename CallAbleT>
+    static constexpr void visitFull(U&& obj, CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        static_assert(Provider::has_names, "type has no names meta or names size mismatch");
+        decltype(auto) accessors  = Provider::accessors(obj);
+        constexpr auto fieldNames = Provider::names();
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            (func(Provider::template getFrom<Is>(accessors, obj), fieldNames[Is], std::get<Is>(field_tags)), ...);
+        }(std::make_index_sequence<Provider::value_count>{});
+    }
+
+    template <typename U, typename CallAbleT>
+    static constexpr void visitTagged(U&& obj, CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        decltype(auto) accessors = Provider::accessors(obj);
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            (func(Provider::template getFrom<Is>(accessors, obj), std::get<Is>(field_tags)), ...);
+        }(std::make_index_sequence<Provider::value_count>{});
+    }
+
+    template <typename U, typename CallAbleT>
+    static constexpr void visitNamed(U&& obj, CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        static_assert(Provider::has_names, "type has no names meta or names size mismatch");
+        decltype(auto) accessors  = Provider::accessors(obj);
+        constexpr auto fieldNames = Provider::names();
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            (func(Provider::template getFrom<Is>(accessors, obj), fieldNames[Is]), ...);
+        }(std::make_index_sequence<Provider::value_count>{});
+    }
+
+    template <typename U, typename CallAbleT>
+    static constexpr void visitValue(U&& obj, CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        decltype(auto) accessors = Provider::accessors(obj);
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            (func(Provider::template getFrom<Is>(accessors, obj)), ...);
+        }(std::make_index_sequence<Provider::value_count>{});
+    }
+
+    template <typename CallAbleT>
+    static constexpr void visitMetaFull(CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        static_assert(Provider::has_names, "type has no names meta or names size mismatch");
+        constexpr auto fieldNames = names();
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            (func(std::type_identity<std::tuple_element_t<Is, value_types>>{}, fieldNames[Is], std::get<Is>(field_tags)),
+             ...);
+        }(std::make_index_sequence<value_count>{});
+    }
+
+    template <typename CallAbleT>
+    static constexpr void visitMetaNamed(CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        static_assert(Provider::has_names, "type has no names meta or names size mismatch");
+        constexpr auto fieldNames = names();
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            (func(fieldNames[Is], std::get<Is>(field_tags)), ...);
+        }(std::make_index_sequence<value_count>{});
+    }
+
+    template <typename CallAbleT>
+    static constexpr void visitMetaTyped(CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            (func(std::type_identity<std::tuple_element_t<Is, value_types>>{}, std::get<Is>(field_tags)), ...);
+        }(std::make_index_sequence<value_count>{});
+    }
+
+    template <typename CallAbleT>
+    static constexpr void visitMetaTagged(CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            (func(std::get<Is>(field_tags)), ...);
+        }(std::make_index_sequence<value_count>{});
+    }
+};
+
+template <typename T, std::size_t I>
+struct FieldDescriptor {
+    using context_type = std::decay_t<T>;
+    using provider     = detail::ReflectProvider<context_type>;
+    using field_type   = typename provider::template field_type<I>;
+
+    static constexpr auto tags = std::get<I>(Reflect<context_type>::field_tags);
+    using tags_type            = std::decay_t<decltype(tags)>;
+    static constexpr std::string_view raw_name = []() constexpr -> std::string_view {
+        if constexpr (provider::has_names) {
+            return provider::template name<I>();
+        } else {
+            return std::string_view{};
+        }
+    }();
+    static constexpr bool has_custom_name = tag_query::has<tag_property::Name>(tags);
+    static constexpr std::string_view name = has_custom_name ? tag_query::get<tag_property::Name>(tags) : raw_name;
+
+    static constexpr bool is_ignored       = tag_query::get<tag_property::Ignore>(tags);
+    static constexpr bool is_skippable     = tag_query::get<tag_property::Skippable>(tags);
+    static constexpr bool has_fixed_length = tag_query::has<tag_property::FixedLength<void>>(tags);
+    static constexpr std::size_t fixed_length =
+        has_fixed_length ? tag_query::get<tag_property::FixedLength<field_type>>(tags) : 0;
 };
 
 template <typename T>
@@ -1360,6 +1517,20 @@ public:
             };
             return std::tuple{invoke(std::integral_constant<std::size_t, Is>{})...};
         }(std::make_index_sequence<size()>{});
+    }
+
+    template <typename CallAbleT>
+    static constexpr void visitMeta(CallAbleT&& func) {
+        constexpr auto enumNames  = names();
+        constexpr auto enumValues = values();
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            (func(enumValues[Is], enumNames[Is], std::get<Is>(field_tags)), ...);
+        }(std::make_index_sequence<size()>{});
+    }
+
+    template <typename CallAbleT>
+    static constexpr void visitMetaFull(CallAbleT&& func) {
+        visitMeta(std::forward<CallAbleT>(func));
     }
 };
 

@@ -8,6 +8,7 @@
 #include <ilias/sync/oneshot.hpp>
 #include <ilias/task.hpp>
 #include <ilias/task/scope.hpp>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -228,11 +229,62 @@ public:
         co_return co_await callRemoteWithOptions(metadata, std::move(options), std::forward<Args>(args)...);
     }
 
-    template <typename Method, typename... Args>
-        requires requires { typename std::decay_t<Method>::RawReturnType; }
-    auto callRemoteWithOptions(Method& metadata, RpcCallOptions options, Args... args)
-        -> ilias::IoTask<typename std::decay_t<Method>::RawReturnType> {
-        co_return co_await callRemoteWithOptions(metadata, std::move(options), std::forward<Args>(args)...);
+    template <typename T, typename... Args>
+    auto callRemoteWithOptions(T& metadata, RpcCallOptions options, Args... args)
+        -> ilias::IoTask<typename std::decay_t<T>::RawReturnType> {
+        struct CompletionGuard {
+            std::atomic<std::uint64_t>& completed;
+            ~CompletionGuard() { completed.fetch_add(1U, std::memory_order_relaxed); }
+        } completionGuard{mCompleted};
+
+        const auto started = RpcCallOptions::Clock::now();
+        if (options.cancellation_token.stop_requested()) {
+            mCanceled.fetch_add(1U, std::memory_order_relaxed);
+            co_return ilias::Err(ilias::IoError::Canceled);
+        }
+
+        auto remaining = remainingWait(options, started);
+        if (remaining.has_value() && remaining->count() <= 0) {
+            mTimedOut.fetch_add(1U, std::memory_order_relaxed);
+            co_return ilias::Err(RpcError::DeadlineExceeded);
+        }
+
+        auto call = callRemote(metadata, std::forward<Args>(args)...);
+        if (remaining.has_value() && options.cancellation_token.stop_possible()) {
+            auto [result, canceled, timedOut] =
+                co_await ilias::whenAny(std::move(call), options.cancellation_token, ilias::sleep(*remaining));
+            if (result) {
+                co_return std::move(*result);
+            }
+            if (canceled) {
+                mCanceled.fetch_add(1U, std::memory_order_relaxed);
+                co_return ilias::Err(ilias::IoError::Canceled);
+            }
+            static_cast<void>(timedOut);
+            mTimedOut.fetch_add(1U, std::memory_order_relaxed);
+            co_return ilias::Err(RpcError::DeadlineExceeded);
+        }
+
+        if (remaining.has_value()) {
+            auto result = co_await ilias::timeout(std::move(call), *remaining);
+            if (!result) {
+                mTimedOut.fetch_add(1U, std::memory_order_relaxed);
+                co_return ilias::Err(RpcError::DeadlineExceeded);
+            }
+            co_return std::move(*result);
+        }
+
+        if (options.cancellation_token.stop_possible()) {
+            auto [result, canceled] = co_await ilias::whenAny(std::move(call), options.cancellation_token);
+            if (result) {
+                co_return std::move(*result);
+            }
+            static_cast<void>(canceled);
+            mCanceled.fetch_add(1U, std::memory_order_relaxed);
+            co_return ilias::Err(ilias::IoError::Canceled);
+        }
+
+        co_return co_await std::move(call);
     }
 
     template <auto Ptr, ConstexprString... ArgNames, typename... Args>
@@ -308,64 +360,6 @@ private:
             return this->callRemoteWithOptions<T, decltype(args)...>(metadata, {},
                                                                      std::forward<decltype(args)>(args)...);
         };
-    }
-
-    template <typename T, typename... Args>
-    auto callRemoteWithOptions(T& metadata, RpcCallOptions options, Args... args)
-        -> ilias::IoTask<typename std::decay_t<T>::RawReturnType> {
-        struct CompletionGuard {
-            std::atomic<std::uint64_t>& completed;
-            ~CompletionGuard() { completed.fetch_add(1U, std::memory_order_relaxed); }
-        } completionGuard{mCompleted};
-
-        const auto started = RpcCallOptions::Clock::now();
-        if (options.cancellation_token.stop_requested()) {
-            mCanceled.fetch_add(1U, std::memory_order_relaxed);
-            co_return ilias::Err(ilias::IoError::Canceled);
-        }
-
-        auto remaining = remainingWait(options, started);
-        if (remaining.has_value() && remaining->count() <= 0) {
-            mTimedOut.fetch_add(1U, std::memory_order_relaxed);
-            co_return ilias::Err(RpcError::DeadlineExceeded);
-        }
-
-        auto call = callRemote(metadata, std::forward<Args>(args)...);
-        if (remaining.has_value() && options.cancellation_token.stop_possible()) {
-            auto [result, canceled, timedOut] =
-                co_await ilias::whenAny(std::move(call), options.cancellation_token, ilias::sleep(*remaining));
-            if (result) {
-                co_return std::move(*result);
-            }
-            if (canceled) {
-                mCanceled.fetch_add(1U, std::memory_order_relaxed);
-                co_return ilias::Err(ilias::IoError::Canceled);
-            }
-            static_cast<void>(timedOut);
-            mTimedOut.fetch_add(1U, std::memory_order_relaxed);
-            co_return ilias::Err(RpcError::DeadlineExceeded);
-        }
-
-        if (remaining.has_value()) {
-            auto result = co_await ilias::timeout(std::move(call), *remaining);
-            if (!result) {
-                mTimedOut.fetch_add(1U, std::memory_order_relaxed);
-                co_return ilias::Err(RpcError::DeadlineExceeded);
-            }
-            co_return std::move(*result);
-        }
-
-        if (options.cancellation_token.stop_possible()) {
-            auto [result, canceled] = co_await ilias::whenAny(std::move(call), options.cancellation_token);
-            if (result) {
-                co_return std::move(*result);
-            }
-            static_cast<void>(canceled);
-            mCanceled.fetch_add(1U, std::memory_order_relaxed);
-            co_return ilias::Err(ilias::IoError::Canceled);
-        }
-
-        co_return co_await std::move(call);
     }
 
     static auto remainingWait(const RpcCallOptions& options, RpcCallOptions::Clock::time_point started)

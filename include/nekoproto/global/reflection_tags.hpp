@@ -196,35 +196,29 @@ struct TagListElement<I, Head, Tail...> : TagListElement<I - 1, Tail...> {};
 template <std::size_t I, auto... Tags>
 using tag_list_element_t = typename TagListElement<I, Tags...>::type;
 
-template <typename T, auto Head, auto... Tail>
+template <typename T, auto... Tags>
 constexpr auto tagListHasTypeImpl() -> bool {
-    if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(Head)>>) {
-        return true;
-    } else if constexpr (sizeof...(Tail) > 0) {
-        return tagListHasTypeImpl<T, Tail...>();
-    } else {
+    if constexpr (sizeof...(Tags) == 0) {
         return false;
+    } else {
+        return (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(Tags)>> || ...);
     }
 }
 
-template <typename T, auto Head, auto... Tail>
-constexpr auto tagListGetTypeImpl() {
-    if constexpr (sizeof...(Tail) > 0) {
-        if constexpr (tagListHasTypeImpl<T, Tail...>()) {
-            return tagListGetTypeImpl<T, Tail...>();
-        } else if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(Head)>>) {
-            return Head;
-        } else {
-            static_assert(std::is_default_constructible_v<T>,
-                          "Tag not found and requested tag type is not default constructible");
-            return T{};
-        }
-    } else if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(Head)>>) {
-        return Head;
-    } else {
+template <typename T, auto... Tags>
+constexpr auto tagListGetTypeImpl() -> T {
+    if constexpr (sizeof...(Tags) == 0) {
         static_assert(std::is_default_constructible_v<T>,
                       "Tag not found and requested tag type is not default constructible");
         return T{};
+    } else {
+        T result{};
+        (([&]() {
+            if constexpr (std::is_same_v<std::decay_t<T>, std::decay_t<decltype(Tags)>>) {
+                result = Tags;
+            }
+        }()), ...);
+        return result;
     }
 }
 
@@ -486,87 +480,6 @@ constexpr auto tagGetType(const Tag& tag) -> T {
     }
 }
 
-template <typename Prop, auto Head, auto... Tail>
-constexpr auto tagListHasImpl() -> bool {
-    if constexpr (tagHas<Prop>(Head)) {
-        return true;
-    } else if constexpr (sizeof...(Tail) > 0) {
-        return tagListHasImpl<Prop, Tail...>();
-    } else {
-        return false;
-    }
-}
-
-template <typename Prop, auto Head, auto... Tail>
-constexpr auto tagListGetImpl() -> typename Prop::type {
-    if constexpr (sizeof...(Tail) > 0) {
-        if constexpr (tagListHasImpl<Prop, Tail...>()) {
-            return tagListGetImpl<Prop, Tail...>();
-        } else if constexpr (tagHas<Prop>(Head)) {
-            return tagGet<Prop>(Head);
-        } else {
-            return Prop::missing();
-        }
-    } else if constexpr (tagHas<Prop>(Head)) {
-        return tagGet<Prop>(Head);
-    } else {
-        return Prop::missing();
-    }
-}
-
-template <typename Prop, auto Head, auto... Tail>
-constexpr auto tagListGetExistingImpl() -> decltype(auto) {
-    if constexpr (sizeof...(Tail) > 0) {
-        if constexpr (tagListHasImpl<Prop, Tail...>()) {
-            return tagListGetExistingImpl<Prop, Tail...>();
-        } else if constexpr (tagHas<Prop>(Head)) {
-            return tagGetExisting<Prop>(Head);
-        } else {
-            static_assert(nekoproto::always_false_v<std::remove_cvref_t<decltype(Head)>>,
-                          "requested tag property is missing");
-        }
-    } else if constexpr (tagHas<Prop>(Head)) {
-        return tagGetExisting<Prop>(Head);
-    } else {
-        static_assert(nekoproto::always_false_v<std::remove_cvref_t<decltype(Head)>>,
-                      "requested tag property is missing");
-    }
-}
-
-template <typename Prop, auto... Tags>
-constexpr auto tagHas(const TagList<Tags...>& tags) -> bool {
-    static_cast<void>(tags);
-
-    if constexpr (sizeof...(Tags) == 0) {
-        return false;
-    } else {
-        return tagListHasImpl<Prop, Tags...>();
-    }
-}
-
-template <typename Prop, auto... Tags>
-constexpr auto tagGet(const TagList<Tags...>& tags) -> typename Prop::type {
-    static_cast<void>(tags);
-
-    if constexpr (sizeof...(Tags) == 0) {
-        return Prop::missing();
-    } else {
-        return tagListGetImpl<Prop, Tags...>();
-    }
-}
-
-template <typename Prop, auto... Tags>
-constexpr auto tagGetExisting(const TagList<Tags...>& tags) -> decltype(auto) {
-    static_cast<void>(tags);
-
-    if constexpr (sizeof...(Tags) == 0) {
-        static_assert(nekoproto::always_false_v<std::remove_cvref_t<decltype(tags)>>,
-                      "requested tag property is missing");
-    } else {
-        return tagListGetExistingImpl<Prop, Tags...>();
-    }
-}
-
 template <typename Prop, typename Tag>
 constexpr auto tagHas(const Tag& tag) -> bool {
     using RawTag = std::remove_cvref_t<Tag>;
@@ -612,6 +525,66 @@ constexpr auto tagGetExisting(const Tag& tag) -> decltype(auto) {
     } else {
         static_assert(nekoproto::always_false_v<RawTag>, "requested tag property is missing");
     }
+}
+
+template <typename Prop, auto... Tags>
+constexpr auto tagListHasImpl() -> bool {
+    if constexpr (sizeof...(Tags) == 0) {
+        return false;
+    } else {
+        return (tagHas<Prop>(Tags) || ...);
+    }
+}
+
+template <typename Prop, auto... Tags>
+constexpr auto tagListGetImpl() -> typename Prop::type {
+    if constexpr (sizeof...(Tags) == 0) {
+        return Prop::missing();
+    } else {
+        typename Prop::type result = Prop::missing();
+        (([&]() {
+            if constexpr (tagHas<Prop>(Tags)) {
+                result = tagGet<Prop>(Tags);
+            }
+        }()), ...);
+        return result;
+    }
+}
+
+template <typename Prop, auto... Tags>
+constexpr auto tagListGetExistingImpl() -> decltype(auto) {
+    static_assert(sizeof...(Tags) > 0, "requested tag property is missing");
+    constexpr auto matchingIndex = []() constexpr -> std::size_t {
+        std::size_t found = sizeof...(Tags);
+        std::size_t idx = 0;
+        (([&]() {
+            if constexpr (tagHas<Prop>(Tags)) {
+                found = idx;
+            }
+            ++idx;
+        }()), ...);
+        return found;
+    }();
+    static_assert(matchingIndex < sizeof...(Tags), "requested tag property is missing");
+    return tagGetExisting<Prop>(TagListElement<matchingIndex, Tags...>::value);
+}
+
+template <typename Prop, auto... Tags>
+constexpr auto tagHas(const TagList<Tags...>& tags) -> bool {
+    static_cast<void>(tags);
+    return tagListHasImpl<Prop, Tags...>();
+}
+
+template <typename Prop, auto... Tags>
+constexpr auto tagGet(const TagList<Tags...>& tags) -> typename Prop::type {
+    static_cast<void>(tags);
+    return tagListGetImpl<Prop, Tags...>();
+}
+
+template <typename Prop, auto... Tags>
+constexpr auto tagGetExisting(const TagList<Tags...>& tags) -> decltype(auto) {
+    static_cast<void>(tags);
+    return tagListGetExistingImpl<Prop, Tags...>();
 }
 
 } // namespace detail

@@ -37,7 +37,20 @@ if ([string]::IsNullOrWhiteSpace($RapidJsonInclude)) {
     }
 }
 
+$fmtInclude = ""
+$fmtRoot = Join-Path $env:LOCALAPPDATA ".xmake\packages\f\fmt"
+if (Test-Path -LiteralPath $fmtRoot) {
+    $header = Get-ChildItem -LiteralPath $fmtRoot -Recurse -Filter format.h |
+        Sort-Object FullName -Descending | Select-Object -First 1
+    if ($null -ne $header) {
+        $fmtInclude = Split-Path (Split-Path $header.FullName -Parent) -Parent
+    }
+}
+
 $common = @("-std=c++23", "-O0", "-c", "-I$($root)\include")
+if (-not [string]::IsNullOrWhiteSpace($fmtInclude)) {
+    $common += "-I$fmtInclude"
+}
 if ($Trace) {
     $common += "-ftime-trace"
 }

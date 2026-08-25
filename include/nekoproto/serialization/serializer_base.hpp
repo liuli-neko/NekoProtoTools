@@ -371,14 +371,12 @@ public:                                                                         
     constexpr auto nekoMemberTuple() noexcept { return nekoproto::detail::serializerMemberTuple(__VA_ARGS__); }        \
     constexpr auto nekoMemberTuple() const noexcept { return nekoproto::detail::serializerMemberTuple(__VA_ARGS__); }  \
     template <int N>                                                                                                   \
-    auto nekoGetMemberReference() noexcept -> decltype(auto) {                                                         \
-        auto members = nekoMemberTuple();                                                                              \
-        return std::get<N>(members);                                                                                   \
+    constexpr auto nekoGetMemberReference() noexcept -> decltype(auto) {                                               \
+        return std::get<N>(nekoMemberTuple());                                                                         \
     }                                                                                                                  \
     template <int N>                                                                                                   \
-    auto nekoGetMemberReference() const noexcept -> decltype(auto) {                                                   \
-        auto members = nekoMemberTuple();                                                                              \
-        return std::get<N>(members);                                                                                   \
+    constexpr auto nekoGetMemberReference() const noexcept -> decltype(auto) {                                         \
+        return std::get<N>(nekoMemberTuple());                                                                         \
     }                                                                                                                  \
     struct NekoSerializerArgsHelper {                                                                                  \
         using tuple = decltype(std::forward_as_tuple(__VA_ARGS__));                                                    \

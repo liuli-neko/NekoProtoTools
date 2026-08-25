@@ -92,10 +92,10 @@ auto parserReflectEmittedFieldCountOne(const FieldT& field, const Tags& tags) ->
 template <typename T>
 auto parserReflectEmittedFieldCount(const T& value) -> std::size_t {
     std::size_t count = 0;
-    Reflect<std::decay_t<T>>::forEachFull(value,
-                                          [&count](const auto& field, std::string_view /*name*/, const auto& tags) {
-                                              count += parserReflectEmittedFieldCountOne(field, tags);
-                                          });
+    Reflect<std::decay_t<T>>::visitFull(value,
+                                        [&count](const auto& field, std::string_view /*name*/, const auto& tags) {
+                                            count += parserReflectEmittedFieldCountOne(field, tags);
+                                        });
     return count;
 }
 
@@ -154,7 +154,7 @@ void parserWriteTrailingComment(W& writer, const ParentType& parent, const Tags&
 template <typename T>
 auto parserSchemaNamedReflection() -> parsing::schema::Type {
     parsing::schema::Type::Object object;
-    Reflect<T>::forEachMetaFull(
+    Reflect<T>::visitMetaFull(
         [&]<typename Field>(std::type_identity<Field>, std::string_view name, const auto& tags) {
             parserSchemaAddReflectField<Field>(object, name, tags);
         });
@@ -164,7 +164,7 @@ auto parserSchemaNamedReflection() -> parsing::schema::Type {
 template <typename T>
 auto parserSchemaPositionalReflection() -> parsing::schema::Type {
     parsing::schema::Type::Array array;
-    Reflect<T>::forEachMetaTyped([&]<typename Field>(std::type_identity<Field>, const auto& tags) {
+    Reflect<T>::visitMetaTyped([&]<typename Field>(std::type_identity<Field>, const auto& tags) {
         if (parserShouldIgnoreReflectField(tags)) {
             return;
         }
@@ -273,7 +273,7 @@ auto parserReadReflectField(typename R::InputValueType in, T& field, std::string
 template <typename W, typename ObjectType, typename T>
 auto parserWriteReflectFields(W& writer, ObjectType& object, const T& value) -> ParserResult {
     ParserResult result;
-    Reflect<std::decay_t<T>>::forEachFull(
+    Reflect<std::decay_t<T>>::visitFull(
         value, [&result, &writer, &object](auto&& field, std::string_view name, const auto& tags) {
             if (result) {
                 result = parserWriteReflectField<W>(writer, object, field, name, tags);
@@ -289,7 +289,7 @@ auto parserReadReflectFields(typename R::InputValueType in, T& value, const Tags
         return object.error();
     }
     ParserResult result;
-    Reflect<std::decay_t<T>>::forEachFull(value, [&result, in](auto&& field, std::string_view name, const auto& tags) {
+    Reflect<std::decay_t<T>>::visitFull(value, [&result, in](auto&& field, std::string_view name, const auto& tags) {
         if (result) {
             result = parserReadReflectField<R>(in, field, name, tags);
         }
@@ -313,8 +313,8 @@ struct WriteParser<W, T,
                     } else {
                         parsing::Parent<W>::beginRawFixedData(writer, parent);
                         ParserResult result;
-                        Reflect<T>::forEachFull(value, [&writer, &result](const auto& field, std::string_view name,
-                                                                          const auto& fieldTags) {
+                        Reflect<T>::visitFull(value, [&writer, &result](const auto& field, std::string_view name,
+                                                                        const auto& fieldTags) {
                             if (!result || parserShouldIgnoreReflectField(fieldTags)) {
                                 return;
                             }
@@ -350,7 +350,7 @@ struct WriteParser<W, T,
                 if (tag_query::get<tag_property::Unframed<std::decay_t<T>>>(tags)) {
                     parsing::Parent<W>::beginUnframedObject(writer, parent);
                     ParserResult result;
-                    Reflect<T>::forEachFull(
+                    Reflect<T>::visitFull(
                         value, [&writer, &result](const auto& field, std::string_view name, const auto& tags) {
                             if (result) {
                                 if (parserShouldIgnoreReflectField(tags)) {
@@ -376,7 +376,7 @@ struct WriteParser<W, T,
             auto array = parsing::Parent<W>::addArray(writer, parserReflectFieldCount<T>(), parent, tags);
             ParserResult result;
             std::size_t index = 0;
-            Reflect<T>::forEachTagged(value, [&writer, &array, &result, &index](auto&& field, const auto& tags) {
+            Reflect<T>::visitTagged(value, [&writer, &array, &result, &index](auto&& field, const auto& tags) {
                 if (result) {
                     if (parserShouldIgnoreReflectField(tags)) {
                         ++index;
@@ -434,8 +434,8 @@ private:
                     }
                     ParserResult result;
                     auto current = in;
-                    Reflect<T>::forEachFull(value, [&current, &result](auto& field, std::string_view name,
-                                                                       const auto& fieldTags) {
+                    Reflect<T>::visitFull(value, [&current, &result](auto& field, std::string_view name,
+                                                                     const auto& fieldTags) {
                         if (!result || parserShouldIgnoreReflectField(fieldTags)) {
                             return;
                         }
@@ -477,7 +477,7 @@ private:
                     }
                     ParserResult result;
                     auto current = in;
-                    Reflect<T>::forEachFull(
+                    Reflect<T>::visitFull(
                         value, [&current, &result](auto& field, std::string_view name, const auto& tags) {
                             if (result) {
                                 if (parserShouldIgnoreReflectField(tags)) {
@@ -507,7 +507,7 @@ private:
             ParserResult result;
             std::size_t index        = 0;
             std::size_t elementIndex = 0;
-            Reflect<T>::forEachTagged(value, [&array, &result, &index, &elementIndex](auto&& field, const auto& tags) {
+            Reflect<T>::visitTagged(value, [&array, &result, &index, &elementIndex](auto&& field, const auto& tags) {
                 if (result) {
                     if (parserShouldIgnoreReflectField(tags)) {
                         ++index;

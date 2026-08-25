@@ -30,11 +30,19 @@ public:
         : mStream(std::move(stream)), mLimits(limits) {}
 
     auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t> {
+        if (!mReadMutex) {
+            mReadMutex = std::make_shared<ilias::Mutex>();
+        }
+        auto guard = co_await mReadMutex->lock();
         ILIAS_CO_TRYV(co_await readFrame(buffer));
         co_return buffer.size();
     }
 
     auto send(std::span<const std::byte> buffer) -> ilias::IoTask<std::size_t> {
+        if (!mWriteMutex) {
+            mWriteMutex = std::make_shared<ilias::Mutex>();
+        }
+        auto guard = co_await mWriteMutex->lock();
         ILIAS_CO_TRYV(co_await writeFrame(buffer));
         co_return buffer.size();
     }
@@ -87,7 +95,6 @@ private:
             co_return ilias::Err(RpcError::InvalidRequest);
         }
 
-        auto guard = co_await mWriteMutex->lock();
         ILIAS_CO_TRY(auto ret, co_await ilias::io::writeAll(mStream, frame));
         if (ret != frame.size()) {
             co_return ilias::Err(ilias::IoError::WriteZero);
@@ -98,7 +105,8 @@ private:
 
     StreamT mStream;
     NekoRpcFrameLimits mLimits;
-    std::unique_ptr<ilias::Mutex> mWriteMutex = std::make_unique<ilias::Mutex>();
+    std::shared_ptr<ilias::Mutex> mReadMutex  = std::make_shared<ilias::Mutex>();
+    std::shared_ptr<ilias::Mutex> mWriteMutex = std::make_shared<ilias::Mutex>();
 };
 
 } // namespace rpc

@@ -416,7 +416,7 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
     const bool isSlice  = static_cast<int>(flag & StreamFlag::SliceData) != 0;
 
     if (isVerify) {
-        auto ret = co_await (sendVersion() | unstoppable());
+        auto ret = co_await (sendVersion() | unstoppable);
         if (!ret) {
             NEKO_LOG_WARN("Communication", "send to verification version failed!");
             co_return Err(ret.error());
@@ -443,7 +443,7 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
             co_return Err(ErrorCode::SerializationError);
         }
         auto ret =
-            co_await (sendRaw({reinterpret_cast<std::byte*>(headerData.data()), headerData.size()}) | unstoppable());
+            co_await (sendRaw({reinterpret_cast<std::byte*>(headerData.data()), headerData.size()}) | unstoppable);
         NEKO_LOG_INFO("Communication", "Sending slice header, protocol: {}, size: {}", message.type(),
                       messageData.size());
         while (true) {
@@ -452,12 +452,12 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
             NEKO_ASSERT(sliceSize > 0, "Communication", "Slice size is 0");
             if (!ret) {
                 if (ret.error() == IoError::Canceled) {
-                    co_await (sendCancel(message.type()) | unstoppable());
+                    co_await (sendCancel(message.type()) | unstoppable);
                 }
                 co_return Err(ret.error());
             }
             ret = co_await (sendSlice({reinterpret_cast<std::byte*>(messageData.data() + offset), sliceSize}, offset) |
-                            unstoppable());
+                            unstoppable);
             offset += sliceSize;
             if (offset >= messageData.size()) {
                 break;
@@ -477,7 +477,7 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
     NEKO_LOG_INFO("Communication", "Send header: message type: Complete proto type: {} length: {}", message.type(),
                   messageData.size() - MessageHeader::size());
     co_return co_await (sendRaw({reinterpret_cast<std::byte*>(messageData.data()), messageData.size()}) |
-                        unstoppable());
+                        unstoppable);
 }
 
 template <CommunicationStream T>
@@ -753,7 +753,7 @@ inline auto ProtoDatagramClient<T>::send(const IProto& message, const IPEndpoint
         co_return Err(Error(ErrorCode::UnsupportOperator));
     }
     if (isVerify) {
-        auto ret = co_await (sendVersion(endpoint) | unstoppable());
+        auto ret = co_await (sendVersion(endpoint) | unstoppable);
         if (!ret) {
             NEKO_LOG_WARN("Communication", "send to verification version failed! error: {}", ret.error().message());
             co_return Err(ret.error());
@@ -784,7 +784,7 @@ inline auto ProtoDatagramClient<T>::send(const IProto& message, const IPEndpoint
 
     auto ret = co_await (
         mDatagramClient.sendto({reinterpret_cast<std::byte*>(messageData.data()), messageData.size()}, endpoint) |
-        unstoppable());
+        unstoppable);
     if (!ret) {
         co_return Err(ret.error());
     }

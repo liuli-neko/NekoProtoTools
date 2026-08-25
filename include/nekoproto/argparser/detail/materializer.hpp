@@ -498,7 +498,7 @@ template <typename T>
 auto applyDefaultFields(T& object, const ArgSchema& schema, std::size_t& spec_index,
                                      PresenceList& supplied) -> std::error_code {
     std::error_code result;
-    Reflect<std::remove_cvref_t<T>>::forEachFull(
+    Reflect<std::remove_cvref_t<T>>::visitFull(
         object, [&](auto& field, std::string_view reflectedName, const auto& tags) {
             if constexpr (shouldIgnoreArgField(decltype(tags){})) {
                 return;
@@ -539,7 +539,7 @@ template <typename T>
 auto materializeFields(T& object, const ArgSchema& schema, const RawParseResult& raw,
                                    const ArgParserConfig& config, std::size_t& spec_index, PresenceList& supplied) -> std::error_code {
     std::error_code result;
-    Reflect<std::remove_cvref_t<T>>::forEachFull(
+    Reflect<std::remove_cvref_t<T>>::visitFull(
         object, [&](auto& field, std::string_view reflectedName, const auto& tags) {
             if constexpr (shouldIgnoreArgField(decltype(tags){})) {
                 return;
@@ -593,7 +593,7 @@ template <typename T>
 auto markImportedFieldsSupplied(const T& object, const ArgSchema& schema, std::size_t& spec_index,
                                               PresenceList& supplied) -> std::error_code {
     std::error_code result;
-    Reflect<std::remove_cvref_t<T>>::forEachFull(
+    Reflect<std::remove_cvref_t<T>>::visitFull(
         object, [&](const auto& field, std::string_view reflectedName, const auto& tags) {
             if constexpr (shouldIgnoreArgField(decltype(tags){})) {
                 return;
@@ -671,7 +671,7 @@ template <typename T>
 auto markActiveFields(const T& object, const ArgSchema& schema, std::size_t& spec_index,
                                    const PresenceList& supplied, PresenceList& active) -> std::error_code {
     std::error_code result;
-    Reflect<std::remove_cvref_t<T>>::forEachFull(
+    Reflect<std::remove_cvref_t<T>>::visitFull(
         object, [&](const auto& field, std::string_view reflectedName, const auto& tags) {
             if constexpr (shouldIgnoreArgField(decltype(tags){})) {
                 return;

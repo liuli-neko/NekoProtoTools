@@ -49,6 +49,9 @@ auto makeUdpStreamClient(IPEndpoint bindIpendpoint, IPEndpoint remoteIpendpoint)
             co_return Err(ret1.error());
         }
         auto udpclient = IliasUdpSocket::from(std::move(socket));
+        if (!udpclient) {
+            co_return Err(udpclient.error());
+        }
         co_return IliasChunkedDatagramMessageEndpoint(std::move(udpclient.value()), remoteIpendpoint,
                                                       JsonRpcError::MessageToolLarge);
     } else {

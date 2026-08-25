@@ -185,6 +185,10 @@ public:
         : mStream(std::move(stream)), mMessageTooLarge(messageTooLarge), mMaxMessageBytes(maxMessageBytes) {}
 
     auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t> {
+        if (!mReadMutex) {
+            mReadMutex = std::make_shared<ilias::Mutex>();
+        }
+        auto guard = co_await mReadMutex->lock();
         ILIAS_CO_TRY(auto size, co_await ilias::io::readUint32LE(mStream));
         if (size > mMaxMessageBytes) {
             co_return ilias::Err(mMessageTooLarge);
@@ -204,6 +208,9 @@ public:
     }
 
     auto send(std::span<const std::byte> buffer) -> ilias::IoTask<std::size_t> {
+        if (!mWriteMutex) {
+            mWriteMutex = std::make_shared<ilias::Mutex>();
+        }
         auto guard = co_await mWriteMutex->lock();
         if (buffer.size() > std::numeric_limits<std::uint32_t>::max() || buffer.size() > mMaxMessageBytes) {
             co_return ilias::Err(mMessageTooLarge);
@@ -219,9 +226,9 @@ public:
         co_return buffer.size();
     }
 
-    void close() { closeStream(mStream); }
-    auto shutdown() -> ilias::IoTask<void> { co_return co_await shutdownStream(mStream); }
-    auto flush() -> ilias::IoTask<void> { co_return co_await flushStream(mStream); }
+    void close() { detail::closeStream(mStream); }
+    auto shutdown() -> ilias::IoTask<void> { co_return co_await detail::shutdownStream(mStream); }
+    auto flush() -> ilias::IoTask<void> { co_return co_await detail::flushStream(mStream); }
 
 protected:
     auto stream() noexcept -> StreamT& { return mStream; }
@@ -231,7 +238,8 @@ private:
     StreamT mStream;
     std::error_code mMessageTooLarge          = ilias::IoError::MessageTooLarge;
     std::size_t mMaxMessageBytes              = 16U * 1024U * 1024U;
-    std::unique_ptr<ilias::Mutex> mWriteMutex = std::make_unique<ilias::Mutex>();
+    std::shared_ptr<ilias::Mutex> mReadMutex  = std::make_shared<ilias::Mutex>();
+    std::shared_ptr<ilias::Mutex> mWriteMutex = std::make_shared<ilias::Mutex>();
 };
 
 template <typename DatagramT, typename EndpointT>

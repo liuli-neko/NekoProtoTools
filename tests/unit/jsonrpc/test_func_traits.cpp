@@ -108,7 +108,7 @@ TEST(RefectNames, Test) { // NOLINT
     EXPECT_EQ(names1[1], "cMember");
     EXPECT_EQ(names1[2], "dMember");
     std::string name = std::string(detail::func_nameof<testFunc>);
-    EXPECT_STREQ(name.c_str(), "test_func");
+    EXPECT_STREQ(name.c_str(), "testFunc");
     call<testFunc>(1);
     name = std::string(detail::func_nameof<testFuncWithStruct>);
     EXPECT_STREQ(name.c_str(), "testFuncWithStruct");
