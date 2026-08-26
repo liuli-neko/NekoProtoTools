@@ -12,4 +12,6 @@
 #include "nekoproto/rpc/registry.hpp"
 #include "nekoproto/rpc/server.hpp"
 #include "nekoproto/rpc/tags.hpp"
+#include "nekoproto/rpc/tracing.hpp"
+#include "nekoproto/rpc/console.hpp"
 #include "nekoproto/rpc/traits.hpp"

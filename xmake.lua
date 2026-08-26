@@ -205,6 +205,14 @@ option("enable_jsonrpc")
     end)
 option_end()
 
+option("enable_rpc_trace")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable RPC remote call tracing and WebUI monitoring console")
+    set_category("modules")
+    set_configvar("NEKO_PROTO_RPC_TRACE", true)
+option_end()
+
 option("use_io_uring")
     set_default(false)
     set_showmenu(true)
@@ -305,7 +313,8 @@ target("NekoSerializer")
                 "enable_tomlplusplus",
                 "enable_protocol",
                 "enable_communication",
-                "enable_jsonrpc")
+                "enable_jsonrpc",
+                "enable_rpc_trace")
     on_load(function (target)
         import("lua.auto", {rootdir = os.projectdir()})
         auto().auto_add_packages(target, {uses_expected = true})
@@ -352,6 +361,10 @@ if has_config("enable_jsonrpc") and json_serializer_enabled() then
         add_includedirs("include")
         -- 添加非模板函数的实现文件
         add_files("src/jsonrpc.cpp", "src/rpc.cpp")
+        if has_config("enable_rpc_trace") then
+            add_files("src/rpc_tracing.cpp")
+        end
+        add_options("enable_rpc_trace")
 
         on_load(function (target) 
             import("lua.auto", {rootdir = os.projectdir()})

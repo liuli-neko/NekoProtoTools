@@ -72,7 +72,9 @@ function autofunc.auto_add_packages(target, options)
     
     if has_config("enable_tests") then
         target:add("packages", "gtest", {public = true})
-        target:add("ldflags", "-lgmock", {public = true, force = true})
+        if is_plat("linux") then
+            target:add("ldflags", "-lgmock", {public = true, force = true})
+        end
         target:add("packages", "cpptrace", {public = true})
     end
     

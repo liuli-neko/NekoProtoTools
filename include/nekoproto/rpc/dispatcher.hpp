@@ -27,6 +27,7 @@
 #include "nekoproto/rpc/endpoint.hpp"
 #include "nekoproto/rpc/method.hpp"
 #include "nekoproto/rpc/options.hpp"
+#include "nekoproto/rpc/tracing.hpp"
 
 namespace nekoproto {
 namespace detail {
@@ -121,6 +122,9 @@ public:
                 .canceled  = mCanceled,
                 .rejected  = mRejected};
     }
+
+    auto maxActive() const noexcept -> std::size_t { return mMaxActive; }
+    auto maxQueued() const noexcept -> std::size_t { return mMaxQueued; }
 
 private:
     void start(Admission& admission) {
@@ -262,8 +266,52 @@ public:
         bool isBind         = false;
     };
 
-    explicit RpcDispatcher([[maybe_unused]] ilias::IoContext& ctx) {}
+    explicit RpcDispatcher([[maybe_unused]] ilias::IoContext& ctx) {
+#if defined(NEKO_PROTO_RPC_TRACE)
+        RpcTraceRegistry::instance().registerCancelHook([this](const void* session, std::string_view requestId) -> bool {
+            std::scoped_lock lock(mActiveMutex);
+            for (auto& [key, handle] : mCancelHandles) {
+                if ((session == nullptr || key.session == session) && stringifyId(key.id) == requestId) {
+                    handle.stop();
+                    mExecution.markCanceled();
+                    return true;
+                }
+            }
+            return false;
+        });
+        RpcTraceRegistry::instance().registerServerInfoProvider([this]() -> RpcServerConfigInfo {
+            RpcServerConfigInfo info;
+            if constexpr (requires { typename Backend::DecodedRequest; }) {
+                info.backendName = "JSON-RPC 2.0";
+            } else {
+                info.backendName = "NekoRpc Binary Protocol";
+            }
+            info.maxConcurrent = mExecution.maxActive();
+            info.maxQueue = mExecution.maxQueued();
+            info.defaultTimeout = mRequestTimeout;
+            info.startTime = mStartTime;
+            info.methods.reserve(mHandlers.size());
+            for (const auto& [name, handler] : mHandlers) {
+                RpcMethodMetadata meta;
+                meta.name = std::string(handler->name());
+                meta.signature = std::string(handler->signature());
+                meta.description = std::string(handler->description());
+                meta.rpcVersion = std::string(handler->rpcVersion());
+                meta.argNames = handler->argNames();
+                meta.isNotification = handler->isNotification();
+                meta.isBind = handler->isBind();
+                meta.usesContext = handler->usesContext();
+                info.methods.push_back(std::move(meta));
+            }
+            return info;
+        });
+#endif
+    }
     ~RpcDispatcher() {
+#if defined(NEKO_PROTO_RPC_TRACE)
+        RpcTraceRegistry::instance().unregisterCancelHook();
+        RpcTraceRegistry::instance().unregisterServerInfoProvider();
+#endif
         try {
             cancelAll();
         } catch (...) {
@@ -434,13 +482,29 @@ public:
         std::vector<typename Backend::ResponseValues> responseSlots(decoded.requests.size());
         std::vector<ActiveKey> activeKeys;
         activeKeys.reserve(decoded.requests.size());
+#if defined(NEKO_PROTO_RPC_TRACE)
+        std::vector<RpcTraceContext> traces(decoded.requests.size());
+#endif
         ilias::TaskGroup<void> requestTasks;
         for (std::size_t index = 0; index < decoded.requests.size(); ++index) {
             const auto& request    = decoded.requests[index];
             const auto method_name = std::string(Backend::methodName(request));
+            const auto effectiveTimeout = effectiveRequestTimeout(std::addressof(session));
+            const auto deadline         = deadlineFromNow(effectiveTimeout);
+
+#if defined(NEKO_PROTO_RPC_TRACE)
+            const auto request_id  = stringifyId(Backend::id(request));
+            const bool is_notif    = !Backend::expectsResponse(request);
+            traces[index].onReceived(method_name, request_id, data.size() / (decoded.requests.empty() ? 1U : decoded.requests.size()),
+                                      is_notif, peer, std::addressof(session), deadline, effectiveTimeout);
+#endif
+
             const auto handler     = mHandlers.find(method_name);
             if (handler == mHandlers.end()) {
                 NEKO_LOG_WARN("rpc", "method {} not found!", method_name);
+#if defined(NEKO_PROTO_RPC_TRACE)
+                traces[index].onFailed(RpcError::MethodNotFound, "Method not found");
+#endif
                 Backend::appendError(responseSlots[index], request, RpcError::MethodNotFound);
                 continue;
             }
@@ -448,13 +512,22 @@ public:
             NEKO_LOG_TRACE("rpc", "rpc dispatcher method dispatch: method={}", method_name);
             if (rejectOnly) {
                 mExecution.reject();
+#if defined(NEKO_PROTO_RPC_TRACE)
+                traces[index].onRejected();
+#endif
                 Backend::appendError(responseSlots[index], request, RpcError::Overloaded);
             } else {
                 auto admission = mExecution.tryAdmit();
                 if (!admission.has_value()) {
+#if defined(NEKO_PROTO_RPC_TRACE)
+                    traces[index].onRejected();
+#endif
                     Backend::appendError(responseSlots[index], request, RpcError::Overloaded);
                     continue;
                 }
+#if defined(NEKO_PROTO_RPC_TRACE)
+                traces[index].onQueued();
+#endif
                 std::optional<ActiveKey> activeKey;
                 if (Backend::expectsResponse(request)) {
                     activeKey = ActiveKey{.session = std::addressof(session), .id = Backend::id(request)};
@@ -463,11 +536,13 @@ public:
                         mRequestStates.insert_or_assign(*activeKey, RequestState::Queued);
                     }
                 }
-                const auto effectiveTimeout = effectiveRequestTimeout(std::addressof(session));
-                const auto deadline         = deadlineFromNow(effectiveTimeout);
                 auto handle                 = requestTasks.spawn(
                     executeRequest(*handler->second, request, responseSlots[index], std::move(*admission), activeKey,
-                                                   std::addressof(session), peer, effectiveTimeout, deadline));
+                                   std::addressof(session), peer, effectiveTimeout, deadline
+#if defined(NEKO_PROTO_RPC_TRACE)
+                                   , traces[index]
+#endif
+                    ));
                 if (activeKey.has_value()) {
                     {
                         std::scoped_lock lock(mActiveMutex);
@@ -486,6 +561,9 @@ public:
                 // A stopped handler task cannot resume far enough to append its
                 // own return value. Complete the protocol request explicitly so
                 // the peer does not wait forever after server-side cancellation.
+#if defined(NEKO_PROTO_RPC_TRACE)
+                traces[index].onCanceled();
+#endif
                 Backend::appendError(responseSlots[index], request, ilias::IoError::Canceled);
             }
         }
@@ -515,17 +593,45 @@ public:
         NEKO_LOG_TRACE("rpc", "rpc dispatcher response encoded: responses={} bytes={}", responses.size(),
                        buffer.size());
 
+#if defined(NEKO_PROTO_RPC_TRACE)
+        const std::size_t perResponseBytes = traces.empty() ? 0U : (buffer.size() / traces.size());
+        for (auto& trace : traces) {
+            trace.onSending(perResponseBytes);
+        }
+#endif
+
         if (endpoint != nullptr && !responses.empty() && buffer.empty()) {
+#if defined(NEKO_PROTO_RPC_TRACE)
+            for (auto& trace : traces) {
+                trace.onFailed(RpcError::InvalidRequest, "Encoding response failed");
+            }
+#endif
             endpoint->close();
             co_return buffer;
         }
 
         if (endpoint != nullptr && !buffer.empty()) {
-            const auto sendResponse = [endpoint, &buffer](const auto& ret) {
+            const auto sendResponse = [endpoint, &buffer
+#if defined(NEKO_PROTO_RPC_TRACE)
+                                        , &traces, perResponseBytes
+#endif
+            ](const auto& ret) {
                 if (!ret || ret.value() != buffer.size()) {
                     NEKO_LOG_ERROR("rpc", "send rpc response failed: {}", ret ? "short write" : ret.error().message());
+#if defined(NEKO_PROTO_RPC_TRACE)
+                    for (auto& trace : traces) {
+                        trace.onFailed(ret ? make_error_code(ilias::IoError::WriteZero) : ret.error());
+                    }
+#endif
                     endpoint->close();
                 }
+#if defined(NEKO_PROTO_RPC_TRACE)
+                else {
+                    for (auto& trace : traces) {
+                        trace.onCompleted(perResponseBytes);
+                    }
+                }
+#endif
             };
             if (endpointSendMutex != nullptr) {
                 auto guard = co_await endpointSendMutex->lock();
@@ -536,6 +642,13 @@ public:
                     {reinterpret_cast<const std::byte*>(buffer.data()), static_cast<std::size_t>(buffer.size())}));
             }
         }
+#if defined(NEKO_PROTO_RPC_TRACE)
+        else {
+            for (auto& trace : traces) {
+                trace.onCompleted(perResponseBytes);
+            }
+        }
+#endif
         co_return buffer;
     }
 
@@ -601,41 +714,69 @@ private:
                         typename Backend::ResponseValues& responses, RpcExecutionLimiter::Admission admission,
                         std::optional<ActiveKey> activeKey, const void* session, const RpcPeerInfo* peer,
                         std::optional<std::chrono::nanoseconds> effectiveTimeout,
-                        std::optional<RpcRequestContext::Clock::time_point> deadline) -> ilias::Task<void> {
+                        std::optional<RpcRequestContext::Clock::time_point> deadline
+#if defined(NEKO_PROTO_RPC_TRACE)
+                        , RpcTraceContext trace = {}
+#endif
+    ) -> ilias::Task<void> {
         if (effectiveTimeout.has_value()) {
             if (effectiveTimeout->count() <= 0) {
                 mExecution.markTimedOut();
+#if defined(NEKO_PROTO_RPC_TRACE)
+                trace.onTimedOut();
+#endif
                 Backend::appendError(responses, request, RpcError::DeadlineExceeded);
                 co_return;
             }
             const auto remaining = *deadline - RpcRequestContext::Clock::now();
             if (remaining <= RpcRequestContext::Clock::duration::zero()) {
                 mExecution.markTimedOut();
+#if defined(NEKO_PROTO_RPC_TRACE)
+                trace.onTimedOut();
+#endif
                 Backend::appendError(responses, request, RpcError::DeadlineExceeded);
                 co_return;
             }
             auto completed =
                 co_await ilias::timeout(runAdmittedRequest(handler, request, responses, std::move(admission),
-                                                           std::move(activeKey), deadline, session, peer),
+                                                           std::move(activeKey), deadline, session, peer
+#if defined(NEKO_PROTO_RPC_TRACE)
+                                                           , trace
+#endif
+                                        ),
                                         remaining);
             if (!completed) {
                 mExecution.markTimedOut();
+#if defined(NEKO_PROTO_RPC_TRACE)
+                trace.onTimedOut();
+#endif
                 Backend::appendError(responses, request, RpcError::DeadlineExceeded);
             }
             co_return;
         }
 
         co_await runAdmittedRequest(handler, request, responses, std::move(admission), std::move(activeKey), deadline,
-                                    session, peer);
+                                    session, peer
+#if defined(NEKO_PROTO_RPC_TRACE)
+                                    , trace
+#endif
+        );
     }
 
     auto runAdmittedRequest(RpcMethodWrapperBase<Backend>& handler, const typename Backend::DecodedRequest& request,
                             typename Backend::ResponseValues& responses, RpcExecutionLimiter::Admission admission,
                             std::optional<ActiveKey> activeKey,
                             std::optional<RpcRequestContext::Clock::time_point> deadline, const void* session,
-                            const RpcPeerInfo* peer) -> ilias::Task<void> {
+                            const RpcPeerInfo* peer
+#if defined(NEKO_PROTO_RPC_TRACE)
+                            , RpcTraceContext trace = {}
+#endif
+    ) -> ilias::Task<void> {
         auto permit = co_await mExecution.acquire();
         admission.start();
+#if defined(NEKO_PROTO_RPC_TRACE)
+        trace.onExecuting();
+#endif
         if (activeKey.has_value()) {
             std::scoped_lock lock(mActiveMutex);
             if (auto state = mRequestStates.find(*activeKey); state != mRequestStates.end()) {
@@ -649,6 +790,9 @@ private:
             RpcRequestContextAccess::setCancellationToken(*context, co_await ilias::this_coro::stopToken());
         }
         co_await handler.call(request, responses, context.has_value() ? std::addressof(*context) : nullptr);
+#if defined(NEKO_PROTO_RPC_TRACE)
+        trace.onExecuted(0);
+#endif
     }
 
     auto effectiveRequestTimeout(const void* session) const -> std::optional<std::chrono::nanoseconds> {
@@ -762,6 +906,7 @@ private:
     std::map<std::string, std::unique_ptr<RpcMethodWrapperBase<Backend>>> mHandlers;
     RpcExecutionLimiter mExecution;
     std::optional<std::chrono::nanoseconds> mRequestTimeout;
+    std::chrono::system_clock::time_point mStartTime = std::chrono::system_clock::now();
 
     template <RpcBackend B, typename T>
     friend class RpcMethodWrapperImpl;

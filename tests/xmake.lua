@@ -43,6 +43,9 @@ local function default_test_config(file)
     elseif group == "rpc" then
         config.enabled = has_config("enable_jsonrpc") and json_serializer_enabled()
         config.deps = {"NekoJsonRpc", "NekoSerializer"}
+        if has_config("enable_rpc_trace") then
+            table.insert(config.files, "../src/rpc_tracing.cpp")
+        end
     elseif group == "communication" then
         config.enabled = has_config("enable_communication") and json_serializer_enabled()
         config.deps = {"NekoCommunication"}

@@ -18,6 +18,7 @@ struct RpcMethodMetadata {
     std::vector<std::string> argNames;
     bool isNotification = false;
     bool isBind = false;
+    bool usesContext = false;
 };
 
 template <typename Backend, typename StreamT>
