@@ -38,7 +38,7 @@ struct JsonRpcMethodContext {
 
 template <typename T>
 struct JsonRpcSerializerHelperObject {
-    T& mTuple;
+    T& tuple;
     JsonRpcMethodContext context{};
 };
 

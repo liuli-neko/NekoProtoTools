@@ -106,9 +106,9 @@ client_loop([[maybe_unused]] ilias::IoContext& ioContext,
     }
     if (static_cast<int>(sendFlag & StreamFlag::VersionVerification) != 0) {
         const auto& protoTable = client.getProtoTable();
-        EXPECT_EQ(protoTable.protocolFactoryVersion, 1);
-        EXPECT_EQ(protoTable.protoTable.size(), 1);
-        EXPECT_STREQ(protoTable.protoTable.begin()->second.c_str(), "Message");
+        EXPECT_EQ(protoTable.protocol_factory_version, 1);
+        EXPECT_EQ(protoTable.proto_table.size(), 1);
+        EXPECT_STREQ(protoTable.proto_table.begin()->second.c_str(), "Message");
     }
     co_return co_await client.close();
 }
@@ -147,9 +147,9 @@ ilias::IoTask<void> handle_loop(ProtoStreamClient<TcpStream>&& pClient,
     }
     if (static_cast<int>(sendFlag & StreamFlag::VersionVerification) != 0) {
         const auto& protoTable = client.getProtoTable();
-        EXPECT_EQ(protoTable.protocolFactoryVersion, 1);
-        EXPECT_EQ(protoTable.protoTable.size(), 1);
-        EXPECT_STREQ(protoTable.protoTable.begin()->second.c_str(), "Message");
+        EXPECT_EQ(protoTable.protocol_factory_version, 1);
+        EXPECT_EQ(protoTable.proto_table.size(), 1);
+        EXPECT_STREQ(protoTable.proto_table.begin()->second.c_str(), "Message");
     }
     co_return co_await client.close();
 }
@@ -250,9 +250,9 @@ ilias::IoTask<void> udp_client([[maybe_unused]] IoContext& ioContext, ProtoFacto
     }
     if (static_cast<int>(sendFlags & StreamFlag::VersionVerification) != 0) {
         const auto& protoTable = client.getProtoTable();
-        EXPECT_EQ(protoTable.protocolFactoryVersion, 1);
-        EXPECT_EQ(protoTable.protoTable.size(), 1);
-        EXPECT_STREQ(protoTable.protoTable.begin()->second.c_str(), "Message");
+        EXPECT_EQ(protoTable.protocol_factory_version, 1);
+        EXPECT_EQ(protoTable.proto_table.size(), 1);
+        EXPECT_STREQ(protoTable.proto_table.begin()->second.c_str(), "Message");
     }
     co_await client.close();
     NEKO_LOG_DEBUG("unit test", "udp test finished");
@@ -318,9 +318,9 @@ ilias::IoTask<void> udp_client_peer([[maybe_unused]] IoContext& ioContext, Proto
     }
     if (static_cast<int>(sendFlags & StreamFlag::VersionVerification) != 0) {
         const auto& protoTable = client.getProtoTable();
-        EXPECT_EQ(protoTable.protocolFactoryVersion, 1);
-        EXPECT_EQ(protoTable.protoTable.size(), 1);
-        EXPECT_STREQ(protoTable.protoTable.begin()->second.c_str(), "Message");
+        EXPECT_EQ(protoTable.protocol_factory_version, 1);
+        EXPECT_EQ(protoTable.proto_table.size(), 1);
+        EXPECT_STREQ(protoTable.proto_table.begin()->second.c_str(), "Message");
     }
     co_await client.close();
     NEKO_LOG_DEBUG("unit test", "udp test finished");

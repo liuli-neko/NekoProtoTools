@@ -15,19 +15,23 @@ struct WriteParser<W, std::tuple<Ts...>, void> {
     using Tuple = std::tuple<Ts...>;
 
     template <typename ParentType, typename Tags, std::size_t... Is>
-    static auto writeImpl(W& writer, const Tuple& value, const ParentType& parent,
-                                  std::index_sequence<Is...>, const Tags& tags) -> ParserResult {
+    static auto writeImpl(W& writer, [[maybe_unused]] const Tuple& value, const ParentType& parent,
+                          std::index_sequence<Is...>, const Tags& tags) -> ParserResult {
         auto array = parsing::Parent<W>::addArray(writer, sizeof...(Ts), parent, tags);
-        ParserResult result;
-        const auto writeElement = [&]<std::size_t I>() {
-            if (result) {
-                result = parserContext(
-                    parserWrite<W>(writer, std::get<I>(value), typename parsing::Parent<W>::Array{&array}),
-                    "Failed to write tuple element " + std::to_string(I) + ": ");
-            }
-        };
-        (writeElement.template operator()<Is>(), ...);
-        return result;
+        if constexpr (sizeof...(Ts) == 0) {
+            return sa::success();
+        } else {
+            ParserResult result;
+            const auto writeElement = [&]<std::size_t I>() {
+                if (result) {
+                    result = parserContext(
+                        parserWrite<W>(writer, std::get<I>(value), typename parsing::Parent<W>::Array{&array}),
+                        "Failed to write tuple element " + std::to_string(I) + ": ");
+                }
+            };
+            (writeElement.template operator()<Is>(), ...);
+            return result;
+        }
     }
 
     template <typename ParentType, typename Tags>
@@ -41,16 +45,21 @@ struct ReadParser<R, std::tuple<Ts...>, void> {
     using Tuple = std::tuple<Ts...>;
 
     template <std::size_t... Is>
-    static auto readImpl(const typename R::InputArrayType& array, Tuple& value, std::index_sequence<Is...>) -> ParserResult {
-        ParserResult result;
-        const auto readElement = [&]<std::size_t I>() {
-            if (result) {
-                result = parserContext(parserRead<R>(R::arrayElement(array, I), std::get<I>(value)),
-                                        "Failed to parse tuple element " + std::to_string(I) + ": ");
-            }
-        };
-        (readElement.template operator()<Is>(), ...);
-        return result;
+    static auto readImpl([[maybe_unused]] const typename R::InputArrayType& array, [[maybe_unused]] Tuple& value,
+                         std::index_sequence<Is...>) -> ParserResult {
+        if constexpr (sizeof...(Ts) == 0) {
+            return sa::success();
+        } else {
+            ParserResult result;
+            const auto readElement = [&]<std::size_t I>() {
+                if (result) {
+                    result = parserContext(parserRead<R>(R::arrayElement(array, I), std::get<I>(value)),
+                                            "Failed to parse tuple element " + std::to_string(I) + ": ");
+                }
+            };
+            (readElement.template operator()<Is>(), ...);
+            return result;
+        }
     }
 
     template <typename Tags>

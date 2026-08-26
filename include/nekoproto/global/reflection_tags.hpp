@@ -168,6 +168,11 @@ struct TagList {
     }
 };
 
+template <auto... A, auto... B>
+consteval auto operator+(TagList<A...>, TagList<B...>) {
+    return TagList<A..., B...>{};
+}
+
 template <typename T>
 struct IsTagList : std::false_type {};
 
@@ -181,17 +186,11 @@ namespace detail {
 
 template <std::size_t I, auto... Tags>
 struct TagListElement {
-    static_assert(nekoproto::always_false_v<std::integral_constant<std::size_t, I>>, "TagList index out of range");
+    static_assert(I < sizeof...(Tags), "TagList index out of range");
+    using tuple_type = std::tuple<decltype(Tags)...>;
+    using type       = std::tuple_element_t<I, tuple_type>;
+    constexpr static auto value = std::get<I>(std::tuple<decltype(Tags)...>{Tags...});
 };
-
-template <auto Head, auto... Tail>
-struct TagListElement<0, Head, Tail...> {
-    using type                  = decltype(Head);
-    constexpr static auto value = Head; // NOLINT
-};
-
-template <std::size_t I, auto Head, auto... Tail>
-struct TagListElement<I, Head, Tail...> : TagListElement<I - 1, Tail...> {};
 
 template <std::size_t I, auto... Tags>
 using tag_list_element_t = typename TagListElement<I, Tags...>::type;
@@ -228,12 +227,6 @@ constexpr auto tagHasType(const Tags& tags) -> bool;
 template <typename T, typename Tags>
 constexpr auto tagGetType(const Tags& tags) -> T;
 
-template <auto Tag>
-consteval auto flattenOneTag();
-
-template <auto... Tags>
-consteval auto flattenTags();
-
 template <auto... Left, auto... Right>
 consteval auto concatTagLists(TagList<Left...>, TagList<Right...>) {
     return TagList<Left..., Right...>{};
@@ -242,7 +235,13 @@ consteval auto concatTagLists(TagList<Left...>, TagList<Right...>) {
 template <auto Tag>
 consteval auto flattenOneTag() {
     if constexpr (is_tag_list_v<std::remove_cvref_t<decltype(Tag)>>) {
-        return []<auto... Inner>(TagList<Inner...>) consteval { return flattenTags<Inner...>(); }(Tag);
+        return []<auto... Inner>(TagList<Inner...>) consteval {
+            if constexpr (sizeof...(Inner) == 0) {
+                return TagList<>{};
+            } else {
+                return (flattenOneTag<Inner>() + ...);
+            }
+        }(Tag);
     } else {
         return TagList<Tag>{};
     }
@@ -253,14 +252,47 @@ consteval auto flattenTags() {
     if constexpr (sizeof...(Tags) == 0) {
         return TagList<>{};
     } else {
-        return []<auto Head, auto... Tail>() consteval {
-            if constexpr (sizeof...(Tail) == 0) {
-                return flattenOneTag<Head>();
-            } else {
-                return concatTagLists(flattenOneTag<Head>(), flattenTags<Tail...>());
-            }
-        }.template operator()<Tags...>();
+        return (flattenOneTag<Tags>() + ...);
     }
+}
+
+template <auto Tag, auto Target>
+inline constexpr bool is_same_tag_v = []() consteval {
+    if constexpr (!std::is_same_v<decltype(Tag), decltype(Target)>) {
+        return false;
+    } else {
+        return Tag == Target;
+    }
+}();
+
+template <auto Tag, auto... Accum>
+consteval auto appendUniqueTag(TagList<Accum...>) {
+    if constexpr (sizeof...(Accum) == 0) {
+        return TagList<Tag>{};
+    } else if constexpr ((is_same_tag_v<Tag, Accum> || ...)) {
+        return TagList<Accum...>{};
+    } else {
+        return TagList<Accum..., Tag>{};
+    }
+}
+
+template <typename Acc, auto... Rest>
+struct DedupFold;
+
+template <typename Acc>
+struct DedupFold<Acc> {
+    using type = Acc;
+};
+
+template <typename Acc, auto Head, auto... Tail>
+struct DedupFold<Acc, Head, Tail...> {
+    using next_acc = decltype(appendUniqueTag<Head>(Acc{}));
+    using type     = typename DedupFold<next_acc, Tail...>::type;
+};
+
+template <auto... Tags>
+consteval auto deduplicateTags(TagList<Tags...>) {
+    return typename DedupFold<TagList<>, Tags...>::type{};
 }
 
 template <typename List>
@@ -281,7 +313,8 @@ struct NormalizeTagList<TagList<Tags...>> {
 template <auto... Tags>
 struct NormalizeTags {
     using flattened             = decltype(flattenTags<Tags...>());
-    constexpr static auto value = NormalizeTagList<flattened>::value;
+    using dedup                 = decltype(deduplicateTags(flattened{}));
+    constexpr static auto value = NormalizeTagList<dedup>::value;
 };
 
 template <auto... Tags>

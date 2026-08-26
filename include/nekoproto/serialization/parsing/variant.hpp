@@ -12,22 +12,22 @@
 namespace nekoproto {
 namespace detail {
 
+template <auto Tag>
+consteval auto filterUnionPayloadOneTag() {
+    if constexpr (std::is_same_v<std::remove_cvref_t<decltype(Tag)>, UnionTag>) {
+        return TagList<>{};
+    } else {
+        return TagList<Tag>{};
+    }
+}
+
 template <auto... Tags>
-struct UnionPayloadTagList;
-
-template <>
-struct UnionPayloadTagList<> {
-    constexpr static auto value = TagList<>{};
-};
-
-template <auto Head, auto... Tail>
-struct UnionPayloadTagList<Head, Tail...> {
-    constexpr static auto tail  = UnionPayloadTagList<Tail...>::value;
+struct UnionPayloadTagList {
     constexpr static auto value = []() consteval {
-        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(Head)>, UnionTag>) {
-            return tail;
+        if constexpr (sizeof...(Tags) == 0) {
+            return TagList<>{};
         } else {
-            return concatTagLists(TagList<Head>{}, tail);
+            return (filterUnionPayloadOneTag<Tags>() + ...);
         }
     }();
 };
@@ -81,16 +81,16 @@ template <typename W, typename... Ts>
 struct WriteParser<W, std::variant<Ts...>, void> {
     using Variant = std::variant<Ts...>;
 
-    template <std::size_t I = 0, typename ParentType, typename Tags>
+    template <typename ParentType, typename Tags>
     static auto writeActive(W& writer, const Variant& value, const ParentType& parent, const Tags& tags) -> ParserResult {
-        if constexpr (I >= sizeof...(Ts)) {
-            return makeParserError(sa::ErrorCode::InvalidIndex, "Variant active index is out of range");
-        } else {
-            if (value.index() == I) {
-                return parserWrite<W>(writer, std::get<I>(value), parent, tags);
-            }
-            return writeActive<I + 1>(writer, value, parent, tags);
+        if (value.valueless_by_exception()) {
+            return makeParserError(sa::ErrorCode::InvalidIndex, "Variant is valueless by exception");
         }
+        return std::visit(
+            [&](const auto& active) -> ParserResult {
+                return parserWrite<W>(writer, active, parent, tags);
+            },
+            value);
     }
 
     template <typename ParentType, typename Tags>
@@ -132,17 +132,19 @@ struct ReadParser<R, std::variant<Ts...>, void> {
         }
     }
 
-    template <std::size_t I = 0, typename Tags>
+    template <typename Tags>
     static void findAlternatives(typename R::InputValueType in, const Tags& tags, std::size_t& matchCount,
                                  std::size_t& matchIndex) {
-        if constexpr (I < sizeof...(Ts)) {
+        auto check = [&]<std::size_t I>() {
             using Alt = std::variant_alternative_t<I, Variant>;
             if (tryAlternative<Alt>(in, tags)) {
                 ++matchCount;
                 matchIndex = I;
             }
-            findAlternatives<I + 1>(in, tags, matchCount, matchIndex);
-        }
+        };
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            (check.template operator()<Is>(), ...);
+        }(std::index_sequence_for<Ts...>{});
     }
 
     template <typename Tags>
@@ -159,24 +161,26 @@ struct ReadParser<R, std::variant<Ts...>, void> {
         return readAlternative(matchIndex, in, value, tags);
     }
 
-    template <std::size_t I = 0, typename Tags>
+    template <typename Tags>
     static auto readAlternative(std::size_t index, typename R::InputValueType in, Variant& value,
-                                        const Tags& tags) -> ParserResult {
-        if constexpr (I >= sizeof...(Ts)) {
-            return makeParserError(sa::ErrorCode::InvalidIndex, "Variant alternative index is out of range");
-        } else {
+                                const Tags& tags) -> ParserResult {
+        ParserResult result = makeParserError(sa::ErrorCode::InvalidIndex, "Variant alternative index is out of range");
+        auto tryRead = [&]<std::size_t I>() {
             if (index == I) {
                 using Alt = std::variant_alternative_t<I, Variant>;
                 Alt tmp{};
-                auto result = parserRead<R>(in, tmp, tags);
+                result = parserRead<R>(in, tmp, tags);
                 if (!result) {
-                    return parserContext(std::move(result), "Failed to parse variant alternative: ");
+                    result = parserContext(std::move(result), "Failed to parse variant alternative: ");
+                } else {
+                    value = std::move(tmp);
                 }
-                value = std::move(tmp);
-                return result;
             }
-            return readAlternative<I + 1>(index, in, value, tags);
-        }
+        };
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            (tryRead.template operator()<Is>(), ...);
+        }(std::index_sequence_for<Ts...>{});
+        return result;
     }
 
     template <typename Tags>

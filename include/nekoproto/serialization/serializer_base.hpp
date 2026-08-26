@@ -316,26 +316,18 @@ struct MakeNamesImpl {
     constexpr static std::array names = parseNames<N>(NamesStr.view());
 };
 
-template <typename T>
-constexpr auto serializerUnwrapMemberRef(T&& value) noexcept -> decltype(auto) {
-    return nekoproto::fieldAccessor(std::forward<T>(value));
-}
-
 template <typename... Args>
 constexpr auto serializerMemberTuple(Args&&... args) noexcept {
-    return std::forward_as_tuple(serializerUnwrapMemberRef(std::forward<Args>(args))...);
+    return std::forward_as_tuple(nekoproto::fieldAccessor(std::forward<Args>(args))...);
 }
 
-template <std::size_t N, typename... Args>
-constexpr auto serializerGetMemberReference(Args&&... args) noexcept -> decltype(auto) {
-    auto tuple = serializerMemberTuple(std::forward<Args>(args)...);
-    return std::get<N>(tuple);
-}
-
-template <typename Spec, std::size_t /*I*/, typename Accessor>
-constexpr auto serializerMakeAccessor(Accessor accessor) noexcept {
-    return accessor;
-}
+template <std::size_t I>
+struct NekoMemberIndexAccessor {
+    template <typename Self>
+    constexpr auto operator()(Self&& self) const -> decltype(auto) {
+        return std::get<I>(std::forward<Self>(self)._nekoMemberTuple());
+    }
+};
 
 template <typename Spec>
 constexpr auto serializerMakeTags() noexcept {
@@ -368,16 +360,8 @@ constexpr auto serializerMakeTags() noexcept {
  */
 #define NEKO_SERIALIZER(...)                                                                                           \
 public:                                                                                                                \
-    constexpr auto nekoMemberTuple() noexcept { return nekoproto::detail::serializerMemberTuple(__VA_ARGS__); }        \
-    constexpr auto nekoMemberTuple() const noexcept { return nekoproto::detail::serializerMemberTuple(__VA_ARGS__); }  \
-    template <int N>                                                                                                   \
-    constexpr auto nekoGetMemberReference() noexcept -> decltype(auto) {                                               \
-        return std::get<N>(nekoMemberTuple());                                                                         \
-    }                                                                                                                  \
-    template <int N>                                                                                                   \
-    constexpr auto nekoGetMemberReference() const noexcept -> decltype(auto) {                                         \
-        return std::get<N>(nekoMemberTuple());                                                                         \
-    }                                                                                                                  \
+    constexpr auto _nekoMemberTuple() noexcept { return nekoproto::detail::serializerMemberTuple(__VA_ARGS__); }       \
+    constexpr auto _nekoMemberTuple() const noexcept { return nekoproto::detail::serializerMemberTuple(__VA_ARGS__); } \
     struct NekoSerializerArgsHelper {                                                                                  \
         using tuple = decltype(std::forward_as_tuple(__VA_ARGS__));                                                    \
     };                                                                                                                 \
@@ -386,9 +370,7 @@ public:                                                                         
         constexpr static std::array names =                                                                            \
             nekoproto::detail::MakeNamesImpl<#__VA_ARGS__, NEKO_VA_ARGS_SIZE(__VA_ARGS__)>::names;                     \
         constexpr static auto values = []<std::size_t... Is>(std::index_sequence<Is...>) {                             \
-            return std::tuple{                                                                                         \
-                nekoproto::detail::serializerMakeAccessor<std::tuple_element_t<Is, NekoSerializerArgsTuple>, Is>(      \
-                    [](auto&& self) -> decltype(auto) { return self.template nekoGetMemberReference<Is>(); })...};     \
+            return std::tuple{nekoproto::detail::NekoMemberIndexAccessor<Is>{}...};                                    \
         }(std::make_index_sequence<NEKO_VA_ARGS_SIZE(__VA_ARGS__)>{});                                                 \
         constexpr static auto field_tags = []<std::size_t... Is>(std::index_sequence<Is...>) {                         \
             return std::tuple{                                                                                         \

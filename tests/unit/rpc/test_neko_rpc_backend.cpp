@@ -199,7 +199,7 @@ TEST(NekoRpcBackend, CallsThroughIliasDuplexStreamEndpoint) {
     ASSERT_TRUE(result.has_value()) << result.error().message();
     EXPECT_EQ(result.value(), 42);
 
-    auto result2 = client->rpc.getMethodInfoList().wait();
+    auto result2 = client->rpc.get_method_info_list().wait();
     ASSERT_TRUE(result2.has_value()) << result2.error().message();
     EXPECT_EQ(result2.value().size(), 2 + (RpcServer<BinaryRpcBackend>::BuiltinMethodsCount));
     for (auto& method : result2.value()) {
@@ -268,9 +268,9 @@ TEST(NekoRpcBackend, ConnectionTaskQueriesAreCurrentOnlyConnectionScopedAndNotPr
     auto active = ilias::spawn(client->add(60, 1));
     ASSERT_TRUE(waitUntil([&] { return server.metrics().active == 1U; }));
 
-    auto tasksQuery = ilias::spawn(client->rpc.getConnectionTasks());
+    auto tasksQuery = ilias::spawn(client->rpc.get_connection_tasks());
     ASSERT_TRUE(waitUntil([&] { return server.metrics().queued == 1U; }));
-    auto statusQuery = ilias::spawn(client->rpc.getConnectionStatus());
+    auto statusQuery = ilias::spawn(client->rpc.get_connection_status());
     ASSERT_TRUE(waitUntil([&] { return server.metrics().queued == 2U; }));
     auto later = ilias::spawn(client->add(0, 2));
     ASSERT_TRUE(waitUntil([&] { return server.metrics().queued == 3U; }));
@@ -302,8 +302,8 @@ TEST(NekoRpcBackend, ConnectionTaskQueriesAreCurrentOnlyConnectionScopedAndNotPr
     EXPECT_EQ(activeResult->value(), 1);
     EXPECT_EQ(laterResult->value(), 2);
 
-    auto emptyStatus = client->rpc.getConnectionStatus().wait();
-    auto emptyTasks = client->rpc.getConnectionTasks().wait();
+    auto emptyStatus = client->rpc.get_connection_status().wait();
+    auto emptyTasks = client->rpc.get_connection_tasks().wait();
     ASSERT_TRUE(emptyStatus.has_value()) << emptyStatus.error().message();
     ASSERT_TRUE(emptyTasks.has_value()) << emptyTasks.error().message();
     EXPECT_EQ(emptyStatus->at("active"), 0U);
@@ -337,13 +337,13 @@ TEST(NekoRpcBackend, ConnectionTaskQueriesDoNotExposeOtherConnections) {
     auto otherConnectionCall = ilias::spawn(first->add(60, 7));
     ASSERT_TRUE(waitUntil([&] { return server.metrics().active == 1U; }));
 
-    auto status = second->rpc.getConnectionStatus().wait();
+    auto status = second->rpc.get_connection_status().wait();
     ASSERT_TRUE(status.has_value()) << status.error().message();
     EXPECT_EQ(status->at("active"), 0U);
     EXPECT_EQ(status->at("queued"), 0U);
     EXPECT_EQ(status->at("in_flight"), 0U);
 
-    auto tasks = second->rpc.getConnectionTasks().wait();
+    auto tasks = second->rpc.get_connection_tasks().wait();
     ASSERT_TRUE(tasks.has_value()) << tasks.error().message();
     EXPECT_TRUE(tasks->empty());
 
@@ -375,25 +375,25 @@ TEST(NekoRpcBackend, ConnectionTimeoutSettingHonorsBoundariesAndAppliesOnlyToFut
         co_return value;
     };
 
-    auto initialPolicy = first->rpc.getExecutionPolicy().wait();
+    auto initialPolicy = first->rpc.get_execution_policy().wait();
     ASSERT_TRUE(initialPolicy.has_value()) << initialPolicy.error().message();
     EXPECT_EQ(initialPolicy->at("limits.connection_timeout_ns"), "none");
     EXPECT_EQ(initialPolicy->at("limits.connection_timeout_min_inclusive_ns"), "1");
     EXPECT_EQ(initialPolicy->at("limits.connection_timeout_max_exclusive_ns"), "200000000");
 
-    auto equalToServerLimit = first->rpc.setConnectionTimeout(200'000'000U).wait();
+    auto equalToServerLimit = first->rpc.set_connection_timeout(200'000'000U).wait();
     ASSERT_FALSE(equalToServerLimit.has_value());
     EXPECT_EQ(equalToServerLimit.error(), makeErrorCode(RpcError::InvalidParams));
     auto tooLargeForDuration =
-        first->rpc.setConnectionTimeout(std::numeric_limits<std::uint64_t>::max()).wait();
+        first->rpc.set_connection_timeout(std::numeric_limits<std::uint64_t>::max()).wait();
     ASSERT_FALSE(tooLargeForDuration.has_value());
     EXPECT_EQ(tooLargeForDuration.error(), makeErrorCode(RpcError::InvalidParams));
 
-    auto clearAtZero = first->rpc.setConnectionTimeout(0U).wait();
+    auto clearAtZero = first->rpc.set_connection_timeout(0U).wait();
     ASSERT_TRUE(clearAtZero.has_value()) << clearAtZero.error().message();
     EXPECT_EQ(clearAtZero.value(), 0U);
 
-    auto rightBoundary = first->rpc.setConnectionTimeout(199'999'999U).wait();
+    auto rightBoundary = first->rpc.set_connection_timeout(199'999'999U).wait();
     ASSERT_TRUE(rightBoundary.has_value()) << rightBoundary.error().message();
     EXPECT_EQ(rightBoundary.value(), 199'999'999U);
     auto ordinaryCall = first->add(20, 7).wait();
@@ -402,14 +402,14 @@ TEST(NekoRpcBackend, ConnectionTimeoutSettingHonorsBoundariesAndAppliesOnlyToFut
 
     auto admittedBeforeChange = ilias::spawn(first->add(90, 17));
     ASSERT_TRUE(waitUntil([&] { return server.metrics().active == 1U; }));
-    auto middleValue = first->rpc.setConnectionTimeout(50'000'000U).wait();
+    auto middleValue = first->rpc.set_connection_timeout(50'000'000U).wait();
     ASSERT_TRUE(middleValue.has_value()) << middleValue.error().message();
     auto admittedBeforeChangeResult = admittedBeforeChange.wait();
     ASSERT_TRUE(admittedBeforeChangeResult.has_value());
     ASSERT_TRUE(admittedBeforeChangeResult->has_value()) << admittedBeforeChangeResult->error().message();
     EXPECT_EQ(admittedBeforeChangeResult->value(), 17);
-    auto firstPolicy = first->rpc.getExecutionPolicy().wait();
-    auto secondPolicy = second->rpc.getExecutionPolicy().wait();
+    auto firstPolicy = first->rpc.get_execution_policy().wait();
+    auto secondPolicy = second->rpc.get_execution_policy().wait();
     ASSERT_TRUE(firstPolicy.has_value()) << firstPolicy.error().message();
     ASSERT_TRUE(secondPolicy.has_value()) << secondPolicy.error().message();
     EXPECT_EQ(firstPolicy->at("limits.connection_timeout_ns"), "50000000");
@@ -419,10 +419,10 @@ TEST(NekoRpcBackend, ConnectionTimeoutSettingHonorsBoundariesAndAppliesOnlyToFut
     ASSERT_FALSE(exceedsConnectionTimeout.has_value());
     EXPECT_EQ(exceedsConnectionTimeout.error(), makeErrorCode(RpcError::DeadlineExceeded));
 
-    auto randomOutOfRange = first->rpc.setConnectionTimeout(731'245'987U).wait();
+    auto randomOutOfRange = first->rpc.set_connection_timeout(731'245'987U).wait();
     ASSERT_FALSE(randomOutOfRange.has_value());
     EXPECT_EQ(randomOutOfRange.error(), makeErrorCode(RpcError::InvalidParams));
-    auto leftBoundary = first->rpc.setConnectionTimeout(1U).wait();
+    auto leftBoundary = first->rpc.set_connection_timeout(1U).wait();
     ASSERT_TRUE(leftBoundary.has_value()) << leftBoundary.error().message();
     auto immediateTimeout = first->add(10, 9).wait();
     ASSERT_FALSE(immediateTimeout.has_value());
@@ -1365,7 +1365,7 @@ TEST(NekoRpcBackend, MethodIdTableRefreshAddsMethodWithinConnection) {
 
     server.bindMethod("late", traits::FunctionT<ilias::IoTask<int>(int, int)>(
                                   [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; }));
-    auto drained = client->rpc.getMethodList().wait();
+    auto drained = client->rpc.get_method_list().wait();
     ASSERT_TRUE(drained.has_value()) << drained.error().message();
 
     auto late = client.callRemote<int>("late", 20, 22).wait();
@@ -1469,7 +1469,7 @@ TEST(NekoRpcBackend, BuiltinMethodsAvailableOnClientByDefault) {
     RpcClient<BinaryRpcBackend> client{context};
     connectEndpoint(server, client);
 
-    auto methods = client->rpc.getMethodList().wait();
+    auto methods = client->rpc.get_method_list().wait();
     ASSERT_TRUE(methods.has_value()) << methods.error().message();
     EXPECT_TRUE(contains(methods.value(), "rpc.get_method_list"));
     EXPECT_TRUE(contains(methods.value(), "rpc.get_method_info"));
@@ -1480,22 +1480,22 @@ TEST(NekoRpcBackend, BuiltinMethodsAvailableOnClientByDefault) {
     EXPECT_TRUE(contains(methods.value(), "rpc.get_connection_status"));
     EXPECT_TRUE(contains(methods.value(), "rpc.get_connection_tasks"));
 
-    auto method_info = client->rpc.getMethodInfo("rpc.get_method_list").wait();
+    auto method_info = client->rpc.get_method_info("rpc.get_method_list").wait();
     ASSERT_TRUE(method_info.has_value()) << method_info.error().message();
 
-    auto statusMethodInfo = client->rpc.getMethodInfo("rpc.get_connection_status").wait();
-    auto tasksMethodInfo = client->rpc.getMethodInfo("rpc.get_connection_tasks").wait();
+    auto statusMethodInfo = client->rpc.get_method_info("rpc.get_connection_status").wait();
+    auto tasksMethodInfo = client->rpc.get_method_info("rpc.get_connection_tasks").wait();
     ASSERT_TRUE(statusMethodInfo.has_value()) << statusMethodInfo.error().message();
     ASSERT_TRUE(tasksMethodInfo.has_value()) << tasksMethodInfo.error().message();
     EXPECT_NE(statusMethodInfo->find("map<string, u64> rpc.get_connection_status()"), std::string::npos);
     EXPECT_NE(tasksMethodInfo->find("map<string, string> rpc.get_connection_tasks()"), std::string::npos);
 
-    auto bound_methods = client->rpc.getBindedMethodList().wait();
+    auto bound_methods = client->rpc.get_binded_method_list().wait();
     ASSERT_TRUE(bound_methods.has_value()) << bound_methods.error().message();
     EXPECT_TRUE(contains(bound_methods.value(), "rpc.get_method_list"));
     EXPECT_TRUE(contains(bound_methods.value(), "rpc.get_bind_method_list"));
 
-    auto policy = client->rpc.getExecutionPolicy().wait();
+    auto policy = client->rpc.get_execution_policy().wait();
     ASSERT_TRUE(policy.has_value()) << policy.error().message();
     EXPECT_EQ(policy->at("privacy_scope"), "per_client_contract_only");
     EXPECT_EQ(policy->at("deadline.propagation"), "connection_timeout_builtin_and_client_cancel");
@@ -1512,13 +1512,13 @@ TEST(NekoRpcBackend, BuiltinMethodsAvailableOnClientByDefault) {
 
     const auto oneDay = static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::hours(24)).count());
-    auto longTimeout = client->rpc.setConnectionTimeout(oneDay).wait();
+    auto longTimeout = client->rpc.set_connection_timeout(oneDay).wait();
     ASSERT_TRUE(longTimeout.has_value()) << longTimeout.error().message();
     EXPECT_EQ(longTimeout.value(), oneDay);
-    auto longTimeoutPolicy = client->rpc.getExecutionPolicy().wait();
+    auto longTimeoutPolicy = client->rpc.get_execution_policy().wait();
     ASSERT_TRUE(longTimeoutPolicy.has_value()) << longTimeoutPolicy.error().message();
     EXPECT_EQ(longTimeoutPolicy->at("limits.connection_timeout_ns"), std::to_string(oneDay));
-    auto clearedTimeout = client->rpc.setConnectionTimeout(0U).wait();
+    auto clearedTimeout = client->rpc.set_connection_timeout(0U).wait();
     ASSERT_TRUE(clearedTimeout.has_value()) << clearedTimeout.error().message();
 
     client.close();

@@ -81,23 +81,34 @@ enum MessageType {
  */
 class NEKO_PROTO_API MessageHeader {
 public:
-    MessageHeader(uint32_t length = 0, int32_t data = 0, uint16_t messageType = 0)
-        : length(length), data(data), messageType(messageType) {}
+    MessageHeader(uint32_t length = 0, int32_t data = 0, uint16_t message_type = 0)
+        : length(length), data(data), message_type(message_type) {}
     static auto size() -> int { return 10; }
     uint32_t length = 0; // 4 : the length of the message, no't contain the header
     int32_t data    = 0; // 4 : the proto type of this message in Complete message or the slice index in Slice message
-    uint16_t messageType = 0; // 2 : the type of this message
+    uint16_t message_type = 0; // 2 : the type of this message
 
-    NEKO_SERIALIZER(makeTags<BinaryTag{.fixed_length = sizeof(uint32_t)}>(length),
-                    makeTags<BinaryTag{.fixed_length = sizeof(int32_t)}>(data),
-                    makeTags<BinaryTag{.fixed_length = sizeof(uint16_t)}>(messageType))
+    // clang-format off
+    struct Neko {
+        static constexpr auto value = Object(
+            "length",      makeTags<BinaryTag{.fixed_length = sizeof(uint32_t)}>(&MessageHeader::length), 
+            "data",        makeTags<BinaryTag{.fixed_length = sizeof(int32_t)}>(&MessageHeader::data), 
+            "messageType", makeTags<BinaryTag{.fixed_length = sizeof(uint16_t)}>(&MessageHeader::message_type));
+    };
+    // clang-format on
 };
 
 struct ProtocolTable {
-    uint32_t protocolFactoryVersion            = 0;
-    std::map<uint32_t, std::string> protoTable = {};
+    uint32_t protocol_factory_version           = 0;
+    std::map<uint32_t, std::string> proto_table = {};
 
-    NEKO_SERIALIZER(protocolFactoryVersion, protoTable)
+    // clang-format off
+    struct Neko {
+        static constexpr auto value = Object(
+            "protocol_factory_version", &ProtocolTable::protocol_factory_version, 
+            "proto_table",              &ProtocolTable::proto_table);
+    };
+    // clang-format on
     NEKO_DECLARE_PROTOCOL(ProtocolTable, BinarySerializer)
 private:
     static auto specifyType() -> int { return 2; }
@@ -112,9 +123,18 @@ struct RawDataMessage {
     std::string name;
     std::vector<std::byte> data;
 
-    NEKO_SERIALIZER(length, type, name, data)
+    // clang-format off
+    struct Neko {
+        static constexpr auto value = Object(
+            "length",      &RawDataMessage::length, 
+            "type",        &RawDataMessage::type,
+            "name",        &RawDataMessage::name,
+            "data",        &RawDataMessage::data);
+    };
+    // clang-format on
     NEKO_DECLARE_PROTOCOL(RawDataMessage, BinarySerializer)
     static auto specifyType() -> int { return 3; }
+
 private:
     friend class detail::ProtoMethodAccess;
 };
@@ -250,10 +270,10 @@ inline auto ProtoClientBase::serializeHeader(const MessageHeader& header) const 
 inline auto ProtoClientBase::serializeVersionPacket() const -> IoTask<std::vector<char>> {
     ProtocolTable protocolTable = {};
     if (mFactory != nullptr) {
-        protocolTable.protocolFactoryVersion = mFactory->version();
+        protocolTable.protocol_factory_version = mFactory->version();
         for (const auto& [name, type] : ProtoFactory::protoTypeMap()) {
             if (type > reserved_proto_type_size) {
-                protocolTable.protoTable[type] = name;
+                protocolTable.proto_table[type] = name;
             }
         }
     }
@@ -288,14 +308,14 @@ inline auto ProtoClientBase::syncProtocolTable(std::span<std::byte> payload, con
     }
 
     auto* protoTable = proto.cast<ProtocolTable>();
-    if (mFactory != nullptr && protoTable->protocolFactoryVersion != mFactory->version()) {
-        NEKO_LOG_WARN("Communication", "ProtoFactory version mismatch: {} != {}", protoTable->protocolFactoryVersion,
+    if (mFactory != nullptr && protoTable->protocol_factory_version != mFactory->version()) {
+        NEKO_LOG_WARN("Communication", "ProtoFactory version mismatch: {} != {}", protoTable->protocol_factory_version,
                       mFactory->version());
     }
     mProtocolTable = *protoTable;
     NEKO_LOG_INFO("Communication", "sync message proto table, version: {}. size: {}",
-                  mProtocolTable.protocolFactoryVersion, mProtocolTable.protoTable.size());
-    for (const auto& [type, name] : mProtocolTable.protoTable) {
+                  mProtocolTable.protocol_factory_version, mProtocolTable.proto_table.size());
+    for (const auto& [type, name] : mProtocolTable.proto_table) {
         NEKO_LOG_INFO("Communication", "Proto table: {} -> {}", name, type);
     }
     co_return {};
@@ -309,7 +329,7 @@ inline auto ProtoClientBase::finishMessage(IProto message, const MessageHeader& 
             auto* proto   = rawData.cast<RawDataMessage>();
             proto->type   = header.data;
             proto->length = header.length;
-            proto->name   = mProtocolTable.protoTable[header.data];
+            proto->name   = mProtocolTable.proto_table[header.data];
             proto->data   = std::move(payload);
             co_return rawData;
         }
@@ -334,11 +354,11 @@ inline auto ProtoClientBase::createProto(const uint32_t type) const -> IProto {
     if (mFactory == nullptr) {
         return {};
     }
-    if (type <= reserved_proto_type_size || mProtocolTable.protoTable.empty()) {
+    if (type <= reserved_proto_type_size || mProtocolTable.proto_table.empty()) {
         return mFactory->create(type);
     }
-    auto it = mProtocolTable.protoTable.find(type);
-    if (it != mProtocolTable.protoTable.end()) {
+    auto it = mProtocolTable.proto_table.find(type);
+    if (it != mProtocolTable.proto_table.end()) {
         return mFactory->create(it->second.c_str());
     }
     return {};
@@ -476,8 +496,7 @@ inline auto ProtoStreamClient<T>::send(const IProto& message, StreamFlag flag) -
     memcpy(messageData.data(), headerData.data(), headerData.size());
     NEKO_LOG_INFO("Communication", "Send header: message type: Complete proto type: {} length: {}", message.type(),
                   messageData.size() - MessageHeader::size());
-    co_return co_await (sendRaw({reinterpret_cast<std::byte*>(messageData.data()), messageData.size()}) |
-                        unstoppable);
+    co_return co_await (sendRaw({reinterpret_cast<std::byte*>(messageData.data()), messageData.size()}) | unstoppable);
 }
 
 template <CommunicationStream T>
@@ -511,7 +530,7 @@ inline auto ProtoStreamClient<T>::recv(StreamFlag flag) -> IoTask<IProto> {
             co_return Err(Error(ErrorCode::InvalidMessageHeader));
         }
 
-        switch (mHeader.messageType) {
+        switch (mHeader.message_type) {
         case MessageType::Cancel:
             NEKO_LOG_INFO("Communication", "recv header: message type: Cancel");
             mBuffer.clear();
@@ -565,7 +584,7 @@ inline auto ProtoStreamClient<T>::recv(StreamFlag flag) -> IoTask<IProto> {
             break;
         default:
             NEKO_LOG_ERROR("Communication", "Recv unsupported message type: {}.",
-                           static_cast<int>(mHeader.messageType));
+                           static_cast<int>(mHeader.message_type));
             co_return Err(Error(ErrorCode::InvalidMessageHeader));
         }
     }
@@ -836,7 +855,7 @@ inline auto ProtoDatagramClient<T>::recv(StreamFlag flag) -> IoTask<std::pair<IP
             co_return Err(Error(ErrorCode::InvalidMessageHeader));
         }
 
-        switch (header.messageType) {
+        switch (header.message_type) {
         case MessageType::VersionVerification: {
             NEKO_LOG_INFO("Communication", "recv header: message type: VersionVerification, lenght: {}", header.length);
             std::span<std::byte> payload(mBuffer.data() + MessageHeader::size(), recvSize - MessageHeader::size());
@@ -868,7 +887,8 @@ inline auto ProtoDatagramClient<T>::recv(StreamFlag flag) -> IoTask<std::pair<IP
         case MessageType::SliceHeader:
         case MessageType::Slice:
         default:
-            NEKO_LOG_ERROR("Communication", "Recv unsupported message type: {}.", static_cast<int>(header.messageType));
+            NEKO_LOG_ERROR("Communication", "Recv unsupported message type: {}.",
+                           static_cast<int>(header.message_type));
             co_return Err(Error(ErrorCode::InvalidMessageHeader));
         }
     }

@@ -667,7 +667,7 @@ Common call patterns:
 *   `server.bindMethod("name", func)` / `server.bindMethod<func>()`: Dynamically register an extra method.
 *   `client->calc.add(1, 2)`: Call a remote method through the C++ protocol path.
 *   `client.callRemote<int>("calc.add", 1, 2)`: Dynamically call by remote method name.
-*   `client->rpc.getMethodList()`: Call the built-in introspection methods.
+*   `client->rpc.get_method_list()`: Call the built-in introspection methods.
 *   `client.notifyRemote<void>("name", args...)` or `client->method.notification(args...)`: Send a notification.
 *   `server.processMessage(bytes)` / `server.callMethod(json)`: Process one complete message without owning a connection. This is useful for tests, stdio, pipes, or custom dispatch.
 
@@ -679,7 +679,7 @@ Servers and clients include a default `rpc` member for built-in introspection. I
 *   `rpc.get_method_info_list`: Get descriptions for all methods.
 
 ```cpp
-auto methods = client->rpc.getMethodList().wait();
+auto methods = client->rpc.get_method_list().wait();
 auto info = client->rpc.getMethodInfo("calc.add").wait();
 ```
 

@@ -84,30 +84,32 @@ struct TypeName {
 };
 
 template <typename RawParamsType, std::size_t... Is>
-constexpr auto parameterToString(std::index_sequence<Is...> /*unused*/,
-                                   const std::vector<std::string>& names = {})
+inline auto parameterToString(std::index_sequence<Is...> /*unused*/,
+                              const std::vector<std::string>& names = {})
     -> std::string {
     if constexpr (sizeof...(Is) == 0) {
+        (void)names;
         return "";
+    } else {
+        std::string result;
+        auto append_param = [&](auto idx) {
+            constexpr size_t Idx = idx;
+            using param_type     = std::tuple_element_t<Idx, RawParamsType>;
+
+            if (names.size() == sizeof...(Is)) {
+                result += TypeName<param_type>::name() + " " + std::string(names[Idx]);
+            } else {
+                result += TypeName<param_type>::name();
+            }
+
+            if constexpr (Idx < sizeof...(Is) - 1) {
+                result += ", ";
+            }
+        };
+        (append_param(std::integral_constant<size_t, Is>{}), ...);
+        return result;
     }
-    std::string result;
-    auto append_param = [&](auto idx) {
-        constexpr size_t Idx = idx;
-        using param_type     = std::tuple_element_t<Idx, RawParamsType>;
-
-        if (names.size() == sizeof...(Is)) {
-            result += TypeName<param_type>::name() + " " + std::string(names[Idx]);
-        } else {
-            result += TypeName<param_type>::name();
-        }
-
-        if constexpr (Idx < sizeof...(Is) - 1) {
-            result += ", ";
-        }
-    };
-    (append_param(std::integral_constant<size_t, Is>{}), ...);
-    return result;
-};
+}
 
 template <typename T>
 struct TypeName<std::optional<T>, void> {

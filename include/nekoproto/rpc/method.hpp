@@ -308,29 +308,28 @@ public:
 //   RpcMethodFN<&Class::method, Class, "arg"> method;
 template <auto Ptr, typename T, ConstexprString... ArgNames>
 class RpcMethodFN : public RpcMethodDynamic<decltype(Ptr)> {
-    constexpr static std::string_view seq = ".";
+    constexpr static std::string_view Seq = ".";
 
 public:
-    constexpr static std::string_view method_name =
-        detail::join<detail::class_nameof<T>, seq, detail::func_nameof<Ptr>>;
-    constexpr static std::string_view MethodName = method_name;
+    constexpr static std::string_view MethodName =
+        detail::join<detail::class_nameof<T>, Seq, detail::func_nameof<Ptr>>;
 
     RpcMethodFN()
         : RpcMethodDynamic<decltype(Ptr)>(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
-                                          method_name) {
+                                          MethodName) {
         this->operator=(Ptr);
     }
 
     explicit RpcMethodFN(bool is_notification)
         : RpcMethodDynamic<decltype(Ptr)>(std::array<std::string_view, sizeof...(ArgNames)>{ArgNames.view()...},
-                                          method_name, is_notification) {
+                                          MethodName, is_notification) {
         this->operator=(Ptr);
     }
 
     using RpcMethodDynamic<decltype(Ptr)>::operator=;
 };
 
-template <typename T, class enable = void>
+template <typename T, class Enable = void>
 struct IsRpcMethod : std::false_type {};
 
 template <typename T>

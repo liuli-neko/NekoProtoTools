@@ -651,7 +651,7 @@ int main() {
 *   `server.bindMethod("name", func)` / `server.bindMethod<func>()`：动态注册额外方法。
 *   `client->calc.add(1, 2)`：通过协议集合的 C++ 路径调用远端方法。
 *   `client.callRemote<int>("calc.add", 1, 2)`：按远端方法名动态调用。
-*   `client->rpc.getMethodList()`：调用默认内建 introspection 方法。
+*   `client->rpc.get_method_list()`：调用默认内建 introspection 方法。
 *   `client.notifyRemote<void>("name", args...)` 或 `client->method.notification(args...)`：发送 notification。
 *   `server.processMessage(bytes)` / `server.callMethod(json)`：无连接地处理单条完整消息，适合测试、stdio、pipe 或自定义调度。
 
@@ -663,7 +663,7 @@ server/client 都默认带一个 `rpc` 成员，用于内建 introspection。它
 *   `rpc.get_method_info_list`: 获取所有方法的描述。
 
 ```cpp
-auto methods = client->rpc.getMethodList().wait();
+auto methods = client->rpc.get_method_list().wait();
 auto info = client->rpc.getMethodInfo("calc.add").wait();
 ```
 

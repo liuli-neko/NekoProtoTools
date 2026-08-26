@@ -60,14 +60,10 @@ void forEachRpcMethod(T& protocol, Fn&& fn, std::string_view prefix = {}) {
     if constexpr (RpcMethodObject<T>) {
         rpcVisitMethod(protocol, std::string_view{}, RpcPropertyPatch{}, prefix, fn);
     } else if constexpr (RpcReflectable<T>) {
-        auto with_name = [&]<typename Field, typename Tags>(Field& field, std::string_view field_name,
-                                                            const Tags& tags) {
-            rpcVisitField(field, field_name, tags, prefix, fn);
-        };
-        auto without_name = [&]<typename Field, typename Tags>(Field& field, const Tags& tags) {
-            rpcVisitField(field, std::string_view{}, tags, prefix, fn);
-        };
-        Reflect<std::remove_cvref_t<T>>::forEach(protocol, Overloads{with_name, without_name});
+        Reflect<std::remove_cvref_t<T>>::visitFull(
+            protocol, [&](auto& field, std::string_view field_name, const auto& tags) {
+                rpcVisitField(field, field_name, tags, prefix, fn);
+            });
     } else {
         static_assert(RpcMethodObject<T> || RpcReflectable<T>, "RPC protocol type must be reflectable");
     }

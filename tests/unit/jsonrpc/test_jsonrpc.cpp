@@ -34,17 +34,18 @@ struct Copytest {
     }
     ~Copytest() { std::cout << "destruct" << std::endl; }
 
-    int a;
+    int a = 0;
+};
 
-    NEKO_SERIALIZER(a)
+template <>
+struct nekoproto::Meta<Copytest> {
+    static constexpr auto value = Object("a", makeTags<rpc_no_prefix>(&Copytest::a));
 };
 
 struct MXXParams {
     int param1;
     std::string param2;
     std::vector<int> param3;
-
-    NEKO_SERIALIZER(param1, param2, param3)
 };
 
 struct UnsupportedRpcValue {
@@ -115,28 +116,28 @@ struct Protocol {
 
 struct NestedLeaf {
     RpcMethod<int(int), "sum", "value"> sum;
-    NEKO_SERIALIZER(sum)
 };
 
 struct NestedBranch {
     NestedLeaf b;
-    NEKO_SERIALIZER(b)
 };
 
 struct NestedApi {
     NestedBranch a;
     RpcMethod<int(int), "root", "value"> root;
-    NEKO_SERIALIZER(a, root)
 };
 
 struct CommonApi {
     RpcMethod<std::string(), "version"> version;
-    NEKO_SERIALIZER(version)
 };
 
 struct NoPrefixApi {
     CommonApi common;
-    NEKO_SERIALIZER(makeTags<rpc_no_prefix>(common))
+};
+
+template <>
+struct nekoproto::Meta<NoPrefixApi> {
+    static constexpr auto value = Object("common", makeTags<rpc_no_prefix>(&NoPrefixApi::common));
 };
 
 struct SpecApi {
@@ -145,24 +146,36 @@ struct SpecApi {
         add;
     RpcMethodSpec<void(int), rpc_name<"spec.notify">, rpc_args<"value">, rpc_notification> notify;
     RpcMethodSpec<int(int), rpc_desc<"reflected desc">, rpc_args<"value">> reflected;
+};
 
-    NEKO_SERIALIZER(
-        (makeTags<rpc_name<"tag.add">, rpc_desc<"tag desc">, rpc_version<"2.0.0">, rpc_args<"left", "right">>(add)),
-        notify, reflected)
+template <>
+struct nekoproto::Meta<SpecApi> {
+    // clang-format off
+    static constexpr auto value = Object(
+        "add", makeTags<rpc_name<"tag.add">, rpc_desc<"tag desc">, rpc_version<"2.0.0">, rpc_args<"left", "right">>(&SpecApi::add),
+        "notify", &SpecApi::notify,
+        "reflected", &SpecApi::reflected);
+    // clang-format on
 };
 
 struct SpecPrefixApi {
     RpcMethodSpec<int(int), rpc_prefix<"inner">, rpc_name<"sum">, rpc_args<"value">> prefixed;
     RpcMethodSpec<int(int), rpc_no_prefix, rpc_name<"rooted">, rpc_args<"value">> rooted;
     RpcMethodSpec<int(int), rpc_prefix<"spec">, rpc_name<"value">, rpc_args<"value">> tagPrefixed;
+};
 
-    NEKO_SERIALIZER(prefixed, rooted, (makeTags<rpc_prefix<"tag">>(tagPrefixed)))
+template <>
+struct nekoproto::Meta<SpecPrefixApi> {
+    // clang-format off
+    static constexpr auto value = Object(
+        "prefixed", &SpecPrefixApi::prefixed,
+        "rooted", &SpecPrefixApi::rooted,
+        "tagPrefixed", makeTags<rpc_prefix<"tag">>(&SpecPrefixApi::tagPrefixed));
+    // clang-format on
 };
 
 struct SpecNestedApi {
     SpecPrefixApi api;
-
-    NEKO_SERIALIZER(api)
 };
 
 class JsonRpcTest : public ::testing::Test {
@@ -537,7 +550,7 @@ TEST_F(JsonRpcTest, RpcMethodSpecMergesFieldTagsWithPriority) {
     ASSERT_TRUE(result.has_value()) << result.error().message();
     EXPECT_EQ(result.value(), 42);
 
-    auto methodInfo = client->rpc.getMethodInfo("tag.add").wait();
+    auto methodInfo = client->rpc.get_method_info("tag.add").wait();
     ASSERT_TRUE(methodInfo.has_value()) << methodInfo.error().message();
     EXPECT_TRUE(methodInfo.value().find("signature: i32 tag.add(i32 left, i32 right)") != std::string::npos);
 
@@ -609,14 +622,14 @@ TEST_F(JsonRpcTest, Basic) {
                                       [](int aa, int bb) -> ilias::IoTask<int> { co_return (aa * 10) + bb; }));
     auto methodDatas = server.methodDatas();
 
-    auto methods = client->rpc.getMethodList().wait();
+    auto methods = client->rpc.get_method_list().wait();
     ASSERT_TRUE(methods.has_value());
     EXPECT_EQ(methods.value().size(), 14 + JsonRpcServer<>::BuiltinMethodsCount);
     for (size_t idx = 0; idx < methods.value().size(); idx++) {
         EXPECT_EQ(methods.value()[idx], methodDatas[idx].name);
     }
 
-    methods = client->rpc.getBindedMethodList().wait();
+    methods = client->rpc.get_binded_method_list().wait();
     ASSERT_TRUE(methods.has_value());
     EXPECT_EQ(methods.value().size(), 4 + JsonRpcServer<>::BuiltinMethodsCount);
     int idx = 0;
@@ -626,47 +639,47 @@ TEST_F(JsonRpcTest, Basic) {
         }
     }
 
-    auto methodInfo = client->rpc.getMethodInfo("test1").wait();
+    auto methodInfo = client->rpc.get_method_info("test1").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_TRUE(std::string::npos != methodInfo.value().find("signature: i32 test1(i32 num1, i32 num2)"));
 
-    methodInfo = client->rpc.getMethodInfo("test2").wait();
+    methodInfo = client->rpc.get_method_info("test2").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_TRUE(methodInfo.value().find("signature: void test2(i32 num1, i32 num2)") != std::string::npos);
 
-    methodInfo = client->rpc.getMethodInfo("test3").wait();
+    methodInfo = client->rpc.get_method_info("test3").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_TRUE(methodInfo.value().find("signature: void test3()") != std::string::npos);
 
-    methodInfo = client->rpc.getMethodInfo("test4").wait();
+    methodInfo = client->rpc.get_method_info("test4").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_TRUE(methodInfo.value().find("signature: i32 test4()") != std::string::npos);
 
-    methodInfo = client->rpc.getMethodInfo("test5").wait();
+    methodInfo = client->rpc.get_method_info("test5").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_TRUE(methodInfo.value().find("signature: string test5(string, f64)") != std::string::npos);
 
-    methodInfo = client->rpc.getMethodInfo("test6").wait();
+    methodInfo = client->rpc.get_method_info("test6").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_TRUE(methodInfo.value().find("signature: string test6(tuple<i32, f64, bool>)") != std::string::npos);
 
-    methodInfo = client->rpc.getMethodInfo("test7").wait();
+    methodInfo = client->rpc.get_method_info("test7").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_TRUE(methodInfo.value().find("signature: string test7()") != std::string::npos);
 
-    methodInfo = client->rpc.getMethodInfo("test8").wait();
+    methodInfo = client->rpc.get_method_info("test8").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_TRUE(methodInfo.value().find("signature: i32 test8(null)") != std::string::npos);
 
-    methodInfo = client->rpc.getMethodInfo("test9").wait();
+    methodInfo = client->rpc.get_method_info("test9").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_TRUE(methodInfo.value().find("signature: array<i32> test9(array<bool>)") != std::string::npos);
 
-    methodInfo = client->rpc.getMethodInfo("test10").wait();
+    methodInfo = client->rpc.get_method_info("test10").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_TRUE(methodInfo.value().find("object<Copytest> test10(i32)") != std::string::npos);
 
-    methodInfo = client->rpc.getMethodInfo("test11").wait();
+    methodInfo = client->rpc.get_method_info("test11").wait();
     ASSERT_TRUE(methodInfo.has_value());
     EXPECT_TRUE(methodInfo.value().find("signature: i32 test11(i32 aa, i32 bb)") != std::string::npos);
 
@@ -690,7 +703,7 @@ TEST_F(JsonRpcTest, Basic) {
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result.value(), 3);
 
-    auto methodInfoList = client->rpc.getMethodInfoList().wait();
+    auto methodInfoList = client->rpc.get_method_info_list().wait();
     ASSERT_TRUE(methodInfoList.has_value());
     EXPECT_EQ(methodInfoList.value().size(), 14 + JsonRpcServer<>::BuiltinMethodsCount);
 
@@ -766,7 +779,7 @@ TEST_F(JsonRpcTest, TestApiV1) {
     ASSERT_TRUE(ret4);
     ASSERT_EQ(*ret4, "testtest");
 
-    auto ret5 = client->rpc.getMethodInfoList().wait();
+    auto ret5 = client->rpc.get_method_info_list().wait();
     ASSERT_TRUE(ret5);
     for (auto& method : *ret5) {
         std::cout << method << std::endl;
