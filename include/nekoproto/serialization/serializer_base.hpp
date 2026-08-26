@@ -67,7 +67,7 @@
 
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/global/string_literal.hpp"
-#include "nekoproto/serialization/private/tags.hpp"
+#include "nekoproto/global/reflection_tags.hpp"
 
 namespace nekoproto {
 namespace detail {

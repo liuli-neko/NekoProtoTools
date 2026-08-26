@@ -30,12 +30,12 @@ struct ReadParser<R, std::bitset<N>, void> {
             return parserContext(std::move(result), "Failed to parse bitset: ");
         }
         if (str.size() != N) {
-            return parserError(sa::ErrorCode::InvalidLength, "Expected bitset string with " + std::to_string(N) +
+            return makeParserError(sa::ErrorCode::InvalidLength, "Expected bitset string with " + std::to_string(N) +
                                                                   " characters, got " + std::to_string(str.size()));
         }
         for (const auto ch : str) {
             if (ch != '0' && ch != '1') {
-                return parserError(sa::ErrorCode::ParseError,
+                return makeParserError(sa::ErrorCode::ParseError,
                                     "Bitset string contains a character other than '0' or '1'");
             }
         }
@@ -97,7 +97,7 @@ struct ReadParser<R, NameValuePair<T>, void> {
         auto field =
             parsing::readerObjectField<R>(object.value(), std::string_view{value.name, value.nameLen}, NoTags{});
         if (!field) {
-            return parserError(sa::ErrorCode::InvalidField,
+            return makeParserError(sa::ErrorCode::InvalidField,
                                 "Required field '" + std::string(value.name, value.nameLen) + "' is missing");
         }
         return parserContext(parserRead<R>(field.value(), value.value),

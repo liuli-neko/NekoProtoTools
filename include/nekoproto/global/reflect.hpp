@@ -471,6 +471,33 @@ struct FuncNameofImpl {
 template <auto Ptr>
 inline constexpr auto func_nameof = []() constexpr { return FuncNameofImpl<Ptr>::func_name; }(); // NOLINT
 
+template <auto MemberPtr>
+    requires std::is_member_object_pointer_v<decltype(MemberPtr)>
+consteval auto memberPointerName() -> std::string_view {
+    std::string_view name = mangledName<MemberPtr>();
+#if defined(__clang__) || defined(__GNUC__)
+    auto start = name.find("&");
+    if (start == std::string_view::npos) {
+        return {};
+    }
+    auto end = name.find(']', start);
+    auto full = name.substr(start + 1, end - start - 1);
+    auto scope = full.rfind("::");
+    return scope == std::string_view::npos ? full : full.substr(scope + 2);
+#elif defined(_MSC_VER)
+    auto start = name.find("&");
+    if (start == std::string_view::npos) {
+        return {};
+    }
+    auto end = name.find('>', start);
+    auto full = name.substr(start + 1, end - start - 1);
+    auto scope = full.rfind("::");
+    return scope == std::string_view::npos ? full : full.substr(scope + 2);
+#else
+    return {};
+#endif
+}
+
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif

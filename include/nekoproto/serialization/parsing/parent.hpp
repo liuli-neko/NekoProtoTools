@@ -1,10 +1,10 @@
 #pragma once
 
 #include "nekoproto/global/global.hpp"
+#include "nekoproto/global/reflection_tags.hpp"
 #include "nekoproto/serialization/parsing/schemaful/IsSchemafulWriter.hpp"
 #include "nekoproto/serialization/parsing/supports_attributes.hpp"
 #include "nekoproto/serialization/parsing/supports_comments.hpp"
-#include "nekoproto/serialization/private/tags.hpp"
 
 #include <string_view>
 #include <type_traits>

@@ -43,7 +43,7 @@ auto parserReadMissingField(FieldT& field, std::string_view name, const Tags& ta
         traits::OptionalLikeType<ValueType>::setNull(field);
         return sa::success();
     }
-    return parserError(sa::ErrorCode::InvalidField, "Required field '" + std::string(name) + "' is missing");
+    return makeParserError(sa::ErrorCode::InvalidField, "Required field '" + std::string(name) + "' is missing");
 }
 
 template <typename W, typename ObjectType, typename T>
@@ -308,7 +308,7 @@ struct WriteParser<W, T,
                 if (tag_query::get<tag_property::RawFixedData>(tags)) {
                     using ParentTypeValue = std::remove_cvref_t<ParentType>;
                     if constexpr (!std::is_same_v<ParentTypeValue, typename parsing::Parent<W>::Root>) {
-                        return parserError(sa::ErrorCode::InvalidType,
+                        return makeParserError(sa::ErrorCode::InvalidType,
                                             "raw_fixed_data is only valid for a binary root value");
                     } else {
                         parsing::Parent<W>::beginRawFixedData(writer, parent);
@@ -320,7 +320,7 @@ struct WriteParser<W, T,
                             }
                             using FieldType = std::remove_cvref_t<decltype(field)>;
                             if (!tag_query::has<tag_property::FixedLength<void>>(fieldTags)) {
-                                result = parserError(sa::ErrorCode::InvalidLength, "raw_fixed_data field '" +
+                                result = makeParserError(sa::ErrorCode::InvalidLength, "raw_fixed_data field '" +
                                                                                         std::string(name) +
                                                                                         "' requires fixed_length");
                                 return;
@@ -337,7 +337,7 @@ struct WriteParser<W, T,
                                     "Failed to write raw fixed field '" + std::string(name) + "': ");
                             } else {
                                 result =
-                                    parserError(sa::ErrorCode::InvalidType,
+                                    makeParserError(sa::ErrorCode::InvalidType,
                                                  "raw_fixed_data field '" + std::string(name) +
                                                      "' must be an arithmetic or enum value with a fixed wire width");
                             }
@@ -429,7 +429,7 @@ private:
             if constexpr (requires { R::isRaw(in); }) {
                 if (tag_query::get<tag_property::RawFixedData>(tags)) {
                     if (!R::isRaw(in)) {
-                        return parserError(sa::ErrorCode::InvalidType,
+                        return makeParserError(sa::ErrorCode::InvalidType,
                                             "raw_fixed_data requires a raw binary input segment");
                     }
                     ParserResult result;
@@ -442,7 +442,7 @@ private:
                         using FieldType = std::remove_cvref_t<decltype(field)>;
                         if (!tag_query::has<tag_property::FixedLength<void>>(fieldTags)) {
                             result =
-                                parserError(sa::ErrorCode::InvalidLength,
+                                makeParserError(sa::ErrorCode::InvalidLength,
                                              "raw_fixed_data field '" + std::string(name) + "' requires fixed_length");
                             return;
                         }
@@ -457,7 +457,7 @@ private:
                             result = parserContext(parserRead<R>(current, field, fieldTags),
                                                     "Failed to parse raw fixed field '" + std::string(name) + "': ");
                         } else {
-                            result = parserError(sa::ErrorCode::InvalidType,
+                            result = makeParserError(sa::ErrorCode::InvalidType,
                                                   "raw_fixed_data field '" + std::string(name) +
                                                       "' must be an arithmetic or enum value with a fixed wire width");
                         }
@@ -500,7 +500,7 @@ private:
             const auto actualSize   = R::arraySize(array.value());
             const auto expectedSize = parserReflectFieldCount<T>();
             if (actualSize != expectedSize) {
-                return parserError(sa::ErrorCode::InvalidLength, "Expected reflected array with " +
+                return makeParserError(sa::ErrorCode::InvalidLength, "Expected reflected array with " +
                                                                       std::to_string(expectedSize) + " elements, got " +
                                                                       std::to_string(actualSize));
             }

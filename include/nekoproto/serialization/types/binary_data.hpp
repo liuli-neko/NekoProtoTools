@@ -194,7 +194,7 @@ struct ReadParser<R, BinaryData<T>, void> {
         std::vector<uint8_t> buf;
         auto ret = Base64Covert::decode(reinterpret_cast<const uint8_t*>(sv.data()), sv.size(), buf);
         if (!ret) {
-            return parserError(sa::ErrorCode::ParseError, "Invalid base64 data");
+            return makeParserError(sa::ErrorCode::ParseError, "Invalid base64 data");
         }
         std::memcpy(value.data, buf.data(), buf.size());
         return sa::success();

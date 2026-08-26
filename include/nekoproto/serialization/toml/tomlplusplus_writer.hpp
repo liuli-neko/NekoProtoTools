@@ -12,7 +12,7 @@
 #endif
 
 #include "nekoproto/serialization/error.hpp"
-#include "nekoproto/serialization/private/tags.hpp"
+#include "nekoproto/serialization/tags.hpp"
 
 #include <toml++/toml.h>
 

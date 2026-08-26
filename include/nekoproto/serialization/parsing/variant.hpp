@@ -66,7 +66,7 @@ struct ReadParser<R, std::monostate, void> {
     template <typename Tags>
     static auto read(typename R::InputValueType in, std::monostate&, const Tags& tags) -> ParserResult {
         if (!parsing::readerIsEmpty<R>(in, tags)) {
-            return parserError(sa::ErrorCode::InvalidType, "Expected null for monostate");
+            return makeParserError(sa::ErrorCode::InvalidType, "Expected null for monostate");
         }
         return sa::success();
     }
@@ -84,7 +84,7 @@ struct WriteParser<W, std::variant<Ts...>, void> {
     template <std::size_t I = 0, typename ParentType, typename Tags>
     static auto writeActive(W& writer, const Variant& value, const ParentType& parent, const Tags& tags) -> ParserResult {
         if constexpr (I >= sizeof...(Ts)) {
-            return parserError(sa::ErrorCode::InvalidIndex, "Variant active index is out of range");
+            return makeParserError(sa::ErrorCode::InvalidIndex, "Variant active index is out of range");
         } else {
             if (value.index() == I) {
                 return parserWrite<W>(writer, std::get<I>(value), parent, tags);
@@ -151,10 +151,10 @@ struct ReadParser<R, std::variant<Ts...>, void> {
         std::size_t matchIndex = 0;
         findAlternatives(in, tags, matchCount, matchIndex);
         if (matchCount == 0U) {
-            return parserError(sa::ErrorCode::ParseError, "No variant alternative matched the input value");
+            return makeParserError(sa::ErrorCode::ParseError, "No variant alternative matched the input value");
         }
         if (matchCount != 1U) {
-            return parserError(sa::ErrorCode::ParseError, "Untagged variant input matches more than one alternative");
+            return makeParserError(sa::ErrorCode::ParseError, "Untagged variant input matches more than one alternative");
         }
         return readAlternative(matchIndex, in, value, tags);
     }
@@ -163,7 +163,7 @@ struct ReadParser<R, std::variant<Ts...>, void> {
     static auto readAlternative(std::size_t index, typename R::InputValueType in, Variant& value,
                                         const Tags& tags) -> ParserResult {
         if constexpr (I >= sizeof...(Ts)) {
-            return parserError(sa::ErrorCode::InvalidIndex, "Variant alternative index is out of range");
+            return makeParserError(sa::ErrorCode::InvalidIndex, "Variant alternative index is out of range");
         } else {
             if (index == I) {
                 using Alt = std::variant_alternative_t<I, Variant>;
@@ -191,7 +191,7 @@ struct ReadParser<R, std::variant<Ts...>, void> {
             return parserContext(array.error(), "Variant must be encoded as [index, value]: ");
         }
         if (R::arraySize(array.value()) != 2U) {
-            return parserError(sa::ErrorCode::InvalidLength, "Variant array must contain exactly two elements");
+            return makeParserError(sa::ErrorCode::InvalidLength, "Variant array must contain exactly two elements");
         }
         std::size_t index = 0;
         auto result       = parserRead<R>(R::arrayElement(array.value(), 0), index);

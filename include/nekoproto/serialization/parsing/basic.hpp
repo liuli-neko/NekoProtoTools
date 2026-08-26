@@ -45,7 +45,7 @@ auto parserWriteString(W& writer, std::string_view value, const ParentType& pare
         if constexpr (requires(std::string_view text, typename W::RawValueType& raw) { W::parseRawValue(text, raw); }) {
             typename W::RawValueType raw;
             if (!W::parseRawValue(value, raw)) {
-                return parserError(sa::ErrorCode::ParseError, "Invalid raw value");
+                return makeParserError(sa::ErrorCode::ParseError, "Invalid raw value");
             }
             parsing::Parent<W>::addValue(writer, raw, parent, tags);
             return sa::success();
@@ -83,7 +83,7 @@ struct WriteParser<W, T, std::enable_if_t<std::is_arithmetic_v<T>>> {
             if constexpr (parsing::supports_fixed_length_writer<W, T, Tags>) {
                 const auto fixed_length = tag_query::get<tag_property::FixedLength<T>>(tags);
                 if (fixed_length != sizeof(T)) {
-                    return parserError(sa::ErrorCode::InvalidLength,
+                    return makeParserError(sa::ErrorCode::InvalidLength,
                                         "Fixed-length arithmetic field requires " + std::to_string(sizeof(T)) +
                                             " bytes for its C++ type, got " + std::to_string(fixed_length));
                 }
@@ -104,7 +104,7 @@ struct ReadParser<R, T, std::enable_if_t<std::is_arithmetic_v<T>>> {
             if constexpr (parsing::supports_fixed_length_reader<R, T, Tags>) {
                 const auto fixed_length = tag_query::get<tag_property::FixedLength<T>>(tags);
                 if (fixed_length != sizeof(T)) {
-                    return parserError(sa::ErrorCode::InvalidLength,
+                    return makeParserError(sa::ErrorCode::InvalidLength,
                                         "Fixed-length arithmetic field requires " + std::to_string(sizeof(T)) +
                                             " bytes for its C++ type, got " + std::to_string(fixed_length));
                 }
@@ -144,7 +144,7 @@ struct ReadParser<R, std::nullptr_t, void> {
     template <typename Tags>
     static auto read(typename R::InputValueType in, std::nullptr_t& /*value*/, const Tags& tags) -> ParserResult {
         if (!parsing::readerIsEmpty<R>(in, tags)) {
-            return parserError(sa::ErrorCode::InvalidType, "Expected null");
+            return makeParserError(sa::ErrorCode::InvalidType, "Expected null");
         }
         return sa::success();
     }
@@ -171,7 +171,7 @@ template <typename R>
 struct ReadParser<R, const char*, void> {
     template <typename Tags>
     static auto read(typename R::InputValueType /*in*/, const char*& /*value*/, const Tags& /*tags*/) -> ParserResult {
-        return parserError(sa::ErrorCode::InvalidType, "Reading into const char* is unsupported");
+        return makeParserError(sa::ErrorCode::InvalidType, "Reading into const char* is unsupported");
     }
 };
 
@@ -192,7 +192,7 @@ template <typename R>
 struct ReadParser<R, char*, void> {
     template <typename Tags>
     static auto read(typename R::InputValueType /*in*/, char*& /*value*/, const Tags& /*tags*/) -> ParserResult {
-        return parserError(sa::ErrorCode::InvalidType, "Reading into char* is unsupported");
+        return makeParserError(sa::ErrorCode::InvalidType, "Reading into char* is unsupported");
     }
 };
 
@@ -260,7 +260,7 @@ struct ReadParser<R, std::basic_string_view<CharT, Traits>, void> {
         static_assert(ParserIsByteCharV<CharT>, "Serialized string views must use byte-sized characters");
         if (tag_query::get<tag_property::RawString>(tags)) {
             if constexpr (requires { parsing::readerToRawString<R>(in, tags); }) {
-                return parserError(sa::ErrorCode::InvalidType,
+                return makeParserError(sa::ErrorCode::InvalidType,
                                     "raw_string cannot be read into string_view without owned storage");
             }
         }
@@ -272,7 +272,7 @@ struct ReadParser<R, std::basic_string_view<CharT, Traits>, void> {
             value = result.value();
             return sa::success();
         }
-        return parserError(sa::ErrorCode::InvalidType, "Reader does not support string_view");
+        return makeParserError(sa::ErrorCode::InvalidType, "Reader does not support string_view");
     }
 };
 
@@ -303,7 +303,7 @@ struct ReadParser<R, T, std::enable_if_t<std::is_enum_v<T>>> {
                 value = it->second;
                 return sa::success();
             }
-            return parserError(sa::ErrorCode::InvalidType, "Unknown enum name '" + enumName + "'");
+            return makeParserError(sa::ErrorCode::InvalidType, "Unknown enum name '" + enumName + "'");
         }
         std::underlying_type_t<T> raw{};
         auto result = parserRead<R>(in, raw, tags);

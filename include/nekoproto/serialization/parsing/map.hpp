@@ -77,7 +77,7 @@ auto parserReadKeyValueArray(typename R::InputValueType in, T& values, const Tag
         Value value{};
         auto keyField = parsing::readerObjectField<R>(object.value(), "key", NoTags{});
         if (!keyField) {
-            return parserError(sa::ErrorCode::InvalidField,
+            return makeParserError(sa::ErrorCode::InvalidField,
                                 "Map entry " + std::to_string(i) + " is missing required field 'key'");
         }
         auto result = parserRead<R>(keyField.value(), key);
@@ -86,7 +86,7 @@ auto parserReadKeyValueArray(typename R::InputValueType in, T& values, const Tag
         }
         auto valField = parsing::readerObjectField<R>(object.value(), "value", NoTags{});
         if (!valField) {
-            return parserError(sa::ErrorCode::InvalidField,
+            return makeParserError(sa::ErrorCode::InvalidField,
                                 "Map entry " + std::to_string(i) + " is missing required field 'value'");
         }
         result = parserRead<R>(valField.value(), value);
@@ -96,7 +96,7 @@ auto parserReadKeyValueArray(typename R::InputValueType in, T& values, const Tag
         auto inserted = parsed.emplace(std::move(key), std::move(value));
         if constexpr (requires { inserted.second; }) {
             if (!inserted.second) {
-                return parserError(sa::ErrorCode::InvalidField,
+                return makeParserError(sa::ErrorCode::InvalidField,
                                     "Map entry " + std::to_string(i) + " contains a duplicate key");
             }
         }
@@ -140,7 +140,7 @@ auto parserReadStringKeyMap(typename R::InputValueType in, T& values, const Tags
             auto inserted = parsed.emplace(typename T::key_type{name.data(), name.size()}, std::move(value));
             if constexpr (requires { inserted.second; }) {
                 if (!inserted.second) {
-                    result = parserError(sa::ErrorCode::InvalidField,
+                    result = makeParserError(sa::ErrorCode::InvalidField,
                                           "Map contains duplicate key '" + std::string(name) + "'");
                     return false;
                 }

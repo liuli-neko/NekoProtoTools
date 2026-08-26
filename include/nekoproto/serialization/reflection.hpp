@@ -14,6 +14,7 @@
 #include "nekoproto/global/log.hpp"
 #include "nekoproto/global/reflect.hpp"
 #include "nekoproto/global/reflection_tags.hpp"
+#include "nekoproto/global/traits.hpp"
 
 #include <any>
 #include <array>
@@ -24,8 +25,7 @@
 #include <type_traits>
 #include <utility> // For std::index_sequence
 
-#include "private/tags.hpp"
-#include "private/traits.hpp"
+#include "tags.hpp"
 
 namespace nekoproto {
 template <typename T, class Enable = void>
@@ -900,6 +900,39 @@ private:
 };
 
 } // namespace detail
+
+// =============================================================================
+// Public Concepts & Type Traits
+// =============================================================================
+
+template <typename T>
+inline constexpr bool is_reflectable_v =
+    detail::has_values_meta<std::remove_cvref_t<T>> || std::is_enum_v<std::remove_cvref_t<T>>;
+
+template <typename T>
+concept Reflectable = is_reflectable_v<T>;
+
+template <typename T>
+inline constexpr bool has_named_reflection_v = detail::has_names_meta<std::remove_cvref_t<T>>;
+
+template <typename T>
+concept NamedReflectable = has_named_reflection_v<T>;
+
+template <typename T>
+inline constexpr bool is_tuple_v = detail::is_std_tuple_v<std::remove_cvref_t<T>>;
+
+template <typename T>
+concept TupleLike = is_tuple_v<T>;
+
+template <typename T>
+inline constexpr bool is_optional_v = traits::OptionalLikeType<std::remove_cvref_t<T>>::value;
+
+template <typename T>
+using OptionalValueT = typename traits::UnwrappedOptionalLikeType<std::remove_cvref_t<T>>::type;
+
+template <typename T>
+concept OptionalLike = traits::optional_like<std::remove_cvref_t<T>>;
+
 template <class... Ts>
 struct Overloads : public Ts... {
     using Ts::operator()...;
@@ -1355,6 +1388,81 @@ public:
             (func(std::get<Is>(field_tags)), ...);
         }(std::make_index_sequence<value_count>{});
     }
+
+private:
+    template <auto MemberPtr>
+    static consteval auto _indexOfImpl() noexcept -> std::size_t {
+        if constexpr (!Provider::has_values) {
+            return static_cast<std::size_t>(-1);
+        } else if constexpr (std::is_member_object_pointer_v<decltype(MemberPtr)> &&
+                             !std::is_base_of_v<traits::MemberClassOfT<decltype(MemberPtr)>, T>) {
+            return static_cast<std::size_t>(-1);
+        } else if constexpr (Provider::provider_kind == detail::ReflectProviderKind::ExplicitMetadata) {
+            constexpr auto accs = Provider::accessors();
+            return []<std::size_t... Is>(std::index_sequence<Is...>, const auto& tuple_accs) consteval -> std::size_t {
+                std::size_t found = static_cast<std::size_t>(-1);
+                auto check_one = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) consteval {
+                    auto raw_acc = fieldAccessor(detail::ReflectAccessorAt<I, std::decay_t<decltype(tuple_accs)>>::get(tuple_accs));
+                    using AccType = std::decay_t<decltype(raw_acc)>;
+                    using PtrType = std::decay_t<decltype(MemberPtr)>;
+                    if constexpr (std::is_same_v<AccType, PtrType>) {
+                        if (raw_acc == MemberPtr) {
+                            found = I;
+                        }
+                    }
+                };
+                (check_one(std::integral_constant<std::size_t, Is>{}), ...);
+                return found;
+            }(std::make_index_sequence<Provider::value_count>{}, accs);
+        } else if constexpr (Provider::provider_kind == detail::ReflectProviderKind::LegacyAutoUnwrap) {
+            if constexpr (std::is_member_object_pointer_v<decltype(MemberPtr)>) {
+                constexpr std::string_view member_name = detail::memberPointerName<MemberPtr>();
+                if constexpr (!member_name.empty()) {
+                    constexpr auto field_names = Provider::names();
+                    for (std::size_t i = 0; i < field_names.size(); ++i) {
+                        if (field_names[i] == member_name) {
+                            return i;
+                        }
+                    }
+                }
+            }
+            return static_cast<std::size_t>(-1);
+        } else {
+            return static_cast<std::size_t>(-1);
+        }
+    }
+
+public:
+    template <auto MemberPtr>
+    static consteval auto indexOf() noexcept -> std::size_t {
+        constexpr std::size_t idx = _indexOfImpl<MemberPtr>();
+        static_assert(idx != static_cast<std::size_t>(-1),
+                      "Member pointer not found in reflection metadata of type T");
+        return idx;
+    }
+
+    template <auto MemberPtr>
+    static consteval auto hasMember() noexcept -> bool {
+        return _indexOfImpl<MemberPtr>() != static_cast<std::size_t>(-1);
+    }
+
+    template <auto MemberPtr>
+    static consteval auto nameOf() noexcept -> std::string_view {
+        return names()[indexOf<MemberPtr>()];
+    }
+
+    template <auto MemberPtr>
+    static consteval auto rawNameOf() noexcept -> std::string_view {
+        return names()[indexOf<MemberPtr>()];
+    }
+
+    template <auto MemberPtr>
+    static consteval auto tagOf() noexcept -> decltype(auto) {
+        return std::get<indexOf<MemberPtr>()>(field_tags);
+    }
+
+    template <auto MemberPtr>
+    using FieldType = std::tuple_element_t<indexOf<MemberPtr>(), typename Model::value_types>;
 };
 
 template <typename T, std::size_t I>

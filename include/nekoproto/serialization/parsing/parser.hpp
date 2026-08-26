@@ -5,7 +5,7 @@
 #include "nekoproto/serialization/parsing/parent.hpp"
 #include "nekoproto/serialization/parsing/reader.hpp"
 #include "nekoproto/serialization/parsing/schema/type.hpp"
-#include "nekoproto/serialization/private/tags.hpp"
+// #include "nekoproto/serialization/tags.hpp"
 
 #include <concepts>
 #include <string>
@@ -27,9 +27,25 @@ inline auto parserRead(typename R::InputValueType in, T& value, const Tags& tags
 template <typename T, typename Tags = NoTags>
 inline auto parserSchema(const Tags& tags = Tags{}) -> parsing::schema::Type;
 
-namespace detail {
+inline auto makeParserError(sa::ErrorCode code, std::string message) -> ParserResult {
+    return sa::err(code, std::move(message));
+}
 
-inline auto parserError(sa::ErrorCode code, std::string message) -> ParserResult { return sa::err(code, std::move(message)); }
+inline auto makeParserSuccess() -> ParserResult {
+    return sa::success();
+}
+
+namespace parsing {
+inline auto error(sa::ErrorCode code, std::string message) -> ParserResult {
+    return sa::err(code, std::move(message));
+}
+
+inline auto success() -> ParserResult {
+    return sa::success();
+}
+} // namespace parsing
+
+namespace detail {
 
 // Build an empty transactional target without discarding stateful container
 // policy objects. This keeps parse-then-commit compatible with comparators,
@@ -160,7 +176,7 @@ inline auto parserWrite(W& writer, const T& value, const ParentType& parent, con
         return detail::WriteParser<W, ValueType>::write(writer, value, parent, tags);
     } else {
         static_assert(always_false_v<T>, "No WriteParser or CustomParser write support for this type/writer");
-        return detail::parserError(sa::ErrorCode::InvalidType,
+        return makeParserError(sa::ErrorCode::InvalidType,
                                     "No WriteParser or CustomParser write support for this type/writer");
     }
 }
@@ -176,7 +192,7 @@ inline auto parserRead(typename R::InputValueType in, T& value, const Tags& tags
         return detail::ReadParser<R, ValueType>::read(in, value, tags);
     } else {
         static_assert(always_false_v<T>, "No ReadParser or CustomParser read support for this type/reader");
-        return detail::parserError(sa::ErrorCode::InvalidType,
+        return makeParserError(sa::ErrorCode::InvalidType,
                                     "No ReadParser or CustomParser read support for this type/reader");
     }
 }

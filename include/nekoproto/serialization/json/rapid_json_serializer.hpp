@@ -270,7 +270,7 @@ struct ReadParser<rapid::Reader, RapidJsonValue, void> {
     template <typename Tags>
     static auto read(rapid::Reader::InputValueType in, RapidJsonValue& value, const Tags& /*tags*/) -> ParserResult {
         if (in == nullptr) {
-            return parserError(sa::ErrorCode::InvalidType, "Cannot read RapidJsonValue from a null input handle");
+            return makeParserError(sa::ErrorCode::InvalidType, "Cannot read RapidJsonValue from a null input handle");
         }
         value = RapidJsonValue(*in);
         return sa::success();
@@ -403,6 +403,9 @@ RapidJsonOutputSerializer(BufferT&) -> RapidJsonOutputSerializer<BufferT>;
 
 using RapidJsonByteOutputSerializer = RapidJsonOutputSerializer<std::vector<std::byte>>;
 
+template <typename BufferT = RapidJsonBackend::DefaultOutputBuffer>
+using RapidJsonPrettyOutputSerializer = RapidJsonOutputSerializer<detail::PrettyJsonWriter<BufferT>>;
+
 template <typename BufferT = RapidJsonBackend::DefaultInputSource>
 class RapidJsonInputSerializer : public detail::InputSerializerAdapter<RapidJsonBackend, BufferT> {
 public:
@@ -419,12 +422,13 @@ RapidJsonInputSerializer(BufferT&) -> RapidJsonInputSerializer<BufferT>;
 // #####################################################
 // default JsonSerializer type definition
 struct RapidJsonSerializer {
-    using OutputSerializer     = RapidJsonOutputSerializer<>;
-    using ByteOutputSerializer = RapidJsonByteOutputSerializer;
-    using InputSerializer      = RapidJsonInputSerializer<>;
-    using JsonValue            = detail::RapidJsonValue;
-    using Reader               = rapid::Reader;
-    using Writer               = rapid::Writer;
+    using OutputSerializer       = RapidJsonOutputSerializer<>;
+    using PrettyOutputSerializer = RapidJsonPrettyOutputSerializer<>;
+    using ByteOutputSerializer   = RapidJsonByteOutputSerializer;
+    using InputSerializer        = RapidJsonInputSerializer<>;
+    using JsonValue              = detail::RapidJsonValue;
+    using Reader                 = rapid::Reader;
+    using Writer                 = rapid::Writer;
 };
 
 } // namespace nekoproto

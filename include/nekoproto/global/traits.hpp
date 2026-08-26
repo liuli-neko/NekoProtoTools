@@ -179,5 +179,16 @@ inline constexpr bool is_collection_like_v = []() consteval { // NOLINT
     }
 }();
 
+template <typename T>
+struct MemberClassOf;
+
+template <typename Class, typename Member>
+struct MemberClassOf<Member Class::*> {
+    using type = Class;
+};
+
+template <typename T>
+using MemberClassOfT = typename MemberClassOf<T>::type;
+
 } // namespace traits
 } // namespace nekoproto

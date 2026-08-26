@@ -1,7 +1,8 @@
 #pragma once
 
 #include "nekoproto/global/global.hpp"
-#include "nekoproto/serialization/private/tags.hpp"
+// #include "nekoproto/global/reflection_tags.hpp"
+// #include "nekoproto/serialization/tags.hpp"
 
 #include <cstddef>
 #include <utility>

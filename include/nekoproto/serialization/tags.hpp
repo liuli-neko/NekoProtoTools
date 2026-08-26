@@ -1,7 +1,7 @@
 /**
  * @file tags.hpp
  * @author llhsdmd (llhsdmd@gmail.com)
- * @brief
+ * @brief Public serialization tags and tag properties.
  * @version 0.1
  * @date 2025-04-28
  *

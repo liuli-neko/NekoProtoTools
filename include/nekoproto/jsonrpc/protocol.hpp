@@ -46,7 +46,7 @@ struct ReadParser<R, JsonRpcIdType, void> {
             value = std::move(string);
             return result;
         }
-        return parserError(sa::ErrorCode::InvalidType, "JSON-RPC id must be null, an unsigned integer, or a string");
+        return makeParserError(sa::ErrorCode::InvalidType, "JSON-RPC id must be null, an unsigned integer, or a string");
     }
 };
 
@@ -103,14 +103,14 @@ struct WriteParser<W, JsonRpcSerializerHelperObject<T>, void> {
             constexpr auto tupleSize = std::tuple_size_v<Tuple>;
             if (!value.context.argNames.empty()) {
                 if (value.context.argNames.size() != tupleSize) {
-                    return parserError(sa::ErrorCode::InvalidLength,
+                    return makeParserError(sa::ErrorCode::InvalidLength,
                                         "Named JSON-RPC params count does not match tuple size");
                 }
                 auto object = parsing::Parent<W>::addObject(writer, value.context.argNames.size(), parent);
                 return writeObject(writer, object, value, std::make_index_sequence<tupleSize>{});
             }
         } else if (!value.context.argNames.empty()) {
-            return parserError(sa::ErrorCode::InvalidType, "Named JSON-RPC params require tuple parameters");
+            return makeParserError(sa::ErrorCode::InvalidType, "Named JSON-RPC params require tuple parameters");
         }
         return parserWrite<W>(writer, value.mTuple, parent, tags);
     }
@@ -140,7 +140,7 @@ struct ReadParser<R, JsonRpcSerializerHelperObject<T>, void> {
             constexpr auto tupleSize = std::tuple_size_v<Tuple>;
             if (!value.context.argNames.empty()) {
                 if (value.context.argNames.size() != tupleSize) {
-                    return parserError(sa::ErrorCode::InvalidLength,
+                    return makeParserError(sa::ErrorCode::InvalidLength,
                                         "Named JSON-RPC params count does not match tuple size");
                 }
                 auto object = R::toObject(in);
@@ -149,7 +149,7 @@ struct ReadParser<R, JsonRpcSerializerHelperObject<T>, void> {
                 }
             }
         } else if (!value.context.argNames.empty()) {
-            return parserError(sa::ErrorCode::InvalidType, "Named JSON-RPC params require tuple parameters");
+            return makeParserError(sa::ErrorCode::InvalidType, "Named JSON-RPC params require tuple parameters");
         }
         return parserRead<R>(in, value.mTuple, tags);
     }
@@ -187,7 +187,7 @@ struct JsonRpcRequestParser {
         }
         if (JsonRpcNamedParams<MethodTraits>::provided(context)) {
             if (!JsonRpcNamedParams<MethodTraits>::matchesParamsSize(context)) {
-                return parserError(sa::ErrorCode::InvalidLength,
+                return makeParserError(sa::ErrorCode::InvalidLength,
                                     "Named JSON-RPC params count does not match params size");
             }
             if constexpr (Request::JsonTraits::ParamsSize > 0 && is_std_tuple_v<typename Request::ParamsTupleType>) {
@@ -195,7 +195,7 @@ struct JsonRpcRequestParser {
                                                                                                      context);
                 result = parserWriteReflectField<W>(writer, object, paramsHelper, "params", NoTags{});
             } else {
-                return parserError(sa::ErrorCode::InvalidType, "Named JSON-RPC params require tuple parameters");
+                return makeParserError(sa::ErrorCode::InvalidType, "Named JSON-RPC params require tuple parameters");
             }
         } else {
             result = parserWriteReflectField<W>(writer, object, value.params, "params", NoTags{});
@@ -224,14 +224,14 @@ struct JsonRpcRequestParser {
         }
         if (JsonRpcNamedParams<MethodTraits>::provided(context)) {
             if (!JsonRpcNamedParams<MethodTraits>::matchesParamsSize(context)) {
-                return parserError(sa::ErrorCode::InvalidLength,
+                return makeParserError(sa::ErrorCode::InvalidLength,
                                     "Named JSON-RPC params count does not match params size");
             }
             if constexpr (Request::JsonTraits::ParamsSize > 0 && is_std_tuple_v<typename Request::ParamsTupleType>) {
                 JsonRpcSerializerHelperObject<typename Request::ParamsTupleType> params_helper(value.params, context);
                 result = parserReadReflectField<R>(in, params_helper, "params", NoTags{});
             } else {
-                return parserError(sa::ErrorCode::InvalidType, "Named JSON-RPC params require tuple parameters");
+                return makeParserError(sa::ErrorCode::InvalidType, "Named JSON-RPC params require tuple parameters");
             }
         } else {
             result = parserReadReflectField<R>(in, value.params, "params", NoTags{});

@@ -5,7 +5,7 @@
 #if defined(NEKO_PROTO_ENABLE_YAMLCPP)
 
 #include "nekoproto/serialization/error.hpp"
-#include "nekoproto/serialization/private/tags.hpp"
+#include "nekoproto/serialization/tags.hpp"
 
 #include <yaml-cpp/yaml.h>
 

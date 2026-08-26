@@ -81,7 +81,7 @@ auto parserReadSequence(typename R::InputValueType in, T& values, const Tags& ta
             return parserContext(std::move(result), "Failed to parse sequence element " + std::to_string(i) + ": ");
         }
         if (!parserInsertSequenceValue(parsed, std::move(item))) {
-            return parserError(sa::ErrorCode::InvalidField,
+            return makeParserError(sa::ErrorCode::InvalidField,
                                 "Duplicate value at sequence element " + std::to_string(i));
         }
     }
@@ -223,7 +223,7 @@ struct ReadParser<R, std::array<T, N>, void> {
         }
         const auto actualSize = R::arraySize(array.value());
         if (actualSize != N) {
-            return parserError(sa::ErrorCode::InvalidLength, "Expected fixed array with " + std::to_string(N) +
+            return makeParserError(sa::ErrorCode::InvalidLength, "Expected fixed array with " + std::to_string(N) +
                                                                   " elements, got " + std::to_string(actualSize));
         }
         for (std::size_t i = 0; i < N; ++i) {

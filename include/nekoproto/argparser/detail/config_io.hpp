@@ -45,12 +45,12 @@ struct CommandConfig<ArgCommand<Value>> {
 };
 
 inline auto configIoToArgparserError(const config_io::ConfigIoError& error) -> std::error_code {
-    const auto parserError =
+    const auto makeParserError =
         error.code == config_io::makeErrorCode(config_io::ConfigIoErrorCode::UnknownFormat) ||
                 error.code == config_io::makeErrorCode(config_io::ConfigIoErrorCode::BackendUnavailable)
             ? ArgParserError::InvalidDefinition
             : ArgParserError::InvalidValue;
-    return makeArgparserError(parserError, error.message);
+    return makeArgparserError(makeParserError, error.message);
 }
 
 template <typename T>

@@ -8,9 +8,8 @@
 #include <utility>
 
 namespace nekoproto {
-namespace detail {
 
-template <typename Backend, typename BufferT>
+template <typename Backend, typename BufferT = typename Backend::DefaultOutputBuffer>
 class OutputSerializerAdapter {
 public:
     using BackendType = Backend;
@@ -74,7 +73,7 @@ private:
     bool mDocumentAttempted = false;
 };
 
-template <typename Backend, typename SourceT>
+template <typename Backend, typename SourceT = typename Backend::DefaultInputSource>
 class InputSerializerAdapter {
 public:
     using BackendType = Backend;
@@ -151,5 +150,12 @@ private:
     bool mDocumentAttempted = false;
 };
 
+namespace detail {
+template <typename Backend, typename BufferT = typename Backend::DefaultOutputBuffer>
+using OutputSerializerAdapter = nekoproto::OutputSerializerAdapter<Backend, BufferT>;
+
+template <typename Backend, typename SourceT = typename Backend::DefaultInputSource>
+using InputSerializerAdapter = nekoproto::InputSerializerAdapter<Backend, SourceT>;
 } // namespace detail
+
 } // namespace nekoproto

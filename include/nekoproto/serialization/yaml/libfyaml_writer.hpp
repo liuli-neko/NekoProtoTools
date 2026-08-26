@@ -5,7 +5,7 @@
 #if defined(NEKO_PROTO_ENABLE_LIBFYAML)
 
 #include "nekoproto/serialization/error.hpp"
-#include "nekoproto/serialization/private/tags.hpp"
+#include "nekoproto/serialization/tags.hpp"
 
 #include <libfyaml.h>
 

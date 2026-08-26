@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-#include "nekoproto/serialization/private/tags.hpp"
+#include "nekoproto/serialization/tags.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/toml_serializer.hpp"
 

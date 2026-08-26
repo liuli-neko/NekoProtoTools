@@ -61,7 +61,7 @@ struct ReadParser<R, std::tuple<Ts...>, void> {
         }
         const auto actualSize = R::arraySize(array.value());
         if (actualSize != sizeof...(Ts)) {
-            return parserError(sa::ErrorCode::InvalidLength, "Expected tuple with " + std::to_string(sizeof...(Ts)) +
+            return makeParserError(sa::ErrorCode::InvalidLength, "Expected tuple with " + std::to_string(sizeof...(Ts)) +
                                                                   " elements, got " + std::to_string(actualSize));
         }
         return readImpl(array.value(), value, std::index_sequence_for<Ts...>{});
@@ -109,7 +109,7 @@ struct ReadParser<R, std::pair<K, V>, void> {
         }
         auto first = parsing::readerObjectField<R>(object.value(), "first", NoTags{});
         if (!first) {
-            return parserError(sa::ErrorCode::InvalidField, "Required pair field 'first' is missing");
+            return makeParserError(sa::ErrorCode::InvalidField, "Required pair field 'first' is missing");
         }
         auto result = parserRead<R>(first.value(), value.first);
         if (!result) {
@@ -117,7 +117,7 @@ struct ReadParser<R, std::pair<K, V>, void> {
         }
         auto second = parsing::readerObjectField<R>(object.value(), "second", NoTags{});
         if (!second) {
-            return parserError(sa::ErrorCode::InvalidField, "Required pair field 'second' is missing");
+            return makeParserError(sa::ErrorCode::InvalidField, "Required pair field 'second' is missing");
         }
         return parserContext(parserRead<R>(second.value(), value.second), "Failed to parse pair field 'second': ");
     }

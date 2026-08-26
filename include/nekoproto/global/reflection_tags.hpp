@@ -614,6 +614,18 @@ constexpr auto getTag(const Tags& tags) -> Tag {
     return detail::tagGetType<Tag>(tags);
 }
 } // namespace tag_query
+
+/**
+ * @brief Unified visitor for reflection tags (supports TagList<...>, single Tag instance, or NoTags).
+ */
+template <typename Tags, typename Visitor>
+constexpr void forEachTag(const Tags& tags, Visitor&& visitor) {
+    if constexpr (is_tag_list_v<std::remove_cvref_t<Tags>>) {
+        std::apply([&visitor](const auto&... tag) { (visitor(tag), ...); }, tags.tuple());
+    } else if constexpr (!std::is_same_v<std::remove_cvref_t<Tags>, NoTags>) {
+        visitor(tags);
+    }
+}
 } // namespace nekoproto
 
 namespace std {
@@ -739,3 +751,9 @@ struct formatter<nekoproto::tag_detail::TagValue<T>> {
             return static_cast<type>(tag.member);                                                                      \
         }                                                                                                              \
     };
+
+#define NEKO_DEFINE_TAG_PROPERTY(Type, member, ClassName) NEKO_DETAIL_DEFINE_TAG_PROPERTY(Type, member, ClassName)
+#define NEKO_DEFINE_TAG_VALUE_PROPERTY(member, ClassName) NEKO_DETAIL_DEFINE_TAG_VALUE_PROPERTY(member, ClassName)
+#define NEKO_DEFINE_TYPE_TAG_PROPERTY(Type, member, ClassName, TraitName)                                              \
+    NEKO_DETAIL_DEFINE_TYPE_TAG_PROPERTY(Type, member, ClassName, TraitName)
+
