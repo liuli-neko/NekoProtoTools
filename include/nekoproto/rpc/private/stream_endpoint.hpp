@@ -29,11 +29,24 @@ public:
     explicit NekoRpcStreamEndpoint(StreamT stream, NekoRpcFrameLimits limits = {})
         : mStream(std::move(stream)), mLimits(limits) {}
 
+    bool isStreamClosed() const noexcept {
+        if (mClosed) {
+            return true;
+        }
+        if constexpr (requires(const StreamT& s) { static_cast<bool>(s); }) {
+            return !static_cast<bool>(mStream);
+        }
+        return false;
+    }
+
     auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t> {
         if (!mReadMutex) {
             mReadMutex = std::make_shared<ilias::Mutex>();
         }
         auto guard = co_await mReadMutex->lock();
+        if (isStreamClosed()) {
+            co_return ilias::Err(ilias::IoError::UnexpectedEOF);
+        }
         ILIAS_CO_TRYV(co_await readFrame(buffer));
         co_return buffer.size();
     }
@@ -43,11 +56,17 @@ public:
             mWriteMutex = std::make_shared<ilias::Mutex>();
         }
         auto guard = co_await mWriteMutex->lock();
+        if (isStreamClosed()) {
+            co_return ilias::Err(ilias::IoError::UnexpectedEOF);
+        }
         ILIAS_CO_TRYV(co_await writeFrame(buffer));
         co_return buffer.size();
     }
 
-    void close() { detail::closeStream(mStream); }
+    void close() {
+        mClosed = true;
+        detail::closeStream(mStream);
+    }
     auto shutdown() -> ilias::IoTask<void> { co_return co_await detail::shutdownStream(mStream); }
     auto flush() -> ilias::IoTask<void> { co_return co_await detail::flushStream(mStream); }
 
@@ -105,6 +124,7 @@ private:
 
     StreamT mStream;
     NekoRpcFrameLimits mLimits;
+    bool mClosed = false;
     std::shared_ptr<ilias::Mutex> mReadMutex  = std::make_shared<ilias::Mutex>();
     std::shared_ptr<ilias::Mutex> mWriteMutex = std::make_shared<ilias::Mutex>();
 };

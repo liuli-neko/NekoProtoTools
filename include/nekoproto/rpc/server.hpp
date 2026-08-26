@@ -10,7 +10,6 @@
 #include <ilias/task/scope.hpp>
 #include <list>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -45,7 +44,6 @@ protected:
     Dispatcher mDispatcher;
     typename Backend::ServerContext mBackendContext;
     std::list<std::shared_ptr<EndpointSlot>> mEndpoints;
-    mutable std::mutex mEndpointMutex;
     bool mClosing = false;
     ilias::TaskGroup<void> mScope;
 
@@ -163,19 +161,11 @@ protected:
 
     void handleEndpoint(std::shared_ptr<EndpointSlot> slot) {
         slot->session = Backend::makeServerPeerSession(mBackendContext);
-        bool rejected = false;
-        {
-            std::scoped_lock lock(mEndpointMutex);
-            if (mClosing) {
-                rejected = true;
-            } else {
-                mEndpoints.emplace_back(slot);
-            }
-        }
-        if (rejected) {
+        if (mClosing) {
             slot->endpoint->close();
             return;
         }
+        mEndpoints.emplace_back(slot);
         try {
             auto cleanup = [this, slot]() -> ilias::Task<void> {
                 eraseEndpoint(slot);
@@ -315,20 +305,17 @@ protected:
     void refreshBackendMethodCatalog() { Backend::refreshMethodCatalog(mBackendContext, methodMetadata()); }
 
     auto snapshotEndpoints() const -> std::vector<std::shared_ptr<EndpointSlot>> {
-        std::scoped_lock lock(mEndpointMutex);
         return {mEndpoints.begin(), mEndpoints.end()};
     }
 
     auto beginClose() -> std::list<std::shared_ptr<EndpointSlot>> {
         std::list<std::shared_ptr<EndpointSlot>> endpoints;
-        std::scoped_lock lock(mEndpointMutex);
         mClosing = true;
         endpoints.splice(endpoints.end(), mEndpoints);
         return endpoints;
     }
 
     void eraseEndpoint(const std::shared_ptr<EndpointSlot>& slot) {
-        std::scoped_lock lock(mEndpointMutex);
         mEndpoints.remove(slot);
     }
 

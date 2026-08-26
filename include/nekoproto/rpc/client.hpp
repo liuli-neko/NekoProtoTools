@@ -1,7 +1,6 @@
 #pragma once
 
 #include <array>
-#include <atomic>
 #include <chrono>
 #include <ilias/platform.hpp>
 #include <ilias/sync/mutex.hpp>
@@ -11,7 +10,6 @@
 #include <iostream>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -59,14 +57,12 @@ protected:
     ilias::Mutex mProtocolMutex;
     ilias::Mutex mFallbackMutex;
     ilias::Mutex mSendMutex;
-    mutable std::mutex mStateMutex;
-    mutable std::mutex mPendingMutex;
-    std::atomic<bool> mResetPeerSession{false};
-    std::atomic<std::uint64_t> mCompleted{0};
-    std::atomic<std::uint64_t> mTimedOut{0};
-    std::atomic<std::uint64_t> mCanceled{0};
-    std::atomic<std::uint64_t> mRejected{0};
-    bool mReceiverStarted = false;
+    bool mResetPeerSession = false;
+    std::uint64_t mCompleted = 0;
+    std::uint64_t mTimedOut  = 0;
+    std::uint64_t mCanceled  = 0;
+    std::uint64_t mRejected  = 0;
+    bool mReceiverStarted    = false;
 
     static auto remainingWait(const RpcCallOptions& options, RpcCallOptions::Clock::time_point started)
         -> std::optional<std::chrono::nanoseconds> {
@@ -93,20 +89,14 @@ protected:
     }
 
     void erasePending(const typename Backend::Id& id) {
-        std::scoped_lock lock(mPendingMutex);
         mPending.erase(id);
     }
 
     void abandonPending(const typename Backend::Id& id) noexcept {
         erasePending(id);
         if constexpr (requires { Backend::encodeCancel(id); }) {
-            std::shared_ptr<detail::IMessageEndpoint> endpoint;
-            std::shared_ptr<ilias::TaskScope> receiverScope;
-            {
-                std::scoped_lock lock(mStateMutex);
-                endpoint      = mEndpoint;
-                receiverScope = mReceiverScope;
-            }
+            auto endpoint      = mEndpoint;
+            auto receiverScope = mReceiverScope;
             if (endpoint == nullptr || receiverScope == nullptr) {
                 return;
             }
@@ -131,11 +121,8 @@ protected:
     }
 
     void failAllPending(std::error_code error) {
-        decltype(mPending) pending;
-        {
-            std::scoped_lock lock(mPendingMutex);
-            pending.swap(mPending);
-        }
+        auto pending = std::move(mPending);
+        mPending.clear();
         for (auto& [id, sender] : pending) {
             static_cast<void>(id);
             (void)sender.send(ilias::Err(error));
@@ -143,36 +130,23 @@ protected:
     }
 
     void failPending(const typename Backend::Id& id, std::error_code error) {
-        std::optional<PendingSender> sender;
-        {
-            std::scoped_lock lock(mPendingMutex);
-            if (auto item = mPending.find(id); item != mPending.end()) {
-                sender.emplace(std::move(item->second));
-                mPending.erase(item);
-            }
-        }
-        if (sender.has_value()) {
-            (void)sender->send(ilias::Err(error));
+        if (auto item = mPending.find(id); item != mPending.end()) {
+            auto sender = std::move(item->second);
+            mPending.erase(item);
+            (void)sender.send(ilias::Err(error));
         }
     }
 
     void disconnect(const std::shared_ptr<detail::IMessageEndpoint>& endpoint, std::error_code error) {
-        {
-            std::scoped_lock lock(mStateMutex);
-            if (mEndpoint == endpoint) {
-                mEndpoint.reset();
-                mReceiverStarted = false;
-            }
+        if (mEndpoint == endpoint) {
+            mEndpoint.reset();
+            mReceiverStarted = false;
         }
         failAllPending(error);
     }
 
     auto ensureReady() -> ilias::IoTask<std::shared_ptr<detail::IMessageEndpoint>> {
-        std::shared_ptr<detail::IMessageEndpoint> endpoint;
-        {
-            std::scoped_lock lock(mStateMutex);
-            endpoint = mEndpoint;
-        }
+        auto endpoint = mEndpoint;
         if (endpoint == nullptr) {
             co_return ilias::Err(Backend::clientNotInitError());
         }
@@ -188,7 +162,7 @@ protected:
 
     auto ensureReceiver(const std::shared_ptr<detail::IMessageEndpoint>& endpoint) -> ilias::IoTask<void> {
         auto protocolGuard = co_await mProtocolMutex.lock();
-        if (mResetPeerSession.exchange(false)) {
+        if (std::exchange(mResetPeerSession, false)) {
             mPeerSession = Backend::makeClientPeerSession(mBackendContext);
         }
         {
@@ -196,18 +170,14 @@ protected:
             ILIAS_CO_TRYV(co_await Backend::ensureClientReady(mBackendContext, mPeerSession, *endpoint));
         }
 
-        std::shared_ptr<ilias::TaskScope> receiverScope;
-        {
-            std::scoped_lock lock(mStateMutex);
-            if (mEndpoint != endpoint || mReceiverScope == nullptr) {
-                co_return ilias::Err(Backend::clientNotInitError());
-            }
-            if (mReceiverStarted) {
-                co_return {};
-            }
-            mReceiverStarted = true;
-            receiverScope    = mReceiverScope;
+        if (mEndpoint != endpoint || mReceiverScope == nullptr) {
+            co_return ilias::Err(Backend::clientNotInitError());
         }
+        if (mReceiverStarted) {
+            co_return {};
+        }
+        mReceiverStarted = true;
+        auto receiverScope = mReceiverScope;
         receiverScope->spawn([this, endpoint]() -> ilias::Task<void> { co_await receiveLoop(endpoint); });
         co_return {};
     }
@@ -238,12 +208,9 @@ protected:
                 continue;
             }
             std::optional<ilias::oneshot::Sender<PendingResult>> sender;
-            {
-                std::scoped_lock lock(mPendingMutex);
-                if (auto item = mPending.find(*id); item != mPending.end()) {
-                    sender.emplace(std::move(item->second));
-                    mPending.erase(item);
-                }
+            if (auto item = mPending.find(*id); item != mPending.end()) {
+                sender.emplace(std::move(item->second));
+                mPending.erase(item);
             }
             if (sender.has_value()) {
                 (void)sender->send(PendingResult(std::move(buffer)));
@@ -289,9 +256,8 @@ protected:
         } else {
             NEKO_LOG_TRACE("rpc", "rpc client call begin: method={} notification={}", methodName, isNotification);
             if (!isNotification) {
-                std::scoped_lock lock(mPendingMutex);
                 if (mPending.size() >= maxPendingCalls()) {
-                    mRejected.fetch_add(1U, std::memory_order_relaxed);
+                    ++mRejected;
                     co_return ilias::Err(ilias::IoError::WouldBlock);
                 }
             }
@@ -299,14 +265,11 @@ protected:
             std::optional<ilias::oneshot::Receiver<PendingResult>> receiver;
             if (!isNotification) {
                 auto channel = ilias::oneshot::channel<PendingResult>();
-                {
-                    std::scoped_lock lock(mPendingMutex);
-                    if (mPending.size() >= maxPendingCalls() || mPending.contains(request.id)) {
-                        mRejected.fetch_add(1U, std::memory_order_relaxed);
-                        co_return ilias::Err(ilias::IoError::WouldBlock);
-                    }
-                    mPending.emplace(request.id, std::move(channel.sender));
+                if (mPending.size() >= maxPendingCalls() || mPending.contains(request.id)) {
+                    ++mRejected;
+                    co_return ilias::Err(ilias::IoError::WouldBlock);
                 }
+                mPending.emplace(request.id, std::move(channel.sender));
                 receiver.emplace(std::move(channel.receiver));
             }
             PendingEraseGuard pendingGuard{this, request.id, !isNotification};
@@ -415,14 +378,9 @@ public:
     }
 
     void close() {
-        std::shared_ptr<detail::IMessageEndpoint> endpoint;
-        std::shared_ptr<ilias::TaskScope> receiverScope;
-        {
-            std::scoped_lock lock(mStateMutex);
-            endpoint         = std::exchange(mEndpoint, nullptr);
-            receiverScope    = std::exchange(mReceiverScope, nullptr);
-            mReceiverStarted = false;
-        }
+        auto endpoint         = std::exchange(mEndpoint, nullptr);
+        auto receiverScope    = std::exchange(mReceiverScope, nullptr);
+        mReceiverStarted      = false;
         if (endpoint != nullptr) {
             endpoint->close();
         }
@@ -434,11 +392,7 @@ public:
     }
 
     auto flush() -> ilias::IoTask<void> {
-        std::shared_ptr<detail::IMessageEndpoint> endpoint;
-        {
-            std::scoped_lock lock(mStateMutex);
-            endpoint = mEndpoint;
-        }
+        auto endpoint = mEndpoint;
         if (endpoint != nullptr) {
             auto guard = co_await mSendMutex.lock();
             co_return co_await endpoint->flush();
@@ -447,11 +401,7 @@ public:
     }
 
     auto shutdown() -> ilias::IoTask<void> {
-        std::shared_ptr<detail::IMessageEndpoint> endpoint;
-        {
-            std::scoped_lock lock(mStateMutex);
-            endpoint = mEndpoint;
-        }
+        auto endpoint = mEndpoint;
         if (endpoint != nullptr) {
             auto sendGuard = co_await mSendMutex.lock();
             std::error_code error;
@@ -461,13 +411,10 @@ public:
                 error = ret.error();
             }
             endpoint->close();
-            {
-                std::scoped_lock lock(mStateMutex);
-                if (mEndpoint == endpoint) {
-                    mEndpoint.reset();
-                    mReceiverScope.reset();
-                    mReceiverStarted = false;
-                }
+            if (mEndpoint == endpoint) {
+                mEndpoint.reset();
+                mReceiverScope.reset();
+                mReceiverStarted = false;
             }
             failAllPending(error ? error : Backend::clientNotInitError());
             if (error) {
@@ -478,32 +425,22 @@ public:
     }
 
     auto isConnected() const -> bool {
-        std::scoped_lock lock(mStateMutex);
         return mEndpoint != nullptr;
     }
 
     auto metrics() const -> RpcMetricsSnapshot {
-        std::size_t pending = 0;
-        {
-            std::scoped_lock lock(mPendingMutex);
-            pending = mPending.size();
-        }
-        return {.active    = pending,
+        return {.active    = mPending.size(),
                 .queued    = 0,
-                .completed = mCompleted.load(std::memory_order_relaxed),
-                .timed_out = mTimedOut.load(std::memory_order_relaxed),
-                .canceled  = mCanceled.load(std::memory_order_relaxed),
-                .rejected  = mRejected.load(std::memory_order_relaxed)};
+                .completed = mCompleted,
+                .timed_out = mTimedOut,
+                .canceled  = mCanceled,
+                .rejected  = mRejected};
     }
 
     auto cancelRemote(const typename Backend::Id& id) -> ilias::IoTask<void>
         requires requires { Backend::encodeCancel(id); }
     {
-        std::shared_ptr<detail::IMessageEndpoint> endpoint;
-        {
-            std::scoped_lock lock(mStateMutex);
-            endpoint = mEndpoint;
-        }
+        auto endpoint = mEndpoint;
         if (endpoint == nullptr) {
             co_return ilias::Err(Backend::clientNotInitError());
         }
@@ -536,7 +473,6 @@ public:
             replacement = std::make_shared<detail::MessageEndpointWrapper<EndpointT>>(std::move(endpoint));
         }
         close();
-        std::scoped_lock lock(mStateMutex);
         mEndpoint         = std::move(replacement);
         mReceiverScope    = std::make_shared<ilias::TaskScope>();
         mReceiverStarted  = false;
@@ -594,19 +530,19 @@ public:
         using RetType = typename std::decay_t<T>::RawReturnType;
 
         struct CompletionGuard {
-            std::atomic<std::uint64_t>& completed;
-            ~CompletionGuard() { completed.fetch_add(1U, std::memory_order_relaxed); }
+            std::uint64_t& completed;
+            ~CompletionGuard() { ++completed; }
         } completionGuard{mCompleted};
 
         const auto started = RpcCallOptions::Clock::now();
         if (options.cancellation_token.stop_requested()) {
-            mCanceled.fetch_add(1U, std::memory_order_relaxed);
+            ++mCanceled;
             co_return ilias::Err(ilias::IoError::Canceled);
         }
 
         auto remaining = remainingWait(options, started);
         if (remaining.has_value() && remaining->count() <= 0) {
-            mTimedOut.fetch_add(1U, std::memory_order_relaxed);
+            ++mTimedOut;
             co_return ilias::Err(RpcError::DeadlineExceeded);
         }
 
@@ -630,9 +566,9 @@ public:
                                                                  metadata.name(), options, remaining);
             if (!wireResult) {
                 if (wireResult.error() == RpcError::DeadlineExceeded) {
-                    mTimedOut.fetch_add(1U, std::memory_order_relaxed);
+                    ++mTimedOut;
                 } else if (wireResult.error() == ilias::IoError::Canceled) {
-                    mCanceled.fetch_add(1U, std::memory_order_relaxed);
+                    ++mCanceled;
                 }
                 co_return ilias::Err(wireResult.error());
             }

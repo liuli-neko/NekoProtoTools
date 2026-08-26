@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <chrono>
 #include <compare>
 #include <ilias/io/system_error.hpp>
@@ -14,7 +13,6 @@
 #include <limits>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
@@ -89,73 +87,70 @@ public:
     }
 
     auto tryAdmit() -> std::optional<Admission> {
-        std::scoped_lock lock(mAdmissionMutex);
         if (mMaxActive == 0U) {
-            mRejected.fetch_add(1U, std::memory_order_relaxed);
+            ++mRejected;
             return std::nullopt;
         }
 
         const bool queued = mOutstanding >= mMaxActive;
         if (queued && mOutstanding - mMaxActive >= mMaxQueued) {
-            mRejected.fetch_add(1U, std::memory_order_relaxed);
+            ++mRejected;
             return std::nullopt;
         }
 
         ++mOutstanding;
         if (queued) {
-            mQueued.fetch_add(1U, std::memory_order_relaxed);
+            ++mQueued;
         }
         return Admission(*this, queued);
     }
 
-    void reject() { mRejected.fetch_add(1U, std::memory_order_relaxed); }
+    void reject() { ++mRejected; }
     auto acquire() { return mPermits->acquire(); }
 
-    void markTimedOut() { mTimedOut.fetch_add(1U, std::memory_order_relaxed); }
+    void markTimedOut() { ++mTimedOut; }
     void markCanceled(std::size_t count = 1U) {
-        mCanceled.fetch_add(static_cast<std::uint64_t>(count), std::memory_order_relaxed);
+        mCanceled += static_cast<std::uint64_t>(count);
     }
 
     auto metrics() const noexcept -> RpcMetricsSnapshot {
-        return {.active    = mActive.load(std::memory_order_relaxed),
-                .queued    = mQueued.load(std::memory_order_relaxed),
-                .completed = mCompleted.load(std::memory_order_relaxed),
-                .timed_out = mTimedOut.load(std::memory_order_relaxed),
-                .canceled  = mCanceled.load(std::memory_order_relaxed),
-                .rejected  = mRejected.load(std::memory_order_relaxed)};
+        return {.active    = mActive,
+                .queued    = mQueued,
+                .completed = mCompleted,
+                .timed_out = mTimedOut,
+                .canceled  = mCanceled,
+                .rejected  = mRejected};
     }
 
 private:
     void start(Admission& admission) {
         if (admission.mQueued) {
-            mQueued.fetch_sub(1U, std::memory_order_relaxed);
+            --mQueued;
         }
-        mActive.fetch_add(1U, std::memory_order_relaxed);
+        ++mActive;
         admission.mStarted = true;
     }
 
     void release(const Admission& admission) {
         if (admission.mStarted) {
-            mActive.fetch_sub(1U, std::memory_order_relaxed);
-            mCompleted.fetch_add(1U, std::memory_order_relaxed);
+            --mActive;
+            ++mCompleted;
         } else if (admission.mQueued) {
-            mQueued.fetch_sub(1U, std::memory_order_relaxed);
+            --mQueued;
         }
-        std::scoped_lock lock(mAdmissionMutex);
         --mOutstanding;
     }
 
     std::unique_ptr<ilias::Semaphore> mPermits;
-    mutable std::mutex mAdmissionMutex;
     std::size_t mMaxActive   = 0;
     std::size_t mMaxQueued   = 0;
     std::size_t mOutstanding = 0;
-    std::atomic<std::size_t> mActive{0};
-    std::atomic<std::size_t> mQueued{0};
-    std::atomic<std::uint64_t> mCompleted{0};
-    std::atomic<std::uint64_t> mTimedOut{0};
-    std::atomic<std::uint64_t> mCanceled{0};
-    std::atomic<std::uint64_t> mRejected{0};
+    std::size_t mActive      = 0;
+    std::size_t mQueued      = 0;
+    std::uint64_t mCompleted = 0;
+    std::uint64_t mTimedOut  = 0;
+    std::uint64_t mCanceled  = 0;
+    std::uint64_t mRejected  = 0;
 };
 
 template <RpcBackend Backend>

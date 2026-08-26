@@ -184,11 +184,24 @@ public:
                                                  std::size_t maxMessageBytes     = 16U * 1024U * 1024U)
         : mStream(std::move(stream)), mMessageTooLarge(messageTooLarge), mMaxMessageBytes(maxMessageBytes) {}
 
+    bool isStreamClosed() const noexcept {
+        if (mClosed) {
+            return true;
+        }
+        if constexpr (requires(const StreamT& s) { static_cast<bool>(s); }) {
+            return !static_cast<bool>(mStream);
+        }
+        return false;
+    }
+
     auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t> {
         if (!mReadMutex) {
             mReadMutex = std::make_shared<ilias::Mutex>();
         }
         auto guard = co_await mReadMutex->lock();
+        if (isStreamClosed()) {
+            co_return ilias::Err(ilias::IoError::UnexpectedEOF);
+        }
         ILIAS_CO_TRY(auto size, co_await ilias::io::readUint32LE(mStream));
         if (size > mMaxMessageBytes) {
             co_return ilias::Err(mMessageTooLarge);
@@ -212,6 +225,9 @@ public:
             mWriteMutex = std::make_shared<ilias::Mutex>();
         }
         auto guard = co_await mWriteMutex->lock();
+        if (isStreamClosed()) {
+            co_return ilias::Err(ilias::IoError::UnexpectedEOF);
+        }
         if (buffer.size() > std::numeric_limits<std::uint32_t>::max() || buffer.size() > mMaxMessageBytes) {
             co_return ilias::Err(mMessageTooLarge);
         }
@@ -226,7 +242,10 @@ public:
         co_return buffer.size();
     }
 
-    void close() { detail::closeStream(mStream); }
+    void close() {
+        mClosed = true;
+        detail::closeStream(mStream);
+    }
     auto shutdown() -> ilias::IoTask<void> { co_return co_await detail::shutdownStream(mStream); }
     auto flush() -> ilias::IoTask<void> { co_return co_await detail::flushStream(mStream); }
 
@@ -238,6 +257,7 @@ private:
     StreamT mStream;
     std::error_code mMessageTooLarge          = ilias::IoError::MessageTooLarge;
     std::size_t mMaxMessageBytes              = 16U * 1024U * 1024U;
+    bool mClosed                              = false;
     std::shared_ptr<ilias::Mutex> mReadMutex  = std::make_shared<ilias::Mutex>();
     std::shared_ptr<ilias::Mutex> mWriteMutex = std::make_shared<ilias::Mutex>();
 };
@@ -259,6 +279,9 @@ public:
         : mDatagram(std::move(datagram)), mEndpoint(std::move(endpoint)), mMessageTooLarge(messageTooLarge) {}
 
     auto recv(std::vector<std::byte>& buffer) -> ilias::IoTask<std::size_t> {
+        if (mClosed) {
+            co_return ilias::Err(ilias::IoError::UnexpectedEOF);
+        }
         auto current = buffer.size();
         buffer.resize(current + ChunkSize);
         while (true) {
@@ -280,6 +303,9 @@ public:
     }
 
     auto send(std::span<const std::byte> buffer) -> ilias::IoTask<std::size_t> {
+        if (mClosed) {
+            co_return ilias::Err(ilias::IoError::UnexpectedEOF);
+        }
         if (buffer.size() >= ChunkSize) {
             co_return ilias::Err(mMessageTooLarge);
         }
@@ -299,7 +325,10 @@ public:
         co_return sent;
     }
 
-    void close() { mDatagram.close(); }
+    void close() {
+        mClosed = true;
+        mDatagram.close();
+    }
     auto shutdown() -> ilias::IoTask<void> { co_return {}; }
     auto flush() -> ilias::IoTask<void> { co_return {}; }
 
@@ -311,6 +340,7 @@ private:
     DatagramT mDatagram;
     EndpointT mEndpoint;
     std::error_code mMessageTooLarge = ilias::IoError::MessageTooLarge;
+    bool mClosed                     = false;
 };
 
 } // namespace detail
