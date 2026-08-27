@@ -371,4 +371,46 @@ struct Ignore {
     }
 };
 } // namespace tag_property
+
+struct SerializerTags {
+    bool             ignored        : 1 = false;
+    bool             skippable      : 1 = false;
+    bool             flat           : 1 = false;
+    bool             raw_string     : 1 = false;
+    bool             raw_fixed_data : 1 = false;
+    bool             unframed       : 1 = false;
+    bool             inline_table   : 1 = false;
+    std::size_t      fixed_length       = 0;
+    std::string_view rename{};
+    std::string_view leading_comment{};
+    std::string_view trailing_comment{};
+    std::string_view yaml_tag{};
+    std::string_view yaml_anchor{};
+    YamlScalarStyle  yaml_scalar_style     = YamlScalarStyle::Any;
+    YamlCollectionStyle yaml_collection_style = YamlCollectionStyle::Any;
+    UnionEncoding    union_encoding        = UnionEncoding::TaggedArray;
+
+    template <typename FieldType = void, typename Tags>
+    static constexpr auto from(const Tags& tags) noexcept -> SerializerTags {
+        SerializerTags st;
+        st.ignored               = tag_query::get<tag_property::Ignore>(tags);
+        st.skippable             = tag_query::get<tag_property::Skippable>(tags);
+        st.flat                  = tag_query::get<tag_property::Flat<FieldType>>(tags);
+        st.raw_string            = tag_query::get<tag_property::RawString>(tags);
+        st.raw_fixed_data        = tag_query::get<tag_property::RawFixedData>(tags);
+        st.unframed              = tag_query::get<tag_property::Unframed<FieldType>>(tags);
+        st.inline_table          = tag_query::get<tag_property::InlineTable>(tags);
+        st.fixed_length          = tag_query::get<tag_property::FixedLength<FieldType>>(tags);
+        st.rename                = tag_query::get<tag_property::Name>(tags);
+        st.leading_comment       = tag_query::get<tag_property::LeadingComment>(tags);
+        st.trailing_comment      = tag_query::get<tag_property::TrailingComment>(tags);
+        st.yaml_tag              = tag_query::get<tag_property::YamlTag>(tags);
+        st.yaml_anchor           = tag_query::get<tag_property::YamlAnchor>(tags);
+        st.yaml_scalar_style     = tag_query::get<tag_property::YamlScalarStyleProperty>(tags);
+        st.yaml_collection_style = tag_query::get<tag_property::YamlCollectionStyleProperty>(tags);
+        st.union_encoding        = tag_query::get<tag_property::UnionEncodingProperty>(tags);
+        return st;
+    }
+};
+
 } // namespace nekoproto

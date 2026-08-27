@@ -255,46 +255,6 @@ consteval auto flattenTags() {
         return (flattenOneTag<Tags>() + ...);
     }
 }
-
-template <auto Tag, auto Target>
-inline constexpr bool is_same_tag_v = []() consteval {
-    if constexpr (!std::is_same_v<decltype(Tag), decltype(Target)>) {
-        return false;
-    } else {
-        return Tag == Target;
-    }
-}();
-
-template <auto Tag, auto... Accum>
-consteval auto appendUniqueTag(TagList<Accum...>) {
-    if constexpr (sizeof...(Accum) == 0) {
-        return TagList<Tag>{};
-    } else if constexpr ((is_same_tag_v<Tag, Accum> || ...)) {
-        return TagList<Accum...>{};
-    } else {
-        return TagList<Accum..., Tag>{};
-    }
-}
-
-template <typename Acc, auto... Rest>
-struct DedupFold;
-
-template <typename Acc>
-struct DedupFold<Acc> {
-    using type = Acc;
-};
-
-template <typename Acc, auto Head, auto... Tail>
-struct DedupFold<Acc, Head, Tail...> {
-    using next_acc = decltype(appendUniqueTag<Head>(Acc{}));
-    using type     = typename DedupFold<next_acc, Tail...>::type;
-};
-
-template <auto... Tags>
-consteval auto deduplicateTags(TagList<Tags...>) {
-    return typename DedupFold<TagList<>, Tags...>::type{};
-}
-
 template <typename List>
 struct NormalizeTagList;
 
@@ -313,8 +273,7 @@ struct NormalizeTagList<TagList<Tags...>> {
 template <auto... Tags>
 struct NormalizeTags {
     using flattened             = decltype(flattenTags<Tags...>());
-    using dedup                 = decltype(deduplicateTags(flattened{}));
-    constexpr static auto value = NormalizeTagList<dedup>::value;
+    constexpr static auto value = NormalizeTagList<flattened>::value;
 };
 
 template <auto... Tags>

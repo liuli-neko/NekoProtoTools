@@ -188,7 +188,7 @@ inline void nekoProtoPrivateLogOut(const char* level, const char* message, const
             static_cast<int>(dis_millseconds), level, file_str.c_str(), context.line, func_str.c_str(), context.module,
             ansiColorCode("reset"), message);
 #else
-    fprintf(stderr, "[%s.%03d] %s - [%s] %s\n", buf, static_cast<int>(disMillseconds), level, context.module, message);
+    fprintf(stderr, "[%s.%03d] %s - [%s] %s\n", buf, static_cast<int>(dis_millseconds), level, context.module, message);
 #endif
 }
 } // namespace logdetail

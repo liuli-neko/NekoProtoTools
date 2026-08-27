@@ -560,86 +560,64 @@ constexpr auto getMetaKind() noexcept -> MetaKind {
 template <typename T>
 constexpr static auto meta_kind_v = getMetaKind<T>();
 
-template <typename T, MetaKind Kind>
-struct MetaPrivateBase;
-
-// 基础实现 - AutoUnwrap
-template <typename T>
-struct MetaPrivateBase<T, MetaKind::AutoUnwrap> {
+template <typename T, class = void>
+struct MetaPrivate {
     static constexpr auto names() noexcept {
-        return memberNamesImpl<T>(std::make_index_sequence<member_count_v<T>>{});
+        if constexpr (IsLocalRefObject<T>) {
+            return T::Neko::value.names;
+        } else if constexpr (IsLocalNames<T>) {
+            return T::Neko::names;
+        } else if constexpr (IsMetaRefObject<T>) {
+            return Meta<T>::value.names;
+        } else if constexpr (IsMetaNames<T>) {
+            return Meta<T>::names;
+        } else if constexpr (can_unwrap_v<T>) {
+            return memberNamesImpl<T>(std::make_index_sequence<member_count_v<T>>{});
+        } else {
+            return std::array<std::string_view, 0>{};
+        }
     }
+
     template <typename U>
         requires std::same_as<std::remove_cvref_t<T>, std::remove_cvref_t<U>>
     static constexpr auto value(U&& obj) -> decltype(auto) {
-        return unwrapStruct(std::forward<U>(obj));
+        if constexpr (IsLocalRefObject<T> || IsLocalRefArray<T>) {
+            return T::Neko::value.values;
+        } else if constexpr (IsLocalRefValues<T>) {
+            return T::Neko::values;
+        } else if constexpr (IsLocalRefValue<T>) {
+            return T::Neko::value;
+        } else if constexpr (IsMetaRefObject<T> || IsMetaRefArray<T>) {
+            return Meta<T>::value.values;
+        } else if constexpr (IsMetaRefValues<T>) {
+            return Meta<T>::values;
+        } else if constexpr (IsMetaRefValue<T>) {
+            return Meta<T>::value;
+        } else if constexpr (can_unwrap_v<T>) {
+            return unwrapStruct(std::forward<U>(obj));
+        } else {
+            return std::forward_as_tuple();
+        }
+    }
+
+    static constexpr auto value() noexcept {
+        if constexpr (IsLocalRefObject<T> || IsLocalRefArray<T>) {
+            return T::Neko::value.values;
+        } else if constexpr (IsLocalRefValues<T>) {
+            return T::Neko::values;
+        } else if constexpr (IsLocalRefValue<T>) {
+            return T::Neko::value;
+        } else if constexpr (IsMetaRefObject<T> || IsMetaRefArray<T>) {
+            return Meta<T>::value.values;
+        } else if constexpr (IsMetaRefValues<T>) {
+            return Meta<T>::values;
+        } else if constexpr (IsMetaRefValue<T>) {
+            return Meta<T>::value;
+        } else {
+            return std::forward_as_tuple();
+        }
     }
 };
-
-// 基础实现 - LocalValuesNames
-template <typename T>
-struct MetaPrivateBase<T, MetaKind::LocalValuesNames> {
-    static constexpr auto names() noexcept { return T::Neko::names; }
-    static constexpr auto value() noexcept { return T::Neko::values; }
-};
-
-// 基础实现 - LocalObject
-template <typename T>
-struct MetaPrivateBase<T, MetaKind::LocalObject> {
-    static constexpr auto names() noexcept -> auto& { return T::Neko::value.names; }
-    static constexpr auto value() noexcept -> auto& { return T::Neko::value.values; }
-};
-
-// 基础实现 - LocalArray
-template <typename T>
-struct MetaPrivateBase<T, MetaKind::LocalArray> {
-    static constexpr auto value() noexcept -> auto& { return T::Neko::value.values; }
-};
-
-// 基础实现 - LocalValue
-template <typename T>
-struct MetaPrivateBase<T, MetaKind::LocalValue> {
-    static constexpr auto value() noexcept { return T::Neko::value; }
-};
-
-// 基础实现 - LocalValueNames
-template <typename T>
-struct MetaPrivateBase<T, MetaKind::LocalValueNames> {
-    static constexpr auto names() noexcept { return T::Neko::names; }
-    static constexpr auto value() noexcept { return T::Neko::value; }
-};
-
-// Meta 变体 - 类似上面的实现
-template <typename T>
-struct MetaPrivateBase<T, MetaKind::MetaValuesNames> {
-    static constexpr auto names() noexcept { return Meta<T>::names; }
-    static constexpr auto value() noexcept { return Meta<T>::values; }
-};
-
-template <typename T>
-struct MetaPrivateBase<T, MetaKind::MetaObject> {
-    static constexpr auto names() noexcept -> auto& { return Meta<T>::value.names; }
-    static constexpr auto value() noexcept -> auto& { return Meta<T>::value.values; }
-};
-
-template <typename T>
-struct MetaPrivateBase<T, MetaKind::MetaArray> {
-    static constexpr auto value() noexcept -> auto& { return Meta<T>::value.values; }
-};
-
-template <typename T>
-struct MetaPrivateBase<T, MetaKind::MetaValue> {
-    static constexpr auto value() noexcept { return Meta<T>::value; }
-};
-
-template <typename T>
-struct MetaPrivateBase<T, MetaKind::MetaValueNames> {
-    static constexpr auto names() noexcept { return Meta<T>::names; }
-    static constexpr auto value() noexcept { return Meta<T>::value; }
-};
-
-template <typename T, class = void>
-struct MetaPrivate : MetaPrivateBase<T, meta_kind_v<T>> {};
 
 template <typename T>
 concept HasNamesMeta = meta_kind_v<T> != MetaKind::ErrorKind && meta_kind_v<T> != MetaKind::MetaValue &&
@@ -939,14 +917,26 @@ struct Overloads : public Ts... {
     Overloads(Ts... args) : Ts(args)... {}
 };
 
+template <std::size_t Index, typename FieldRef, typename TagsType>
+struct FieldView {
+    static constexpr std::size_t index = Index;
+    using field_type                   = std::remove_cvref_t<FieldRef>;
+    using tags_type                    = TagsType;
+
+    std::string_view name;
+    FieldRef         value;
+    TagsType         tags;
+
+    constexpr auto get_name() const noexcept -> std::string_view { return name; }
+    constexpr auto& get_value() const noexcept { return value; }
+    constexpr auto get_tags() const noexcept -> const TagsType& { return tags; }
+};
+
 template <typename T, class enable = void>
 struct Reflect {
 private:
     using Provider = detail::ReflectProvider<T>;
     using Model    = detail::ReflectModel<T>;
-
-    enum class CallbackKind { Full, Tagged, Named, Value, Adaptive };
-    enum class MetaCallbackKind { Full, Named, Typed, Tagged, Adaptive };
 
     template <typename U>
     using ObjectReference = std::remove_reference_t<U>&;
@@ -964,47 +954,6 @@ private:
     template <std::size_t I, typename U>
     using FieldReference =
         decltype(detail::valueRef(std::declval<BoundAccessorReference<I, U>>(), std::declval<ObjectReference<U>>()));
-
-    template <typename U, typename CallAbleT, std::size_t... Is>
-    static consteval auto selectCallbackKind(std::index_sequence<Is...> /*unused*/) -> CallbackKind {
-        if constexpr ((std::is_invocable_v<CallAbleT&, FieldReference<Is, U>, std::string_view,
-                                           decltype(std::get<Is>(field_tags))> &&
-                       ...)) {
-            return CallbackKind::Full;
-        } else if constexpr ((std::is_invocable_v<CallAbleT&, FieldReference<Is, U>,
-                                                  decltype(std::get<Is>(field_tags))> &&
-                              ...)) {
-            return CallbackKind::Tagged;
-        } else if constexpr ((std::is_invocable_v<CallAbleT&, FieldReference<Is, U>, std::string_view> && ...)) {
-            return CallbackKind::Named;
-        } else if constexpr ((std::is_invocable_v<CallAbleT&, FieldReference<Is, U>> && ...)) {
-            return CallbackKind::Value;
-        } else {
-            // Overload sets may intentionally select a different ergonomic
-            // callback form for different field types. Preserve that behavior.
-            return CallbackKind::Adaptive;
-        }
-    }
-
-    template <typename CallAbleT, std::size_t... Is>
-    static consteval auto selectMetaCallbackKind(std::index_sequence<Is...> /*unused*/) -> MetaCallbackKind {
-        if constexpr ((std::is_invocable_v<CallAbleT&, std::type_identity<std::tuple_element_t<Is, value_types>>,
-                                           std::string_view, decltype(std::get<Is>(field_tags))> &&
-                       ...)) {
-            return MetaCallbackKind::Full;
-        } else if constexpr ((std::is_invocable_v<CallAbleT&, std::string_view, decltype(std::get<Is>(field_tags))> &&
-                              ...)) {
-            return MetaCallbackKind::Named;
-        } else if constexpr ((std::is_invocable_v<CallAbleT&, std::type_identity<std::tuple_element_t<Is, value_types>>,
-                                                  decltype(std::get<Is>(field_tags))> &&
-                              ...)) {
-            return MetaCallbackKind::Typed;
-        } else if constexpr ((std::is_invocable_v<CallAbleT&, decltype(std::get<Is>(field_tags))> && ...)) {
-            return MetaCallbackKind::Tagged;
-        } else {
-            return MetaCallbackKind::Adaptive;
-        }
-    }
 
     template <typename U, typename CallAbleT>
     static constexpr auto forEachAdaptive(U&& obj, CallAbleT&& func) {
@@ -1066,26 +1015,32 @@ private:
     }
 
 public:
-    // Public reflection algorithm. It consumes only the provider/model surface:
-    // no direct T::Neko or Meta<T> probing belongs below this line.
+    // STL-style field view iterator
+    template <typename U, typename CallAbleT>
+    static constexpr auto forEachField(U&& obj, CallAbleT&& func) {
+        if constexpr (!Provider::has_values) {
+            static_assert(Provider::has_values, "type has no values meta");
+        }
+        decltype(auto) accessors  = Provider::accessors(obj);
+        constexpr auto fieldNames = Provider::names();
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
+                auto&& val  = Provider::template getFrom<I>(accessors, obj);
+                auto&& tags = std::get<I>(field_tags);
+                std::string_view name = (I < fieldNames.size()) ? fieldNames[I] : std::string_view{};
+                return detail::removeVoidToMonostate(
+                    func, FieldView<I, decltype(val), decltype(tags)>{name, val, tags});
+            };
+            return std::tuple{invoke(std::integral_constant<std::size_t, Is>{})...};
+        }(std::make_index_sequence<Provider::value_count>{});
+    }
+
     template <typename U, typename CallAbleT>
     static constexpr auto forEach(U&& obj, CallAbleT&& func) {
         if constexpr (!Provider::has_values) {
             static_assert(Provider::has_values, "type has no values meta");
         }
-        constexpr auto callbackKind =
-            selectCallbackKind<U, CallAbleT>(std::make_index_sequence<Provider::value_count>{});
-        if constexpr (callbackKind == CallbackKind::Full) {
-            return forEachFull(std::forward<U>(obj), std::forward<CallAbleT>(func));
-        } else if constexpr (callbackKind == CallbackKind::Tagged) {
-            return forEachTagged(std::forward<U>(obj), std::forward<CallAbleT>(func));
-        } else if constexpr (callbackKind == CallbackKind::Named) {
-            return forEachNamed(std::forward<U>(obj), std::forward<CallAbleT>(func));
-        } else if constexpr (callbackKind == CallbackKind::Value) {
-            return forEachValue(std::forward<U>(obj), std::forward<CallAbleT>(func));
-        } else {
-            return forEachAdaptive(std::forward<U>(obj), std::forward<CallAbleT>(func));
-        }
+        return forEachAdaptive(std::forward<U>(obj), std::forward<CallAbleT>(func));
     }
 
     template <typename U, typename CallAbleT>
@@ -1237,18 +1192,7 @@ public:
         if constexpr (!Provider::has_values) {
             static_assert(Provider::has_values, "type has no values meta");
         }
-        constexpr auto callbackKind = selectMetaCallbackKind<CallAbleT>(std::make_index_sequence<value_count>{});
-        if constexpr (callbackKind == MetaCallbackKind::Full) {
-            return forEachMetaFull(std::forward<CallAbleT>(func));
-        } else if constexpr (callbackKind == MetaCallbackKind::Named) {
-            return forEachMetaNamed(std::forward<CallAbleT>(func));
-        } else if constexpr (callbackKind == MetaCallbackKind::Typed) {
-            return forEachMetaTyped(std::forward<CallAbleT>(func));
-        } else if constexpr (callbackKind == MetaCallbackKind::Tagged) {
-            return forEachMetaTagged(std::forward<CallAbleT>(func));
-        } else {
-            return forEachMetaAdaptive(std::forward<CallAbleT>(func));
-        }
+        return forEachMetaAdaptive(std::forward<CallAbleT>(func));
     }
 
     template <typename CallAbleT>
@@ -1490,6 +1434,39 @@ struct FieldDescriptor {
         has_fixed_length ? tag_query::get<tag_property::FixedLength<field_type>>(tags) : 0;
 };
 
+namespace detail {
+template <typename Key, typename Value, std::size_t N>
+struct FlatEnumMap {
+    std::array<std::pair<Key, Value>, N> entries{};
+
+    struct Iterator {
+        const std::pair<Key, Value>* ptr = nullptr;
+        constexpr const auto& operator*() const noexcept { return *ptr; }
+        constexpr const auto* operator->() const noexcept { return ptr; }
+        constexpr Iterator& operator++() noexcept { ++ptr; return *this; }
+        constexpr bool operator==(const Iterator& other) const noexcept { return ptr == other.ptr; }
+        constexpr bool operator!=(const Iterator& other) const noexcept { return ptr != other.ptr; }
+    };
+
+    constexpr auto begin() const noexcept { return Iterator{entries.data()}; }
+    constexpr auto end() const noexcept { return Iterator{entries.data() + N}; }
+
+    constexpr auto find(std::string_view key) const noexcept -> Iterator {
+        for (std::size_t i = 0; i < N; ++i) {
+            if (entries[i].first == key) return Iterator{&entries[i]};
+        }
+        return end();
+    }
+
+    constexpr auto find(Value val) const noexcept -> Iterator {
+        for (std::size_t i = 0; i < N; ++i) {
+            if (entries[i].first == val) return Iterator{&entries[i]};
+        }
+        return end();
+    }
+};
+} // namespace detail
+
 template <typename T>
 struct Reflect<T, std::enable_if_t<std::is_enum_v<T>>> {
 private:
@@ -1518,25 +1495,27 @@ public:
             return AutoTable::values;
         }
     }
-    static auto nameMap() -> const auto& {
-        static std::map<std::string_view, T> s_name_map = []() {
-            auto map = std::map<std::string_view, T>{};
-            auto ns  = names();
-            auto vs  = values();
-            for (int i = 0; i < ns.size(); ++i) {
-                map[ns[i]] = vs[i];
+    static const auto& nameMap() noexcept {
+        static constexpr auto N = size();
+        static constexpr auto s_name_map = []() consteval {
+            detail::FlatEnumMap<std::string_view, T, N> map{};
+            auto ns = names();
+            auto vs = values();
+            for (std::size_t i = 0; i < N; ++i) {
+                map.entries[i] = {ns[i], vs[i]};
             }
             return map;
         }();
         return s_name_map;
     }
-    static auto valueMap() -> const auto& {
-        static std::map<T, std::string_view> s_value_map = []() {
-            auto map = std::map<T, std::string_view>{};
-            auto ns  = names();
-            auto vs  = values();
-            for (int i = 0; i < static_cast<int>(ns.size()); ++i) {
-                map[vs[i]] = ns[i];
+    static const auto& valueMap() noexcept {
+        static constexpr auto N = size();
+        static constexpr auto s_value_map = []() consteval {
+            detail::FlatEnumMap<T, std::string_view, N> map{};
+            auto ns = names();
+            auto vs = values();
+            for (std::size_t i = 0; i < N; ++i) {
+                map.entries[i] = {vs[i], ns[i]};
             }
             return map;
         }();

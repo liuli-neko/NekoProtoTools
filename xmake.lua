@@ -20,6 +20,7 @@ add_configfiles("include/nekoproto/global/config.h.in")
 set_configdir("include/nekoproto/global")
 
 includes("lua/hidetargets.lua")
+includes("lua/bench_compile_time.lua")
 
 option("has_std_expected")
     set_showmenu(false)
