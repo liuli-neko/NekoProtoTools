@@ -26,7 +26,7 @@ struct BinaryBackend {
         explicit OutputState(BufferT& buffer) noexcept : writer(buffer) {}
 
         WriterType writer;
-        bool wroteRoot = false;
+        bool wrote_root = false;
     };
 
     template <typename SourceT>
@@ -38,16 +38,16 @@ struct BinaryBackend {
 
     template <typename BufferT, typename T>
     static auto write(OutputState<BufferT>& state, const T& value) -> sa::Result<void> {
-        if (state.wroteRoot) {
+        if (state.wrote_root) {
             return sa::error(sa::ErrorCode::InvalidLength,
                              "Binary V2 accepts exactly one root value; wrap multiple values in a tuple or object");
         }
-        state.wroteRoot = true;
+        state.wrote_root = true;
         using ValueType = std::remove_cvref_t<T>;
         if constexpr (is_tagged_field_v<ValueType>) {
             if constexpr (tag_query::get<tag_property::RawFixedData>(ValueType::tags)) {
                 using RawType = std::remove_cvref_t<typename ValueType::accessor_type>;
-                if constexpr (!(detail::has_values_meta<RawType> && detail::has_names_meta<RawType>)) {
+                if constexpr (!(detail::HasValuesMeta<RawType> && detail::HasNamesMeta<RawType>)) {
                     return sa::error(sa::ErrorCode::InvalidType,
                                      "raw_fixed_data requires a reflected object with named fixed-width fields");
                 }
@@ -65,7 +65,7 @@ struct BinaryBackend {
         if constexpr (is_tagged_field_v<ValueType>) {
             if constexpr (tag_query::get<tag_property::RawFixedData>(ValueType::tags)) {
                 using RawType = std::remove_cvref_t<typename ValueType::accessor_type>;
-                if constexpr (!(detail::has_values_meta<RawType> && detail::has_names_meta<RawType>)) {
+                if constexpr (!(detail::HasValuesMeta<RawType> && detail::HasNamesMeta<RawType>)) {
                     return sa::error(sa::ErrorCode::InvalidType,
                                      "raw_fixed_data requires a reflected object with named fixed-width fields");
                 }

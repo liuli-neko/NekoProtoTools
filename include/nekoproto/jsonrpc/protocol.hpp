@@ -90,7 +90,7 @@ struct WriteParser<W, JsonRpcSerializerHelperObject<T>, void> {
         const auto writeField = [&]<std::size_t I>() {
             if (result) {
                 result = parserWriteReflectField<W>(writer, object, std::get<I>(value.tuple),
-                                                    value.context.argNames[I], NoTags{});
+                                                    value.context.arg_names[I], NoTags{});
             }
         };
         (writeField.template operator()<Is>(), ...);
@@ -101,15 +101,15 @@ struct WriteParser<W, JsonRpcSerializerHelperObject<T>, void> {
     static auto write(W& writer, const Helper& value, const ParentType& parent, const Tags& tags) -> ParserResult {
         if constexpr (is_std_tuple_v<Tuple>) {
             constexpr auto tupleSize = std::tuple_size_v<Tuple>;
-            if (!value.context.argNames.empty()) {
-                if (value.context.argNames.size() != tupleSize) {
+            if (!value.context.arg_names.empty()) {
+                if (value.context.arg_names.size() != tupleSize) {
                     return makeParserError(sa::ErrorCode::InvalidLength,
                                            "Named JSON-RPC params count does not match tuple size");
                 }
-                auto object = parsing::Parent<W>::addObject(writer, value.context.argNames.size(), parent);
+                auto object = parsing::Parent<W>::addObject(writer, value.context.arg_names.size(), parent);
                 return writeObject(writer, object, value, std::make_index_sequence<tupleSize>{});
             }
-        } else if (!value.context.argNames.empty()) {
+        } else if (!value.context.arg_names.empty()) {
             return makeParserError(sa::ErrorCode::InvalidType, "Named JSON-RPC params require tuple parameters");
         }
         return parserWrite<W>(writer, value.tuple, parent, tags);
@@ -126,7 +126,7 @@ struct ReadParser<R, JsonRpcSerializerHelperObject<T>, void> {
         ParserResult result;
         const auto readField = [&]<std::size_t I>() {
             if (result) {
-                result = parserReadReflectField<R>(in, std::get<I>(value.tuple), value.context.argNames[I], NoTags{});
+                result = parserReadReflectField<R>(in, std::get<I>(value.tuple), value.context.arg_names[I], NoTags{});
             }
         };
         (readField.template operator()<Is>(), ...);
@@ -137,8 +137,8 @@ struct ReadParser<R, JsonRpcSerializerHelperObject<T>, void> {
     static auto read(typename R::InputValueType in, Helper& value, const Tags& tags) -> ParserResult {
         if constexpr (is_std_tuple_v<Tuple>) {
             constexpr auto tupleSize = std::tuple_size_v<Tuple>;
-            if (!value.context.argNames.empty()) {
-                if (value.context.argNames.size() != tupleSize) {
+            if (!value.context.arg_names.empty()) {
+                if (value.context.arg_names.size() != tupleSize) {
                     return makeParserError(sa::ErrorCode::InvalidLength,
                                            "Named JSON-RPC params count does not match tuple size");
                 }
@@ -147,7 +147,7 @@ struct ReadParser<R, JsonRpcSerializerHelperObject<T>, void> {
                     return readObject(in, value, std::make_index_sequence<tupleSize>{});
                 }
             }
-        } else if (!value.context.argNames.empty()) {
+        } else if (!value.context.arg_names.empty()) {
             return makeParserError(sa::ErrorCode::InvalidType, "Named JSON-RPC params require tuple parameters");
         }
         return parserRead<R>(in, value.tuple, tags);
@@ -167,10 +167,10 @@ template <typename ParamsTupleType>
 struct JsonRpcNamedParams {
     static constexpr std::size_t ParamsSize = jsonRpcParamsSize<ParamsTupleType>();
 
-    static auto provided(const JsonRpcMethodContext& context) noexcept -> bool { return !context.argNames.empty(); }
+    static auto provided(const JsonRpcMethodContext& context) noexcept -> bool { return !context.arg_names.empty(); }
 
     static auto matchesParamsSize(const JsonRpcMethodContext& context) noexcept -> bool {
-        return !context.argNames.empty() && context.argNames.size() == ParamsSize;
+        return !context.arg_names.empty() && context.arg_names.size() == ParamsSize;
     }
 };
 

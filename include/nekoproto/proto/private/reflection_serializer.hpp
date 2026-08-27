@@ -35,39 +35,39 @@ public:
 template <typename T>
 class ReflectionField : public ReflectionFieldBase {
 public:
-    explicit ReflectionField(const std::string_view& name, T* value) : mValue(value), mName(name) {
+    explicit ReflectionField(const std::string_view& name, T* value) : value_(value), name_(name) {
         NEKO_ASSERT(value != nullptr, "ReflectionSerializer", "can not make reflection object {} for nullptr", name);
     }
-    auto getField() const noexcept -> const T& { return *mValue; }
-    void setField(const T& value) noexcept { (*mValue) = value; }
-    auto name() const noexcept -> const std::string_view& override { return mName; }
+    auto getField() const noexcept -> const T& { return *value_; }
+    void setField(const T& value) noexcept { (*value_) = value; }
+    auto name() const noexcept -> const std::string_view& override { return name_; }
     auto typeInfo() const noexcept -> const std::type_info& override { return typeid(T); }
 
 private:
-    T* const mValue;
-    const std::string_view mName;
+    T* const               value_;
+    const std::string_view name_;
 };
 
 class ReflectionObject {
 public:
     ReflectionObject()                        = default;
     ReflectionObject(const ReflectionObject&) = delete;
-    ReflectionObject(ReflectionObject&& other) : mFields(std::move(other.mFields)) {}
+    ReflectionObject(ReflectionObject&& other) : fields_(std::move(other.fields_)) {}
     auto operator=(const ReflectionObject&) -> ReflectionObject& = delete;
     auto operator=(ReflectionObject&& other) -> ReflectionObject& {
         if (this != &other) {
-            mFields = std::move(other.mFields);
+            fields_ = std::move(other.fields_);
         }
         return *this;
     }
 
     inline ~ReflectionObject() { clear(); }
-    inline void clear() noexcept { mFields.clear(); }
+    inline void clear() noexcept { fields_.clear(); }
 
     template <typename T>
     auto getField(const std::string_view& name, const T& defaultValue) const noexcept -> T {
-        auto it = mFields.find(name);
-        if (it == mFields.end()) {
+        auto it = fields_.find(name);
+        if (it == fields_.end()) {
             NEKO_LOG_ERROR("ReflectionSerializer", "field {} not found.", name);
             return defaultValue;
         }
@@ -90,8 +90,8 @@ public:
 
     template <typename T>
     auto getField(const std::string_view& name, T* result) const noexcept -> bool {
-        auto it = mFields.find(name);
-        if (it == mFields.end()) {
+        auto it = fields_.find(name);
+        if (it == fields_.end()) {
             NEKO_LOG_ERROR("ReflectionSerializer", "field {} not found.", name);
             return false;
         }
@@ -114,8 +114,8 @@ public:
     }
     template <typename T>
     auto setField(const std::string_view& name, const T& value) noexcept -> bool {
-        auto it = mFields.find(name);
-        if (it == mFields.end()) {
+        auto it = fields_.find(name);
+        if (it == fields_.end()) {
             NEKO_LOG_ERROR("ReflectionSerializer", "field {} not found.", name);
             return false;
         }
@@ -139,11 +139,11 @@ public:
         if (value == nullptr) {
             return nullptr;
         }
-        auto it = mFields.find(name);
-        if (it == mFields.end()) {
-            mFields.insert(std::make_pair<const std::string_view&, std::unique_ptr<ReflectionFieldBase>>(
+        auto it = fields_.find(name);
+        if (it == fields_.end()) {
+            fields_.insert(std::make_pair<const std::string_view&, std::unique_ptr<ReflectionFieldBase>>(
                 name, std::make_unique<ReflectionField<T>>(name, value)));
-            return static_cast<ReflectionField<T>*>(mFields.find(name)->second.get());
+            return static_cast<ReflectionField<T>*>(fields_.find(name)->second.get());
         }
         NEKO_LOG_WARN("ReflectionSerializer", "field {} already exists, duplicate field will be overwritten.", name);
         it->second = std::make_unique<ReflectionField<T>>(name, value);
@@ -151,7 +151,7 @@ public:
     }
 
 private:
-    std::map<std::string_view, std::unique_ptr<ReflectionFieldBase>> mFields;
+    std::map<std::string_view, std::unique_ptr<ReflectionFieldBase>> fields_;
 };
 } // namespace detail
 
@@ -160,28 +160,28 @@ public:
     ReflectionSerializer()                                       = default;
     ReflectionSerializer(const ReflectionSerializer&)            = delete;
     auto operator=(const ReflectionSerializer&) -> ReflectionSerializer& = delete;
-    ReflectionSerializer(ReflectionSerializer&& other) : mObject(std::move(other.mObject)) {}
+    ReflectionSerializer(ReflectionSerializer&& other) : object_(std::move(other.object_)) {}
     auto operator=(ReflectionSerializer&& other) -> ReflectionSerializer& {
-        mObject = std::move(other.mObject);
+        object_ = std::move(other.object_);
         return *this;
     }
     ~ReflectionSerializer() = default;
 
     template <typename T>
-        requires detail::has_values_meta<std::remove_cvref_t<T>> && detail::has_names_meta<std::remove_cvref_t<T>>
+        requires detail::HasValuesMeta<std::remove_cvref_t<T>> && detail::HasNamesMeta<std::remove_cvref_t<T>>
     static auto reflection(T& obj) -> ReflectionSerializer {
         ReflectionSerializer rs;
         Reflect<std::remove_cvref_t<T>>::visitNamed(obj, [&rs](auto& field, std::string_view name) {
-            const auto* bound = rs.mObject.bindField(name, &field);
+            const auto* bound = rs.object_.bindField(name, &field);
             NEKO_ASSERT(bound != nullptr, "ReflectionSerializer", "failed to bind field {}", name);
         });
         return rs;
     }
 
-    inline auto getObject() -> detail::ReflectionObject* { return &mObject; }
+    inline auto getObject() -> detail::ReflectionObject* { return &object_; }
 
 private:
-    detail::ReflectionObject mObject;
+    detail::ReflectionObject object_;
 };
 
 } // namespace nekoproto

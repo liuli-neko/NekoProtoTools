@@ -325,7 +325,7 @@ template <std::size_t I>
 struct NekoMemberIndexAccessor {
     template <typename Self>
     constexpr auto operator()(Self&& self) const -> decltype(auto) {
-        return std::get<I>(std::forward<Self>(self)._nekoMemberTuple());
+        return std::get<I>(std::forward<Self>(self).nekoMemberTuple());
     }
 };
 
@@ -360,8 +360,8 @@ constexpr auto serializerMakeTags() noexcept {
  */
 #define NEKO_SERIALIZER(...)                                                                                           \
 public:                                                                                                                \
-    constexpr auto _nekoMemberTuple() noexcept { return nekoproto::detail::serializerMemberTuple(__VA_ARGS__); }       \
-    constexpr auto _nekoMemberTuple() const noexcept { return nekoproto::detail::serializerMemberTuple(__VA_ARGS__); } \
+    constexpr auto nekoMemberTuple() noexcept { return nekoproto::detail::serializerMemberTuple(__VA_ARGS__); }       \
+    constexpr auto nekoMemberTuple() const noexcept { return nekoproto::detail::serializerMemberTuple(__VA_ARGS__); } \
     struct NekoSerializerArgsHelper {                                                                                  \
         using tuple = decltype(std::forward_as_tuple(__VA_ARGS__));                                                    \
     };                                                                                                                 \

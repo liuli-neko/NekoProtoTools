@@ -19,7 +19,7 @@
 
 using namespace nekoproto;
 using namespace std::chrono_literals;
-
+#ifdef NEKO_RPC_TRACE
 class RpcTracingTest : public ::testing::Test {
 protected:
     void SetUp() override {
@@ -44,9 +44,7 @@ TEST_F(RpcTracingTest, TrackLifecycleAndMetrics) {
     server.addEndpoint(std::move(serverStream), RpcPeerInfo{.id = "test-client-1", .attributes = {{"role", "tester"}}});
     client.setEndpoint(std::move(clientStream));
 
-    server.bindMethod<"a", "b">("calc.add", traits::FunctionT<int(int, int)>([](int a, int b) {
-        return a + b;
-    }));
+    server.bindMethod<"a", "b">("calc.add", traits::FunctionT<int(int, int)>([](int a, int b) { return a + b; }));
 
     auto result = client.callRemote<int>("calc.add", 15, 27).wait();
     ASSERT_TRUE(result.has_value()) << result.error().message();
@@ -93,9 +91,9 @@ TEST_F(RpcTracingTest, TrackTimeoutAndDeadline) {
     client.setEndpoint(std::move(clientStream));
 
     server.bindMethod("slow.op", traits::FunctionT<ilias::IoTask<int>()>([]() -> ilias::IoTask<int> {
-        co_await ilias::sleep(200ms);
-        co_return 100;
-    }));
+                          co_await ilias::sleep(200ms);
+                          co_return 100;
+                      }));
 
     auto result = client.callRemote<int>("slow.op").wait();
     EXPECT_FALSE(result.has_value());
@@ -117,9 +115,9 @@ TEST_F(RpcTracingTest, CancelActiveCallViaRegistry) {
     client.setEndpoint(std::move(clientStream));
 
     server.bindMethod("long.job", traits::FunctionT<ilias::IoTask<int>()>([]() -> ilias::IoTask<int> {
-        co_await ilias::sleep(2s);
-        co_return 42;
-    }));
+                          co_await ilias::sleep(2s);
+                          co_return 42;
+                      }));
 
     auto handle = ilias::spawn([&client]() -> ilias::Task<ilias::Result<int, std::error_code>> {
         co_return co_await client.callRemote<int>("long.job");
@@ -159,7 +157,8 @@ TEST_F(RpcTracingTest, WebUiHttpEndpoints) {
 
         // Test GET /
         std::string req = "GET / HTTP/1.1\r\nHost: 127.0.0.1:18099\r\n\r\n";
-        auto writeRes = co_await stream.writeAll(std::span<const std::byte>{reinterpret_cast<const std::byte*>(req.data()), req.size()});
+        auto writeRes   = co_await stream.writeAll(
+            std::span<const std::byte>{reinterpret_cast<const std::byte*>(req.data()), req.size()});
         EXPECT_TRUE(writeRes.has_value());
         (void)co_await stream.flush();
 
@@ -175,8 +174,9 @@ TEST_F(RpcTracingTest, WebUiHttpEndpoints) {
         }
 
         // Test GET /api/calls
-        req = "GET /api/calls HTTP/1.1\r\nHost: 127.0.0.1:18099\r\n\r\n";
-        writeRes = co_await stream.writeAll(std::span<const std::byte>{reinterpret_cast<const std::byte*>(req.data()), req.size()});
+        req      = "GET /api/calls HTTP/1.1\r\nHost: 127.0.0.1:18099\r\n\r\n";
+        writeRes = co_await stream.writeAll(
+            std::span<const std::byte>{reinterpret_cast<const std::byte*>(req.data()), req.size()});
         EXPECT_TRUE(writeRes.has_value());
         (void)co_await stream.flush();
 
@@ -188,6 +188,5 @@ TEST_F(RpcTracingTest, WebUiHttpEndpoints) {
 
     clientTask().wait();
 }
-
+#endif // EINTERPRET_ENABLE_RPC_TRACING
 #include "../common/common_main.cpp.in"
-

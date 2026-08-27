@@ -39,7 +39,7 @@ public:
         rapidjson::Value* value;
     };
 
-    Writer() : mDoc(rapidjson::kNullType) {}
+    Writer() : doc_(rapidjson::kNullType) {}
     ~Writer() = default;
 
     static auto parseRawValue(std::string_view text, RawValueType& value) -> bool {
@@ -47,57 +47,57 @@ public:
         return !value.HasParseError();
     }
 
-    auto doc() -> rapidjson::Document* { return &mDoc; }
+    auto doc() -> rapidjson::Document* { return &doc_; }
 
     auto arrayAsRoot(const std::size_t size) noexcept -> OutputArrayType {
-        mDoc.SetArray();
+        doc_.SetArray();
         if (size != static_cast<std::size_t>(-1)) {
-            mDoc.Reserve(static_cast<rapidjson::SizeType>(size), mDoc.GetAllocator());
+            doc_.Reserve(static_cast<rapidjson::SizeType>(size), doc_.GetAllocator());
         }
-        return {&mDoc};
+        return {&doc_};
     }
     auto objectAsRoot(const std::size_t size) noexcept -> OutputObjectType {
-        mDoc.SetObject();
+        doc_.SetObject();
         if (size != static_cast<std::size_t>(-1)) {
-            mDoc.MemberReserve(static_cast<rapidjson::SizeType>(size), mDoc.GetAllocator());
+            doc_.MemberReserve(static_cast<rapidjson::SizeType>(size), doc_.GetAllocator());
         }
-        return {&mDoc};
+        return {&doc_};
     }
     auto nullAsRoot() noexcept -> OutputValueType {
-        mDoc.SetNull();
-        return {&mDoc};
+        doc_.SetNull();
+        return {&doc_};
     }
     auto valueAsRoot(const rapidjson::Value& value) noexcept -> OutputValueType {
-        mDoc.CopyFrom(value, mDoc.GetAllocator());
-        return {&mDoc};
+        doc_.CopyFrom(value, doc_.GetAllocator());
+        return {&doc_};
     }
     template <typename T>
     auto valueAsRoot(const T& value) noexcept -> OutputValueType {
         auto val = fromBasicType(value);
-        mDoc.Swap(val);
-        return {&mDoc};
+        doc_.Swap(val);
+        return {&doc_};
     }
     auto addArrayToArray(const std::size_t size, OutputArrayType* parent) -> OutputArrayType {
         rapidjson::Value child(rapidjson::kArrayType);
         if (size != static_cast<std::size_t>(-1)) {
-            child.Reserve(static_cast<rapidjson::SizeType>(size), mDoc.GetAllocator());
+            child.Reserve(static_cast<rapidjson::SizeType>(size), doc_.GetAllocator());
         }
 
-        parent->value->PushBack(child, mDoc.GetAllocator());
+        parent->value->PushBack(child, doc_.GetAllocator());
 
         auto& inserted = (*parent->value)[parent->value->Size() - 1];
         return {&inserted};
     }
     auto addArrayToObject(std::string_view name, const std::size_t size, OutputObjectType* parent) -> OutputArrayType {
         rapidjson::Value key;
-        key.SetString(name.data(), static_cast<rapidjson::SizeType>(name.size()), mDoc.GetAllocator());
+        key.SetString(name.data(), static_cast<rapidjson::SizeType>(name.size()), doc_.GetAllocator());
 
         rapidjson::Value child(rapidjson::kArrayType);
         if (size != static_cast<std::size_t>(-1)) {
-            child.Reserve(static_cast<rapidjson::SizeType>(size), mDoc.GetAllocator());
+            child.Reserve(static_cast<rapidjson::SizeType>(size), doc_.GetAllocator());
         }
 
-        parent->value->AddMember(key, child, mDoc.GetAllocator());
+        parent->value->AddMember(key, child, doc_.GetAllocator());
 
         auto member = parent->value->MemberEnd();
         --member;
@@ -106,24 +106,24 @@ public:
     auto addObjectToArray(const std::size_t size, OutputArrayType* parent) -> OutputObjectType {
         rapidjson::Value child(rapidjson::kObjectType);
         if (size != static_cast<std::size_t>(-1)) {
-            child.MemberReserve(static_cast<rapidjson::SizeType>(size), mDoc.GetAllocator());
+            child.MemberReserve(static_cast<rapidjson::SizeType>(size), doc_.GetAllocator());
         }
 
-        parent->value->PushBack(child, mDoc.GetAllocator());
+        parent->value->PushBack(child, doc_.GetAllocator());
 
         auto& inserted = (*parent->value)[parent->value->Size() - 1];
         return {&inserted};
     }
     auto addObjectToObject(std::string_view name, const std::size_t size, OutputObjectType* parent) -> OutputObjectType {
         rapidjson::Value key;
-        key.SetString(name.data(), static_cast<rapidjson::SizeType>(name.size()), mDoc.GetAllocator());
+        key.SetString(name.data(), static_cast<rapidjson::SizeType>(name.size()), doc_.GetAllocator());
 
         rapidjson::Value child(rapidjson::kObjectType);
         if (size != static_cast<std::size_t>(-1)) {
-            child.MemberReserve(static_cast<rapidjson::SizeType>(size), mDoc.GetAllocator());
+            child.MemberReserve(static_cast<rapidjson::SizeType>(size), doc_.GetAllocator());
         }
 
-        parent->value->AddMember(key, child, mDoc.GetAllocator());
+        parent->value->AddMember(key, child, doc_.GetAllocator());
 
         auto member = parent->value->MemberEnd();
         --member;
@@ -132,15 +132,15 @@ public:
     template <typename T>
     auto addValueToArray(const T& value, OutputArrayType* parent) -> OutputValueType {
         auto val = fromBasicType(value);
-        parent->value->PushBack(val, mDoc.GetAllocator());
+        parent->value->PushBack(val, doc_.GetAllocator());
 
         auto& inserted = (*parent->value)[parent->value->Size() - 1];
         return {&inserted};
     }
     auto addValueToArray(const rapidjson::Value& value, OutputArrayType* parent) -> OutputValueType {
         rapidjson::Value val;
-        val.CopyFrom(value, mDoc.GetAllocator());
-        parent->value->PushBack(val, mDoc.GetAllocator());
+        val.CopyFrom(value, doc_.GetAllocator());
+        parent->value->PushBack(val, doc_.GetAllocator());
 
         auto& inserted = (*parent->value)[parent->value->Size() - 1];
         return {&inserted};
@@ -148,10 +148,10 @@ public:
     template <typename T>
     auto addValueToObject(std::string_view name, const T& value, OutputObjectType* parent) -> OutputValueType {
         rapidjson::Value key;
-        key.SetString(name.data(), static_cast<rapidjson::SizeType>(name.size()), mDoc.GetAllocator());
+        key.SetString(name.data(), static_cast<rapidjson::SizeType>(name.size()), doc_.GetAllocator());
 
         auto val = fromBasicType(value);
-        parent->value->AddMember(key, val, mDoc.GetAllocator());
+        parent->value->AddMember(key, val, doc_.GetAllocator());
 
         auto member = parent->value->MemberEnd();
         --member;
@@ -159,11 +159,11 @@ public:
     }
     auto addValueToObject(std::string_view name, const rapidjson::Value& value, OutputObjectType* parent) -> OutputValueType {
         rapidjson::Value key;
-        key.SetString(name.data(), static_cast<rapidjson::SizeType>(name.size()), mDoc.GetAllocator());
+        key.SetString(name.data(), static_cast<rapidjson::SizeType>(name.size()), doc_.GetAllocator());
 
         rapidjson::Value val;
-        val.CopyFrom(value, mDoc.GetAllocator());
-        parent->value->AddMember(key, val, mDoc.GetAllocator());
+        val.CopyFrom(value, doc_.GetAllocator());
+        parent->value->AddMember(key, val, doc_.GetAllocator());
 
         auto member = parent->value->MemberEnd();
         --member;
@@ -171,17 +171,17 @@ public:
     }
     auto addNullToArray(OutputArrayType* parent) -> OutputValueType {
         rapidjson::Value val(rapidjson::kNullType);
-        parent->value->PushBack(val, mDoc.GetAllocator());
+        parent->value->PushBack(val, doc_.GetAllocator());
 
         auto& inserted = (*parent->value)[parent->value->Size() - 1];
         return {&inserted};
     }
     auto addNullToObject(std::string_view name, OutputObjectType* parent) -> OutputValueType {
         rapidjson::Value key;
-        key.SetString(name.data(), static_cast<rapidjson::SizeType>(name.size()), mDoc.GetAllocator());
+        key.SetString(name.data(), static_cast<rapidjson::SizeType>(name.size()), doc_.GetAllocator());
 
         rapidjson::Value val(rapidjson::kNullType);
-        parent->value->AddMember(key, val, mDoc.GetAllocator());
+        parent->value->AddMember(key, val, doc_.GetAllocator());
 
         auto member = parent->value->MemberEnd();
         --member;
@@ -196,11 +196,11 @@ private:
         using U = std::remove_cv_t<std::remove_reference_t<T>>;
         rapidjson::Value val;
         if constexpr (std::is_same_v<U, std::string>) {
-            val.SetString(value.data(), static_cast<rapidjson::SizeType>(value.size()), mDoc.GetAllocator());
+            val.SetString(value.data(), static_cast<rapidjson::SizeType>(value.size()), doc_.GetAllocator());
         } else if constexpr (std::is_same_v<U, std::string_view>) {
-            val.SetString(value.data(), static_cast<rapidjson::SizeType>(value.size()), mDoc.GetAllocator());
+            val.SetString(value.data(), static_cast<rapidjson::SizeType>(value.size()), doc_.GetAllocator());
         } else if constexpr (std::is_base_of_v<rapidjson::Value, U>) {
-            val.CopyFrom(value, mDoc.GetAllocator());
+            val.CopyFrom(value, doc_.GetAllocator());
         } else if constexpr (std::is_same_v<U, bool>) {
             val.SetBool(value);
         } else if constexpr (std::is_floating_point_v<U>) {
@@ -228,7 +228,7 @@ private:
     }
 
 private:
-    rapidjson::Document mDoc;
+    rapidjson::Document doc_;
 };
 } // namespace rapid
 } // namespace nekoproto

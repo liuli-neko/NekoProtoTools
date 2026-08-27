@@ -80,7 +80,7 @@ struct WriteParser<W, T, std::enable_if_t<std::is_arithmetic_v<T>>> {
     template <typename ParentType, typename Tags>
     static auto write(W& writer, const T& value, const ParentType& parent, const Tags& tags) -> ParserResult {
         if (tag_query::has<tag_property::FixedLength<void>>(tags)) {
-            if constexpr (parsing::supports_fixed_length_writer<W, T, Tags>) {
+            if constexpr (parsing::SupportsFixedLengthWriter<W, T, Tags>) {
                 const auto fixed_length = tag_query::get<tag_property::FixedLength<T>>(tags);
                 if (fixed_length != sizeof(T)) {
                     return makeParserError(sa::ErrorCode::InvalidLength,
@@ -101,7 +101,7 @@ struct ReadParser<R, T, std::enable_if_t<std::is_arithmetic_v<T>>> {
     template <typename Tags>
     static auto read(typename R::InputValueType in, T& value, const Tags& tags) -> ParserResult {
         if (tag_query::has<tag_property::FixedLength<void>>(tags)) {
-            if constexpr (parsing::supports_fixed_length_reader<R, T, Tags>) {
+            if constexpr (parsing::SupportsFixedLengthReader<R, T, Tags>) {
                 const auto fixed_length = tag_query::get<tag_property::FixedLength<T>>(tags);
                 if (fixed_length != sizeof(T)) {
                     return makeParserError(sa::ErrorCode::InvalidLength,

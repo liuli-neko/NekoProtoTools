@@ -116,7 +116,7 @@ consteval auto commandTypeValidAt() -> bool {
         if constexpr (is_command_placeholder_v<field_t>) {
             return true;
         } else {
-            return nekoproto::detail::has_values_meta<field_t> && std::is_default_constructible_v<field_t>;
+            return nekoproto::detail::HasValuesMeta<field_t> && std::is_default_constructible_v<field_t>;
         }
     }
 }

@@ -82,7 +82,7 @@ struct WriteParser<W, NameValuePair<T>, void> {
     static auto write(W& writer, const NameValuePair<T>& value, const ParentType& parent, const Tags& tags) -> ParserResult {
         auto object = parsing::Parent<W>::addObject(writer, 1, parent, tags);
         return parserWrite<W>(writer, value.value,
-                               typename parsing::Parent<W>::Object{{value.name, value.nameLen}, &object});
+                               typename parsing::Parent<W>::Object{{value.name, value.name_len}, &object});
     }
 };
 
@@ -95,13 +95,13 @@ struct ReadParser<R, NameValuePair<T>, void> {
             return object.error();
         }
         auto field =
-            parsing::readerObjectField<R>(object.value(), std::string_view{value.name, value.nameLen}, NoTags{});
+            parsing::readerObjectField<R>(object.value(), std::string_view{value.name, value.name_len}, NoTags{});
         if (!field) {
             return makeParserError(sa::ErrorCode::InvalidField,
-                                "Required field '" + std::string(value.name, value.nameLen) + "' is missing");
+                                "Required field '" + std::string(value.name, value.name_len) + "' is missing");
         }
         return parserContext(parserRead<R>(field.value(), value.value),
-                              "Failed to parse field '" + std::string(value.name, value.nameLen) + "': ");
+                              "Failed to parse field '" + std::string(value.name, value.name_len) + "': ");
     }
 };
 

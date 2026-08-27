@@ -9,11 +9,11 @@ namespace nekoproto {
 
 namespace parsing {
 template <typename W>
-concept supports_attributes =
-    requires(W writer, std::string_view name, typename W::OutputObjectType obj, bool isAttribute) {
-        { writer.addValueToObject(name, name, &obj, isAttribute) } -> std::same_as<typename W::OutputVarType>;
+concept SupportsAttributes =
+    requires(W writer, std::string_view name, typename W::OutputObjectType obj, bool is_attribute) {
+        { writer.addValueToObject(name, name, &obj, is_attribute) } -> std::same_as<typename W::OutputVarType>;
 
-        { writer.addNullToObject(name, &obj, isAttribute) } -> std::same_as<typename W::OutputVarType>;
+        { writer.addNullToObject(name, &obj, is_attribute) } -> std::same_as<typename W::OutputVarType>;
     };
 } // namespace parsing
 

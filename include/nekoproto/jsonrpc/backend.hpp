@@ -180,7 +180,7 @@ public:
         static_assert(BackendSerializable<JsonRpcBackend, Request>,
                       "JsonRpcBackend: method parameters are not serializable by JsonSerializer");
         Request decoded;
-        detail::JsonRpcMethodContext context{.argNames = method.rpcArgNames()};
+        detail::JsonRpcMethodContext context{.arg_names = method.rpcArgNames()};
         detail::JsonRpcRequestWithContext<Request> decodedWithContext{decoded, context};
         JsonSerializer::InputSerializer in(request.value);
         if (in(decodedWithContext)) {
@@ -318,7 +318,7 @@ public:
 
         Message buffer;
         JsonSerializer::OutputSerializer out(buffer);
-        detail::JsonRpcMethodContext methodContext{.argNames = method.rpcArgNames()};
+        detail::JsonRpcMethodContext methodContext{.arg_names = method.rpcArgNames()};
         detail::JsonRpcRequestWithContext<Request> requestWithContext{request, methodContext};
         if (out(requestWithContext) && out.end()) {
             if (buffer.size() > context.options.max_message_bytes) {

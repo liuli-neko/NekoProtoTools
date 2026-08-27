@@ -69,8 +69,7 @@ struct CanAggregate : CanAggregateImpl<T, void, Args...> {};
  */
 template <typename T, typename... Args>
 constexpr auto memberCount([[maybe_unused]] Args&&... args) noexcept {
-    if constexpr ((!CanAggregate<T, Args..., AnyType>::value) &&
-                  (!CanAggregate<T, Args..., std::nullopt_t>::value)) {
+    if constexpr ((!CanAggregate<T, Args..., AnyType>::value) && (!CanAggregate<T, Args..., std::nullopt_t>::value)) {
         return sizeof...(args);
     } else if constexpr (CanAggregate<T, Args..., AnyType>::value) {
         return memberCount<T>(std::forward<Args>(args)..., AnyType{});
@@ -80,7 +79,7 @@ constexpr auto memberCount([[maybe_unused]] Args&&... args) noexcept {
 }
 
 template <typename T>
-static constexpr size_t member_count_v = memberCount<T>(); // NOLINT(readability-identifier-naming)
+static constexpr size_t member_count_v = memberCount<T>();
 
 template <typename T>
 struct IsStdArray : std::false_type {};
@@ -92,8 +91,7 @@ struct IsStdArray<std::array<T, N>> : std::true_type {
 };
 
 template <typename T>
-static constexpr bool can_unwrap_v = // NOLINT(readability-identifier-naming)
-    std::is_aggregate_v<std::remove_cv_t<T>> && !IsStdArray<T>::value;
+static constexpr bool can_unwrap_v = std::is_aggregate_v<std::remove_cv_t<T>> && !IsStdArray<T>::value;
 
 /**
  * @brief Convert the struct reference to tuple
@@ -111,7 +109,7 @@ constexpr auto unwrapStruct(T& data) noexcept {
 }
 
 template <class T>
-inline static T external; // NOLINT(readability-identifier-naming)
+inline static T s_external;
 
 template <class T>
 struct PtrT final {
@@ -138,15 +136,14 @@ template <class T>
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
 template <auto N, class T>
-constexpr std::string_view get_name_impl = // NOLINT(readability-identifier-naming)
-    mangledName<getPtr<N>(external<std::remove_volatile_t<T>>)>();
+constexpr std::string_view get_name_impl = mangledName<getPtr<N>(s_external<std::remove_volatile_t<T>>)>();
 #pragma clang diagnostic pop
 #elif __GNUC__
 template <auto N, class T>
-constexpr std::string_view get_name_impl = mangledName<getPtr<N>(external<std::remove_volatile_t<T>>)>();
+constexpr std::string_view get_name_impl = mangledName<getPtr<N>(s_external<std::remove_volatile_t<T>>)>();
 #else
 template <auto N, class T>
-constexpr std::string_view get_name_impl = mangledName<getPtr<N>(external<std::remove_volatile_t<T>>)>();
+constexpr std::string_view get_name_impl = mangledName<getPtr<N>(s_external<std::remove_volatile_t<T>>)>();
 #endif
 
 struct NekoReflector {
@@ -156,29 +153,29 @@ struct NekoReflector {
 };
 
 struct ReflectType {
-    static constexpr std::string_view name = mangledName<NekoReflector>(); // NOLINT(readability-identifier-naming)
-    static constexpr auto end = name.substr(name.find("NekoReflector") + sizeof("NekoReflector") - 1); // NOLINT
+    static constexpr std::string_view name = mangledName<NekoReflector>();
+    static constexpr auto end              = name.substr(name.find("NekoReflector") + sizeof("NekoReflector") - 1);
 #if defined(__GNUC__) || defined(__clang__)
-    static constexpr auto begin = std::string_view{"T = "}; // NOLINT
+    static constexpr auto begin = std::string_view{"T = "};
 #else
     static constexpr auto begin = std::string_view{"mangledName<"};
 #endif
 };
 
 struct ReflectField {
-    static constexpr auto name  = get_name_impl<0, NekoReflector>;                               // NOLINT
-    static constexpr auto end   = name.substr(name.find("nekoField") + sizeof("nekoField") - 1); // NOLINT
-    static constexpr auto begin = name[name.find("nekoField") - 1];                              // NOLINT
+    static constexpr auto name  = get_name_impl<0, NekoReflector>;
+    static constexpr auto end   = name.substr(name.find("nekoField") + sizeof("nekoField") - 1);
+    static constexpr auto begin = name[name.find("nekoField") - 1];
 };
 
 template <std::size_t N, class T>
 struct MemberNameofImpl {
-    static constexpr auto name     = get_name_impl<N, T>;                                    // NOLINT
-    static constexpr auto begin    = name.find(ReflectField::end);                          // NOLINT
-    static constexpr auto tmp      = name.substr(0, begin);                                  // NOLINT
-    static constexpr auto stripped = tmp.substr(tmp.find_last_of(ReflectField::begin) + 1); // NOLINT
+    static constexpr auto name     = get_name_impl<N, T>;
+    static constexpr auto begin    = name.find(ReflectField::end);
+    static constexpr auto tmp      = name.substr(0, begin);
+    static constexpr auto stripped = tmp.substr(tmp.find_last_of(ReflectField::begin) + 1);
 
-    static constexpr std::string_view stripped_literal = join_v<stripped>; // NOLINT
+    static constexpr std::string_view stripped_literal = join_v<stripped>;
 };
 
 template <const std::string_view& str>
@@ -191,22 +188,20 @@ constexpr auto parserClassNameWithType() -> std::string_view {
 
 template <class T>
 struct ClassNameofImpl {
-    static constexpr std::string_view name     = mangledName<T>();            // NOLINT
-    static constexpr auto begin                = name.find(ReflectType::end); // NOLINT
-    static constexpr auto tmp                  = name.substr(0, begin);        // NOLINT
-    static constexpr auto class_name_with_type =                               // NOLINT
-        tmp.substr(tmp.find(ReflectType::begin) + ReflectType::begin.size());
-    static constexpr auto stripped = // NOLINT
-        parserClassNameWithType<class_name_with_type>();
+    static constexpr std::string_view name     = mangledName<T>();
+    static constexpr auto begin                = name.find(ReflectType::end);
+    static constexpr auto tmp                  = name.substr(0, begin);
+    static constexpr auto class_name_with_type = tmp.substr(tmp.find(ReflectType::begin) + ReflectType::begin.size());
+    static constexpr auto stripped             = parserClassNameWithType<class_name_with_type>();
 
-    static constexpr std::string_view stripped_literal = join_v<stripped>; // NOLINT
+    static constexpr std::string_view stripped_literal = join_v<stripped>;
 };
 
 template <std::size_t N, class T>
-inline constexpr auto member_nameof = []() constexpr { return MemberNameofImpl<N, T>::stripped_literal; }(); // NOLINT
+inline constexpr auto member_nameof = []() constexpr { return MemberNameofImpl<N, T>::stripped_literal; }();
 
 template <class T>
-inline constexpr auto class_nameof = []() constexpr { return ClassNameofImpl<T>::stripped_literal; }(); // NOLINT
+inline constexpr auto class_nameof = []() constexpr { return ClassNameofImpl<T>::stripped_literal; }();
 
 template <class T, std::size_t... Is>
 [[nodiscard]] constexpr auto memberNamesImpl(std::index_sequence<Is...> /*unused*/) {
@@ -311,17 +306,16 @@ template <typename T>
 struct EnumReflectionTable {
     static_assert(std::is_enum_v<T>);
 
-    static constexpr auto entries =
-        nekoGetValidEnumNames<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>{}); // NOLINT
-    static constexpr std::size_t size = entries.size();                                   // NOLINT
-    static constexpr auto names       = [] {                                              // NOLINT
+    static constexpr auto entries     = nekoGetValidEnumNames<T>(std::make_index_sequence<NEKO_ENUM_SEARCH_DEPTH>{});
+    static constexpr std::size_t size = entries.size();
+    static constexpr auto names       = [] {
         std::array<std::string_view, size> result{};
         for (std::size_t i = 0; i < size; ++i) {
             result[i] = entries[i].second;
         }
         return result;
     }();
-    static constexpr auto values = [] { // NOLINT
+    static constexpr auto values = [] {
         std::array<T, size> result{};
         for (std::size_t i = 0; i < size; ++i) {
             result[i] = entries[i].first;
@@ -367,36 +361,36 @@ template <typename Functor>
 struct FunctionTraits<Functor, std::void_t<decltype(&std::remove_cvref_t<Functor>::operator())>>
     : FunctionTraits<decltype(&std::remove_cvref_t<Functor>::operator())> {};
 
-#define MEMBER_FUNCTION_TRAITS_QUALIFIER(QUAL)                                                                         \
+#define NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(QUAL)                                                             \
     template <typename C, typename R, typename... Args>                                                                \
     struct FunctionTraits<R (C::*)(Args...) QUAL> : FunctionTraits<R (C::*)(Args...)> {};
 
-MEMBER_FUNCTION_TRAITS_QUALIFIER(const)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(&)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(const&)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile&)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile&)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(&&)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(const&&)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile&&)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile&&)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(const)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(&)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(const&)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile&)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile&)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(&&)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(const&&)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile&&)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile&&)
 #if __cpp_noexcept_function_type
-MEMBER_FUNCTION_TRAITS_QUALIFIER(noexcept)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(const noexcept)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile noexcept)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile noexcept)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(& noexcept)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(const& noexcept)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile& noexcept)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile& noexcept)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(&& noexcept)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(const&& noexcept)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile&& noexcept)
-MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile&& noexcept)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(noexcept)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(const noexcept)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile noexcept)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile noexcept)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(& noexcept)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(const& noexcept)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile& noexcept)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile& noexcept)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(&& noexcept)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(const&& noexcept)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(volatile&& noexcept)
+NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER(const volatile&& noexcept)
 #endif
-#undef MEMBER_FUNCTION_TRAITS_QUALIFIER
+#undef NEKO_DETAIL_MEMBER_FUNCTION_TRAITS_QUALIFIER
 
 template <typename T>
     requires requires(T tt) {
@@ -420,56 +414,52 @@ struct FunctionTraits<T> : FunctionTraits<decltype(&std::remove_cvref_t<T>::oper
 template <auto Ptr>
     requires(std::is_pointer_v<decltype(Ptr)>)
 struct FuncNameofImpl {
-    static constexpr std::string_view name = mangledName<Ptr>(); // NOLINT
+    static constexpr std::string_view name = mangledName<Ptr>();
 #if defined(__clang__)
     // auto nekoproto::detail::mangledName() [Ptr = &nekoproto::detail::NekoReflector::nekoStaticFunc]
     // auto nekoproto::detail::mangledName() [Ptr = &test_func]
-    static constexpr std::string_view characteristicString =                                         // NOLINT
-        "auto nekoproto::detail::mangledName() [Ptr = &";                                           // NOLINT
-    static constexpr auto full_function_name =                                                       // NOLINT
-        name.substr(characteristicString.size(), name.size() - characteristicString.size() - 1);     // NOLINT
-    static constexpr auto begin     = full_function_name.find_last_of("::");                         // NOLINT
-    static constexpr auto func_name =                                                                // NOLINT
-        begin == std::string_view::npos ? full_function_name : full_function_name.substr(begin + 1); // NOLINT
-#elif defined(__GNUC__)
-    // consteval auto nekoproto::detail::mangledName() [with auto Ptr = NekoReflector::nekoStaticFunc]
-    // consteval auto nekoproto::detail::mangledName() [with auto Ptr = testFuncWithStruct]
-    static constexpr std::string_view characteristicString =
-        "consteval auto nekoproto::detail::mangledName() [with auto Ptr = ";                    // NOLINT
-    static constexpr auto full_function_name =                                                   // NOLINT
-        name.substr(characteristicString.size(), name.size() - characteristicString.size() - 1); // NOLINT
-    static_assert(full_function_name.size() > 0, "can not find a valid function name");
-    static constexpr auto seq            = full_function_name.find_last_of("::"); // NOLINT
-    static constexpr auto is_member_func = seq != std::string_view::npos;         // NOLINT
+    static constexpr std::string_view characteristic_string = "auto nekoproto::detail::mangledName() [Ptr = &";
+    static constexpr auto full_function_name =
+        name.substr(characteristic_string.size(), name.size() - characteristic_string.size() - 1);
+    static constexpr auto begin = full_function_name.find_last_of("::");
     static constexpr auto func_name =
-        is_member_func ? full_function_name.substr(seq + 1) : full_function_name; // NOLINT
+        begin == std::string_view::npos ? full_function_name : full_function_name.substr(begin + 1);
+#elif defined(__GNUC__)
+    static constexpr std::string_view characteristicString =
+        "consteval auto nekoproto::detail::mangledName() [with auto Ptr = ";
+    static constexpr auto full_function_name =
+        name.substr(characteristicString.size(), name.size() - characteristicString.size() - 1);
+    static_assert(full_function_name.size() > 0, "can not find a valid function name");
+    static constexpr auto seq            = full_function_name.find_last_of("::");
+    static constexpr auto is_member_func = seq != std::string_view::npos;
+    static constexpr auto func_name      = is_member_func ? full_function_name.substr(seq + 1) : full_function_name;
 #elif defined(_MSC_VER)
-    static constexpr std::string_view characteristicString = "auto __cdecl nekoproto::detail::mangledName<"; // NOLINT
+    static constexpr std::string_view characteristicString = "auto __cdecl nekoproto::detail::mangledName<";
     // void __cdecl nekoproto::detail::NekoReflector::nekoStaticFunc(void)>(void)
     // int __cdecl freeFuncOneArg(int)>(void)
-    static constexpr auto full_function_name =                                                   // NOLINT
-        name.substr(characteristicString.size(), name.size() - characteristicString.size() - 6); // NOLINT
-    static constexpr auto end = full_function_name.find_last_of('(');                            // NOLINT
+    static constexpr auto full_function_name =
+        name.substr(characteristicString.size(), name.size() - characteristicString.size() - 6);
+    static constexpr auto end = full_function_name.find_last_of('(');
     static_assert(end != std::string_view::npos, "function end not found");
-    static constexpr auto before_params      = full_function_name.substr(0, end); // NOLINT
-    static constexpr std::string_view xcdecl = "__cdecl ";                        // NOLINT
-    static constexpr auto cdecl_pos          = before_params.find(xcdecl);        // NOLINT
-    static constexpr auto name_begin         =                                    // NOLINT
+    static constexpr auto before_params      = full_function_name.substr(0, end);
+    static constexpr std::string_view xcdecl = "__cdecl ";
+    static constexpr auto cdecl_pos          = before_params.find(xcdecl);
+    static constexpr auto name_begin =
         cdecl_pos == std::string_view::npos ? before_params.find_last_of(' ') + 1 : cdecl_pos + xcdecl.size();
     static_assert(name_begin != std::string_view::npos, "function begin not found");
-    static constexpr auto qualified_name    = before_params.substr(name_begin); // NOLINT
-    static constexpr std::string_view scope = "::";                             // NOLINT
-    static constexpr auto scope_pos         = qualified_name.rfind(scope);      // NOLINT
-    static constexpr auto tmp               =                                   // NOLINT
+    static constexpr auto qualified_name    = before_params.substr(name_begin);
+    static constexpr std::string_view scope = "::";
+    static constexpr auto scope_pos         = qualified_name.rfind(scope);
+    static constexpr auto tmp =
         scope_pos == std::string_view::npos ? qualified_name : qualified_name.substr(scope_pos + scope.size());
-    static constexpr std::string_view func_name = join_v<tmp>; // NOLINT
+    static constexpr std::string_view func_name = join_v<tmp>;
 #else
     static_assert(false, "unsupported compiler");
 #endif
 };
 
 template <auto Ptr>
-inline constexpr auto func_nameof = []() constexpr { return FuncNameofImpl<Ptr>::func_name; }(); // NOLINT
+inline constexpr auto func_nameof = []() constexpr { return FuncNameofImpl<Ptr>::func_name; }();
 
 template <auto MemberPtr>
     requires std::is_member_object_pointer_v<decltype(MemberPtr)>
@@ -480,8 +470,8 @@ consteval auto memberPointerName() -> std::string_view {
     if (start == std::string_view::npos) {
         return {};
     }
-    auto end = name.find(']', start);
-    auto full = name.substr(start + 1, end - start - 1);
+    auto end   = name.find(']', start);
+    auto full  = name.substr(start + 1, end - start - 1);
     auto scope = full.rfind("::");
     return scope == std::string_view::npos ? full : full.substr(scope + 2);
 #elif defined(_MSC_VER)
@@ -489,8 +479,8 @@ consteval auto memberPointerName() -> std::string_view {
     if (start == std::string_view::npos) {
         return {};
     }
-    auto end = name.find('>', start);
-    auto full = name.substr(start + 1, end - start - 1);
+    auto end   = name.find('>', start);
+    auto full  = name.substr(start + 1, end - start - 1);
     auto scope = full.rfind("::");
     return scope == std::string_view::npos ? full : full.substr(scope + 2);
 #else

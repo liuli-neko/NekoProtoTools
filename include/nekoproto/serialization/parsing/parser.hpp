@@ -112,23 +112,23 @@ struct SchemaParser {
 };
 
 template <typename W, typename T>
-concept parser_writable =
+concept ParserWritable =
     requires(W& writer, const std::decay_t<T>& value, typename parsing::Parent<W>::Root parent, NoTags tags) {
         { WriteParser<W, std::decay_t<T>>::write(writer, value, parent, tags) } -> std::same_as<ParserResult>;
     };
 
 template <typename R, typename T>
-concept parser_readable = requires(typename R::InputValueType in, std::decay_t<T>& value, NoTags tags) {
+concept ParserReadable = requires(typename R::InputValueType in, std::decay_t<T>& value, NoTags tags) {
     { ReadParser<R, std::decay_t<T>>::read(in, value, tags) } -> std::same_as<ParserResult>;
 };
 
 template <typename T>
-concept parser_schema_available = requires {
+concept ParserSchemaAvailable = requires {
     { SchemaParser<std::decay_t<T>>::toSchema() } -> std::same_as<parsing::schema::Type>;
 };
 
 template <typename R, typename W, typename T>
-concept parser_serializable = parser_writable<W, T> && parser_readable<R, T>;
+concept ParserSerializable = ParserWritable<W, T> && ParserReadable<R, T>;
 
 template <typename W, auto Tags, typename Accessor>
 struct WriteParser<W, TaggedField<Tags, Accessor>, void> {

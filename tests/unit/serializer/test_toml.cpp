@@ -118,7 +118,7 @@ TEST(TomlSerialization, DefaultOutputIsCompactAndPrettyOutputIsOptional) {
     EXPECT_EQ(compact.find("    [params.network]"), std::string::npos) << compact;
     EXPECT_EQ(compact.find("\n\n"), std::string::npos) << compact;
 
-    const auto pretty = writeToml(source, TomlOutputFormatOptions::Pretty());
+    const auto pretty = writeToml(source, TomlOutputFormatOptions::pretty());
     EXPECT_NE(pretty.find("command = 'serve'"), std::string::npos) << pretty;
     EXPECT_NE(pretty.find("    [params.network]"), std::string::npos) << pretty;
     EXPECT_NE(pretty.find("host = 'a.com'"), std::string::npos) << pretty;

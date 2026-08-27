@@ -124,7 +124,7 @@ public:
     }
 
     Reader(const char* data, std::size_t size, ParseLimits limits = {})
-        : mState{.data = data,
+        : state_{.data = data,
                  .size = size,
                  .offset = 0,
                  .limits = limits,
@@ -132,44 +132,44 @@ public:
                  .framed = false,
                  .error = std::nullopt} {
         if (data == nullptr) {
-            mState.error = sa::error(sa::ErrorCode::ParseError, "Binary input handle is null");
+            state_.error = sa::error(sa::ErrorCode::ParseError, "Binary input handle is null");
             return;
         }
         if (size > limits.max_input_bytes) {
-            mState.error = sa::error(sa::ErrorCode::InvalidLength, "Binary input exceeds configured byte limit");
+            state_.error = sa::error(sa::ErrorCode::InvalidLength, "Binary input exceeds configured byte limit");
             return;
         }
         if (size >= sizeof(BinaryMagic) && std::memcmp(data, BinaryMagic, sizeof(BinaryMagic)) == 0) {
-            mState.framed = true;
-            mState.offset = sizeof(BinaryMagic);
+            state_.framed = true;
+            state_.offset = sizeof(BinaryMagic);
         }
     }
 
     auto inputResult() const -> sa::Result<void> {
-        return mState.error ? sa::Result<void>{*mState.error} : sa::success();
+        return state_.error ? sa::Result<void>{*state_.error} : sa::success();
     }
 
     void beginRawFixedDataAsRoot() noexcept {
-        mState.framed = false;
-        mState.offset = 0;
+        state_.framed = false;
+        state_.offset = 0;
     }
 
     auto finish() const -> sa::Result<void> {
-        if (mState.error) return *mState.error;
-        if (mState.offset != mState.size) {
+        if (state_.error) return *state_.error;
+        if (state_.offset != state_.size) {
             return sa::error(sa::ErrorCode::ParseError, "Binary input contains trailing or unconsumed bytes");
         }
         return sa::success();
     }
 
     auto root() -> InputValueType {
-        if (mState.error) return errorValue(mState, *mState.error);
-        if (!mState.framed) return rawValue(mState);
-        auto cursor = mState.offset;
-        auto parsed = parseNode(mState, cursor, mState.size, 0);
-        if (!parsed) return errorValue(mState, parsed.error());
-        mState.offset = cursor;
-        return {&mState, std::move(parsed.value())};
+        if (state_.error) return errorValue(state_, *state_.error);
+        if (!state_.framed) return rawValue(state_);
+        auto cursor = state_.offset;
+        auto parsed = parseNode(state_, cursor, state_.size, 0);
+        if (!parsed) return errorValue(state_, parsed.error());
+        state_.offset = cursor;
+        return {&state_, std::move(parsed.value())};
     }
 
     static auto next(const InputValueType& input) -> InputValueType {
@@ -182,8 +182,8 @@ public:
         return {input.state, std::move(parsed.value())};
     }
 
-    auto offset() const noexcept -> std::size_t { return mState.offset; }
-    auto size() const noexcept -> std::size_t { return mState.size; }
+    auto offset() const noexcept -> std::size_t { return state_.offset; }
+    auto size() const noexcept -> std::size_t { return state_.size; }
 
     static auto isRaw(const InputValueType& input) noexcept -> bool {
         return input.state != nullptr && input.node != nullptr && input.node->raw;
@@ -701,7 +701,7 @@ private:
     }
 
 private:
-    State mState;
+    State state_;
 };
 
 } // namespace binary

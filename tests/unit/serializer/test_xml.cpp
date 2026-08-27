@@ -157,7 +157,7 @@ TEST(PugiXmlBackend, MapsXmlContentFieldToNodeText) {
 }
 
 TEST(PugiXmlBackend, WritesCommentTagsForObjectsAndArrays) {
-    static_assert(parsing::supports_comments<xml::Writer>);
+    static_assert(parsing::SupportsComments<xml::Writer>);
     static_assert(tag_query::get<tag_property::LeadingComment>(TagList<comment_tag<"values comment">>{}) ==
                   std::string_view{"values comment"});
     static_assert(tag_query::get<tag_property::Comment>(TagList<comment_tag<"values comment">>{}) ==

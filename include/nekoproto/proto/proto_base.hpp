@@ -156,7 +156,7 @@ public:
     auto operator=(IProto&& proto) -> IProto&;
 
 private:
-    std::unique_ptr<detail::AbstractProto> mImp;
+    std::unique_ptr<detail::AbstractProto> imp_;
 };
 
 class NEKO_PROTO_API ProtoFactory {
@@ -201,9 +201,9 @@ private:
     static auto staticProtoTypeMap() -> std::map<std::string_view, int>&;
 
 private:
-    std::vector<std::function<IProto()>> mCreaterList;
-    std::unordered_map<int, std::function<IProto()>> mDynamicCreaterMap;
-    uint32_t mVersion;
+    std::vector<std::function<IProto()>>             creater_list_;
+    std::unordered_map<int, std::function<IProto()>> dynamic_creater_map_;
+    uint32_t                                         version_;
 };
 
 template <typename T>
@@ -217,11 +217,11 @@ auto ProtoFactory::specifyProtoType(const int type) noexcept -> int {
 
 template <typename T>
 auto ProtoFactory::protoType() noexcept -> int {
-    static int kType = -1;
-    if (kType == -1) [[unlikely]] {
-        kType = protoType(protoName<T>(), false);
+    static int s_type = -1;
+    if (s_type == -1) [[unlikely]] {
+        s_type = protoType(protoName<T>(), false);
     }
-    return kType;
+    return s_type;
 }
 
 template <typename T>
@@ -238,56 +238,56 @@ auto ProtoFactory::creater() noexcept -> IProto {
     return IProto{new T()};
 }
 
-inline IProto::IProto(detail::AbstractProto* proto) : mImp(proto) {}
+inline IProto::IProto(detail::AbstractProto* proto) : imp_(proto) {}
 
-inline IProto::IProto(IProto&& proto) : mImp(std::move(proto.mImp)) {}
+inline IProto::IProto(IProto&& proto) : imp_(std::move(proto.imp_)) {}
 
 inline auto IProto::toData() const noexcept -> std::vector<char> {
-    if (mImp) {
-        return mImp->toData();
+    if (imp_) {
+        return imp_->toData();
     }
     return {};
 }
 
 inline auto IProto::toData(std::vector<char>& buffer) const noexcept -> bool {
-    if (mImp) {
-        return mImp->toData(buffer);
+    if (imp_) {
+        return imp_->toData(buffer);
     }
     return false;
 }
 
 inline auto IProto::fromData(const char* data, std::size_t size) noexcept -> bool {
-    if (mImp) {
-        return mImp->fromData(data, size);
+    if (imp_) {
+        return imp_->fromData(data, size);
     }
     return false;
 }
 
 inline auto IProto::type() const noexcept -> int {
-    if (mImp) {
-        return mImp->type();
+    if (imp_) {
+        return imp_->type();
     }
     return -1;
 }
 
 inline auto IProto::protoName() const noexcept -> std::string_view {
-    if (mImp) {
-        return mImp->protoName();
+    if (imp_) {
+        return imp_->protoName();
     }
     return "IProto";
 }
 
 inline auto IProto::clone() const -> IProto {
-    if (mImp) {
-        return IProto{mImp->clone()};
+    if (imp_) {
+        return IProto{imp_->clone()};
     }
     return {};
 }
 
 template <typename T>
 auto IProto::getField(const std::string_view& name, T* result) noexcept -> bool {
-    NEKO_ASSERT(mImp != nullptr, "ReflectionSerializer", " protoobject is nullptr");
-    auto* reflectionObject = mImp->getReflectionObject();
+    NEKO_ASSERT(imp_ != nullptr, "ReflectionSerializer", " protoobject is nullptr");
+    auto* reflectionObject = imp_->getReflectionObject();
     if (reflectionObject == nullptr) {
         return false;
     }
@@ -296,35 +296,35 @@ auto IProto::getField(const std::string_view& name, T* result) noexcept -> bool 
 
 template <typename T>
 auto IProto::getField(const std::string_view& name, const T& defaultValue) noexcept -> T {
-    NEKO_ASSERT(mImp != nullptr, "ReflectionSerializer", "proto object is nullptr");
-    auto* reflectionObject = mImp->getReflectionObject();
+    NEKO_ASSERT(imp_ != nullptr, "ReflectionSerializer", "proto object is nullptr");
+    auto* reflectionObject = imp_->getReflectionObject();
     NEKO_ASSERT(reflectionObject != nullptr, "ReflectionSerializer", "reflectionObject is nullptr");
     return reflectionObject->getField(name, defaultValue);
 }
 
 template <typename T>
 auto IProto::setField(const std::string_view& name, const T& value) noexcept -> bool {
-    NEKO_ASSERT(mImp != nullptr, "ReflectionSerializer", "proto object is nullptr");
-    auto* reflectionObject = mImp->getReflectionObject();
+    NEKO_ASSERT(imp_ != nullptr, "ReflectionSerializer", "proto object is nullptr");
+    auto* reflectionObject = imp_->getReflectionObject();
     NEKO_ASSERT(reflectionObject != nullptr, "ReflectionSerializer", "reflectionObject is nullptr");
     return reflectionObject->setField(name, value);
 }
 
-inline auto IProto::operator==(std::nullptr_t) const -> bool { return mImp == nullptr; }
+inline auto IProto::operator==(std::nullptr_t) const -> bool { return imp_ == nullptr; }
 template <typename T>
 auto IProto::operator==(T* ptr) const -> bool {
-    if (mImp == nullptr && mImp->data() == ptr) {
+    if (imp_ == nullptr && imp_->data() == ptr) {
         return true;
     }
     auto self = cast<T>();
-    if (mImp->data() != nullptr && self != nullptr) {
+    if (imp_->data() != nullptr && self != nullptr) {
         return *ptr == *self;
     }
     return false;
 }
 template <typename T, typename std::enable_if<!std::is_same<T, IProto>::value, char>::type>
 inline auto IProto::operator=(const T& proto) -> IProto& {
-    if (mImp) {
+    if (imp_) {
         auto self = cast<T>();
         if (self != nullptr) {
             *self = proto;
@@ -334,22 +334,22 @@ inline auto IProto::operator=(const T& proto) -> IProto& {
 }
 
 inline auto IProto::operator=(IProto&& proto) -> IProto& {
-    mImp = std::move(proto.mImp);
+    imp_ = std::move(proto.imp_);
     return *this;
 }
 
 template <typename T>
 inline auto IProto::cast() noexcept -> T* {
-    if (mImp && type() == ProtoFactory::protoType<T>()) {
-        return reinterpret_cast<T*>(mImp->data());
+    if (imp_ && type() == ProtoFactory::protoType<T>()) {
+        return reinterpret_cast<T*>(imp_->data());
     }
     return nullptr;
 }
 
 template <typename T>
 auto IProto::cast() const noexcept -> const T* {
-    if (mImp && type() == ProtoFactory::protoType<T>()) {
-        return reinterpret_cast<const T*>(mImp->data());
+    if (imp_ && type() == ProtoFactory::protoType<T>()) {
+        return reinterpret_cast<const T*>(imp_->data());
     }
     return nullptr;
 }
@@ -372,7 +372,7 @@ struct DeclaredSpecifyType<ProtoT, typename std::enable_if<HasSpecifyTypeMethod<
 };
 
 template <typename ProtoT, typename SerializerT>
-std::string_view ProtoBase<ProtoT, SerializerT>::gProtoName = []() noexcept {
+std::string_view ProtoBase<ProtoT, SerializerT>::s_proto_name = []() noexcept {
     std::string_view name = class_nameof<ProtoT>;
     DeclaredSpecifyType<ProtoT>::declared();
     staticInitFuncs(name, [name](nekoproto::ProtoFactory* self) { self->regist<ProtoBaseType>(name); });

@@ -36,84 +36,83 @@ public:
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
 public:
-    Span() : mData(nullptr), mSize(0) {}
+    Span() : size_(0), data_(nullptr) {}
 
     template <typename U = T>
     explicit Span(const U* data, size_type size)
-        : mData(reinterpret_cast<pointer>(data)), mSize(size * sizeof(U) / sizeof(T)) {}
+        : size_(size * sizeof(U) / sizeof(T)), data_(reinterpret_cast<pointer>(data)) {}
 
     template <typename It, typename End>
     Span(It begin, End end)
-        : mData(reinterpret_cast<pointer>(&(*begin))), mSize(std::distance(begin, end)) {}
+        : size_(std::distance(begin, end)), data_(reinterpret_cast<pointer>(&(*begin))) {}
 
     template <typename U = T, size_type N>
-    Span(const U (&data)[N]) : mData(reinterpret_cast<pointer>(data)), mSize(N * sizeof(U) / sizeof(T)) {}
+    Span(const U (&data)[N]) : size_(N * sizeof(U) / sizeof(T)), data_(reinterpret_cast<pointer>(data)) {}
 
     template <typename U = T, size_type N>
     Span(const std::array<U, N>& data)
-        : mData(reinterpret_cast<pointer>(data.data())), mSize(data.size() * sizeof(U) / sizeof(T)) {}
+        : size_(data.size() * sizeof(U) / sizeof(T)), data_(reinterpret_cast<pointer>(data.data())) {}
     template <typename U = T, size_type N>
     Span(std::array<U, N>& data)
-        : mData(reinterpret_cast<pointer>(data.data())), mSize(data.size() * sizeof(U) / sizeof(T)) {}
+        : size_(data.size() * sizeof(U) / sizeof(T)), data_(reinterpret_cast<pointer>(data.data())) {}
 
     template <typename U = T>
     explicit Span(const std::basic_string<U>& data)
-        : mData(reinterpret_cast<pointer>(data.data())), mSize(data.size() * sizeof(U) / sizeof(T)) {}
+        : size_(data.size() * sizeof(U) / sizeof(T)), data_(reinterpret_cast<pointer>(data.data())) {}
 
     template <typename U = T>
     Span(const Span<U>& other)
-        : mData(reinterpret_cast<pointer>(other.data)), mSize(other.size() * sizeof(U) / sizeof(T)) {}
+        : size_(other.size() * sizeof(U) / sizeof(T)), data_(reinterpret_cast<pointer>(other.data)) {}
 
     template <typename U = T>
     explicit Span(const std::vector<U>& other)
-        : mData(reinterpret_cast<pointer>(other.data)), mSize(other.size() * sizeof(U) / sizeof(T)) {}
+        : size_(other.size() * sizeof(U) / sizeof(T)), data_(reinterpret_cast<pointer>(other.data)) {}
     template <typename U = T>
     explicit Span(std::vector<U>& data)
-        : mData(reinterpret_cast<pointer>(data.data())), mSize(data.size() * sizeof(U) / sizeof(T)) {}
+        : size_(data.size() * sizeof(U) / sizeof(T)), data_(reinterpret_cast<pointer>(data.data())) {}
 
-    auto operator[](const size_type index) -> reference { return mData[index]; }
-    auto operator[](const size_type index) const -> const_reference { return mData[index]; }
+    auto operator[](const size_type index) -> reference { return data_[index]; }
+    auto operator[](const size_type index) const -> const_reference { return data_[index]; }
     auto at(const size_type index) const -> const_reference {
-        NEKO_ASSERT(index < mSize, "span", "Index out of span view");
-        return mData[index];
+        NEKO_ASSERT(index < size_, "span", "Index out of span view");
+        return data_[index];
     }
     auto at(const size_type index) -> reference {
-        NEKO_ASSERT(index < mSize, "span", "Index out of span view");
-        return mData[index];
+        NEKO_ASSERT(index < size_, "span", "Index out of span view");
+        return data_[index];
     }
 
-    auto begin() const -> iterator { return mData; }
-    auto end() const -> iterator { return mData + mSize; }
-    auto cbegin() const -> const_iterator { return mData; }
-    auto cend() const -> const_iterator { return mData + mSize; }
+    auto begin() const -> iterator { return data_; }
+    auto end() const -> iterator { return data_ + size_; }
+    auto cbegin() const -> const_iterator { return data_; }
+    auto cend() const -> const_iterator { return data_ + size_; }
     auto rbegin() const -> reverse_iterator { return reverse_iterator(end()); }
     auto rend() const -> reverse_iterator { return reverse_iterator(begin()); }
     auto crbegin() const -> const_reverse_iterator { return const_reverse_iterator(end()); }
     auto crend() const -> const_reverse_iterator { return const_reverse_iterator(begin()); }
 
-    auto size_bytes() const -> size_type // NOLINT(readability-identifier-naming)
-    {
-        return mSize * sizeof(T);
+    auto size_bytes() const -> size_type {
+        return size_ * sizeof(T);
     }
-    auto size() const -> size_type { return mSize; }
-    auto empty() const -> bool { return mSize == 0; }
+    auto size() const -> size_type { return size_; }
+    auto empty() const -> bool { return size_ == 0; }
 
-    auto front() const -> const_reference { return mData[0]; }
-    auto front() -> reference { return mData[0]; }
-    auto back() const -> const_reference { return mData[mSize - 1]; }
-    auto back() -> reference { return mData[mSize - 1]; }
+    auto front() const -> const_reference { return data_[0]; }
+    auto front() -> reference { return data_[0]; }
+    auto back() const -> const_reference { return data_[size_ - 1]; }
+    auto back() -> reference { return data_[size_ - 1]; }
 
-    auto data() -> pointer { return mData; }
-    auto data() const -> const_pointer { return mData; }
+    auto data() -> pointer { return data_; }
+    auto data() const -> const_pointer { return data_; }
 
-    auto subspan(size_type offset, size_type count) const -> Span { return Span(mData + offset, count); }
-    auto subspan(size_type offset) const -> Span { return Span(mData + offset, mSize - offset); }
-    auto first(size_type count) const -> Span { return Span(mData, count); }
-    auto last(size_type count) const -> Span { return Span(mData + mSize - count, count); }
+    auto subspan(size_type offset, size_type count) const -> Span { return Span(data_ + offset, count); }
+    auto subspan(size_type offset) const -> Span { return Span(data_ + offset, size_ - offset); }
+    auto first(size_type count) const -> Span { return Span(data_, count); }
+    auto last(size_type count) const -> Span { return Span(data_ + size_ - count, count); }
 
 private:
-    size_type mSize;
-    pointer mData;
+    size_type size_;
+    pointer   data_;
 };
 #else
 template <typename T = char>

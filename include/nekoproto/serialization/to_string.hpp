@@ -26,19 +26,19 @@ public:
 
     template <typename T>
     auto operator()(const T& value) -> bool {
-        mWriter.reset();
-        mLastResult = parserWrite<print::TextWriter>(mWriter, value, parsing::Parent<print::TextWriter>::Root{});
-        return static_cast<bool>(mLastResult);
+        writer_.reset();
+        last_result_ = parserWrite<print::TextWriter>(writer_, value, parsing::Parent<print::TextWriter>::Root{});
+        return static_cast<bool>(last_result_);
     }
 
-    auto end() const noexcept -> bool { return static_cast<bool>(mLastResult); }
-    explicit operator bool() const noexcept { return static_cast<bool>(mLastResult); }
-    auto error() const noexcept -> const sa::Error* { return sa::errorPtr(mLastResult); }
-    auto str() const -> std::string { return mWriter.str(); }
+    auto end() const noexcept -> bool { return static_cast<bool>(last_result_); }
+    explicit operator bool() const noexcept { return static_cast<bool>(last_result_); }
+    auto error() const noexcept -> const sa::Error* { return sa::errorPtr(last_result_); }
+    auto str() const -> std::string { return writer_.str(); }
 
 private:
-    print::TextWriter mWriter;
-    sa::Result<void> mLastResult;
+    print::TextWriter writer_;
+    sa::Result<void>  last_result_;
 };
 
 template <typename T>

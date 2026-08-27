@@ -27,7 +27,7 @@ inline auto rpcJoinName(std::string_view prefix, std::string_view name) -> std::
 }
 
 template <typename T>
-concept RpcReflectable = has_values_meta<std::remove_cvref_t<T>>;
+concept RpcReflectable = HasValuesMeta<std::remove_cvref_t<T>>;
 
 template <typename Field, typename Fn, typename Tags>
 void rpcVisitField(Field& field, std::string_view field_name, const Tags& tags, std::string_view prefix, Fn&& fn);

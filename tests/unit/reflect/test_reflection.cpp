@@ -55,18 +55,18 @@ static_assert(detail::ReflectModel<Test1>::value_count == 3);
 static_assert(std::is_same_v<typename detail::ReflectModel<Test1>::value_types, Reflect<Test1>::value_types>);
 
 TEST(Reflection, Test) {
-    EXPECT_FALSE(detail::has_values_meta<int*>);
-    EXPECT_TRUE(detail::has_values_meta<Test1>);
+    EXPECT_FALSE(detail::HasValuesMeta<int*>);
+    EXPECT_TRUE(detail::HasValuesMeta<Test1>);
     EXPECT_EQ((detail::member_nameof<0, Test1>), "member1");
     EXPECT_EQ((detail::member_nameof<1, Test1>), "member2");
     EXPECT_EQ((detail::member_nameof<2, Test1>), "member3");
     EXPECT_TRUE(detail::can_unwrap_v<Test1>);
     static_assert(detail::can_unwrap_v<Test1>, "Test1 must can unwrap");
-    static_assert(!detail::is_local_ref_values<Test1> && !detail::is_local_names<Test1>,
+    static_assert(!detail::IsLocalRefValues<Test1> && !detail::IsLocalNames<Test1>,
                   "Test1 must not be local_ref_values");
-    static_assert(!detail::is_local_ref_object<Test1>, "Test1 must not be local_ref_object");
-    static_assert(!detail::is_local_ref_array<Test1>, "Test1 must not be local_ref_array");
-    static_assert(!detail::is_local_ref_value<Test1>, "Test1 must not be local_ref_value");
+    static_assert(!detail::IsLocalRefObject<Test1>, "Test1 must not be local_ref_object");
+    static_assert(!detail::IsLocalRefArray<Test1>, "Test1 must not be local_ref_array");
+    static_assert(!detail::IsLocalRefValue<Test1>, "Test1 must not be local_ref_value");
     static_assert(std::is_same_v<Reflect<Test1>::value_types, std::tuple<int, int, int>>, "Test1 must have 3 members");
     Test1 test{.member1 = 23, .member2 = 12, .member3 = 45};
     static_assert(std::is_invocable_v<void(const JsonTag&), NoTags>, "NoTags can convert to JsonTag");
@@ -120,14 +120,14 @@ static_assert(std::is_same_v<typename detail::ReflectModel<Test2>::value_types, 
 static_assert(is_tag_list_v<std::decay_t<decltype(std::get<0>(detail::ReflectModel<Test2>::field_tags))>>);
 
 TEST(Reflection, RefObjectValue) {
-    static_assert(!detail::is_local_ref_values<Test2> && !detail::is_local_names<Test2>,
+    static_assert(!detail::IsLocalRefValues<Test2> && !detail::IsLocalNames<Test2>,
                   "Test2 must not be local_ref_values");
-    static_assert(detail::is_local_ref_object<Test2>, "Test2 must be local_ref_object");
-    static_assert(!detail::is_local_ref_array<Test2>, "Test2 must not be local_ref_array");
-    static_assert(!detail::is_local_ref_value<Test2>, "Test2 must not be local_ref_value");
-    static_assert(detail::has_value_function<Test2>, "Test2 must have value function");
+    static_assert(detail::IsLocalRefObject<Test2>, "Test2 must be local_ref_object");
+    static_assert(!detail::IsLocalRefArray<Test2>, "Test2 must not be local_ref_array");
+    static_assert(!detail::IsLocalRefValue<Test2>, "Test2 must not be local_ref_value");
+    static_assert(detail::HasValueFunction<Test2>, "Test2 must have value function");
     using FuncType = std::decay_t<decltype(std::get<2>(Test2::Neko::value.values))>;
-    static_assert(detail::is_member_ref_function<FuncType, Test2>, "");
+    static_assert(detail::IsMemberRefFunction<FuncType, Test2>, "");
     Test2 test{.member1 = 23, .member2 = 12, .member3 = 45, .member4 = 56};
     Reflect<Test2>::forEach(test, [](auto& field) {
         NEKO_LOG_INFO("test", "field: {}", field);
@@ -216,11 +216,11 @@ struct Test3 {
 };
 
 TEST(Reflection, RefObjectArray) {
-    static_assert(!detail::is_local_ref_values<Test3> && !detail::is_local_names<Test3>,
+    static_assert(!detail::IsLocalRefValues<Test3> && !detail::IsLocalNames<Test3>,
                   "Test3 must not be local_ref_values");
-    static_assert(!detail::is_local_ref_object<Test3>, "Test3 must not be local_ref_object");
-    static_assert(detail::is_local_ref_array<Test3>, "Test3 must be local_ref_array");
-    static_assert(!detail::is_local_ref_value<Test3>, "Test3 must not be local_ref_value");
+    static_assert(!detail::IsLocalRefObject<Test3>, "Test3 must not be local_ref_object");
+    static_assert(detail::IsLocalRefArray<Test3>, "Test3 must be local_ref_array");
+    static_assert(!detail::IsLocalRefValue<Test3>, "Test3 must not be local_ref_value");
     static_assert(std::is_same_v<Reflect<Test3>::value_types, std::tuple<int, std::string>>,
                   "Test3 must have 2 members");
     Test3 test{.prr = {.member1 = 234}, .member2 = "3453"};
@@ -369,16 +369,16 @@ struct Test5 {
 };
 
 TEST(Reflection, RefObjectSingle) {
-    static_assert(!detail::is_local_ref_values<Test4> && !detail::is_local_names<Test4>,
+    static_assert(!detail::IsLocalRefValues<Test4> && !detail::IsLocalNames<Test4>,
                   "Test4 must not be local_ref_values");
-    static_assert(!detail::is_local_ref_object<Test4>, "Test4 must not be local_ref_object");
-    static_assert(!detail::is_local_ref_array<Test4>, "Test4 must not be local_ref_array");
-    static_assert(detail::is_local_ref_value<Test4>, "Test4 must be local_ref_value");
-    static_assert(!detail::is_local_ref_values<Test5> && detail::is_local_names<Test5>,
+    static_assert(!detail::IsLocalRefObject<Test4>, "Test4 must not be local_ref_object");
+    static_assert(!detail::IsLocalRefArray<Test4>, "Test4 must not be local_ref_array");
+    static_assert(detail::IsLocalRefValue<Test4>, "Test4 must be local_ref_value");
+    static_assert(!detail::IsLocalRefValues<Test5> && detail::IsLocalNames<Test5>,
                   "Test5 must not be local_ref_values");
-    static_assert(!detail::is_local_ref_object<Test5>, "Test5 must not be local_ref_object");
-    static_assert(!detail::is_local_ref_array<Test5>, "Test5 must not be local_ref_array");
-    static_assert(detail::is_local_ref_value<Test5>, "Test5 must be local_ref_value");
+    static_assert(!detail::IsLocalRefObject<Test5>, "Test5 must not be local_ref_object");
+    static_assert(!detail::IsLocalRefArray<Test5>, "Test5 must not be local_ref_array");
+    static_assert(detail::IsLocalRefValue<Test5>, "Test5 must be local_ref_value");
     static_assert(std::is_same_v<Reflect<Test4>::value_types, std::tuple<int>>, "Test4 must have 1 members");
     static_assert(std::is_same_v<Reflect<Test5>::value_types, std::tuple<int>>, "Test5 must have 1 members");
 
@@ -416,11 +416,11 @@ static_assert(detail::ReflectProvider<Test6>::provider_kind == detail::ReflectPr
 static_assert(detail::ReflectProvider<Test6>::kind == detail::MetaKind::MetaObject);
 
 TEST(Reflection, Local) {
-    static_assert(!detail::is_local_ref_values<Test6>, "Test6 must be local_ref_values");
-    static_assert(!detail::is_local_names<Test6>, "Test6 must be local_names");
-    static_assert(!detail::is_local_ref_object<Test6>, "Test6 must not be local_ref_object");
-    static_assert(!detail::is_local_ref_array<Test6>, "Test6 must not be local_ref_array");
-    static_assert(!detail::is_local_ref_value<Test6>, "Test6 must not be local_ref_value");
+    static_assert(!detail::IsLocalRefValues<Test6>, "Test6 must be local_ref_values");
+    static_assert(!detail::IsLocalNames<Test6>, "Test6 must be local_names");
+    static_assert(!detail::IsLocalRefObject<Test6>, "Test6 must not be local_ref_object");
+    static_assert(!detail::IsLocalRefArray<Test6>, "Test6 must not be local_ref_array");
+    static_assert(!detail::IsLocalRefValue<Test6>, "Test6 must not be local_ref_value");
     Test6 test{.member1 = 23, .member2 = 12};
     static_assert(std::is_same_v<Reflect<Test6>::value_types, std::tuple<int, int>>, "Test6 must have 2 members");
     Reflect<Test6>::forEach(test, [](auto& field, std::string_view name, const auto& tags) {

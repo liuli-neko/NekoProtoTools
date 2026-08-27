@@ -20,7 +20,7 @@ ImplementationFileExtensions:
   - cpp
   - cxx
 
-HeaderFilterRegex: ''
+HeaderFilterRegex: '.*nekoproto/.*'
 FormatStyle: none
 InheritParentConfig: true
 SystemHeaders: false
@@ -67,6 +67,8 @@ CheckOptions:
   # --------------------------------------------------------------------------
   - key: readability-identifier-naming.FunctionCase
     value: camelBack
+  - key: readability-identifier-naming.FunctionIgnoredRegexp
+    value: '^(make_error_code|to_string|swap)$'
   - key: readability-identifier-naming.ConstexprFunctionCase
     value: camelBack
   - key: readability-identifier-naming.PublicMethodCase
@@ -77,6 +79,8 @@ CheckOptions:
     value: camelBack
   - key: readability-identifier-naming.ConstexprMethodCase
     value: camelBack
+  - key: readability-identifier-naming.MethodIgnoredRegexp
+    value: '^(size_bytes|c_str|begin|end|cbegin|cend|rbegin|rend|size|empty|data|front|back|Put|Flush|GetString|GetSize|Clear)$'
 
   # --------------------------------------------------------------------------
   # Variables
@@ -113,6 +117,10 @@ CheckOptions:
     value: lower_case
   - key: readability-identifier-naming.GlobalConstantCase
     value: lower_case
+  - key: readability-identifier-naming.ClassConstantCase
+    value: lower_case
+  - key: readability-identifier-naming.StaticConstantIgnoredRegexp
+    value: '^(value|names|values|tags|end|begin|prefix|version|description|arg_names|notification)$'
 
   # --------------------------------------------------------------------------
   # Members
@@ -124,17 +132,14 @@ CheckOptions:
   #
   - key: readability-identifier-naming.PublicMemberCase
     value: lower_case
-  - key: readability-identifier-naming.ClassConstexprCase
-    value: CamelCase
-  # Private/protected members get trailing underscore.
-  - key: readability-identifier-naming.PrivateMemberCase
-    value: CamelCase
-  - key: readability-identifier-naming.PrivateMemberPrefix
-    value: m
+  # Protected members are lower_case without suffix.
   - key: readability-identifier-naming.ProtectedMemberCase
-    value: CamelCase
-  - key: readability-identifier-naming.ProtectedMemberPrefix
-    value: m
+    value: lower_case
+  # Private members get trailing underscore.
+  - key: readability-identifier-naming.PrivateMemberCase
+    value: lower_case
+  - key: readability-identifier-naming.PrivateMemberSuffix
+    value: _
 
   # --------------------------------------------------------------------------
   # Type aliases
@@ -150,7 +155,7 @@ CheckOptions:
   # Concepts
   # --------------------------------------------------------------------------
   - key: readability-identifier-naming.ConceptCase
-    value: lower_case
+    value: CamelCase
 
   # --------------------------------------------------------------------------
   # Template parameters
@@ -169,5 +174,3 @@ CheckOptions:
   # --------------------------------------------------------------------------
   - key: readability-identifier-naming.MacroDefinitionCase
     value: UPPER_CASE
-  - key: readability-identifier-naming.MacroDefinitionIgnoredRegexp
-    value: '^NEKO_.*$'

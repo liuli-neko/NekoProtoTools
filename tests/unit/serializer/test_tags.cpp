@@ -425,8 +425,8 @@ TEST(SerializationTags, MakeTagsExposeAccessorAndWrappedTag) {
     auto spec = makeTags<rename_tag<"wire_code">, JsonTag{.skippable = true}>(&TypeLevelFlatTagInner::code);
 
     static_assert(is_tagged_field_v<decltype(spec)>);
-    static_assert(std::is_same_v<detail::resolve_without_context_t<decltype(&TypeLevelFlatTagInner::code)>, int>);
-    static_assert(std::is_same_v<resolve_member_type_t<field_accessor_t<decltype(spec)>, TypeLevelFlatTagInner>, int>);
+    static_assert(std::is_same_v<detail::ResolveWithoutContextT<decltype(&TypeLevelFlatTagInner::code)>, int>);
+    static_assert(std::is_same_v<ResolveMemberTypeT<FieldAccessorT<decltype(spec)>, TypeLevelFlatTagInner>, int>);
     static_assert(tag_query::get<tag_property::Name>(field_tags_v<decltype(spec)>) == "wire_code");
     static_assert(tag_query::get<tag_property::Skippable>(field_tags_v<decltype(spec)>));
 }

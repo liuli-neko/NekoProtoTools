@@ -17,7 +17,7 @@
 namespace nekoproto {
 namespace detail {
 
-inline constexpr std::size_t max_flattened_tag_count = 128; // NOLINT
+inline constexpr std::size_t max_flattened_tag_count = 128;
 
 template <typename T>
 struct IsResolvableWithoutContext : std::false_type {};
@@ -29,7 +29,7 @@ template <typename Fn>
 struct IsResolvableWithoutContext<std::is_invocable<Fn>> : std::true_type {};
 
 template <typename T>
-inline constexpr bool is_resolvable_without_context_v = IsResolvableWithoutContext<T>::value; // NOLINT
+inline constexpr bool is_resolvable_without_context_v = IsResolvableWithoutContext<T>::value;
 
 template <typename T>
 struct ResolveWithoutContext;
@@ -52,7 +52,7 @@ struct ResolveWithoutContext<MemberType ClassType::*> {
 };
 
 template <typename T>
-using resolve_without_context_t = typename ResolveWithoutContext<T>::type;
+using ResolveWithoutContextT = typename ResolveWithoutContext<T>::type;
 
 template <typename T, auto tags>
 constexpr auto performCheck() -> bool {
@@ -90,17 +90,17 @@ constexpr auto tagValueValue(T&& value) -> decltype(auto) {
 }
 
 template <typename T>
-auto constexpr makeTagValueCommon(T&& value) {
-    decltype(auto) rawValue = tagValueValue(std::forward<T>(value));
-    using RawValue          = std::remove_reference_t<decltype(rawValue)>;
+constexpr auto makeTagValueCommon(T&& value) {
+    decltype(auto) raw_value = tagValueValue(std::forward<T>(value));
+    using RawValue           = std::remove_reference_t<decltype(raw_value)>;
     if constexpr (std::is_array_v<RawValue>) {
-        return std::vector<std::decay_t<RawValue>>{std::begin(rawValue), std::end(rawValue)};
+        return std::vector<std::decay_t<RawValue>>{std::begin(raw_value), std::end(raw_value)};
     } else if constexpr (nekoproto::detail::IsStdArray<std::decay_t<RawValue>>::value) {
-        return std::vector<typename std::decay_t<RawValue>::value_type>{std::begin(rawValue), std::end(rawValue)};
+        return std::vector<typename std::decay_t<RawValue>::value_type>{std::begin(raw_value), std::end(raw_value)};
     } else if constexpr (IsConstexprString<RawValue>::value) {
-        return rawValue.view();
+        return raw_value.view();
     } else {
-        return std::forward<decltype(rawValue)>(rawValue);
+        return std::forward<decltype(raw_value)>(raw_value);
     }
 }
 
@@ -193,7 +193,7 @@ struct TagListElement {
 };
 
 template <std::size_t I, auto... Tags>
-using tag_list_element_t = typename TagListElement<I, Tags...>::type;
+using TagListElementT = typename TagListElement<I, Tags...>::type;
 
 template <typename T, auto... Tags>
 constexpr auto tagListHasTypeImpl() -> bool {
@@ -323,7 +323,7 @@ inline constexpr auto normalize_tags_v = NormalizeTags<Tags...>::value;
 } // namespace detail
 
 template <std::size_t I, auto... Tags>
-constexpr auto get(TagList<Tags...> tags) noexcept -> detail::tag_list_element_t<I, Tags...> {
+constexpr auto get(TagList<Tags...> tags) noexcept -> detail::TagListElementT<I, Tags...> {
     static_cast<void>(tags);
     return detail::TagListElement<I, Tags...>::value;
 }
@@ -335,11 +335,11 @@ constexpr auto TagList<Tags...>::get() const {
 }
 
 template <auto... Tags, typename Accessor>
-inline constexpr auto makeTags(Accessor&& accessor) { // NOLINT
+inline constexpr auto makeTags(Accessor&& accessor) -> TaggedField<detail::normalize_tags_v<Tags...>, Accessor> {
     constexpr auto NormalizedTags = detail::normalize_tags_v<Tags...>;
 
     if constexpr (detail::is_resolvable_without_context_v<std::decay_t<Accessor>>) {
-        using ResolvedType = detail::resolve_without_context_t<std::decay_t<Accessor>>;
+        using ResolvedType = detail::ResolveWithoutContextT<std::decay_t<Accessor>>;
         static_assert(detail::performCheck<ResolvedType, NormalizedTags>(),
                       "Tag check failed for a member of type, please check the tag definition");
     }
@@ -362,25 +362,25 @@ template <auto Tags, typename Accessor>
 struct IsTaggedField<const TaggedField<Tags, Accessor>&> : std::true_type {};
 
 template <typename T>
-inline constexpr bool is_tagged_field_v = IsTaggedField<std::decay_t<T>>::value; // NOLINT
+inline constexpr bool is_tagged_field_v = IsTaggedField<std::decay_t<T>>::value;
 
-template <typename T, class enable = void>
+template <typename T, class Enable = void>
 struct UnwrapTaggedField {
     using type                 = T;
-    constexpr static auto tags = NoTags{}; // NOLINT
+    constexpr static auto tags = NoTags{};
 };
 
 template <typename T>
 struct UnwrapTaggedField<T, std::enable_if_t<is_tagged_field_v<T>>> {
     using type                 = typename std::decay_t<T>::accessor_type;
-    constexpr static auto tags = std::decay_t<T>::tags; // NOLINT
+    constexpr static auto tags = std::decay_t<T>::tags;
 };
 
 template <typename T>
-using unwrap_tagged_field_t = typename UnwrapTaggedField<T>::type;
+using UnwrapTaggedFieldT = typename UnwrapTaggedField<T>::type;
 
 template <typename T>
-inline constexpr auto unwrap_tagged_field_tags_v = UnwrapTaggedField<T>::tags; // NOLINT
+inline constexpr auto unwrap_tagged_field_tags_v = UnwrapTaggedField<T>::tags;
 
 template <typename T>
 constexpr auto fieldAccessor(T&& value) noexcept -> decltype(auto) {
@@ -392,14 +392,14 @@ constexpr auto fieldAccessor(T&& value) noexcept -> decltype(auto) {
 }
 
 template <typename T>
-using field_accessor_t = unwrap_tagged_field_t<T>;
+using FieldAccessorT = UnwrapTaggedFieldT<T>;
 
 template <typename T>
-inline constexpr auto field_tags_v = unwrap_tagged_field_tags_v<T>; // NOLINT
+inline constexpr auto field_tags_v = unwrap_tagged_field_tags_v<T>;
 
 template <typename Accessor, typename HostType>
 struct ResolveMemberType {
-    using type = field_accessor_t<Accessor>;
+    using type = FieldAccessorT<Accessor>;
 };
 
 template <typename Accessor, typename HostType>
@@ -409,13 +409,13 @@ struct ResolveMemberType<Accessor, HostType> {
 };
 
 template <typename Accessor, typename HostType>
-using resolve_member_type_t = typename std::decay_t<typename ResolveMemberType<std::decay_t<Accessor>, HostType>::type>;
+using ResolveMemberTypeT = typename std::decay_t<typename ResolveMemberType<std::decay_t<Accessor>, HostType>::type>;
 
 namespace detail {
 
 template <typename ValuesTuple, typename ContextType, std::size_t... Is>
 constexpr auto performAllChecksImpl(std::index_sequence<Is...> /*unused*/) -> bool {
-    return (performCheck<resolve_member_type_t<field_accessor_t<std::tuple_element_t<Is, ValuesTuple>>, ContextType>,
+    return (performCheck<ResolveMemberTypeT<FieldAccessorT<std::tuple_element_t<Is, ValuesTuple>>, ContextType>,
                          field_tags_v<std::tuple_element_t<Is, ValuesTuple>>>() &&
             ...);
 }
@@ -667,22 +667,22 @@ struct tuple_size<nekoproto::TagList<Tags...>> : integral_constant<size_t, sizeo
 
 template <size_t I, auto... Tags>
 struct tuple_element<I, nekoproto::TagList<Tags...>> {
-    using type = nekoproto::detail::tag_list_element_t<I, Tags...>;
+    using type = nekoproto::detail::TagListElementT<I, Tags...>;
 };
 
 template <size_t I, auto... Tags>
 constexpr auto get(const nekoproto::TagList<Tags...>& tags) noexcept
-    -> nekoproto::detail::tag_list_element_t<I, Tags...> {
+    -> nekoproto::detail::TagListElementT<I, Tags...> {
     return nekoproto::get<I>(tags);
 }
 
 template <size_t I, auto... Tags>
-constexpr auto get(nekoproto::TagList<Tags...>& tags) noexcept -> nekoproto::detail::tag_list_element_t<I, Tags...> {
+constexpr auto get(nekoproto::TagList<Tags...>& tags) noexcept -> nekoproto::detail::TagListElementT<I, Tags...> {
     return nekoproto::get<I>(tags);
 }
 
 template <size_t I, auto... Tags>
-constexpr auto get(nekoproto::TagList<Tags...>&& tags) noexcept -> nekoproto::detail::tag_list_element_t<I, Tags...> {
+constexpr auto get(nekoproto::TagList<Tags...>&& tags) noexcept -> nekoproto::detail::TagListElementT<I, Tags...> {
     return nekoproto::get<I>(tags);
 }
 } // namespace std

@@ -31,22 +31,22 @@ private:
         std::string value;
         std::vector<Node> array;
 
-        std::vector<std::string> objectNames;
-        std::vector<Node> objectValues;
+        std::vector<std::string> object_names;
+        std::vector<Node>        object_values;
 
         auto emplaceObject(const std::string& name, Node&& node) {
-            objectNames.push_back(name);
-            objectValues.push_back(std::move(node));
-            return std::pair<std::string_view, Node&>(objectNames.back(), objectValues.back());
+            object_names.push_back(name);
+            object_values.push_back(std::move(node));
+            return std::pair<std::string_view, Node&>(object_names.back(), object_values.back());
         }
 
         void reserveObject(size_t size) {
-            objectNames.reserve(size);
-            objectValues.reserve(size);
+            object_names.reserve(size);
+            object_values.reserve(size);
         }
 
         auto object(int index) const -> std::pair<std::string_view, const Node&> {
-            return {objectNames[index], objectValues[index]};
+            return {object_names[index], object_values[index]};
         }
     };
 
@@ -65,27 +65,27 @@ public:
         Node* value;
     };
 
-    void reset() { mRoot = Node{}; }
+    void reset() { root_ = Node{}; }
 
     auto arrayAsRoot(std::size_t size) -> OutputArrayType {
-        initializeArray(mRoot, size);
-        return {&mRoot};
+        initializeArray(root_, size);
+        return {&root_};
     }
 
     auto objectAsRoot(std::size_t size) -> OutputObjectType {
-        initializeObject(mRoot, size);
-        return {&mRoot};
+        initializeObject(root_, size);
+        return {&root_};
     }
 
     auto nullAsRoot() -> OutputValueType {
-        mRoot = Node{};
-        return {&mRoot};
+        root_ = Node{};
+        return {&root_};
     }
 
     template <typename T>
     auto valueAsRoot(const T& value) -> OutputValueType {
-        setValue(mRoot, value);
-        return {&mRoot};
+        setValue(root_, value);
+        return {&root_};
     }
 
     static auto addArrayToArray(std::size_t size, OutputArrayType* parent) -> OutputArrayType {
@@ -139,7 +139,7 @@ public:
 
     auto str() const -> std::string {
         std::string output;
-        render(mRoot, output);
+        render(root_, output);
         return output;
     }
 
@@ -276,7 +276,7 @@ private:
             break;
         case Node::Kind::Object:
             output.push_back('{');
-            for (std::size_t i = 0; i < node.objectNames.size(); ++i) {
+            for (std::size_t i = 0; i < node.object_names.size(); ++i) {
                 if (i != 0) {
                     output.push_back(',');
                 }
@@ -291,7 +291,7 @@ private:
     }
 
 private:
-    Node mRoot;
+    Node root_;
 };
 } // namespace json
 } // namespace nekoproto

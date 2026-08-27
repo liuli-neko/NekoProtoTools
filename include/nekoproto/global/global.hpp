@@ -25,13 +25,13 @@ inline constexpr bool always_false_v = false;
 } // namespace nekoproto
 
 #if defined(_MSVC_LANG) && _MSVC_LANG > __cplusplus
-    #define _NEKO_CPP_RAW_VER _MSVC_LANG
+    #define NEKO_DETAIL_CPP_RAW_VER _MSVC_LANG
 #else
-    #define _NEKO_CPP_RAW_VER __cplusplus
+    #define NEKO_DETAIL_CPP_RAW_VER __cplusplus
 #endif
-#define _NEKO_CPP_RAW_VER_YEAR ((_NEKO_CPP_RAW_VER / 100) % 100)
-#if _NEKO_CPP_RAW_VER >= 201103L
-    #define NEKO_CPP_PLUS (_NEKO_CPP_RAW_VER_YEAR - (_NEKO_CPP_RAW_VER_YEAR % 3) + 2)
+#define NEKO_DETAIL_CPP_RAW_VER_YEAR ((NEKO_DETAIL_CPP_RAW_VER / 100) % 100)
+#if NEKO_DETAIL_CPP_RAW_VER >= 201103L
+    #define NEKO_CPP_PLUS (NEKO_DETAIL_CPP_RAW_VER_YEAR - (NEKO_DETAIL_CPP_RAW_VER_YEAR % 3) + 2)
 #else
     #define NEKO_CPP_PLUS 1
 #endif

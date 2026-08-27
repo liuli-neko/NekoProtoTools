@@ -80,7 +80,7 @@ auto parserReflectEmittedFieldCountOne(const FieldT& field, const Tags& tags) ->
     if (parserShouldIgnoreReflectField(tags) || parserShouldSkipEmptyField(field, tags)) {
         return 0;
     }
-    if constexpr (has_values_meta<FieldType> && has_names_meta<FieldType> &&
+    if constexpr (HasValuesMeta<FieldType> && HasNamesMeta<FieldType> &&
                   !DisableReflectParser<FieldType>::value) {
         if (tag_query::get<tag_property::Flat<FieldType>>(tags)) {
             return parserReflectEmittedFieldCount(field);
@@ -187,7 +187,7 @@ auto parserWriteReflectField(W& writer, ObjectType& object, const T& field, std:
     if (parserShouldIgnoreReflectField(tags)) {
         return sa::success();
     }
-    if constexpr (has_values_meta<FieldType> && has_names_meta<FieldType> &&
+    if constexpr (HasValuesMeta<FieldType> && HasNamesMeta<FieldType> &&
                   !DisableReflectParser<FieldType>::value) {
         if (tag_query::get<tag_property::Flat<FieldType>>(tags)) {
             return parserWriteReflectFields<W>(writer, object, field);
@@ -240,7 +240,7 @@ auto parserReadReflectField(typename R::InputValueType in, T& field, std::string
     if (parserShouldIgnoreReflectField(tags)) {
         return sa::success();
     }
-    if constexpr (has_values_meta<FieldType> && has_names_meta<FieldType> &&
+    if constexpr (HasValuesMeta<FieldType> && HasNamesMeta<FieldType> &&
                   !DisableReflectParser<FieldType>::value) {
         if (tag_query::get<tag_property::Flat<FieldType>>(tags)) {
             return parserReadReflectFields<R>(in, field);
@@ -299,11 +299,11 @@ auto parserReadReflectFields(typename R::InputValueType in, T& value, const Tags
 
 template <typename W, typename T>
 struct WriteParser<W, T,
-                   std::enable_if_t<has_values_meta<T> && (!is_tagged_field_v<T>) && (!std::is_enum_v<T>) &&
+                   std::enable_if_t<HasValuesMeta<T> && (!is_tagged_field_v<T>) && (!std::is_enum_v<T>) &&
                                     (!DisableReflectParser<T>::value)>> {
     template <typename ParentType, typename Tags>
     static auto write(W& writer, const T& value, const ParentType& parent, const Tags& tags) -> ParserResult {
-        if constexpr (has_names_meta<T>) {
+        if constexpr (HasNamesMeta<T>) {
             if constexpr (requires { writer.beginRawFixedDataAsRoot(); }) {
                 if (tag_query::get<tag_property::RawFixedData>(tags)) {
                     using ParentTypeValue = std::remove_cvref_t<ParentType>;
@@ -346,7 +346,7 @@ struct WriteParser<W, T,
                     }
                 }
             }
-            if constexpr (parsing::supports_unframed_object_writer<W>) {
+            if constexpr (parsing::SupportsUnframedObjectWriter<W>) {
                 if (tag_query::get<tag_property::Unframed<std::decay_t<T>>>(tags)) {
                     parsing::Parent<W>::beginUnframedObject(writer, parent);
                     ParserResult result;
@@ -399,7 +399,7 @@ struct WriteParser<W, T,
 
 template <typename R, typename T>
 struct ReadParser<R, T,
-                  std::enable_if_t<has_values_meta<T> && (!is_tagged_field_v<T>) && (!std::is_enum_v<T>) &&
+                  std::enable_if_t<HasValuesMeta<T> && (!is_tagged_field_v<T>) && (!std::is_enum_v<T>) &&
                                    (!DisableReflectParser<T>::value)>> {
     template <typename Tags>
     static auto read(typename R::InputValueType in, T& value, const Tags& tags) -> ParserResult {
@@ -425,7 +425,7 @@ struct ReadParser<R, T,
 private:
     template <typename Tags>
     static auto readInPlace(typename R::InputValueType in, T& value, const Tags& tags) -> ParserResult {
-        if constexpr (has_names_meta<T>) {
+        if constexpr (HasNamesMeta<T>) {
             if constexpr (requires { R::isRaw(in); }) {
                 if (tag_query::get<tag_property::RawFixedData>(tags)) {
                     if (!R::isRaw(in)) {
@@ -468,7 +468,7 @@ private:
                     return result;
                 }
             }
-            if constexpr (parsing::supports_unframed_object_reader<R>) {
+            if constexpr (parsing::SupportsUnframedObjectReader<R>) {
                 if (tag_query::get<tag_property::Unframed<std::decay_t<T>>>(tags)) {
                     if constexpr (requires { R::isFramedObject(in); }) {
                         if (R::isFramedObject(in)) {
@@ -525,11 +525,11 @@ private:
 };
 
 template <typename T>
-struct SchemaParser<T, std::enable_if_t<has_values_meta<T> && (!is_tagged_field_v<T>) && (!std::is_enum_v<T>) &&
+struct SchemaParser<T, std::enable_if_t<HasValuesMeta<T> && (!is_tagged_field_v<T>) && (!std::is_enum_v<T>) &&
                                         (!DisableReflectParser<T>::value)>> {
     static auto toSchema() -> parsing::schema::Type {
         parsing::schema::Type schema;
-        if constexpr (has_names_meta<T>) {
+        if constexpr (HasNamesMeta<T>) {
             schema = parserSchemaNamedReflection<T>();
         } else {
             schema = parserSchemaPositionalReflection<T>();

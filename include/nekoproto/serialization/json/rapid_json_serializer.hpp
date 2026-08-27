@@ -145,22 +145,22 @@ public:
         Tab     = '\t',
     };
     using FormatOptions = rapidjson::PrettyFormatOptions;
-    static auto Default() -> JsonOutputFormatOptions { // NOLINT(readability-identifier-naming)
+    static auto defaultOptions() -> JsonOutputFormatOptions {
         return JsonOutputFormatOptions();
     }
-    static auto Compact() -> JsonOutputFormatOptions { // NOLINT(readability-identifier-naming)
+    static auto compact() -> JsonOutputFormatOptions {
         return JsonOutputFormatOptions(Indent::Space, 0);
     }
-    explicit JsonOutputFormatOptions(Indent indentChar = Indent::Space, uint32_t indentLength = 4,
-                                     FormatOptions formatOptions = FormatOptions::kFormatSingleLineArray,
+    explicit JsonOutputFormatOptions(Indent indent_char = Indent::Space, uint32_t indent_length = 4,
+                                     FormatOptions format_options = FormatOptions::kFormatSingleLineArray,
                                      int precision               = detail::JsonWriter<>::kDefaultMaxDecimalPlaces)
-        : indentChar(static_cast<char>(indentChar)), indentLength(indentLength), formatOptions(formatOptions),
+        : indent_char(static_cast<char>(indent_char)), indent_length(indent_length), format_options(format_options),
           precision(precision) {}
 
-    char indentChar             = static_cast<char>(Indent::Space);
-    int indentLength            = 4;
-    FormatOptions formatOptions = FormatOptions::kFormatDefault;
-    int precision               = rapidjson::PrettyWriter<detail::OutBufferWrapper>::kDefaultMaxDecimalPlaces;
+    char          indent_char    = static_cast<char>(Indent::Space);
+    int           indent_length  = 4;
+    FormatOptions format_options = FormatOptions::kFormatDefault;
+    int           precision      = rapidjson::PrettyWriter<detail::OutBufferWrapper>::kDefaultMaxDecimalPlaces;
 };
 
 namespace detail {
@@ -174,8 +174,8 @@ struct SetJsonFormatOption {
 template <typename T>
 struct SetJsonFormatOption<T, typename std::enable_if<IsPrettyJsonWriter<T>::value>::type> {
     static void setting(T& writer, const JsonOutputFormatOptions& options) {
-        writer.SetIndent(options.indentChar, options.indentLength);
-        writer.SetFormatOptions(options.formatOptions);
+        writer.SetIndent(options.indent_char, options.indent_length);
+        writer.SetFormatOptions(options.format_options);
         writer.SetMaxDecimalPlaces(options.precision);
     }
 };
@@ -184,24 +184,24 @@ class RapidJsonValue {
 public:
     RapidJsonValue() = default;
     explicit RapidJsonValue(const JsonValue& value) {
-        mValue = std::make_shared<JsonDocument>();
-        mValue->CopyFrom(value, mValue->GetAllocator());
+        value_ = std::make_shared<JsonDocument>();
+        value_->CopyFrom(value, value_->GetAllocator());
     }
-    auto hasValue() const -> bool { return mValue != nullptr; }
+    auto hasValue() const -> bool { return value_ != nullptr; }
     operator bool() const { return hasValue(); }
-    auto nativeValue() const -> const JsonValue& { return *mValue; }
-    auto nativeValue() -> JsonValue& { return *mValue; }
-    auto isObject() const -> bool { return mValue && mValue->IsObject(); }
-    auto isArray() const -> bool { return mValue && mValue->IsArray(); }
-    auto isString() const -> bool { return mValue && mValue->IsString(); }
-    auto isNumber() const -> bool { return mValue && mValue->IsNumber(); }
-    auto isBool() const -> bool { return mValue && mValue->IsBool(); }
-    auto isNull() const -> bool { return mValue && mValue->IsNull(); }
+    auto nativeValue() const -> const JsonValue& { return *value_; }
+    auto nativeValue() -> JsonValue& { return *value_; }
+    auto isObject() const -> bool { return value_ && value_->IsObject(); }
+    auto isArray() const -> bool { return value_ && value_->IsArray(); }
+    auto isString() const -> bool { return value_ && value_->IsString(); }
+    auto isNumber() const -> bool { return value_ && value_->IsNumber(); }
+    auto isBool() const -> bool { return value_ && value_->IsBool(); }
+    auto isNull() const -> bool { return value_ && value_->IsNull(); }
 
     template <typename T>
     auto value(T& value) const -> bool {
-        if (mValue && mValue->template Is<T>()) {
-            value = mValue->template Get<T>();
+        if (value_ && value_->template Is<T>()) {
+            value = value_->template Get<T>();
             return true;
         }
         return false;
@@ -209,10 +209,10 @@ public:
 
     auto size() const -> std::size_t {
         if (isArray()) {
-            return mValue->Size();
+            return value_->Size();
         }
         if (isObject()) {
-            return mValue->MemberCount();
+            return value_->MemberCount();
         }
         return 0;
     }
@@ -222,8 +222,8 @@ public:
     auto operator[](const T& name) const -> RapidJsonValue {
         if (isObject()) {
             auto view  = std::string_view(name);
-            auto value = mValue->FindMember(JsonValue(view.data(), view.size()));
-            if (value != mValue->MemberEnd()) {
+            auto value = value_->FindMember(JsonValue(view.data(), view.size()));
+            if (value != value_->MemberEnd()) {
                 return RapidJsonValue(value->value);
             }
         }
@@ -232,20 +232,20 @@ public:
 
     auto operator[](std::size_t index) const -> RapidJsonValue {
         if (isArray()) {
-            if (index < mValue->Size()) {
-                return RapidJsonValue(mValue->GetArray()[(int)index]);
+            if (index < value_->Size()) {
+                return RapidJsonValue(value_->GetArray()[(int)index]);
             }
         }
         if (isObject()) {
-            if (index < mValue->MemberCount()) {
-                return RapidJsonValue((mValue->MemberBegin() + index)->value);
+            if (index < value_->MemberCount()) {
+                return RapidJsonValue((value_->MemberBegin() + index)->value);
             }
         }
         return RapidJsonValue();
     }
 
 private:
-    std::shared_ptr<JsonDocument> mValue;
+    std::shared_ptr<JsonDocument> value_;
 };
 
 } // namespace detail
@@ -298,15 +298,15 @@ struct RapidJsonBackend {
         }
 
         OutputState(typename OutputTraits::output_buffer_type& buffer,
-                    const JsonOutputFormatOptions& formatOptions) noexcept
-            : stream(buffer), options(formatOptions), hasFormatOptions(true) {}
+                    const JsonOutputFormatOptions& format_options) noexcept
+            : stream(buffer), options(format_options), has_format_options(true) {}
 
         typename OutputTraits::wrapper_type stream;
-        rapid::Writer writer;
-        JsonOutputFormatOptions options = JsonOutputFormatOptions::Default();
-        bool hasFormatOptions           = false;
-        bool hasRoot                    = false;
-        bool flushed                    = false;
+        rapid::Writer                       writer;
+        JsonOutputFormatOptions             options            = JsonOutputFormatOptions::defaultOptions();
+        bool                                has_format_options = false;
+        bool                                has_root           = false;
+        bool                                flushed            = false;
     };
 
     template <typename BufferT>
@@ -347,15 +347,15 @@ struct RapidJsonBackend {
     template <typename BufferT, typename T>
     static auto write(OutputState<BufferT>& state, const T& value) -> sa::Result<void> {
         state.writer.doc()->SetNull();
-        auto result   = parserWrite<rapid::Writer>(state.writer, value, parsing::Parent<rapid::Writer>::Root{});
-        state.hasRoot = static_cast<bool>(result);
-        state.flushed = false;
+        auto result    = parserWrite<rapid::Writer>(state.writer, value, parsing::Parent<rapid::Writer>::Root{});
+        state.has_root = static_cast<bool>(result);
+        state.flushed  = false;
         return result;
     }
 
     template <typename BufferT>
     static auto finish(OutputState<BufferT>& state, sa::Result<void> result) -> sa::Result<void> {
-        if (!state.hasRoot || !result) {
+        if (!state.has_root || !result) {
             return result;
         }
         if (state.flushed) {
@@ -363,7 +363,7 @@ struct RapidJsonBackend {
         }
 
         typename OutputState<BufferT>::WriterType writer(state.stream);
-        if (state.hasFormatOptions) {
+        if (state.has_format_options) {
             detail::SetJsonFormatOption<typename OutputState<BufferT>::WriterType>::setting(writer, state.options);
         }
         const auto flushed = state.writer.doc()->Accept(writer);
@@ -377,7 +377,7 @@ struct RapidJsonBackend {
 
     template <typename BufferT>
     static auto outputReady(const OutputState<BufferT>& state, const sa::Result<void>& result) noexcept -> bool {
-        return state.hasRoot && static_cast<bool>(result);
+        return state.has_root && static_cast<bool>(result);
     }
 
     template <typename BufferT>

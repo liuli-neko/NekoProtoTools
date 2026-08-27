@@ -61,7 +61,7 @@ auto readJson(std::string_view json, T& value) -> bool {
 TEST(JsonRpcProtocol, NamedParamsRequestRoundTripsAsObject) {
     using Request = detail::JsonRpcRequest2<AddTraits>;
     const std::vector<std::string> argNames{"lhs", "rhs"};
-    const detail::JsonRpcMethodContext context{.argNames = argNames};
+    const detail::JsonRpcMethodContext context{.arg_names = argNames};
 
     Request request;
     request.method   = "math.add";
@@ -152,7 +152,7 @@ TEST(JsonRpcProtocol, EmptyParamsRequestWritesEmptyArray) {
 TEST(JsonRpcProtocol, OmittedNullableParamsAreAccepted) {
     using Request = detail::JsonRpcRequest2<OptionalTraits>;
     const std::vector<std::string> argNames{"value"};
-    const detail::JsonRpcMethodContext context{.argNames = argNames};
+    const detail::JsonRpcMethodContext context{.arg_names = argNames};
 
     Request request;
     detail::JsonRpcRequestWithContext<Request> requestWithContext{request, context};
@@ -164,7 +164,7 @@ TEST(JsonRpcProtocol, OmittedNullableParamsAreAccepted) {
 TEST(JsonRpcProtocol, OmittedRequiredParamsAreRejected) {
     using Request = detail::JsonRpcRequest2<AddTraits>;
     const std::vector<std::string> argNames{"lhs", "rhs"};
-    const detail::JsonRpcMethodContext context{.argNames = argNames};
+    const detail::JsonRpcMethodContext context{.arg_names = argNames};
 
     Request request;
     detail::JsonRpcRequestWithContext<Request> requestWithContext{request, context};

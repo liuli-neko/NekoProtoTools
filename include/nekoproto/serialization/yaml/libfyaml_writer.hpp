@@ -34,15 +34,15 @@ public:
     using OutputValueType  = OutputNodeType;
 
     Writer() = default;
-    explicit Writer(fy_document* document) noexcept : mDocument(document) {}
+    explicit Writer(fy_document* document) noexcept : document_(document) {}
 
     void reset(fy_document* document) noexcept {
-        mDocument = document;
-        mResult   = sa::success();
-        mTagStorage.clear();
+        document_ = document;
+        result_   = sa::success();
+        tag_storage_.clear();
     }
 
-    auto result() const noexcept -> const sa::Result<void>& { return mResult; }
+    auto result() const noexcept -> const sa::Result<void>& { return result_; }
 
     template <typename Tags>
     auto arrayAsRoot(std::size_t /*size*/, const Tags& tags) -> OutputArrayType {
@@ -136,8 +136,8 @@ public:
 
 private:
     auto remember(sa::ErrorCode code, std::string message) -> sa::Result<void> {
-        mResult = sa::error(code, std::move(message));
-        return mResult;
+        result_ = sa::error(code, std::move(message));
+        return result_;
     }
 
     template <typename Output, typename Tags>
@@ -165,8 +165,8 @@ private:
             remember(sa::ErrorCode::InvalidType, "Cannot apply YAML tag to an empty node");
             return;
         }
-        mTagStorage.emplace_back(tag);
-        const auto& ownedTag = mTagStorage.back();
+        tag_storage_.emplace_back(tag);
+        const auto& ownedTag = tag_storage_.back();
         if (fy_node_set_tag(node, ownedTag.data(), ownedTag.size()) != 0) {
             remember(sa::ErrorCode::InvalidType, "Could not apply YAML tag '" + std::string(tag) + "'");
         }
@@ -247,11 +247,11 @@ private:
     }
 
     auto createSequence() -> fy_node* {
-        if (mDocument == nullptr) {
+        if (document_ == nullptr) {
             remember(sa::ErrorCode::InvalidType, "YAML document is not initialized");
             return nullptr;
         }
-        auto* node = fy_node_create_sequence(mDocument);
+        auto* node = fy_node_create_sequence(document_);
         if (node == nullptr) {
             remember(sa::ErrorCode::Unknown, "Could not create YAML sequence node");
         }
@@ -259,11 +259,11 @@ private:
     }
 
     auto createMapping() -> fy_node* {
-        if (mDocument == nullptr) {
+        if (document_ == nullptr) {
             remember(sa::ErrorCode::InvalidType, "YAML document is not initialized");
             return nullptr;
         }
-        auto* node = fy_node_create_mapping(mDocument);
+        auto* node = fy_node_create_mapping(document_);
         if (node == nullptr) {
             remember(sa::ErrorCode::Unknown, "Could not create YAML mapping node");
         }
@@ -271,11 +271,11 @@ private:
     }
 
     auto createNull() -> fy_node* {
-        if (mDocument == nullptr) {
+        if (document_ == nullptr) {
             remember(sa::ErrorCode::InvalidType, "YAML document is not initialized");
             return nullptr;
         }
-        auto* node = fy_node_build_from_string(mDocument, "null", 4);
+        auto* node = fy_node_build_from_string(document_, "null", 4);
         if (node == nullptr) {
             remember(sa::ErrorCode::Unknown, "Could not create YAML null node");
         }
@@ -284,7 +284,7 @@ private:
 
     template <typename T>
     auto createScalar(const T& value) -> fy_node* {
-        if (mDocument == nullptr) {
+        if (document_ == nullptr) {
             remember(sa::ErrorCode::InvalidType, "YAML document is not initialized");
             return nullptr;
         }
@@ -295,7 +295,7 @@ private:
             }
         }
         const auto text = toString(value);
-        auto* node      = fy_node_create_scalar_copy(mDocument, text.data(), text.size());
+        auto* node      = fy_node_create_scalar_copy(document_, text.data(), text.size());
         if (node == nullptr) {
             remember(sa::ErrorCode::Unknown, "Could not create YAML scalar node");
             return nullptr;
@@ -311,7 +311,7 @@ private:
         if (node == nullptr) {
             return;
         }
-        if (fy_document_set_root(mDocument, node) != 0) {
+        if (fy_document_set_root(document_, node) != 0) {
             remember(sa::ErrorCode::Unknown, "Could not set YAML document root");
         }
     }
@@ -331,7 +331,7 @@ private:
             remember(sa::ErrorCode::InvalidType, "Cannot append to an empty YAML mapping");
             return;
         }
-        auto* key = fy_node_create_scalar_copy(mDocument, name.data(), name.size());
+        auto* key = fy_node_create_scalar_copy(document_, name.data(), name.size());
         if (key == nullptr) {
             remember(sa::ErrorCode::Unknown, "Could not create YAML mapping key '" + std::string(name) + "'");
             return;
@@ -374,9 +374,9 @@ private:
     }
 
 private:
-    fy_document* mDocument = nullptr;
-    sa::Result<void> mResult;
-    std::deque<std::string> mTagStorage;
+    fy_document*            document_ = nullptr;
+    sa::Result<void>        result_;
+    std::deque<std::string> tag_storage_;
 };
 
 } // namespace yaml

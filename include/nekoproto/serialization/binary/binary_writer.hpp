@@ -139,9 +139,9 @@ private:
     class ContainerScope {
     public:
         ContainerScope() = default;
-        ContainerScope(Writer& writer, std::size_t expected) noexcept : mWriter(&writer), mExpected(expected) {}
+        ContainerScope(Writer& writer, std::size_t expected) noexcept : writer_(&writer), expected_(expected) {}
 
-        ContainerScope(const ContainerScope&)            = delete;
+        ContainerScope(const ContainerScope&)                    = delete;
         auto operator=(const ContainerScope&) -> ContainerScope& = delete;
         ContainerScope(ContainerScope&& other) noexcept { moveFrom(other); }
         auto operator=(ContainerScope&& other) noexcept -> ContainerScope& {
@@ -156,34 +156,34 @@ private:
     private:
         friend class Writer;
 
-        void increment() noexcept { ++mActual; }
+        void increment() noexcept { ++actual_; }
 
         auto rememberId(std::uint32_t id) -> bool {
             if constexpr (Kind == ContainerKind::IdObject) {
-                return mIds.insert(id).second;
+                return ids_.insert(id).second;
             }
             return true;
         }
 
         void finish() noexcept {
-            if (mWriter != nullptr && mActual != mExpected) {
-                mWriter->setError(sa::ErrorCode::InvalidLength,
+            if (writer_ != nullptr && actual_ != expected_) {
+                writer_->setError(sa::ErrorCode::InvalidLength,
                                    "Binary container emitted member count does not match its declared count");
             }
-            mWriter = nullptr;
+            writer_ = nullptr;
         }
 
         void moveFrom(ContainerScope& other) noexcept {
-            mWriter   = std::exchange(other.mWriter, nullptr);
-            mExpected = other.mExpected;
-            mActual   = other.mActual;
-            mIds      = std::move(other.mIds);
+            writer_   = std::exchange(other.writer_, nullptr);
+            expected_ = other.expected_;
+            actual_   = other.actual_;
+            ids_      = std::move(other.ids_);
         }
 
-        Writer* mWriter = nullptr;
-        std::size_t mExpected = 0;
-        std::size_t mActual   = 0;
-        std::unordered_set<std::uint32_t> mIds;
+        Writer*                           writer_   = nullptr;
+        std::size_t                       expected_ = 0;
+        std::size_t                       actual_   = 0;
+        std::unordered_set<std::uint32_t> ids_;
     };
 
 public:
@@ -192,9 +192,9 @@ public:
     using OutputIdObjectType = ContainerScope<ContainerKind::IdObject>;
     struct OutputValueType {};
 
-    explicit Writer(BufferT& buffer) noexcept : mBuffer(buffer) {}
+    explicit Writer(BufferT& buffer) noexcept : buffer_(buffer) {}
 
-    void beginRawFixedDataAsRoot() noexcept { mRawRoot = true; }
+    void beginRawFixedDataAsRoot() noexcept { raw_root_ = true; }
 
     auto arrayAsRoot(std::size_t size) -> OutputArrayType {
         writeContainerHeader(ValueTag::Array, size);
@@ -210,7 +210,7 @@ public:
     }
 
     auto nullAsRoot() -> OutputValueType {
-        if (mRawRoot) {
+        if (raw_root_) {
             setError(sa::ErrorCode::InvalidType, "raw_fixed_data binary values cannot encode null");
         } else {
             ensureDocumentHeader();
@@ -221,13 +221,13 @@ public:
 
     template <typename T>
     auto valueAsRoot(const T& value) -> OutputValueType {
-        mRawRoot ? writeRawValue(value) : writeValue(value);
+        raw_root_ ? writeRawValue(value) : writeValue(value);
         return {};
     }
 
     template <typename T>
     auto fixedValueAsRoot(const T& value, std::size_t size) -> OutputValueType {
-        mRawRoot ? writeRawFixed(value, size) : writeFixed(value, size);
+        raw_root_ ? writeRawFixed(value, size) : writeFixed(value, size);
         return {};
     }
 
@@ -337,12 +337,12 @@ public:
     }
 
     auto result() const -> sa::Result<void> {
-        if (mError) {
-            return *mError;
+        if (error_) {
+            return *error_;
         }
         return sa::success();
     }
-    auto size() const noexcept -> std::size_t { return mBuffer.size(); }
+    auto size() const noexcept -> std::size_t { return buffer_.size(); }
 
 private:
     template <ContainerKind Kind>
@@ -379,10 +379,10 @@ private:
     }
 
     void ensureDocumentHeader() {
-        if (mDocumentStarted || mRawRoot) {
+        if (document_started_ || raw_root_) {
             return;
         }
-        mDocumentStarted = true;
+        document_started_ = true;
         appendBytes(BinaryMagic, sizeof(BinaryMagic));
     }
 
@@ -521,25 +521,25 @@ private:
     }
 
     void setError(sa::ErrorCode code, std::string message) noexcept {
-        if (!mError) {
-            mError = sa::error(code, std::move(message));
+        if (!error_) {
+            error_ = sa::error(code, std::move(message));
         }
     }
 
     void pushByte(ValueTag tag) { pushByte(static_cast<std::uint8_t>(tag)); }
-    void pushByte(std::uint8_t byte) { mBuffer.push_back(static_cast<typename BufferT::value_type>(byte)); }
+    void pushByte(std::uint8_t byte) { buffer_.push_back(static_cast<typename BufferT::value_type>(byte)); }
     void appendBytes(const void* data, std::size_t size) {
         if (size == 0) return;
         const auto* bytes = static_cast<const std::uint8_t*>(data);
-        mBuffer.reserve(mBuffer.size() + size);
+        buffer_.reserve(buffer_.size() + size);
         for (std::size_t ix = 0; ix < size; ++ix) pushByte(bytes[ix]);
     }
 
 private:
-    BufferT& mBuffer;
-    bool mDocumentStarted = false;
-    bool mRawRoot = false;
-    std::optional<sa::Error> mError;
+    BufferT&                 buffer_;
+    bool                     document_started_ = false;
+    bool                     raw_root_         = false;
+    std::optional<sa::Error> error_;
 };
 
 } // namespace binary

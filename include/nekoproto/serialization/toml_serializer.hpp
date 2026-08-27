@@ -52,29 +52,29 @@ inline auto removeBlankTomlLines(std::string_view toml) -> std::string {
     std::string result;
     result.reserve(toml.size());
 
-    std::size_t lineBegin = 0;
-    while (lineBegin < toml.size()) {
-        auto lineEnd = toml.find('\n', lineBegin);
-        if (lineEnd == std::string_view::npos) {
-            lineEnd = toml.size();
+    std::size_t line_begin = 0;
+    while (line_begin < toml.size()) {
+        auto line_end = toml.find('\n', line_begin);
+        if (line_end == std::string_view::npos) {
+            line_end = toml.size();
         }
 
-        bool hasContent = false;
-        for (std::size_t index = lineBegin; index < lineEnd; ++index) {
+        bool has_content = false;
+        for (std::size_t index = line_begin; index < line_end; ++index) {
             if (toml[index] != ' ' && toml[index] != '\t' && toml[index] != '\r') {
-                hasContent = true;
+                has_content = true;
                 break;
             }
         }
 
-        if (hasContent) {
-            result.append(toml.substr(lineBegin, lineEnd - lineBegin));
-            if (lineEnd < toml.size()) {
+        if (has_content) {
+            result.append(toml.substr(line_begin, line_end - line_begin));
+            if (line_end < toml.size()) {
                 result.push_back('\n');
             }
         }
 
-        lineBegin = lineEnd + 1;
+        line_begin = line_end + 1;
     }
 
     return result;
@@ -84,26 +84,26 @@ inline auto removeBlankTomlLines(std::string_view toml) -> std::string {
 struct TomlOutputFormatOptions {
     using FormatOptions = toml::format_flags;
 
-    static constexpr auto CompactFlags() noexcept -> FormatOptions { // NOLINT(readability-identifier-naming)
+    static constexpr auto compactFlags() noexcept -> FormatOptions {
         return toml::format_flags::allow_literal_strings | toml::format_flags::allow_unicode_strings |
                toml::format_flags::allow_real_tabs_in_strings | toml::format_flags::allow_binary_integers |
                toml::format_flags::allow_octal_integers | toml::format_flags::allow_hexadecimal_integers |
                toml::format_flags::terse_key_value_pairs;
     }
 
-    static auto Compact() -> TomlOutputFormatOptions { // NOLINT(readability-identifier-naming)
-        return TomlOutputFormatOptions(CompactFlags(), true);
+    static auto compact() -> TomlOutputFormatOptions {
+        return TomlOutputFormatOptions(compactFlags(), true);
     }
 
-    static auto Pretty() -> TomlOutputFormatOptions { // NOLINT(readability-identifier-naming)
+    static auto pretty() -> TomlOutputFormatOptions {
         return TomlOutputFormatOptions(toml::toml_formatter::default_flags, false);
     }
 
-    explicit TomlOutputFormatOptions(FormatOptions flags = CompactFlags(), bool stripBlankLines = true) noexcept
-        : flags(flags), stripBlankLines(stripBlankLines) {}
+    explicit TomlOutputFormatOptions(FormatOptions flags = compactFlags(), bool strip_blank_lines = true) noexcept
+        : flags(flags), strip_blank_lines(strip_blank_lines) {}
 
-    FormatOptions flags = CompactFlags();
-    bool stripBlankLines = true;
+    FormatOptions flags             = compactFlags();
+    bool          strip_blank_lines = true;
 };
 
 struct TomlplusplusBackend {
@@ -116,15 +116,15 @@ struct TomlplusplusBackend {
     struct OutputState {
         explicit OutputState(BufferT& outputBuffer) : buffer(outputBuffer), writer(&document) {}
 
-        OutputState(BufferT& outputBuffer, const TomlOutputFormatOptions& formatOptions)
-            : buffer(outputBuffer), writer(&document), options(formatOptions) {}
+        OutputState(BufferT& outputBuffer, const TomlOutputFormatOptions& format_options)
+            : buffer(outputBuffer), writer(&document), options(format_options) {}
 
-        BufferT& buffer;
-        toml::table document;
-        tomlplusplus::Writer writer;
+        BufferT&                buffer;
+        toml::table             document;
+        tomlplusplus::Writer    writer;
         TomlOutputFormatOptions options;
-        bool hasRoot = false;
-        bool flushed = false;
+        bool                    has_root = false;
+        bool                    flushed  = false;
     };
 
     template <typename SourceT>
@@ -132,8 +132,8 @@ struct TomlplusplusBackend {
         explicit InputState(const char* buffer, std::size_t size) { parse(buffer, size); }
 
         explicit InputState(std::istream& stream) {
-            ownedInput.assign(std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{});
-            parse(ownedInput.data(), ownedInput.size(), false);
+            owned_input.assign(std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{});
+            parse(owned_input.data(), owned_input.size(), false);
         }
 
         void parse(const char* buffer, std::size_t size, bool copy = true) {
@@ -141,8 +141,8 @@ struct TomlplusplusBackend {
                 --size;
             }
             if (copy) {
-                ownedInput.assign(buffer, size);
-                buffer = ownedInput.data();
+                owned_input.assign(buffer, size);
+                buffer = owned_input.data();
             }
             auto parsed = toml::parse(std::string_view{buffer, size});
             if (!parsed) {
@@ -153,8 +153,8 @@ struct TomlplusplusBackend {
             result   = sa::success();
         }
 
-        std::string ownedInput;
-        toml::table document;
+        std::string      owned_input;
+        toml::table      document;
         sa::Result<void> result;
     };
 
@@ -164,8 +164,8 @@ struct TomlplusplusBackend {
         state.writer.reset(&state.document);
         auto result = parserWrite<tomlplusplus::Writer>(state.writer, value,
                                                          parsing::Parent<tomlplusplus::Writer>::Root{});
-        state.hasRoot = static_cast<bool>(result) && static_cast<bool>(state.writer.result());
-        state.flushed = false;
+        state.has_root = static_cast<bool>(result) && static_cast<bool>(state.writer.result());
+        state.flushed  = false;
         if (!state.writer.result()) {
             return state.writer.result();
         }
@@ -180,14 +180,14 @@ struct TomlplusplusBackend {
         if (!state.writer.result()) {
             return state.writer.result();
         }
-        if (!state.hasRoot) {
+        if (!state.has_root) {
             return result;
         }
         if (!state.flushed) {
             std::ostringstream stream;
             stream << toml::toml_formatter{state.document, state.options.flags};
             auto output = stream.str();
-            if (state.options.stripBlankLines) {
+            if (state.options.strip_blank_lines) {
                 output = detail::removeBlankTomlLines(output);
             }
             detail::appendToml(state.buffer, output);
@@ -198,7 +198,7 @@ struct TomlplusplusBackend {
 
     template <typename BufferT>
     static auto outputReady(const OutputState<BufferT>& state, const sa::Result<void>& result) noexcept -> bool {
-        return state.hasRoot && static_cast<bool>(result) && static_cast<bool>(state.writer.result());
+        return state.has_root && static_cast<bool>(result) && static_cast<bool>(state.writer.result());
     }
 
     template <typename SourceT>

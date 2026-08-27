@@ -35,24 +35,34 @@ enum class RpcCallStage : std::uint8_t {
 
 inline auto toString(RpcCallStage stage) noexcept -> std::string_view {
     switch (stage) {
-    case RpcCallStage::Received:  return "Received";
-    case RpcCallStage::Queued:    return "Queued";
-    case RpcCallStage::Executing: return "Executing";
-    case RpcCallStage::Executed:  return "Executed";
-    case RpcCallStage::Sending:   return "Sending";
-    case RpcCallStage::Completed: return "Completed";
-    case RpcCallStage::Canceled:  return "Canceled";
-    case RpcCallStage::TimedOut:  return "TimedOut";
-    case RpcCallStage::Rejected:  return "Rejected";
-    case RpcCallStage::Failed:    return "Failed";
-    default:                      return "Unknown";
+    case RpcCallStage::Received:
+        return "Received";
+    case RpcCallStage::Queued:
+        return "Queued";
+    case RpcCallStage::Executing:
+        return "Executing";
+    case RpcCallStage::Executed:
+        return "Executed";
+    case RpcCallStage::Sending:
+        return "Sending";
+    case RpcCallStage::Completed:
+        return "Completed";
+    case RpcCallStage::Canceled:
+        return "Canceled";
+    case RpcCallStage::TimedOut:
+        return "TimedOut";
+    case RpcCallStage::Rejected:
+        return "Rejected";
+    case RpcCallStage::Failed:
+        return "Failed";
+    default:
+        return "Unknown";
     }
 }
 
 inline constexpr bool isTerminalStage(RpcCallStage stage) noexcept {
-    return stage == RpcCallStage::Completed || stage == RpcCallStage::Canceled ||
-           stage == RpcCallStage::TimedOut || stage == RpcCallStage::Rejected ||
-           stage == RpcCallStage::Failed;
+    return stage == RpcCallStage::Completed || stage == RpcCallStage::Canceled || stage == RpcCallStage::TimedOut ||
+           stage == RpcCallStage::Rejected || stage == RpcCallStage::Failed;
 }
 
 #if defined(NEKO_PROTO_RPC_TRACE)
@@ -87,10 +97,10 @@ struct RpcCallTraceSpan {
     std::optional<std::chrono::nanoseconds> timeout;
     std::optional<std::chrono::steady_clock::time_point> deadline;
 
-    std::size_t requestBytes = 0;
+    std::size_t requestBytes  = 0;
     std::size_t responseBytes = 0;
     std::string errorMessage;
-    int errorCode = 0;
+    int errorCode       = 0;
     bool isNotification = false;
 
     auto queueDurationMs() const noexcept -> double {
@@ -131,8 +141,8 @@ public:
 
     static auto instance() -> RpcTraceRegistry&;
 
-    auto registerSpan(std::string_view methodName, std::string requestId, std::size_t requestBytes,
-                      bool isNotification, const RpcPeerInfo* peer, const void* session,
+    auto registerSpan(std::string_view methodName, std::string requestId, std::size_t requestBytes, bool isNotification,
+                      const RpcPeerInfo* peer, const void* session,
                       std::optional<std::chrono::steady_clock::time_point> deadline,
                       std::optional<std::chrono::nanoseconds> timeout) -> std::shared_ptr<RpcCallTraceSpan>;
 
@@ -145,8 +155,7 @@ public:
     void markCanceled(const std::shared_ptr<RpcCallTraceSpan>& span);
     void markTimedOut(const std::shared_ptr<RpcCallTraceSpan>& span);
     void markRejected(const std::shared_ptr<RpcCallTraceSpan>& span);
-    void markFailed(const std::shared_ptr<RpcCallTraceSpan>& span, std::error_code ec,
-                    std::string_view msg = {});
+    void markFailed(const std::shared_ptr<RpcCallTraceSpan>& span, std::error_code ec, std::string_view msg = {});
 
     using ServerInfoProvider = std::function<RpcServerConfigInfo()>;
 
@@ -170,7 +179,7 @@ public:
 private:
     std::mutex mMutex;
     std::uint64_t mNextTraceId = 1;
-    std::size_t mMaxHistory = 100;
+    std::size_t mMaxHistory    = 100;
 
     std::unordered_map<std::uint64_t, std::shared_ptr<RpcCallTraceSpan>> mActive;
     std::deque<std::shared_ptr<RpcCallTraceSpan>> mRecentCompleted;
@@ -181,22 +190,22 @@ private:
 
     // Cumulative stats
     std::uint64_t mTotalCompleted = 0;
-    std::uint64_t mTotalTimedOut = 0;
-    std::uint64_t mTotalCanceled = 0;
-    std::uint64_t mTotalRejected = 0;
-    std::uint64_t mTotalFailed = 0;
+    std::uint64_t mTotalTimedOut  = 0;
+    std::uint64_t mTotalCanceled  = 0;
+    std::uint64_t mTotalRejected  = 0;
+    std::uint64_t mTotalFailed    = 0;
 };
 
 class RpcTraceContext {
 public:
     RpcTraceContext() = default;
 
-    void onReceived(std::string_view methodName, std::string requestId, std::size_t requestBytes,
-                    bool isNotification, const RpcPeerInfo* peer, const void* session,
+    void onReceived(std::string_view methodName, std::string requestId, std::size_t requestBytes, bool isNotification,
+                    const RpcPeerInfo* peer, const void* session,
                     std::optional<std::chrono::steady_clock::time_point> deadline,
                     std::optional<std::chrono::nanoseconds> timeout) {
-        mSpan = RpcTraceRegistry::instance().registerSpan(
-            methodName, std::move(requestId), requestBytes, isNotification, peer, session, deadline, timeout);
+        mSpan = RpcTraceRegistry::instance().registerSpan(methodName, std::move(requestId), requestBytes,
+                                                          isNotification, peer, session, deadline, timeout);
     }
 
     void onQueued() {
@@ -266,45 +275,46 @@ private:
 
 #else // !defined(NEKO_PROTO_RPC_TRACE) - Zero-overhead no-op stubs
 
-struct RpcCallTraceSpan {};
+// struct RpcCallTraceSpan {};
 
-class RpcTraceRegistry {
-public:
-    using CancelHook = std::function<bool(const void*, std::string_view)>;
-    using ServerInfoProvider = std::function<void()>;
-    static auto instance() -> RpcTraceRegistry& {
-        static RpcTraceRegistry sInstance;
-        return sInstance;
-    }
-    void registerCancelHook(CancelHook) noexcept {}
-    void unregisterCancelHook() noexcept {}
-    auto requestCancel(std::string_view, const void* = nullptr) noexcept -> bool { return false; }
-    auto requestCancelByTraceId(std::uint64_t) noexcept -> bool { return false; }
-    template <typename F>
-    void registerServerInfoProvider(F&&) noexcept {}
-    void unregisterServerInfoProvider() noexcept {}
-    auto serverInfoJson() -> std::string { return "{\"server\":{},\"methods\":[]}"; }
-    auto snapshotJson() -> std::string { return "{\"metrics\":{},\"active\":[],\"recent_completed\":[],\"recent_failed\":[]}"; }
-    void clear() noexcept {}
-};
+// class RpcTraceRegistry {
+// public:
+//     using CancelHook         = std::function<bool(const void*, std::string_view)>;
+//     using ServerInfoProvider = std::function<void()>;
+//     static auto instance() -> RpcTraceRegistry& {
+//         static RpcTraceRegistry sInstance;
+//         return sInstance;
+//     }
+//     void registerCancelHook(CancelHook) noexcept {}
+//     void unregisterCancelHook() noexcept {}
+//     auto requestCancel(std::string_view, const void* = nullptr) noexcept -> bool { return false; }
+//     auto requestCancelByTraceId(std::uint64_t) noexcept -> bool { return false; }
+//     template <typename F>
+//     void registerServerInfoProvider(F&&) noexcept {}
+//     void unregisterServerInfoProvider() noexcept {}
+//     auto serverInfoJson() -> std::string { return "{\"server\":{},\"methods\":[]}"; }
+//     auto snapshotJson() -> std::string {
+//         return "{\"metrics\":{},\"active\":[],\"recent_completed\":[],\"recent_failed\":[]}";
+//     }
+//     void clear() noexcept {}
+// };
 
-class RpcTraceContext {
-public:
-    constexpr void onReceived(std::string_view, std::string_view, std::size_t, bool, const RpcPeerInfo*,
-                              const void*, std::optional<std::chrono::steady_clock::time_point>,
-                              std::optional<std::chrono::nanoseconds>) noexcept {}
-    constexpr void onQueued() noexcept {}
-    constexpr void onExecuting() noexcept {}
-    constexpr void onExecuted(std::size_t, std::error_code = {}) noexcept {}
-    constexpr void onSending(std::size_t = 0) noexcept {}
-    constexpr void onCompleted(std::size_t = 0) noexcept {}
-    constexpr void onCanceled() noexcept {}
-    constexpr void onTimedOut() noexcept {}
-    constexpr void onRejected() noexcept {}
-    constexpr void onFailed(std::error_code, std::string_view = {}) noexcept {}
-};
+// class RpcTraceContext {
+// public:
+//     constexpr void onReceived(std::string_view, std::string_view, std::size_t, bool, const RpcPeerInfo*, const void*,
+//                               std::optional<std::chrono::steady_clock::time_point>,
+//                               std::optional<std::chrono::nanoseconds>) noexcept {}
+//     constexpr void onQueued() noexcept {}
+//     constexpr void onExecuting() noexcept {}
+//     void onExecuted(std::size_t, std::error_code = {}) noexcept {}
+//     constexpr void onSending(std::size_t = 0) noexcept {}
+//     constexpr void onCompleted(std::size_t = 0) noexcept {}
+//     constexpr void onCanceled() noexcept {}
+//     constexpr void onTimedOut() noexcept {}
+//     constexpr void onRejected() noexcept {}
+//     void onFailed(std::error_code, std::string_view = {}) noexcept {}
+// };
 
 #endif // defined(NEKO_PROTO_RPC_TRACE)
 
 } // namespace nekoproto
-

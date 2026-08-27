@@ -505,7 +505,7 @@ TEST(JsonSerializerTest, ReflectedObjectRoundTripsThroughPublicEntry) {
 
 #if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
     std::vector<char> prettyBuffer;
-    RapidJsonOutputSerializer<detail::PrettyJsonWriter<>> pretty(prettyBuffer, JsonOutputFormatOptions::Default());
+    RapidJsonOutputSerializer<detail::PrettyJsonWriter<>> pretty(prettyBuffer, JsonOutputFormatOptions::defaultOptions());
     ASSERT_TRUE(pretty(source)) << serializerError(pretty.error());
     ASSERT_TRUE(pretty.end()) << serializerError(pretty.error());
     const std::string prettyJson(prettyBuffer.begin(), prettyBuffer.end());
@@ -573,8 +573,8 @@ TEST(JsonSerializerTest, OptionalVariantObjectRoundTrip) {
 }
 
 TEST(JsonSerializerTest, JsonSchemaUsesGenericReflectionParser) {
-    static_assert(detail::has_values_meta<TestP>);
-    static_assert(detail::has_values_meta<JsonSchema>);
+    static_assert(detail::HasValuesMeta<TestP>);
+    static_assert(detail::HasValuesMeta<JsonSchema>);
 
     const TestP value = makeTestObject();
     JsonSchema schema;

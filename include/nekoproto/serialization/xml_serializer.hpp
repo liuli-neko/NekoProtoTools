@@ -39,21 +39,21 @@ inline auto isValidXmlName(std::string_view name) -> bool {
     if (name.empty()) {
         return false;
     }
-    const auto isStart    = [](unsigned char ch) { return std::isalpha(ch) != 0 || ch == '_' || ch == ':'; };
-    const auto isContinue = [&](unsigned char ch) {
-        return isStart(ch) || std::isdigit(ch) != 0 || ch == '-' || ch == '.';
+    const auto is_start    = [](unsigned char ch) { return std::isalpha(ch) != 0 || ch == '_' || ch == ':'; };
+    const auto is_continue = [&](unsigned char ch) {
+        return is_start(ch) || std::isdigit(ch) != 0 || ch == '-' || ch == '.';
     };
-    if (!isStart(static_cast<unsigned char>(name.front()))) {
+    if (!is_start(static_cast<unsigned char>(name.front()))) {
         return false;
     }
-    return std::ranges::all_of(name.substr(1), isContinue);
+    return std::ranges::all_of(name.substr(1), is_continue);
 }
 
 template <typename T>
 auto defaultXmlRootName() -> std::string {
-    constexpr auto Name = class_nameof<std::remove_cvref_t<T>>;
-    if (isValidXmlName(Name)) {
-        return std::string{Name};
+    constexpr auto name = class_nameof<std::remove_cvref_t<T>>;
+    if (isValidXmlName(name)) {
+        return std::string{name};
     }
     return "root";
 }
@@ -81,15 +81,15 @@ struct PugiXmlBackend {
     struct OutputState {
         explicit OutputState(BufferT& outputBuffer) noexcept : buffer(outputBuffer) {}
 
-        OutputState(BufferT& outputBuffer, std::string rootName, std::string indent = "    ") noexcept
-            : buffer(outputBuffer), configuredRootName(std::move(rootName)), indentation(std::move(indent)) {}
+        OutputState(BufferT& outputBuffer, std::string root_name, std::string indent = "    ") noexcept
+            : buffer(outputBuffer), configured_root_name(std::move(root_name)), indentation(std::move(indent)) {}
 
-        BufferT& buffer;
+        BufferT&    buffer;
         xml::Writer writer;
-        std::string configuredRootName;
+        std::string configured_root_name;
         std::string indentation = "    ";
-        bool hasRoot            = false;
-        bool flushed            = false;
+        bool        has_root    = false;
+        bool        flushed     = false;
     };
 
     template <typename SourceT>
@@ -105,11 +105,11 @@ struct PugiXmlBackend {
             while (size > 0 && buffer[size - 1] == '\0') {
                 --size;
             }
-            const auto parseResult = document.load_buffer(buffer, size, pugi::parse_default, pugi::encoding_utf8);
-            if (!parseResult) {
+            const auto parse_result = document.load_buffer(buffer, size, pugi::parse_default, pugi::encoding_utf8);
+            if (!parse_result) {
                 result = sa::error(sa::ErrorCode::ParseError, "pugixml parse error at offset " +
-                                                                  std::to_string(parseResult.offset) + ": " +
-                                                                  parseResult.description());
+                                                                  std::to_string(parse_result.offset) + ": " +
+                                                                  parse_result.description());
                 return;
             }
             root = document.document_element();
@@ -119,28 +119,28 @@ struct PugiXmlBackend {
         }
 
         pugi::xml_document document;
-        pugi::xml_node root;
-        sa::Result<void> result;
+        pugi::xml_node     root;
+        sa::Result<void>   result;
     };
 
     template <typename BufferT, typename T>
     static auto write(OutputState<BufferT>& state, const T& value) -> sa::Result<void> {
-        const auto rootName =
-            state.configuredRootName.empty() ? detail::defaultXmlRootName<T>() : state.configuredRootName;
-        if (!detail::isValidXmlName(rootName)) {
-            state.hasRoot = false;
-            return sa::error(sa::ErrorCode::InvalidField, "Invalid XML root name '" + rootName + "'");
+        const auto root_name =
+            state.configured_root_name.empty() ? detail::defaultXmlRootName<T>() : state.configured_root_name;
+        if (!detail::isValidXmlName(root_name)) {
+            state.has_root = false;
+            return sa::error(sa::ErrorCode::InvalidField, "Invalid XML root name '" + root_name + "'");
         }
-        state.writer.reset(rootName);
-        auto result   = parserWrite<xml::Writer>(state.writer, value, parsing::Parent<xml::Writer>::Root{});
-        state.hasRoot = static_cast<bool>(result);
-        state.flushed = false;
+        state.writer.reset(root_name);
+        auto result    = parserWrite<xml::Writer>(state.writer, value, parsing::Parent<xml::Writer>::Root{});
+        state.has_root = static_cast<bool>(result);
+        state.flushed  = false;
         return result;
     }
 
     template <typename BufferT>
     static auto finish(OutputState<BufferT>& state, sa::Result<void> result) -> sa::Result<void> {
-        if (!state.hasRoot || !result) {
+        if (!state.has_root || !result) {
             return result;
         }
         if (!state.flushed) {

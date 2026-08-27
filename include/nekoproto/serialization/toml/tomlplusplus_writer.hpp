@@ -43,14 +43,14 @@ public:
     };
 
     Writer() = default;
-    explicit Writer(toml::table* root) noexcept : mRoot(root) {}
+    explicit Writer(toml::table* root) noexcept : root_(root) {}
 
     void reset(toml::table* root) noexcept {
-        mRoot   = root;
-        mResult = sa::success();
+        root_   = root;
+        result_ = sa::success();
     }
 
-    auto result() const noexcept -> const sa::Result<void>& { return mResult; }
+    auto result() const noexcept -> const sa::Result<void>& { return result_; }
 
     template <typename Tags>
     auto arrayAsRoot(std::size_t /*size*/, const Tags& /*tags*/) -> OutputArrayType {
@@ -60,13 +60,13 @@ public:
 
     template <typename Tags>
     auto objectAsRoot(std::size_t /*size*/, const Tags& tags) -> OutputObjectType {
-        if (mRoot == nullptr) {
+        if (root_ == nullptr) {
             remember(sa::ErrorCode::InvalidType, "TOML document is not initialized");
             return {};
         }
-        mRoot->clear();
-        applyTableTags(*mRoot, tags, true);
-        return {mRoot};
+        root_->clear();
+        applyTableTags(*root_, tags, true);
+        return {root_};
     }
 
     template <typename Tags>
@@ -173,8 +173,8 @@ public:
 
 private:
     void remember(sa::ErrorCode code, std::string message) {
-        if (mResult) {
-            mResult = sa::error(code, std::move(message));
+        if (result_) {
+            result_ = sa::error(code, std::move(message));
         }
     }
 
@@ -246,8 +246,8 @@ private:
     }
 
 private:
-    toml::table* mRoot = nullptr;
-    sa::Result<void> mResult;
+    toml::table*     root_ = nullptr;
+    sa::Result<void> result_;
 };
 
 } // namespace tomlplusplus

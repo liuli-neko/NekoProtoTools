@@ -85,16 +85,16 @@ constexpr auto initNoTagsTuple(std::index_sequence<Is...> /*unused*/) {
 }
 
 template <std::size_t N>
-using no_tags_tuple_t = decltype(initNoTagsTuple(std::make_index_sequence<N>{}));
+using NoTagsTupleT = decltype(initNoTagsTuple(std::make_index_sequence<N>{}));
 
 template <std::size_t N>
-inline constexpr auto no_tags_tuple_v = initNoTagsTuple(std::make_index_sequence<N>{}); // NOLINT
+inline constexpr auto no_tags_tuple_v = initNoTagsTuple(std::make_index_sequence<N>{});
 
 template <typename T>
-using field_value_decay_t = std::remove_cvref_t<field_accessor_t<T>>;
+using FieldValueDecayT = std::remove_cvref_t<FieldAccessorT<T>>;
 
 template <typename T>
-inline constexpr bool is_enum_field_value_v = std::is_enum_v<field_value_decay_t<T>>; // NOLINT
+inline constexpr bool is_enum_field_value_v = std::is_enum_v<FieldValueDecayT<T>>;
 
 template <std::size_t Diameter, std::size_t Offset, typename... ValueTs>
 consteval auto allEnumFieldValuesAt() -> bool {
@@ -107,43 +107,43 @@ consteval auto allEnumFieldValuesAt() -> bool {
 template <std::size_t Diameter, std::size_t Offset, typename... ValueTs>
 consteval auto enumFieldValuesSameAt() -> bool {
     using tuple = std::tuple<ValueTs...>;
-    using first = field_value_decay_t<std::tuple_element_t<Offset, tuple>>;
+    using first = FieldValueDecayT<std::tuple_element_t<Offset, tuple>>;
     return []<std::size_t... Is>(std::index_sequence<Is...>) {
-        return (std::is_same_v<first, field_value_decay_t<std::tuple_element_t<(Is * Diameter) + Offset, tuple>>> &&
+        return (std::is_same_v<first, FieldValueDecayT<std::tuple_element_t<(Is * Diameter) + Offset, tuple>>> &&
                 ...);
     }(std::make_index_sequence<sizeof...(ValueTs) / Diameter>{});
 }
 
 template <typename... ValueTs>
-using double_type_tuple = decltype(initValuesTuple<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
-                                                           std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+using DoubleTypeTuple = decltype(initValuesTuple<2, 1>(std::make_index_sequence<sizeof...(ValueTs) / 2>{},
+                                                           std::declval<std::tuple<traits::RefType<ValueTs>...>>()));
 
 template <typename... ValueTs>
-using double_field_values_tuple = decltype(initFieldValuesTuple<2, 1>(
-    std::make_index_sequence<sizeof...(ValueTs) / 2>{}, std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+using DoubleFieldValuesTuple = decltype(initFieldValuesTuple<2, 1>(
+    std::make_index_sequence<sizeof...(ValueTs) / 2>{}, std::declval<std::tuple<traits::RefType<ValueTs>...>>()));
 
 template <typename... ValueTs>
-using double_field_tags_tuple = decltype(initFieldTagsTuple<2, 1>(
-    std::make_index_sequence<sizeof...(ValueTs) / 2>{}, std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+using DoubleFieldTagsTuple = decltype(initFieldTagsTuple<2, 1>(
+    std::make_index_sequence<sizeof...(ValueTs) / 2>{}, std::declval<std::tuple<traits::RefType<ValueTs>...>>()));
 
 template <typename... ValueTs>
-using double_enum_tags_tuple = decltype(initFieldTagsTuple<2, 1>(
-    std::make_index_sequence<sizeof...(ValueTs) / 2>{}, std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+using DoubleEnumTagsTuple = decltype(initFieldTagsTuple<2, 1>(
+    std::make_index_sequence<sizeof...(ValueTs) / 2>{}, std::declval<std::tuple<traits::RefType<ValueTs>...>>()));
 
 template <typename... ValueTs>
-using field_values_tuple = decltype(initFieldValuesTuple<1, 0>(
-    std::make_index_sequence<sizeof...(ValueTs)>{}, std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+using FieldValuesTuple = decltype(initFieldValuesTuple<1, 0>(
+    std::make_index_sequence<sizeof...(ValueTs)>{}, std::declval<std::tuple<traits::RefType<ValueTs>...>>()));
 
 template <typename... ValueTs>
-using field_tags_tuple = decltype(initFieldTagsTuple<1, 0>(
-    std::make_index_sequence<sizeof...(ValueTs)>{}, std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+using FieldTagsTuple = decltype(initFieldTagsTuple<1, 0>(
+    std::make_index_sequence<sizeof...(ValueTs)>{}, std::declval<std::tuple<traits::RefType<ValueTs>...>>()));
 
 template <typename... ValueTs>
-using enum_tags_tuple = decltype(initFieldTagsTuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
-                                                             std::declval<std::tuple<traits::ref_type<ValueTs>...>>()));
+using EnumTagsTuple = decltype(initFieldTagsTuple<1, 0>(std::make_index_sequence<sizeof...(ValueTs)>{},
+                                                             std::declval<std::tuple<traits::RefType<ValueTs>...>>()));
 
 template <typename T, class Obj>
-concept is_member_ref_function = requires(T val, Obj& obj) { std::is_lvalue_reference<decltype(val(obj))>::value; };
+concept IsMemberRefFunction = requires(T val, Obj& obj) { std::is_lvalue_reference<decltype(val(obj))>::value; };
 
 template <typename T>
 struct IsStdTupleImp : std::false_type {};
@@ -160,14 +160,14 @@ constexpr auto isStdTuple() -> bool {
 }
 
 template <typename... Ts>
-inline constexpr bool is_std_tuple_v = isStdTuple<Ts...>(); // NOLINT
+inline constexpr bool is_std_tuple_v = isStdTuple<Ts...>();
 
 template <typename Tuple, typename Context>
 struct TupleUnwrap;
 
 template <typename... Args, typename Context>
 struct TupleUnwrap<std::tuple<Args...>, Context> {
-    using type = std::tuple<resolve_member_type_t<field_accessor_t<Args>, Context>...>;
+    using type = std::tuple<ResolveMemberTypeT<FieldAccessorT<Args>, Context>...>;
 };
 
 template <typename Tuple, typename Context>
@@ -175,14 +175,14 @@ struct TupleTagsUnwrap;
 
 template <typename... Args, typename Context>
 struct TupleTagsUnwrap<std::tuple<Args...>, Context> {
-    constexpr static auto value = std::make_tuple(field_tags_v<Args>...); // NOLINT
+    constexpr static auto value = std::make_tuple(field_tags_v<Args>...);
 };
 
 template <typename Tuple, typename Context>
-using tuple_unwrap_t = typename TupleUnwrap<Tuple, Context>::type;
+using TupleUnwrapT = typename TupleUnwrap<Tuple, Context>::type;
 
 template <typename Tuple, typename Context>
-static constexpr auto tuple_tags_unwrap_v = TupleTagsUnwrap<Tuple, Context>::value; // NOLINT
+static constexpr auto tuple_tags_unwrap_v = TupleTagsUnwrap<Tuple, Context>::value;
 
 template <typename F, typename... Ts>
 static constexpr auto removeVoidToMonostate(F&& func, Ts&&... ts) -> decltype(auto) {
@@ -195,7 +195,7 @@ static constexpr auto removeVoidToMonostate(F&& func, Ts&&... ts) -> decltype(au
 }
 } // namespace detail
 
-template <typename T, std::size_t N, typename TagsT = detail::no_tags_tuple_t<N>>
+template <typename T, std::size_t N, typename TagsT = detail::NoTagsTupleT<N>>
 struct Enumerate {
     static_assert(std::is_enum_v<T>, "T must be a enum type");
     std::array<std::string_view, N> names;
@@ -308,21 +308,21 @@ template <typename... ValueTs>
     requires(sizeof...(ValueTs) > 0U) && (sizeof...(ValueTs) % 2 == 0U) && (detail::allNamesAt<2, 0, ValueTs...>()) &&
             (detail::allEnumFieldValuesAt<2, 1, ValueTs...>()) &&
             (detail::enumFieldValuesSameAt<2, 1, ValueTs...>())
-Enumerate(ValueTs&&...) -> Enumerate<detail::field_value_decay_t<std::tuple_element_t<1, std::tuple<ValueTs...>>>,
-                                     sizeof...(ValueTs) / 2, detail::double_enum_tags_tuple<ValueTs...>>;
+Enumerate(ValueTs&&...) -> Enumerate<detail::FieldValueDecayT<std::tuple_element_t<1, std::tuple<ValueTs...>>>,
+                                     sizeof...(ValueTs) / 2, detail::DoubleEnumTagsTuple<ValueTs...>>;
 
 template <typename... ValueTs>
     requires(sizeof...(ValueTs) > 0U) && (detail::allEnumFieldValuesAt<1, 0, ValueTs...>()) &&
             (detail::enumFieldValuesSameAt<1, 0, ValueTs...>())
-Enumerate(ValueTs&&...) -> Enumerate<detail::field_value_decay_t<std::tuple_element_t<0, std::tuple<ValueTs...>>>,
-                                     sizeof...(ValueTs), detail::enum_tags_tuple<ValueTs...>>;
+Enumerate(ValueTs&&...) -> Enumerate<detail::FieldValueDecayT<std::tuple_element_t<0, std::tuple<ValueTs...>>>,
+                                     sizeof...(ValueTs), detail::EnumTagsTuple<ValueTs...>>;
 
 template <typename... ValueTs>
 Object(ValueTs&&...)
-    -> Object<detail::double_field_values_tuple<ValueTs...>, detail::double_field_tags_tuple<ValueTs...>>;
+    -> Object<detail::DoubleFieldValuesTuple<ValueTs...>, detail::DoubleFieldTagsTuple<ValueTs...>>;
 
 template <typename... ValueTs>
-Array(ValueTs&&...) -> Array<detail::field_values_tuple<ValueTs...>, detail::field_tags_tuple<ValueTs...>>;
+Array(ValueTs&&...) -> Array<detail::FieldValuesTuple<ValueTs...>, detail::FieldTagsTuple<ValueTs...>>;
 
 namespace detail {
 template <typename T, class = void>
@@ -342,20 +342,20 @@ struct IsRefEnumerate<Enumerate<T, N, TagsT>, void> : std::true_type {};
 
 template <typename T, typename U, class = void>
 struct MemberMetadata {
-    using raw_type                          = field_accessor_t<T>;
+    using raw_type                          = FieldAccessorT<T>;
     using parent_type                       = U;
     constexpr static bool is_ref            = std::is_reference_v<raw_type>;
     constexpr static bool is_l_ref          = std::is_lvalue_reference_v<raw_type>;
-    constexpr static bool is_lambda         = is_member_ref_function<raw_type, U>;
+    constexpr static bool is_lambda         = IsMemberRefFunction<raw_type, U>;
     constexpr static bool is_member_pointer = std::is_member_object_pointer_v<raw_type>;
     constexpr static bool is_ok             = is_ref || is_lambda || is_member_pointer;
 
-    constexpr static auto tags = field_tags_v<T>; // NOLINT
+    constexpr static auto tags = field_tags_v<T>;
     static constexpr auto get(auto&& accessor, U& obj) noexcept -> decltype(auto) {
         using AccessorType = std::decay_t<decltype(accessor)>;
         if constexpr (std::is_member_object_pointer_v<AccessorType>) {
             return obj.*accessor;
-        } else if constexpr (is_member_ref_function<AccessorType, U>) {
+        } else if constexpr (IsMemberRefFunction<AccessorType, U>) {
             return accessor(obj); // lambda 或函数
         } else if constexpr (is_tagged_field_v<AccessorType>) {
             return get(accessor.accessor, obj);
@@ -366,13 +366,13 @@ struct MemberMetadata {
 };
 
 template <typename T>
-concept is_local_ref_value = requires {
+concept IsLocalRefValue = requires {
     { T::Neko::value };
     requires MemberMetadata<decltype(T::Neko::value), T>::is_ok;
 };
 
 template <typename T>
-concept is_meta_ref_value = requires {
+concept IsMetaRefValue = requires {
     { Meta<T>::value };
     requires MemberMetadata<decltype(Meta<T>::value), T>::is_ok;
 };
@@ -382,64 +382,64 @@ struct IsAllMetaRefValue : std::false_type {};
 
 template <typename A, typename... Args>
 struct IsAllMetaRefValue<A, std::tuple<Args...>, void> {
-    constexpr static bool value = (MemberMetadata<Args, A>::is_ok && ...); // NOLINT
+    constexpr static bool value = (MemberMetadata<Args, A>::is_ok && ...);
 };
 
 template <typename T>
-concept is_local_names = requires {
+concept IsLocalNames = requires {
     { T::Neko::names };
 };
 
 template <typename T>
-concept is_meta_names = requires {
+concept IsMetaNames = requires {
     { Meta<T>::names };
 };
 
 template <typename T>
-concept is_global_ref_values = requires(T& test) {
+concept IsGlobalRefValues = requires(T& test) {
     { unwrapStruct(test) };
 };
 
 template <typename T>
-concept is_meta_ref_values = requires {
+concept IsMetaRefValues = requires {
     { Meta<T>::values };
     requires is_std_tuple_v<std::decay_t<decltype(Meta<T>::values)>>;
     requires IsAllMetaRefValue<T, std::decay_t<decltype(Meta<T>::values)>>::value;
 };
 
 template <typename T>
-concept is_local_ref_values = requires {
+concept IsLocalRefValues = requires {
     { T::Neko::values };
     requires is_std_tuple_v<std::decay_t<decltype(T::Neko::values)>>;
     requires IsAllMetaRefValue<T, std::decay_t<decltype(T::Neko::values)>>::value;
 };
 
 template <typename T>
-concept is_local_ref_object = requires {
+concept IsLocalRefObject = requires {
     { T::Neko::value };
     requires IsRefObject<std::decay_t<decltype(T::Neko::value)>>::value;
 };
 
 template <typename T>
-concept is_meta_ref_object = requires {
+concept IsMetaRefObject = requires {
     { Meta<T>::value };
     requires IsRefObject<std::decay_t<decltype(Meta<T>::value)>>::value;
 };
 
 template <typename T>
-concept is_local_ref_array = requires {
+concept IsLocalRefArray = requires {
     { T::Neko::value };
     requires IsRefArray<std::decay_t<decltype(T::Neko::value)>>::value;
 };
 
 template <typename T>
-concept is_meta_ref_array = requires {
+concept IsMetaRefArray = requires {
     { Meta<T>::value };
     requires IsRefArray<std::decay_t<decltype(Meta<T>::value)>>::value;
 };
 
 template <typename T>
-concept is_meta_enumerate = std::is_enum_v<T> && requires {
+concept IsMetaEnumerate = std::is_enum_v<T> && requires {
     { Meta<T>::value };
     requires IsRefEnumerate<std::decay_t<decltype(Meta<T>::value)>>::value;
 };
@@ -450,14 +450,14 @@ constexpr auto valueRef(T&& accessor, ObjT& obj) noexcept -> decltype(auto) {
 }
 
 template <typename T>
-constexpr static bool is_ref_by_local_v = //  NOLINT
-    (is_local_ref_values<T> && is_local_names<T>) || is_local_ref_object<T> || is_local_ref_array<T> ||
-    is_local_ref_value<T>;
+constexpr static bool is_ref_by_local_v =
+    (IsLocalRefValues<T> && IsLocalNames<T>) || IsLocalRefObject<T> || IsLocalRefArray<T> ||
+    IsLocalRefValue<T>;
 
 template <typename T>
-constexpr static bool is_ref_by_meta_v = //  NOLINT
-    (is_meta_ref_values<T> && is_meta_names<T>) || is_meta_ref_object<T> || is_meta_ref_array<T> ||
-    is_meta_ref_value<T>;
+constexpr static bool is_ref_by_meta_v =
+    (IsMetaRefValues<T> && IsMetaNames<T>) || IsMetaRefObject<T> || IsMetaRefArray<T> ||
+    IsMetaRefValue<T>;
 
 enum class MetaKind {
     ErrorKind,        // error
@@ -484,11 +484,11 @@ enum class ReflectProviderKind { Error, ExplicitMetadata, NativeReflection, Lega
 
 template <typename T, class Enable = void>
 struct NativeReflectionProvider {
-    static constexpr bool available = false; // NOLINT
+    static constexpr bool available = false;
 };
 
 template <typename T>
-inline constexpr bool native_reflection_provider_available_v = NativeReflectionProvider<T>::available; // NOLINT
+inline constexpr bool native_reflection_provider_available_v = NativeReflectionProvider<T>::available;
 
 // Native reflection annotation bridge.
 //
@@ -497,19 +497,19 @@ inline constexpr bool native_reflection_provider_available_v = NativeReflectionP
 // placeholder provider cannot silently change serializer or argparser behavior.
 template <auto... Annotations>
 struct NativeAnnotationTags {
-    static constexpr auto value = normalize_tags_v<Annotations...>; // NOLINT
+    static constexpr auto value = normalize_tags_v<Annotations...>;
 };
 
 template <auto... Annotations>
-inline constexpr auto native_annotation_tags_v = NativeAnnotationTags<Annotations...>::value; // NOLINT
+inline constexpr auto native_annotation_tags_v = NativeAnnotationTags<Annotations...>::value;
 
 template <typename T, std::size_t I, class Enable = void>
 struct NativeReflectionFieldTags {
-    static constexpr auto value = NoTags{}; // NOLINT
+    static constexpr auto value = NoTags{};
 };
 
 template <typename T, std::size_t I>
-inline constexpr auto native_reflection_field_tags_v = NativeReflectionFieldTags<T, I>::value; // NOLINT
+inline constexpr auto native_reflection_field_tags_v = NativeReflectionFieldTags<T, I>::value;
 
 template <typename T>
 constexpr auto getReflectProviderKind() noexcept -> ReflectProviderKind {
@@ -525,30 +525,30 @@ constexpr auto getReflectProviderKind() noexcept -> ReflectProviderKind {
 }
 
 template <typename T>
-constexpr static auto reflect_provider_kind_v = getReflectProviderKind<T>(); // NOLINT
+constexpr static auto reflect_provider_kind_v = getReflectProviderKind<T>();
 
 // 辅助函数，确定类型使用哪种 tag
 template <typename T>
 constexpr auto getMetaKind() noexcept -> MetaKind {
-    if constexpr (is_local_ref_values<T> && is_local_names<T>) {
+    if constexpr (IsLocalRefValues<T> && IsLocalNames<T>) {
         return MetaKind::LocalValuesNames;
-    } else if constexpr (is_local_ref_object<T>) {
+    } else if constexpr (IsLocalRefObject<T>) {
         return MetaKind::LocalObject;
-    } else if constexpr (is_local_ref_array<T>) {
+    } else if constexpr (IsLocalRefArray<T>) {
         return MetaKind::LocalArray;
-    } else if constexpr (is_local_ref_value<T> && is_local_names<T>) {
+    } else if constexpr (IsLocalRefValue<T> && IsLocalNames<T>) {
         return MetaKind::LocalValueNames;
-    } else if constexpr (is_local_ref_value<T>) {
+    } else if constexpr (IsLocalRefValue<T>) {
         return MetaKind::LocalValue;
-    } else if constexpr (!is_ref_by_local_v<T> && is_meta_ref_values<T> && is_meta_names<T>) {
+    } else if constexpr (!is_ref_by_local_v<T> && IsMetaRefValues<T> && IsMetaNames<T>) {
         return MetaKind::MetaValuesNames;
-    } else if constexpr (!is_ref_by_local_v<T> && is_meta_ref_object<T>) {
+    } else if constexpr (!is_ref_by_local_v<T> && IsMetaRefObject<T>) {
         return MetaKind::MetaObject;
-    } else if constexpr (!is_ref_by_local_v<T> && is_meta_ref_array<T>) {
+    } else if constexpr (!is_ref_by_local_v<T> && IsMetaRefArray<T>) {
         return MetaKind::MetaArray;
-    } else if constexpr (!is_ref_by_local_v<T> && is_meta_ref_value<T> && is_meta_names<T>) {
+    } else if constexpr (!is_ref_by_local_v<T> && IsMetaRefValue<T> && IsMetaNames<T>) {
         return MetaKind::MetaValueNames;
-    } else if constexpr (!is_ref_by_local_v<T> && is_meta_ref_value<T>) {
+    } else if constexpr (!is_ref_by_local_v<T> && IsMetaRefValue<T>) {
         return MetaKind::MetaValue;
     } else if constexpr (can_unwrap_v<T>) {
         return MetaKind::AutoUnwrap;
@@ -558,7 +558,7 @@ constexpr auto getMetaKind() noexcept -> MetaKind {
 }
 
 template <typename T>
-constexpr static auto meta_kind_v = getMetaKind<T>(); // NOLINT
+constexpr static auto meta_kind_v = getMetaKind<T>();
 
 template <typename T, MetaKind Kind>
 struct MetaPrivateBase;
@@ -642,23 +642,23 @@ template <typename T, class = void>
 struct MetaPrivate : MetaPrivateBase<T, meta_kind_v<T>> {};
 
 template <typename T>
-concept has_names_meta = meta_kind_v<T> != MetaKind::ErrorKind && meta_kind_v<T> != MetaKind::MetaValue &&
+concept HasNamesMeta = meta_kind_v<T> != MetaKind::ErrorKind && meta_kind_v<T> != MetaKind::MetaValue &&
                          meta_kind_v<T> != MetaKind::LocalValue && meta_kind_v<T> != MetaKind::MetaArray &&
                          meta_kind_v<T> != MetaKind::LocalArray;
 
 template <typename T>
-concept has_values_meta = meta_kind_v<T> != MetaKind::ErrorKind;
+concept HasValuesMeta = meta_kind_v<T> != MetaKind::ErrorKind;
 
 template <typename T>
-concept has_value_function_one = requires(T& obj) {
+concept HasValueFunctionOne = requires(T& obj) {
     { MetaPrivate<T>::value(obj) };
 };
 template <typename T>
-concept has_value_function = requires {
+concept HasValueFunction = requires {
     { MetaPrivate<T>::value() };
 };
 template <typename T>
-concept has_name_function = requires {
+concept HasNameFunction = requires {
     { MetaPrivate<T>::names() };
 };
 
@@ -673,7 +673,7 @@ struct ReflectAccessorCount<Values, true> {
 };
 
 template <typename Values>
-inline constexpr auto reflect_accessor_count_v = ReflectAccessorCount<Values>::value; // NOLINT
+inline constexpr auto reflect_accessor_count_v = ReflectAccessorCount<Values>::value;
 
 // Bridges the legacy "tuple of accessors or one accessor" representation into
 // the index-based provider API. Reflect<T> should not need to know this storage
@@ -710,16 +710,16 @@ template <typename T>
 struct ReflectProvider {
     using context_type = std::decay_t<T>;
 
-    static constexpr ReflectProviderKind provider_kind = reflect_provider_kind_v<T>;                  // NOLINT
-    static constexpr MetaKind legacy_kind              = meta_kind_v<T>;                              // NOLINT
-    static constexpr MetaKind kind                     = legacy_kind;                                 // NOLINT
-    static constexpr bool has_names                    = has_names_meta<T>;                           // NOLINT
-    static constexpr bool has_values                   = provider_kind != ReflectProviderKind::Error; // NOLINT
+    static constexpr ReflectProviderKind provider_kind = reflect_provider_kind_v<T>;
+    static constexpr MetaKind            legacy_kind   = meta_kind_v<T>;
+    static constexpr MetaKind            kind          = legacy_kind;
+    static constexpr bool                has_names     = HasNamesMeta<T>;
+    static constexpr bool                has_values    = provider_kind != ReflectProviderKind::Error;
 
     static constexpr auto names() {
         if constexpr (provider_kind == ReflectProviderKind::NativeReflection) {
             return NativeReflectionProvider<T>::names();
-        } else if constexpr (has_name_function<T>) {
+        } else if constexpr (HasNameFunction<T>) {
             return MetaPrivate<T>::names();
         } else {
             return std::array<std::string_view, 0>{};
@@ -735,7 +735,7 @@ struct ReflectProvider {
             // tuple directly instead of invoking N accessors that each rebuild
             // the complete argument tuple.
             return std::forward<U>(obj).nekoMemberTuple();
-        } else if constexpr (has_value_function_one<T>) {
+        } else if constexpr (HasValueFunctionOne<T>) {
             return MetaPrivate<T>::value(std::forward<U>(obj));
         } else {
             return accessors();
@@ -745,7 +745,7 @@ struct ReflectProvider {
     static constexpr auto accessors() -> decltype(auto) {
         if constexpr (provider_kind == ReflectProviderKind::NativeReflection) {
             return NativeReflectionProvider<T>::accessors();
-        } else if constexpr (has_value_function<T>) {
+        } else if constexpr (HasValueFunction<T>) {
             return MetaPrivate<T>::value();
         } else {
             return std::forward_as_tuple();
@@ -754,13 +754,13 @@ struct ReflectProvider {
 
     using accessors_type = std::decay_t<decltype(accessors(std::declval<context_type&>()))>;
 
-    static constexpr std::size_t value_count = has_values ? reflect_accessor_count_v<accessors_type> : 0; // NOLINT
+    static constexpr std::size_t value_count = has_values ? reflect_accessor_count_v<accessors_type> : 0;
 
     template <std::size_t I>
     using accessor_type = typename ReflectAccessorAt<I, accessors_type>::type;
 
     template <std::size_t I>
-    using field_type = resolve_member_type_t<field_accessor_t<accessor_type<I>>, context_type>;
+    using field_type = ResolveMemberTypeT<FieldAccessorT<accessor_type<I>>, context_type>;
 
     template <std::size_t I>
     static constexpr auto name() {
@@ -787,7 +787,7 @@ struct ReflectProvider {
             decltype(auto) acc = std::get<I>(std::forward<Values>(values));
             using AccType      = std::decay_t<decltype(acc)>;
             if constexpr (std::is_reference_v<decltype(acc)> && !std::is_member_object_pointer_v<AccType> &&
-                          !is_member_ref_function<AccType, std::remove_reference_t<U>>) {
+                          !IsMemberRefFunction<AccType, std::remove_reference_t<U>>) {
                 return std::forward<decltype(acc)>(acc);
             } else {
                 return valueRef(acc, obj);
@@ -802,9 +802,9 @@ struct ReflectProvider {
             return NativeReflectionProvider<T>::tags();
         } else if constexpr (has_values) {
             using values_type = std::decay_t<decltype(accessors(std::declval<context_type&>()))>;
-            if constexpr (is_local_ref_object<T> || is_local_ref_array<T>) {
+            if constexpr (IsLocalRefObject<T> || IsLocalRefArray<T>) {
                 return T::Neko::value.tags;
-            } else if constexpr (is_meta_ref_object<T> || is_meta_ref_array<T>) {
+            } else if constexpr (IsMetaRefObject<T> || IsMetaRefArray<T>) {
                 return Meta<T>::value.tags;
             } else if constexpr (requires { T::Neko::field_tags; }) {
                 return T::Neko::field_tags;
@@ -838,12 +838,12 @@ private:
             using values_type = std::decay_t<decltype(Provider::accessors(std::declval<ContextType&>()))>;
             if constexpr (is_std_tuple_v<values_type>) {
                 static_assert(performAllChecks<values_type, ContextType>(), "tags checks failed");
-                return (tuple_unwrap_t<values_type, ContextType>*)nullptr;
+                return (TupleUnwrapT<values_type, ContextType>*)nullptr;
             } else {
-                static_assert(performCheck<resolve_member_type_t<field_accessor_t<values_type>, ContextType>,
+                static_assert(performCheck<ResolveMemberTypeT<FieldAccessorT<values_type>, ContextType>,
                                             field_tags_v<values_type>>(),
                               "tags checks failed");
-                return (std::tuple<resolve_member_type_t<field_accessor_t<values_type>, ContextType>>*)nullptr;
+                return (std::tuple<ResolveMemberTypeT<FieldAccessorT<values_type>, ContextType>>*)nullptr;
             }
         } else {
             return (std::tuple<>*)nullptr;
@@ -854,8 +854,8 @@ public:
     using provider    = Provider;
     using value_types = std::remove_pointer_t<decltype(types())>;
 
-    static constexpr auto field_tags = Provider::tags();               // NOLINT
-    static constexpr int value_count = std::tuple_size_v<value_types>; // NOLINT
+    static constexpr auto field_tags  = Provider::tags();
+    static constexpr int  value_count = std::tuple_size_v<value_types>;
 };
 
 struct RefAny {
@@ -864,10 +864,10 @@ struct RefAny {
     RefAny(RefAny&&)      = default;
     template <typename T>
         requires(!std::is_same_v<std::remove_cvref_t<T>, RefAny> && std::is_lvalue_reference_v<T &&>)
-    RefAny(T&& obj) : mAny(std::ref(obj)) {}
+    RefAny(T&& obj) : any_(std::ref(obj)) {}
     template <typename T>
     auto as() -> decltype(auto) {
-        return std::any_cast<std::reference_wrapper<T>>(mAny).get();
+        return std::any_cast<std::reference_wrapper<T>>(any_).get();
     }
     auto operator=(const RefAny&) -> RefAny& = default;
     auto operator=(RefAny&&) -> RefAny&      = default;
@@ -879,8 +879,8 @@ struct RefAny {
         return *this;
     }
 
-    auto type() const -> const auto& { return mAny.type(); }
-    auto valid() const -> bool { return mAny.has_value(); }
+    auto type() const -> const auto& { return any_.type(); }
+    auto valid() const -> bool { return any_.has_value(); }
 
     template <typename T>
     operator T() {
@@ -888,15 +888,15 @@ struct RefAny {
     }
     template <typename T>
     operator std::reference_wrapper<T>() {
-        return std::any_cast<std::reference_wrapper<T>>(mAny);
+        return std::any_cast<std::reference_wrapper<T>>(any_);
     }
     template <typename T>
     auto operator==(const T& obj) const -> bool {
-        return std::any_cast<std::reference_wrapper<T>>(mAny).get() == obj;
+        return std::any_cast<std::reference_wrapper<T>>(any_).get() == obj;
     }
 
 private:
-    std::any mAny;
+    std::any any_;
 };
 
 } // namespace detail
@@ -907,13 +907,13 @@ private:
 
 template <typename T>
 inline constexpr bool is_reflectable_v =
-    detail::has_values_meta<std::remove_cvref_t<T>> || std::is_enum_v<std::remove_cvref_t<T>>;
+    detail::HasValuesMeta<std::remove_cvref_t<T>> || std::is_enum_v<std::remove_cvref_t<T>>;
 
 template <typename T>
 concept Reflectable = is_reflectable_v<T>;
 
 template <typename T>
-inline constexpr bool has_named_reflection_v = detail::has_names_meta<std::remove_cvref_t<T>>;
+inline constexpr bool has_named_reflection_v = detail::HasNamesMeta<std::remove_cvref_t<T>>;
 
 template <typename T>
 concept NamedReflectable = has_named_reflection_v<T>;
@@ -928,10 +928,10 @@ template <typename T>
 inline constexpr bool is_optional_v = traits::OptionalLikeType<std::remove_cvref_t<T>>::value;
 
 template <typename T>
-using OptionalValueT = typename traits::UnwrappedOptionalLikeType<std::remove_cvref_t<T>>::type;
+using OptionalValueT = traits::UnwrappedOptionalLikeTypeT<std::remove_cvref_t<T>>;
 
 template <typename T>
-concept OptionalLike = traits::optional_like<std::remove_cvref_t<T>>;
+concept OptionalLike = traits::OptionalLike<std::remove_cvref_t<T>>;
 
 template <class... Ts>
 struct Overloads : public Ts... {
@@ -1229,8 +1229,8 @@ public:
     }
 
     using value_types                = typename Model::value_types;
-    static constexpr auto field_tags = Model::field_tags;  // NOLINT
-    static constexpr int value_count = Model::value_count; // NOLINT
+    static constexpr auto field_tags = Model::field_tags;
+    static constexpr int  value_count = Model::value_count;
 
     template <typename CallAbleT>
     static constexpr auto forEachMeta(CallAbleT&& func) {
@@ -1496,7 +1496,7 @@ private:
     using AutoTable = detail::EnumReflectionTable<T>;
 
     static constexpr auto tags() noexcept {
-        if constexpr (detail::is_meta_enumerate<T>) {
+        if constexpr (detail::IsMetaEnumerate<T>) {
             return Meta<T>::value.tags;
         } else {
             return detail::no_tags_tuple_v<size()>;
@@ -1505,21 +1505,21 @@ private:
 
 public:
     static constexpr auto names() noexcept {
-        if constexpr (detail::is_meta_enumerate<T>) {
+        if constexpr (detail::IsMetaEnumerate<T>) {
             return Meta<T>::value.names;
         } else {
             return AutoTable::names;
         }
     }
     static constexpr auto values() noexcept {
-        if constexpr (detail::is_meta_enumerate<T>) {
+        if constexpr (detail::IsMetaEnumerate<T>) {
             return Meta<T>::value.values;
         } else {
             return AutoTable::values;
         }
     }
     static auto nameMap() -> const auto& {
-        static std::map<std::string_view, T> kNameMap = []() {
+        static std::map<std::string_view, T> s_name_map = []() {
             auto map = std::map<std::string_view, T>{};
             auto ns  = names();
             auto vs  = values();
@@ -1528,10 +1528,10 @@ public:
             }
             return map;
         }();
-        return kNameMap;
+        return s_name_map;
     }
     static auto valueMap() -> const auto& {
-        static std::map<T, std::string_view> kValueMap = []() {
+        static std::map<T, std::string_view> s_value_map = []() {
             auto map = std::map<T, std::string_view>{};
             auto ns  = names();
             auto vs  = values();
@@ -1540,25 +1540,25 @@ public:
             }
             return map;
         }();
-        return kValueMap;
+        return s_value_map;
     }
     static constexpr auto className() noexcept { return detail::class_nameof<T>; }
     static constexpr auto size() noexcept {
-        if constexpr (detail::is_meta_enumerate<T>) {
+        if constexpr (detail::IsMetaEnumerate<T>) {
             return Meta<T>::value.names.size();
         } else {
             return AutoTable::size;
         }
     }
-    static constexpr auto field_tags = tags();                  // NOLINT
-    static constexpr int value_count = static_cast<int>(size()); // NOLINT
+    static constexpr auto field_tags  = tags();
+    static constexpr int  value_count = static_cast<int>(size());
 
     static constexpr auto value(std::string_view name) {
-        auto kEnums = values();
-        auto kNames = names();
+        auto enum_values = values();
+        auto enum_names  = names();
         for (int i = 0; i < (int)size(); ++i) {
-            if (kNames[i] == name) {
-                return kEnums[i];
+            if (enum_names[i] == name) {
+                return enum_values[i];
             }
         }
         NEKO_LOG_ERROR("reflection", "name not found");
@@ -1566,11 +1566,11 @@ public:
     }
 
     static constexpr auto name(T value) {
-        const auto& k_names = names();
-        const auto& k_enums = values();
+        const auto& enum_names  = names();
+        const auto& enum_values = values();
         for (int i = 0; i < (int)size(); ++i) {
-            if (k_enums[i] == value) {
-                return k_names[i];
+            if (enum_values[i] == value) {
+                return enum_names[i];
             }
         }
         NEKO_LOG_ERROR("reflection", "value not found");
@@ -1580,12 +1580,12 @@ public:
     template <typename U>
         requires(std::is_same_v<T, U> || std::is_integral_v<U>)
     static constexpr auto flagsToString(U value, std::string delimiter = "|") {
-        const auto& k_names = names();
-        const auto& k_enums = values();
+        const auto& enum_names  = names();
+        const auto& enum_values = values();
         std::string result;
         for (int i = 0; i < (int)size(); ++i) {
-            if (static_cast<std::underlying_type_t<T>>(k_enums[i]) & static_cast<std::underlying_type_t<T>>(value)) {
-                result += std::string(k_names[i]) + delimiter;
+            if (static_cast<std::underlying_type_t<T>>(enum_values[i]) & static_cast<std::underlying_type_t<T>>(value)) {
+                result += std::string(enum_names[i]) + delimiter;
             }
         }
         if (result.size() > delimiter.size()) {
@@ -1596,20 +1596,20 @@ public:
 
     template <typename CallAbleT>
     static constexpr auto forEachMeta(CallAbleT&& func) {
-        constexpr auto enumNames  = names();
-        constexpr auto enumValues = values();
+        constexpr auto enum_names  = names();
+        constexpr auto enum_values = values();
         return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
             auto invoke = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
-                constexpr auto value = enumValues[I];
-                auto&& tags          = std::get<I>(field_tags);
+                constexpr auto value = enum_values[I];
+                auto&&         tags  = std::get<I>(field_tags);
                 if constexpr (std::is_invocable_v<CallAbleT&, std::integral_constant<T, value>, std::string_view,
                                                   decltype(tags)>) {
-                    return detail::removeVoidToMonostate(func, std::integral_constant<T, value>{}, enumNames[I],
+                    return detail::removeVoidToMonostate(func, std::integral_constant<T, value>{}, enum_names[I],
                                                             tags);
                 } else if constexpr (std::is_invocable_v<CallAbleT&, T, std::string_view, decltype(tags)>) {
-                    return detail::removeVoidToMonostate(func, value, enumNames[I], tags);
+                    return detail::removeVoidToMonostate(func, value, enum_names[I], tags);
                 } else if constexpr (std::is_invocable_v<CallAbleT&, std::string_view, decltype(tags)>) {
-                    return detail::removeVoidToMonostate(func, enumNames[I], tags);
+                    return detail::removeVoidToMonostate(func, enum_names[I], tags);
                 } else if constexpr (std::is_invocable_v<CallAbleT&, std::integral_constant<T, value>,
                                                          decltype(tags)>) {
                     return detail::removeVoidToMonostate(func, std::integral_constant<T, value>{}, tags);
@@ -1629,10 +1629,10 @@ public:
 
     template <typename CallAbleT>
     static constexpr void visitMeta(CallAbleT&& func) {
-        constexpr auto enumNames  = names();
-        constexpr auto enumValues = values();
+        constexpr auto enum_names  = names();
+        constexpr auto enum_values = values();
         [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            (func(enumValues[Is], enumNames[Is], std::get<Is>(field_tags)), ...);
+            (func(enum_values[Is], enum_names[Is], std::get<Is>(field_tags)), ...);
         }(std::make_index_sequence<size()>{});
     }
 

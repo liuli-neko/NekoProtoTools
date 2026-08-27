@@ -50,19 +50,19 @@ private:
 
 #else // !defined(NEKO_PROTO_RPC_TRACE) - Zero-overhead no-op stub
 
-class RpcTracingWebUi {
-public:
-    explicit RpcTracingWebUi(std::string_view = "127.0.0.1:8067") noexcept {}
-    ~RpcTracingWebUi() = default;
+// class RpcTracingWebUi {
+// public:
+//     explicit RpcTracingWebUi(std::string_view = "127.0.0.1:8067") noexcept {}
+//     ~RpcTracingWebUi() = default;
 
-    RpcTracingWebUi(const RpcTracingWebUi&) = delete;
-    auto operator=(const RpcTracingWebUi&) -> RpcTracingWebUi& = delete;
-    RpcTracingWebUi(RpcTracingWebUi&&) noexcept = default;
-    auto operator=(RpcTracingWebUi&&) noexcept -> RpcTracingWebUi& = default;
+//     RpcTracingWebUi(const RpcTracingWebUi&) = delete;
+//     auto operator=(const RpcTracingWebUi&) -> RpcTracingWebUi& = delete;
+//     RpcTracingWebUi(RpcTracingWebUi&&) noexcept = default;
+//     auto operator=(RpcTracingWebUi&&) noexcept -> RpcTracingWebUi& = default;
 
-    auto install(RpcTraceRegistry& = RpcTraceRegistry::instance()) noexcept -> bool { return false; }
-    auto endpoint() const noexcept -> std::string_view { return {}; }
-};
+//     auto install(RpcTraceRegistry& = RpcTraceRegistry::instance()) noexcept -> bool { return false; }
+//     auto endpoint() const noexcept -> std::string_view { return {}; }
+// };
 
 #endif // defined(NEKO_PROTO_RPC_TRACE)
 

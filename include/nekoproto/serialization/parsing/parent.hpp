@@ -2,7 +2,7 @@
 
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/global/reflection_tags.hpp"
-#include "nekoproto/serialization/parsing/schemaful/IsSchemafulWriter.hpp"
+#include "nekoproto/serialization/parsing/schemaful/is_schemaful_writer.hpp"
 #include "nekoproto/serialization/parsing/supports_attributes.hpp"
 #include "nekoproto/serialization/parsing/supports_comments.hpp"
 
@@ -48,17 +48,17 @@ struct Parent {
     };
 
     struct Object {
-        std::string_view name;
+        std::string_view  name;
         OutputObjectType* object;
-        bool isAttribute = false;
-        auto asAttribute() -> Object { return {name, object, true}; }
+        bool              is_attribute = false;
+        auto              asAttribute() -> Object { return {name, object, true}; }
     };
 
     struct IdObject {
-        std::string_view name;
+        std::string_view    name;
         OutputIdObjectType* object;
-        bool isAttribute = false;
-        auto asAttribute() -> IdObject { return {name, object, true}; }
+        bool                is_attribute = false;
+        auto                asAttribute() -> IdObject { return {name, object, true}; }
     };
 
     template <typename T>
@@ -122,7 +122,7 @@ struct Parent {
     template <typename ParentType>
     static void addComment(W& writer, std::string_view comment, const ParentType& parent) {
         using Type = std::remove_cvref_t<ParentType>;
-        if constexpr (supports_comments<W>) {
+        if constexpr (SupportsComments<W>) {
             if constexpr (std::is_same<Type, Array>()) {
                 writer.addCommentToArray(comment, parent.array);
 
@@ -194,9 +194,9 @@ struct Parent {
             NEKO_RETURN_TAGGED(writer.addNullToArray(parent.array, tags), writer.addNullToArray(parent.array));
 
         } else if constexpr (std::is_same<Type, Object>()) {
-            if constexpr (supports_attributes<std::remove_cvref_t<W>>) {
-                NEKO_RETURN_TAGGED(writer.addNullToObject(parent.name, parent.object, parent.isAttribute, tags),
-                                   writer.addNullToObject(parent.name, parent.object, parent.isAttribute));
+            if constexpr (SupportsAttributes<std::remove_cvref_t<W>>) {
+                NEKO_RETURN_TAGGED(writer.addNullToObject(parent.name, parent.object, parent.is_attribute, tags),
+                                   writer.addNullToObject(parent.name, parent.object, parent.is_attribute));
             } else {
                 NEKO_RETURN_TAGGED(writer.addNullToObject(parent.name, parent.object, tags),
                                    writer.addNullToObject(parent.name, parent.object));
@@ -233,9 +233,9 @@ struct Parent {
                                writer.addValueToArray(var, parent.array));
 
         } else if constexpr (std::is_same<Type, Object>()) {
-            if constexpr (supports_attributes<std::remove_cvref_t<W>>) {
-                NEKO_RETURN_TAGGED(writer.addValueToObject(parent.name, var, parent.object, parent.isAttribute, tags),
-                                   writer.addValueToObject(parent.name, var, parent.object, parent.isAttribute));
+            if constexpr (SupportsAttributes<std::remove_cvref_t<W>>) {
+                NEKO_RETURN_TAGGED(writer.addValueToObject(parent.name, var, parent.object, parent.is_attribute, tags),
+                                   writer.addValueToObject(parent.name, var, parent.object, parent.is_attribute));
             } else {
                 NEKO_RETURN_TAGGED(writer.addValueToObject(parent.name, var, parent.object, tags),
                                    writer.addValueToObject(parent.name, var, parent.object));

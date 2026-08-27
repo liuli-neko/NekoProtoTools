@@ -45,16 +45,16 @@ public:
                 only pass right-values in cases where this makes sense, such as the result of some
                 size() call.
         @internal */
-    NameValuePair(const char* name, const std::size_t nameLen, T&& value) noexcept
+    NameValuePair(const char* name, const std::size_t name_len, T&& value) noexcept
         : name(name),
-          nameLen(nameLen),
+          name_len(name_len),
           value(std::forward<T>(value)) {}
     NameValuePair(std::string_view name, T&& value) noexcept : name(name.data()),
-                                                                    nameLen(name.size()),
+                                                                    name_len(name.size()),
                                                                     value(std::forward<T>(value)) {}
     const char* name;
-    std::size_t nameLen;
-    Type value;
+    std::size_t name_len;
+    Type        value;
 };
 
 template <class T>
@@ -94,44 +94,44 @@ public:
     void Clear() noexcept;                // NOLINT(readability-identifier-naming)
 
 private:
-    std::vector<Ch>* mVec;
-    std::vector<Ch> mVecUnique; // maybe make it a static.
+    std::vector<Ch>* vec_;
+    std::vector<Ch>  vec_unique_; // maybe make it a static.
 };
 
 class ByteOutBufferWrapper {
 public:
     using Ch = char;
 
-    explicit ByteOutBufferWrapper(std::vector<std::byte>& vec) noexcept : mVec(&vec) {}
+    explicit ByteOutBufferWrapper(std::vector<std::byte>& vec) noexcept : vec_(&vec) {}
     void Put(Ch ch) noexcept { // NOLINT(readability-identifier-naming)
-        mVec->push_back(static_cast<std::byte>(static_cast<unsigned char>(ch)));
+        vec_->push_back(static_cast<std::byte>(static_cast<unsigned char>(ch)));
     }
     void Flush() noexcept {} // NOLINT(readability-identifier-naming)
     auto GetString() const noexcept -> const Ch* { // NOLINT(readability-identifier-naming)
-        return reinterpret_cast<const Ch*>(mVec->data());
+        return reinterpret_cast<const Ch*>(vec_->data());
     }
-    auto GetSize() const noexcept -> std::size_t { return mVec->size(); } // NOLINT(readability-identifier-naming)
-    void Clear() noexcept { mVec->clear(); }                      // NOLINT(readability-identifier-naming)
+    auto GetSize() const noexcept -> std::size_t { return vec_->size(); } // NOLINT(readability-identifier-naming)
+    void Clear() noexcept { vec_->clear(); }                      // NOLINT(readability-identifier-naming)
 
 private:
-    std::vector<std::byte>* mVec;
+    std::vector<std::byte>* vec_;
 };
 
-inline OutBufferWrapper::OutBufferWrapper() noexcept : mVec(&mVecUnique) {}
-inline OutBufferWrapper::OutBufferWrapper(std::vector<Ch>& vec) noexcept : mVec(&vec) {}
+inline OutBufferWrapper::OutBufferWrapper() noexcept : vec_(&vec_unique_) {}
+inline OutBufferWrapper::OutBufferWrapper(std::vector<Ch>& vec) noexcept : vec_(&vec) {}
 inline void OutBufferWrapper::setVector(std::vector<Ch>* vec) noexcept {
     if (vec != nullptr) {
-        mVec = vec;
+        vec_ = vec;
     } else {
-        mVec = &mVecUnique;
-        mVec->clear();
+        vec_ = &vec_unique_;
+        vec_->clear();
     }
 }
-inline void OutBufferWrapper::Put(Ch ch) noexcept { mVec->push_back(ch); }
+inline void OutBufferWrapper::Put(Ch ch) noexcept { vec_->push_back(ch); }
 inline void OutBufferWrapper::Flush() noexcept {}
-inline auto OutBufferWrapper::GetString() const noexcept -> const OutBufferWrapper::Ch* { return mVec->data(); }
-inline auto OutBufferWrapper::GetSize() const noexcept -> std::size_t { return mVec->size(); }
-inline void OutBufferWrapper::Clear() noexcept { mVec->clear(); }
+inline auto OutBufferWrapper::GetString() const noexcept -> const OutBufferWrapper::Ch* { return vec_->data(); }
+inline auto OutBufferWrapper::GetSize() const noexcept -> std::size_t { return vec_->size(); }
+inline void OutBufferWrapper::Clear() noexcept { vec_->clear(); }
 } // namespace detail
 
 } // namespace nekoproto

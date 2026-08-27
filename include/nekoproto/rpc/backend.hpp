@@ -130,7 +130,7 @@ public:
         if constexpr (std::is_void_v<T>) {
             return true;
         } else {
-            return detail::parser_serializable<typename Serializer::Reader, typename Serializer::Writer,
+            return detail::ParserSerializable<typename Serializer::Reader, typename Serializer::Writer,
                                                std::decay_t<T>>;
         }
     }

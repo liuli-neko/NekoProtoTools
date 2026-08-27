@@ -58,12 +58,12 @@ public:
     auto operator=(const ProtoT& other) noexcept -> ProtoBase&;
     auto operator=(ProtoT&& other) noexcept -> ProtoBase&;
 
-    auto operator*() noexcept -> ProtoT& { return *mData; }
-    auto operator->() noexcept -> ProtoT* { return mData; }
-    auto operator*() const noexcept -> const ProtoT& { return *mData; }
-    auto operator->() const noexcept -> const ProtoT* { return mData; }
-    operator const ProtoT&() const noexcept { return *mData; }
-    operator ProtoT&() noexcept { return *mData; }
+    auto operator*() noexcept -> ProtoT& { return *data_; }
+    auto operator->() noexcept -> ProtoT* { return data_.get(); }
+    auto operator*() const noexcept -> const ProtoT& { return *data_; }
+    auto operator->() const noexcept -> const ProtoT* { return data_.get(); }
+    operator const ProtoT&() const noexcept { return *data_; }
+    operator ProtoT&() noexcept { return *data_; }
 
     auto clone() const -> AbstractProto* override;
     auto toData(std::vector<char>& buffer) const noexcept -> bool override;
@@ -72,11 +72,9 @@ public:
     auto fromData(const char* data, std::size_t size) noexcept -> bool override;
     auto protoName() const noexcept -> std::string_view override;
     static auto name() noexcept -> std::string_view;
-    static auto serialize(const ProtoT& proto) -> std::vector<char>; // NOLINT(readability-identifier-naming)
-    static auto serialize(const ProtoT& proto, std::vector<char>& buffer)
-        -> bool; // NOLINT(readability-identifier-naming)
-    static auto deserialize(const char* data, std::size_t size, ProtoT& proto)
-        -> bool; // NOLINT(readability-identifier-naming)
+    static auto serialize(const ProtoT& proto) -> std::vector<char>;
+    static auto serialize(const ProtoT& proto, std::vector<char>& buffer) -> bool;
+    static auto deserialize(const char* data, std::size_t size, ProtoT& proto) -> bool;
     auto getReflectionObject() noexcept -> ReflectionObject* override;
     virtual auto data() noexcept -> void* override;
 
@@ -85,9 +83,9 @@ protected:
     auto operator=(const ProtoBase& other) -> ProtoBase& = delete;
 
 private:
-    std::unique_ptr<ReflectionSerializer> mReflectionSerializer = {};
-    std::unique_ptr<ProtoT, void (*)(ProtoT*)> mData            = {};
-    static std::string_view gProtoName;
+    std::unique_ptr<ReflectionSerializer>      reflection_serializer_ = {};
+    std::unique_ptr<ProtoT, void (*)(ProtoT*)> data_                  = {};
+    static std::string_view                    s_proto_name;
 };
 class ProtoMethodAccess {
 public:
@@ -106,77 +104,77 @@ struct HasSpecifyTypeMethod<T, ResultT, std::void_t<decltype(ProtoMethodAccess::
 
 template <typename ProtoT, typename SerializerT>
 inline auto ProtoBase<ProtoT, SerializerT>::data() noexcept -> void* {
-    return mData.get();
+    return data_.get();
 }
 template <typename ProtoT, typename SerializerT>
 inline auto ProtoBase<ProtoT, SerializerT>::clone() const -> AbstractProto* {
-    return new ProtoBase<ProtoT, SerializerT>(*mData);
+    return new ProtoBase<ProtoT, SerializerT>(*data_);
 }
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::ProtoBase() : mData(new ProtoT(), [](ProtoT* ptr) { delete ptr; }) {}
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase() : data_(new ProtoT(), [](ProtoT* ptr) { delete ptr; }) {}
 
 template <typename ProtoT, typename SerializerT>
 inline ProtoBase<ProtoT, SerializerT>::ProtoBase(const ProtoT& proto)
-    : mData(new ProtoT(proto), [](ProtoT* ptr) { delete ptr; }) {}
+    : data_(new ProtoT(proto), [](ProtoT* ptr) { delete ptr; }) {}
 
 template <typename ProtoT, typename SerializerT>
 inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT&& proto)
-    : mData(new ProtoT(std::move(proto)), [](ProtoT* ptr) { delete ptr; }) {}
+    : data_(new ProtoT(std::move(proto)), [](ProtoT* ptr) { delete ptr; }) {}
 
 template <typename ProtoT, typename SerializerT>
-inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT* proto) : mData(proto, [](ProtoT*) {}) {}
+inline ProtoBase<ProtoT, SerializerT>::ProtoBase(ProtoT* proto) : data_(proto, [](ProtoT*) {}) {}
 
 template <typename T, typename SerializerT>
 ProtoBase<T, SerializerT>::ProtoBase(ProtoBase<T, SerializerT>&& other) {
-    mReflectionSerializer = std::move(other.mReflectionSerializer);
-    mData                 = std::move(other.mData);
-    other.mData           = nullptr;
+    reflection_serializer_ = std::move(other.reflection_serializer_);
+    data_                  = std::move(other.data_);
+    other.data_            = nullptr;
 }
 
 template <typename ProtoT, typename SerializerT>
 inline ProtoBase<ProtoT, SerializerT>::~ProtoBase() {
-    mData.reset();
+    data_.reset();
 }
 
 template <typename T, typename SerializerT>
 auto ProtoBase<T, SerializerT>::operator=(ProtoBase<T, SerializerT>&& other) noexcept -> ProtoBase<T, SerializerT>& {
-    mReflectionSerializer = std::move(other.mReflectionSerializer);
-    mData                 = std::move(other.mData);
-    other.mData           = nullptr;
+    reflection_serializer_ = std::move(other.reflection_serializer_);
+    data_                  = std::move(other.data_);
+    other.data_            = nullptr;
     return *this;
 }
 
 template <typename ProtoT, typename SerializerT>
 inline auto ProtoBase<ProtoT, SerializerT>::operator=(const ProtoT& other) noexcept -> ProtoBase<ProtoT, SerializerT>& {
-    (*mData) = other;
+    (*data_) = other;
     return *this;
 }
 
 template <typename ProtoT, typename SerializerT>
 inline auto ProtoBase<ProtoT, SerializerT>::operator=(ProtoT&& other) noexcept -> ProtoBase<ProtoT, SerializerT>& {
-    (*mData) = std::move(other);
+    (*data_) = std::move(other);
     return *this;
 }
 
 template <typename T, typename SerializerT>
 auto ProtoBase<T, SerializerT>::protoName() const noexcept -> std::string_view {
-    return gProtoName;
+    return s_proto_name;
 }
 
 template <typename T, typename SerializerT>
 auto ProtoBase<T, SerializerT>::name() noexcept -> std::string_view {
-    return gProtoName;
+    return s_proto_name;
 }
 
 template <typename ProtoT, typename SerializerT>
 inline auto ProtoBase<ProtoT, SerializerT>::getReflectionObject() noexcept -> ReflectionObject* {
-    NEKO_ASSERT(mData != nullptr, "ReflectionSerializer", "mData is nullptr");
-    if (mReflectionSerializer != nullptr) {
-        return mReflectionSerializer->getObject();
+    NEKO_ASSERT(data_ != nullptr, "ReflectionSerializer", "data_ is nullptr");
+    if (reflection_serializer_ != nullptr) {
+        return reflection_serializer_->getObject();
     }
-    mReflectionSerializer = std::make_unique<ReflectionSerializer>(ReflectionSerializer::reflection(*mData));
-    return mReflectionSerializer->getObject();
+    reflection_serializer_ = std::make_unique<ReflectionSerializer>(ReflectionSerializer::reflection(*data_));
+    return reflection_serializer_->getObject();
 }
 
 template <typename ProtoT, typename SerializerT>
@@ -184,7 +182,7 @@ auto ProtoBase<ProtoT, SerializerT>::serialize(const ProtoT& proto, std::vector<
     typename SerializerT::OutputSerializer serializer(buffer);
     auto ret = serializer(proto);
     if (!ret || !serializer.end()) {
-        NEKO_LOG_ERROR("proto", "{} serialize error", gProtoName);
+        NEKO_LOG_ERROR("proto", "{} serialize error", s_proto_name);
         return false;
     }
     return ret;
@@ -203,33 +201,33 @@ auto ProtoBase<ProtoT, SerializerT>::deserialize(const char* data, std::size_t s
     typename SerializerT::InputSerializer serializer(data, size);
     if (!serializer) {
 #if defined(NEKO_VERBOSE_LOGS)
-        NEKO_LOG_INFO("proto", "{} data parser failed.", gProtoName);
+        NEKO_LOG_INFO("proto", "{} data parser failed.", s_proto_name);
 #endif
         return false;
     }
     bool ret = serializer(proto);
     if (!ret) {
-        NEKO_LOG_ERROR("proto", "{} deserialize error", gProtoName);
+        NEKO_LOG_ERROR("proto", "{} deserialize error", s_proto_name);
         return false;
     }
     return true;
 }
 template <typename T, typename SerializerT>
 auto ProtoBase<T, SerializerT>::toData(std::vector<char>& buffer) const noexcept -> bool {
-    NEKO_ASSERT(mData != nullptr, "ReflectionSerializer", "mData is nullptr");
-    return serialize(*mData.get(), buffer);
+    NEKO_ASSERT(data_ != nullptr, "ReflectionSerializer", "data_ is nullptr");
+    return serialize(*data_.get(), buffer);
 }
 
 template <typename T, typename SerializerT>
 auto ProtoBase<T, SerializerT>::toData() const noexcept -> std::vector<char> {
-    NEKO_ASSERT(mData != nullptr, "ReflectionSerializer", "mData is nullptr");
-    return serialize(*mData.get());
+    NEKO_ASSERT(data_ != nullptr, "ReflectionSerializer", "data_ is nullptr");
+    return serialize(*data_.get());
 }
 
 template <typename T, typename SerializerT>
 auto ProtoBase<T, SerializerT>::fromData(const char* data, std::size_t size) noexcept -> bool {
-    NEKO_ASSERT(mData != nullptr, "ReflectionSerializer", "mData is nullptr");
-    return deserialize(data, size, *mData.get());
+    NEKO_ASSERT(data_ != nullptr, "ReflectionSerializer", "data_ is nullptr");
+    return deserialize(data, size, *data_.get());
 }
 } // namespace detail
 

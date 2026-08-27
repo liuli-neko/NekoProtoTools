@@ -31,21 +31,21 @@ public:
     using OutputValueType  = OutputNodeType;
 
     Writer() = default;
-    explicit Writer(YAML::Node* root) noexcept : mRoot(root) {}
+    explicit Writer(YAML::Node* root) noexcept : root_(root) {}
 
     void reset(YAML::Node* root) noexcept {
-        mRoot   = root;
-        mResult = sa::success();
+        root_   = root;
+        result_ = sa::success();
     }
 
-    auto result() const noexcept -> const sa::Result<void>& { return mResult; }
+    auto result() const noexcept -> const sa::Result<void>& { return result_; }
 
     template <typename Tags>
     auto arrayAsRoot(std::size_t /*size*/, const Tags& tags) -> OutputArrayType {
         if (!resetRoot(YAML::NodeType::Sequence)) {
             return {};
         }
-        return applyTags(OutputArrayType{*mRoot}, tags);
+        return applyTags(OutputArrayType{*root_}, tags);
     }
 
     template <typename Tags>
@@ -53,7 +53,7 @@ public:
         if (!resetRoot(YAML::NodeType::Map)) {
             return {};
         }
-        return applyTags(OutputObjectType{*mRoot}, tags);
+        return applyTags(OutputObjectType{*root_}, tags);
     }
 
     template <typename Tags>
@@ -61,21 +61,21 @@ public:
         if (!resetRoot(YAML::NodeType::Null)) {
             return {};
         }
-        return applyTags(OutputValueType{*mRoot}, tags);
+        return applyTags(OutputValueType{*root_}, tags);
     }
 
     template <typename T, typename Tags>
     auto valueAsRoot(const T& value, const Tags& tags) -> OutputValueType {
-        if (mRoot == nullptr) {
+        if (root_ == nullptr) {
             remember(sa::ErrorCode::InvalidType, "YAML document is not initialized");
             return {};
         }
         auto node = createScalar(value);
-        if (!mResult) {
+        if (!result_) {
             return {};
         }
-        *mRoot = node;
-        return applyTags(OutputValueType{*mRoot}, tags);
+        *root_ = node;
+        return applyTags(OutputValueType{*root_}, tags);
     }
 
     template <typename Tags>
@@ -111,7 +111,7 @@ public:
     template <typename T, typename Tags>
     auto addValueToArray(const T& value, OutputArrayType* parent, const Tags& tags) -> OutputValueType {
         auto node = createScalar(value);
-        if (!mResult) {
+        if (!result_) {
             return {};
         }
         auto inserted = appendToSequence(parent, node);
@@ -122,7 +122,7 @@ public:
     auto addValueToObject(std::string_view name, const T& value, OutputObjectType* parent, const Tags& tags)
         -> OutputValueType {
         auto node = createScalar(value);
-        if (!mResult) {
+        if (!result_) {
             return {};
         }
         auto inserted = appendToMapping(parent, name, node);
@@ -148,17 +148,17 @@ public:
 
 private:
     void remember(sa::ErrorCode code, std::string message) {
-        if (mResult) {
-            mResult = sa::error(code, std::move(message));
+        if (result_) {
+            result_ = sa::error(code, std::move(message));
         }
     }
 
     auto resetRoot(YAML::NodeType::value type) -> bool {
-        if (mRoot == nullptr) {
+        if (root_ == nullptr) {
             remember(sa::ErrorCode::InvalidType, "YAML document is not initialized");
             return false;
         }
-        *mRoot = YAML::Node(type);
+        *root_ = YAML::Node(type);
         return true;
     }
 
@@ -257,8 +257,8 @@ private:
     }
 
 private:
-    YAML::Node* mRoot = nullptr;
-    sa::Result<void> mResult;
+    YAML::Node*      root_ = nullptr;
+    sa::Result<void> result_;
 };
 
 } // namespace yamlcpp

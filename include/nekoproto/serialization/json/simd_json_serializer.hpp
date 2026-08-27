@@ -28,30 +28,30 @@ public:
     SimdJsonValue() = default;
 
     explicit SimdJsonValue(const InputValue& value)
-        : mValue(std::make_shared<RawJsonValue>(value.value)), mParser(value.owner) {}
+        : value_(std::make_shared<RawJsonValue>(value.value)), parser_(value.owner) {}
 
     SimdJsonValue(const RawJsonValue& value, std::shared_ptr<JsonParser> parser)
-        : mValue(std::make_shared<RawJsonValue>(value)), mParser(std::move(parser)) {}
+        : value_(std::make_shared<RawJsonValue>(value)), parser_(std::move(parser)) {}
 
-    auto hasValue() const noexcept -> bool { return mValue != nullptr; }
+    auto hasValue() const noexcept -> bool { return value_ != nullptr; }
     explicit operator bool() const noexcept { return hasValue(); }
 
-    auto nativeValue() const -> const RawJsonValue& { return *mValue; }
-    auto nativeValue() -> RawJsonValue& { return *mValue; }
+    auto nativeValue() const -> const RawJsonValue& { return *value_; }
+    auto nativeValue() -> RawJsonValue& { return *value_; }
 
-    auto isObject() const -> bool { return mValue && mValue->is_object(); }
-    auto isArray() const -> bool { return mValue && mValue->is_array(); }
-    auto isString() const -> bool { return mValue && mValue->is_string(); }
-    auto isNumber() const -> bool { return mValue && mValue->is_number(); }
-    auto isBool() const -> bool { return mValue && mValue->is_bool(); }
-    auto isNull() const -> bool { return mValue && mValue->is_null(); }
+    auto isObject() const -> bool { return value_ && value_->is_object(); }
+    auto isArray() const -> bool { return value_ && value_->is_array(); }
+    auto isString() const -> bool { return value_ && value_->is_string(); }
+    auto isNumber() const -> bool { return value_ && value_->is_number(); }
+    auto isBool() const -> bool { return value_ && value_->is_bool(); }
+    auto isNull() const -> bool { return value_ && value_->is_null(); }
 
     template <typename T>
     auto value(T& output) const -> bool {
-        if (!mValue) {
+        if (!value_) {
             return false;
         }
-        auto result = Reader::template toBasicType<T>(InputValue{*mValue, mParser});
+        auto result = Reader::template toBasicType<T>(InputValue{*value_, parser_});
         if (!result) {
             return false;
         }
@@ -61,10 +61,10 @@ public:
 
     auto size() const -> std::size_t {
         if (isArray()) {
-            return mValue->get_array().value_unsafe().size();
+            return value_->get_array().value_unsafe().size();
         }
         if (isObject()) {
-            return mValue->get_object().value_unsafe().size();
+            return value_->get_object().value_unsafe().size();
         }
         return 0;
     }
@@ -75,30 +75,30 @@ public:
         if (!isObject()) {
             return {};
         }
-        auto value = mValue->get_object().value_unsafe().at_key(std::string_view{name});
+        auto value = value_->get_object().value_unsafe().at_key(std::string_view{name});
         if (value.error() != simdjson::SUCCESS) {
             return {};
         }
-        return SimdJsonValue(value.value_unsafe(), mParser);
+        return SimdJsonValue(value.value_unsafe(), parser_);
     }
 
     auto operator[](std::size_t index) const -> SimdJsonValue {
         if (isArray() && index < size()) {
-            return SimdJsonValue(mValue->get_array().value_unsafe().at(index).value_unsafe(), mParser);
+            return SimdJsonValue(value_->get_array().value_unsafe().at(index).value_unsafe(), parser_);
         }
         if (isObject() && index < size()) {
-            auto iterator = mValue->get_object().value_unsafe().begin();
+            auto iterator = value_->get_object().value_unsafe().begin();
             while (index-- > 0) {
                 ++iterator;
             }
-            return SimdJsonValue(iterator.value(), mParser);
+            return SimdJsonValue(iterator.value(), parser_);
         }
         return {};
     }
 
 private:
-    std::shared_ptr<RawJsonValue> mValue;
-    std::shared_ptr<JsonParser> mParser;
+    std::shared_ptr<RawJsonValue> value_;
+    std::shared_ptr<JsonParser>   parser_;
 };
 
 template <typename BufferT, typename = void>
@@ -171,10 +171,10 @@ struct SimdJsonBackend {
     struct OutputState {
         explicit OutputState(BufferT& outputBuffer) noexcept : buffer(outputBuffer) {}
 
-        BufferT& buffer;
+        BufferT&             buffer;
         detail::simd::Writer writer;
-        bool hasRoot = false;
-        bool flushed = false;
+        bool                 has_root = false;
+        bool                 flushed  = false;
     };
 
     template <typename SourceT>
@@ -184,8 +184,8 @@ struct SimdJsonBackend {
                 result = sa::error(sa::ErrorCode::InvalidType, "SimdJsonValue does not contain a value");
                 return;
             }
-            retainedValue = value;
-            root          = detail::simd::InputValue{retainedValue.nativeValue(), nullptr};
+            retained_value = value;
+            root           = detail::simd::InputValue{retained_value.nativeValue(), nullptr};
         }
 
         explicit InputState(const char* buffer, std::size_t size) noexcept
@@ -206,10 +206,10 @@ struct SimdJsonBackend {
             root = detail::simd::InputValue{parsed.value_unsafe(), parser};
         }
 
-        detail::simd::InputValue root;
+        detail::simd::InputValue                  root;
         std::shared_ptr<detail::simd::JsonParser> parser;
-        detail::simd::SimdJsonValue retainedValue;
-        sa::Result<void> result;
+        detail::simd::SimdJsonValue               retained_value;
+        sa::Result<void>                          result;
     };
 
     template <typename BufferT, typename T>
@@ -217,14 +217,14 @@ struct SimdJsonBackend {
         state.writer.reset();
         auto result =
             parserWrite<detail::simd::Writer>(state.writer, value, parsing::Parent<detail::simd::Writer>::Root{});
-        state.hasRoot = static_cast<bool>(result);
-        state.flushed = false;
+        state.has_root = static_cast<bool>(result);
+        state.flushed  = false;
         return result;
     }
 
     template <typename BufferT>
     static auto finish(OutputState<BufferT>& state, sa::Result<void> result) -> sa::Result<void> {
-        if (!state.hasRoot || !result) {
+        if (!state.has_root || !result) {
             return result;
         }
         if (!state.flushed) {
@@ -237,7 +237,7 @@ struct SimdJsonBackend {
 
     template <typename BufferT>
     static auto outputReady(const OutputState<BufferT>& state, const sa::Result<void>& result) noexcept -> bool {
-        return state.hasRoot && static_cast<bool>(result);
+        return state.has_root && static_cast<bool>(result);
     }
 
     template <typename SourceT>

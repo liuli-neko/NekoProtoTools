@@ -17,7 +17,7 @@ namespace traits {
 
 template <typename T>
 concept Serializable =
-    nekoproto::detail::parser_serializable<JsonSerializer::Reader, JsonSerializer::Writer, std::decay_t<T>>;
+    nekoproto::detail::ParserSerializable<JsonSerializer::Reader, JsonSerializer::Writer, std::decay_t<T>>;
 
 template <typename T, class enable = void>
 struct IsSerializable : std::false_type {};
@@ -33,7 +33,7 @@ struct IsSerializable<void> : std::true_type {};
 namespace detail {
 
 struct JsonRpcMethodContext {
-    std::span<const std::string> argNames{};
+    std::span<const std::string> arg_names{};
 };
 
 template <typename T>
@@ -45,8 +45,8 @@ struct JsonRpcSerializerHelperObject {
 template <typename... Args>
 constexpr auto jsonrpcAutomaticExpansionAble() -> bool {
     if constexpr (sizeof...(Args) == 1) {
-        return has_values_meta<std::remove_cvref_t<std::tuple_element_t<0, std::tuple<Args...>>>> &&
-               has_names_meta<std::remove_cvref_t<std::tuple_element_t<0, std::tuple<Args...>>>>;
+        return HasValuesMeta<std::remove_cvref_t<std::tuple_element_t<0, std::tuple<Args...>>>> &&
+               HasNamesMeta<std::remove_cvref_t<std::tuple_element_t<0, std::tuple<Args...>>>>;
     } else {
         return false;
     }

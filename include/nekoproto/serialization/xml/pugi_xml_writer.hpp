@@ -20,17 +20,17 @@
 namespace nekoproto {
 namespace xml {
 
-inline constexpr std::string_view ArrayMarker    = "neko-array";
-inline constexpr std::string_view ArrayContainer = "container";
-inline constexpr std::string_view ArrayEmpty     = "empty";
-inline constexpr std::string_view NullMarker     = "nil";
-inline constexpr std::string_view XmlContent     = "xml_content";
-inline constexpr std::string_view ArrayItem      = "item";
+inline constexpr std::string_view k_array_marker    = "neko-array";
+inline constexpr std::string_view k_array_container = "container";
+inline constexpr std::string_view k_array_empty     = "empty";
+inline constexpr std::string_view k_null_marker     = "nil";
+inline constexpr std::string_view k_xml_content     = "xml_content";
+inline constexpr std::string_view k_array_item      = "item";
 
 class Writer {
 public:
     struct OutputArrayType {
-        std::string name;
+        std::string    name;
         pugi::xml_node parent;
         pugi::xml_node placeholder;
     };
@@ -45,44 +45,44 @@ public:
 
     using OutputVarType = OutputValueType;
 
-    explicit Writer(std::string rootName = "root") : mRootName(std::move(rootName)) { reset(mRootName); }
+    explicit Writer(std::string root_name = "root") : root_name_(std::move(root_name)) { reset(root_name_); }
 
-    void reset(std::string rootName) {
-        mDocument.reset();
-        mRootName                                = std::move(rootName);
-        auto declaration                         = mDocument.append_child(pugi::node_declaration);
+    void reset(std::string root_name) {
+        document_.reset();
+        root_name_                               = std::move(root_name);
+        auto declaration                         = document_.append_child(pugi::node_declaration);
         declaration.append_attribute("version")  = "1.0";
         declaration.append_attribute("encoding") = "UTF-8";
     }
 
     auto arrayAsRoot(std::size_t /*size*/) -> OutputArrayType {
-        auto root                                 = appendElement(mDocument, mRootName);
-        root.append_attribute(ArrayMarker.data()) = ArrayContainer.data();
-        auto placeholder                          = appendEmptyArray(root, ArrayItem);
-        return {std::string{ArrayItem}, root, placeholder};
+        auto root                                   = appendElement(document_, root_name_);
+        root.append_attribute(k_array_marker.data()) = k_array_container.data();
+        auto placeholder                            = appendEmptyArray(root, k_array_item);
+        return {std::string{k_array_item}, root, placeholder};
     }
 
-    auto objectAsRoot(std::size_t /*size*/) -> OutputObjectType { return {appendElement(mDocument, mRootName)}; }
+    auto objectAsRoot(std::size_t /*size*/) -> OutputObjectType { return {appendElement(document_, root_name_)}; }
 
     auto nullAsRoot() -> OutputValueType {
-        auto root = appendElement(mDocument, mRootName);
+        auto root = appendElement(document_, root_name_);
         markNull(root);
         return {root};
     }
 
     template <typename T>
     auto valueAsRoot(const T& value) -> OutputValueType {
-        auto root = appendElement(mDocument, mRootName);
+        auto root = appendElement(document_, root_name_);
         setText(root, toString(value));
         return {root};
     }
 
     static auto addArrayToArray(std::size_t /*size*/, OutputArrayType* parent) -> OutputArrayType {
         removePlaceholder(parent);
-        auto container                                 = appendElement(parent->parent, parent->name);
-        container.append_attribute(ArrayMarker.data()) = ArrayContainer.data();
-        auto placeholder                               = appendEmptyArray(container, ArrayItem);
-        return {std::string{ArrayItem}, container, placeholder};
+        auto container                                   = appendElement(parent->parent, parent->name);
+        container.append_attribute(k_array_marker.data()) = k_array_container.data();
+        auto placeholder                                 = appendEmptyArray(container, k_array_item);
+        return {std::string{k_array_item}, container, placeholder};
     }
 
     static auto addArrayToObject(std::string_view name, std::size_t /*size*/, OutputObjectType* parent)
@@ -111,14 +111,14 @@ public:
 
     template <typename T>
     static auto addValueToObject(std::string_view name, const T& value, OutputObjectType* parent,
-                                 bool isAttribute = false) -> OutputValueType {
+                                 bool is_attribute = false) -> OutputValueType {
         const auto text = toString(value);
-        if (isAttribute) {
-            const auto ownedName = std::string{name};
-            parent->node.append_attribute(ownedName.c_str()).set_value(text.c_str());
+        if (is_attribute) {
+            const auto owned_name = std::string{name};
+            parent->node.append_attribute(owned_name.c_str()).set_value(text.c_str());
             return {parent->node};
         }
-        if (name == XmlContent) {
+        if (name == k_xml_content) {
             setText(parent->node, text);
             return {parent->node};
         }
@@ -134,14 +134,14 @@ public:
         return {node};
     }
 
-    static auto addNullToObject(std::string_view name, OutputObjectType* parent, bool isAttribute = false)
+    static auto addNullToObject(std::string_view name, OutputObjectType* parent, bool is_attribute = false)
         -> OutputValueType {
-        if (isAttribute) {
-            const auto ownedName = std::string{name};
-            parent->node.append_attribute(ownedName.c_str()).set_value("null");
+        if (is_attribute) {
+            const auto owned_name = std::string{name};
+            parent->node.append_attribute(owned_name.c_str()).set_value("null");
             return {parent->node};
         }
-        if (name == XmlContent) {
+        if (name == k_xml_content) {
             return {parent->node};
         }
         auto node = appendElement(parent->node, name);
@@ -162,20 +162,20 @@ public:
 
     auto str(std::string_view indent = "    ") const -> std::string {
         std::ostringstream stream;
-        const auto indentation = std::string{indent};
-        mDocument.save(stream, indentation.c_str(), pugi::format_default, pugi::encoding_utf8);
+        const auto         indentation = std::string{indent};
+        document_.save(stream, indentation.c_str(), pugi::format_default, pugi::encoding_utf8);
         return stream.str();
     }
 
 private:
     static auto appendElement(pugi::xml_node parent, std::string_view name) -> pugi::xml_node {
-        const auto ownedName = std::string{name};
-        return parent.append_child(ownedName.c_str());
+        const auto owned_name = std::string{name};
+        return parent.append_child(owned_name.c_str());
     }
 
     static auto appendEmptyArray(pugi::xml_node parent, std::string_view name) -> pugi::xml_node {
-        auto node                                 = appendElement(parent, name);
-        node.append_attribute(ArrayMarker.data()) = ArrayEmpty.data();
+        auto node                                   = appendElement(parent, name);
+        node.append_attribute(k_array_marker.data()) = k_array_empty.data();
         return node;
     }
 
@@ -186,13 +186,13 @@ private:
         }
     }
 
-    static void markNull(pugi::xml_node node) { node.append_attribute(NullMarker.data()) = "true"; }
+    static void markNull(pugi::xml_node node) { node.append_attribute(k_null_marker.data()) = "true"; }
 
     static void setText(pugi::xml_node node, const std::string& value) { node.text().set(value.c_str()); }
 
     static void appendComment(pugi::xml_node parent, std::string_view comment) {
-        const auto ownedComment = std::string{comment};
-        parent.append_child(pugi::node_comment).set_value(ownedComment.c_str());
+        const auto owned_comment = std::string{comment};
+        parent.append_child(pugi::node_comment).set_value(owned_comment.c_str());
     }
 
     template <typename T>
@@ -224,8 +224,8 @@ private:
     }
 
 private:
-    pugi::xml_document mDocument;
-    std::string mRootName;
+    pugi::xml_document document_;
+    std::string        root_name_;
 };
 
 } // namespace xml

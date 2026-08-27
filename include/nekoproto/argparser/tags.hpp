@@ -50,7 +50,7 @@ struct OptionalValue<std::optional<T>> {
 };
 
 template <typename T>
-using optional_value_t = typename OptionalValue<std::remove_cvref_t<T>>::type;
+using OptionalValueT = typename OptionalValue<std::remove_cvref_t<T>>::type;
 
 template <typename T>
 struct IsVector : std::false_type {};
@@ -64,7 +64,7 @@ template <typename T>
 inline constexpr bool is_vector_v = IsVector<std::remove_cvref_t<T>>::value; // NOLINT
 
 template <typename T>
-using vector_value_t = typename IsVector<std::remove_cvref_t<T>>::value_type;
+using VectorValueT = typename IsVector<std::remove_cvref_t<T>>::value_type;
 
 template <typename T>
 inline constexpr bool is_argparser_borrowed_text_v = []() consteval { // NOLINT
@@ -72,9 +72,9 @@ inline constexpr bool is_argparser_borrowed_text_v = []() consteval { // NOLINT
     if constexpr (std::is_same_v<raw_t, std::string_view>) {
         return true;
     } else if constexpr (is_arg_optional_v<raw_t>) {
-        return is_argparser_borrowed_text_v<optional_value_t<raw_t>>;
+        return is_argparser_borrowed_text_v<OptionalValueT<raw_t>>;
     } else if constexpr (is_vector_v<raw_t>) {
-        return is_argparser_borrowed_text_v<vector_value_t<raw_t>>;
+        return is_argparser_borrowed_text_v<VectorValueT<raw_t>>;
     } else {
         return false;
     }
@@ -86,9 +86,9 @@ inline constexpr bool is_path_completion_supported_v = []() consteval { // NOLIN
     if constexpr (std::is_same_v<raw_t, std::string>) {
         return true;
     } else if constexpr (is_arg_optional_v<raw_t>) {
-        return is_path_completion_supported_v<optional_value_t<raw_t>>;
+        return is_path_completion_supported_v<OptionalValueT<raw_t>>;
     } else if constexpr (is_vector_v<raw_t>) {
-        return is_path_completion_supported_v<vector_value_t<raw_t>>;
+        return is_path_completion_supported_v<VectorValueT<raw_t>>;
     } else {
         return false;
     }
@@ -103,9 +103,9 @@ inline constexpr bool is_bool_supported_v = []() consteval { // NOLINT
     if constexpr (is_bool_value_v<raw_t>) {
         return true;
     } else if constexpr (is_arg_optional_v<raw_t>) {
-        return is_bool_value_v<optional_value_t<raw_t>>;
+        return is_bool_value_v<OptionalValueT<raw_t>>;
     } else if constexpr (is_vector_v<raw_t>) {
-        return is_bool_value_v<vector_value_t<raw_t>>;
+        return is_bool_value_v<VectorValueT<raw_t>>;
     } else {
         return false;
     }
@@ -121,9 +121,9 @@ inline constexpr bool is_range_supported_v = []() consteval { // NOLINT
     if constexpr (is_range_value_v<raw_t>) {
         return true;
     } else if constexpr (is_arg_optional_v<raw_t>) {
-        return is_range_value_v<optional_value_t<raw_t>>;
+        return is_range_value_v<OptionalValueT<raw_t>>;
     } else if constexpr (is_vector_v<raw_t>) {
-        return is_range_value_v<vector_value_t<raw_t>>;
+        return is_range_value_v<VectorValueT<raw_t>>;
     } else {
         return false;
     }
@@ -132,7 +132,7 @@ inline constexpr bool is_range_supported_v = []() consteval { // NOLINT
 template <typename T>
 inline constexpr bool is_nested_option_v = // NOLINT
     std::is_class_v<std::remove_cvref_t<T>> && !traits::is_string_like_v<T> && !is_arg_optional_v<T> &&
-    !is_vector_v<T> && nekoproto::detail::has_values_meta<std::remove_cvref_t<T>>;
+    !is_vector_v<T> && nekoproto::detail::HasValuesMeta<std::remove_cvref_t<T>>;
 } // namespace detail
 
 struct ArgTags {
@@ -178,7 +178,7 @@ struct ArgTags {
                           "argparser repeatable tags require a std::vector field; vectors are repeatable by default");
         }
         if constexpr (is_command) {
-            static_assert(detail::IsCommandType<raw_t>::value || nekoproto::detail::has_values_meta<raw_t>,
+            static_assert(detail::IsCommandType<raw_t>::value || nekoproto::detail::HasValuesMeta<raw_t>,
                           "argparser command tags require a reflected command struct or ArgCommand placeholder");
             static_assert(!is_flag && !is_position && !has_range && !has_required && !has_repeat,
                           "argparser command tags cannot also be flag, positional, range, required, or repeatable");

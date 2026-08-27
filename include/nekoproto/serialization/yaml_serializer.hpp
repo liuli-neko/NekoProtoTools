@@ -53,12 +53,12 @@ namespace detail {
 inline void quietYamlDiagOutput(fy_diag* /*diag*/, void* /*user*/, const char* /*buf*/, size_t /*len*/) {}
 
 inline auto createQuietYamlDiag() -> fy_diag* {
-    fy_diag_cfg diagCfg{};
-    fy_diag_cfg_default(&diagCfg);
-    diagCfg.fp        = nullptr;
-    diagCfg.output_fn = quietYamlDiagOutput;
-    diagCfg.colorize  = false;
-    auto* diag        = fy_diag_create(&diagCfg);
+    fy_diag_cfg diag_cfg{};
+    fy_diag_cfg_default(&diag_cfg);
+    diag_cfg.fp        = nullptr;
+    diag_cfg.output_fn = quietYamlDiagOutput;
+    diag_cfg.colorize  = false;
+    auto* diag         = fy_diag_create(&diag_cfg);
     if (diag != nullptr) {
         fy_diag_set_collect_errors(diag, true);
     }
@@ -120,24 +120,24 @@ struct LibfyamlBackend {
             if (diag != nullptr) {
                 fy_diag_destroy(diag);
             }
-            diag        = detail::createQuietYamlDiag();
-            parseConfig = detail::defaultYamlParseConfig(diag);
-            document    = fy_document_create(&parseConfig);
+            diag         = detail::createQuietYamlDiag();
+            parse_config = detail::defaultYamlParseConfig(diag);
+            document     = fy_document_create(&parse_config);
             writer.reset(document);
-            result  = document == nullptr ? sa::error(sa::ErrorCode::Unknown, "Could not create YAML document")
-                                          : sa::success();
-            hasRoot = false;
-            flushed = false;
+            result   = document == nullptr ? sa::error(sa::ErrorCode::Unknown, "Could not create YAML document")
+                                           : sa::success();
+            has_root = false;
+            flushed  = false;
         }
 
-        BufferT& buffer;
-        fy_parse_cfg parseConfig{};
-        fy_diag* diag         = nullptr;
-        fy_document* document = nullptr;
-        yaml::Writer writer;
+        BufferT&         buffer;
+        fy_parse_cfg     parse_config{};
+        fy_diag*         diag     = nullptr;
+        fy_document*     document = nullptr;
+        yaml::Writer     writer;
         sa::Result<void> result;
-        bool hasRoot = false;
-        bool flushed = false;
+        bool             has_root = false;
+        bool             flushed  = false;
     };
 
     template <typename SourceT>
@@ -145,8 +145,8 @@ struct LibfyamlBackend {
         explicit InputState(const char* buffer, std::size_t size) { parse(buffer, size); }
 
         explicit InputState(std::istream& stream) {
-            ownedInput.assign(std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{});
-            parse(ownedInput.data(), ownedInput.size(), false);
+            owned_input.assign(std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{});
+            parse(owned_input.data(), owned_input.size(), false);
         }
 
         InputState(const InputState&)            = delete;
@@ -168,15 +168,15 @@ struct LibfyamlBackend {
                 --size;
             }
             if (copy) {
-                ownedInput.assign(buffer, size);
-                buffer = ownedInput.data();
+                owned_input.assign(buffer, size);
+                buffer = owned_input.data();
             }
             if (diag != nullptr) {
                 fy_diag_destroy(diag);
             }
-            diag        = detail::createQuietYamlDiag();
-            parseConfig = detail::defaultYamlParseConfig(diag);
-            document    = fy_document_build_from_string(&parseConfig, buffer, size);
+            diag         = detail::createQuietYamlDiag();
+            parse_config = detail::defaultYamlParseConfig(diag);
+            document     = fy_document_build_from_string(&parse_config, buffer, size);
             if (document == nullptr) {
                 result = sa::error(sa::ErrorCode::ParseError, detail::firstYamlDiagMessage(diag));
                 return;
@@ -189,11 +189,11 @@ struct LibfyamlBackend {
             result = sa::success();
         }
 
-        std::string ownedInput;
-        fy_parse_cfg parseConfig{};
-        fy_diag* diag         = nullptr;
-        fy_document* document = nullptr;
-        fy_node* root         = nullptr;
+        std::string      owned_input;
+        fy_parse_cfg     parse_config{};
+        fy_diag*         diag     = nullptr;
+        fy_document*     document = nullptr;
+        fy_node*         root     = nullptr;
         sa::Result<void> result;
     };
 
@@ -203,8 +203,8 @@ struct LibfyamlBackend {
         if (!state.result) {
             return state.result;
         }
-        auto result   = parserWrite<yaml::Writer>(state.writer, value, parsing::Parent<yaml::Writer>::Root{});
-        state.hasRoot = static_cast<bool>(result) && static_cast<bool>(state.writer.result());
+        auto result    = parserWrite<yaml::Writer>(state.writer, value, parsing::Parent<yaml::Writer>::Root{});
+        state.has_root = static_cast<bool>(result) && static_cast<bool>(state.writer.result());
         if (!state.writer.result()) {
             return state.writer.result();
         }
@@ -219,7 +219,7 @@ struct LibfyamlBackend {
         if (!state.writer.result()) {
             return state.writer.result();
         }
-        if (!state.hasRoot) {
+        if (!state.has_root) {
             return result;
         }
         if (!state.flushed) {
@@ -237,7 +237,7 @@ struct LibfyamlBackend {
 
     template <typename BufferT>
     static auto outputReady(const OutputState<BufferT>& state, const sa::Result<void>& result) noexcept -> bool {
-        return state.hasRoot && static_cast<bool>(result) && static_cast<bool>(state.writer.result());
+        return state.has_root && static_cast<bool>(result) && static_cast<bool>(state.writer.result());
     }
 
     template <typename SourceT>
@@ -290,11 +290,11 @@ struct YamlCppBackend {
     struct OutputState {
         explicit OutputState(BufferT& outputBuffer) : buffer(outputBuffer), writer(&document) {}
 
-        BufferT& buffer;
-        YAML::Node document;
+        BufferT&        buffer;
+        YAML::Node      document;
         yamlcpp::Writer writer;
-        bool hasRoot = false;
-        bool flushed = false;
+        bool            has_root = false;
+        bool            flushed  = false;
     };
 
     template <typename SourceT>
@@ -302,8 +302,8 @@ struct YamlCppBackend {
         explicit InputState(const char* buffer, std::size_t size) { parse(buffer, size); }
 
         explicit InputState(std::istream& stream) {
-            ownedInput.assign(std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{});
-            parse(ownedInput.data(), ownedInput.size(), false);
+            owned_input.assign(std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{});
+            parse(owned_input.data(), owned_input.size(), false);
         }
 
         void parse(const char* buffer, std::size_t size, bool copy = true) {
@@ -311,8 +311,8 @@ struct YamlCppBackend {
                 --size;
             }
             if (copy) {
-                ownedInput.assign(buffer, size);
-                buffer = ownedInput.data();
+                owned_input.assign(buffer, size);
+                buffer = owned_input.data();
             }
             try {
                 document = YAML::Load(std::string{buffer, size});
@@ -327,8 +327,8 @@ struct YamlCppBackend {
             result = sa::success();
         }
 
-        std::string ownedInput;
-        YAML::Node document;
+        std::string      owned_input;
+        YAML::Node       document;
         sa::Result<void> result;
     };
 
@@ -336,9 +336,9 @@ struct YamlCppBackend {
     static auto write(OutputState<BufferT>& state, const T& value) -> sa::Result<void> {
         state.document = YAML::Node{};
         state.writer.reset(&state.document);
-        auto result   = parserWrite<yamlcpp::Writer>(state.writer, value, parsing::Parent<yamlcpp::Writer>::Root{});
-        state.hasRoot = static_cast<bool>(result) && static_cast<bool>(state.writer.result());
-        state.flushed = false;
+        auto result    = parserWrite<yamlcpp::Writer>(state.writer, value, parsing::Parent<yamlcpp::Writer>::Root{});
+        state.has_root = static_cast<bool>(result) && static_cast<bool>(state.writer.result());
+        state.flushed  = false;
         if (!state.writer.result()) {
             return state.writer.result();
         }
@@ -353,7 +353,7 @@ struct YamlCppBackend {
         if (!state.writer.result()) {
             return state.writer.result();
         }
-        if (!state.hasRoot) {
+        if (!state.has_root) {
             return result;
         }
         if (!state.flushed) {
@@ -370,7 +370,7 @@ struct YamlCppBackend {
 
     template <typename BufferT>
     static auto outputReady(const OutputState<BufferT>& state, const sa::Result<void>& result) noexcept -> bool {
-        return state.hasRoot && static_cast<bool>(result) && static_cast<bool>(state.writer.result());
+        return state.has_root && static_cast<bool>(result) && static_cast<bool>(state.writer.result());
     }
 
     template <typename SourceT>

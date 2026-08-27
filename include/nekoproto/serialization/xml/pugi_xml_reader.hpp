@@ -36,11 +36,11 @@ public:
     };
 
     struct InputValueType {
-        std::variant<pugi::xml_node, pugi::xml_attribute> value = pugi::xml_node{};
-        bool unwrapArrayContainer                               = false;
+        std::variant<pugi::xml_node, pugi::xml_attribute> value                  = pugi::xml_node{};
+        bool                                              unwrap_array_container = false;
 
         InputValueType() = default;
-        InputValueType(pugi::xml_node node, bool unwrap = false) : value(node), unwrapArrayContainer(unwrap) {}
+        InputValueType(pugi::xml_node node, bool unwrap = false) : value(node), unwrap_array_container(unwrap) {}
         InputValueType(pugi::xml_attribute attribute) : value(attribute) {}
     };
 
@@ -82,14 +82,14 @@ public:
 
     static auto objectField(const InputObjectType& object, std::string_view name) noexcept
         -> sa::Result<InputValueType> {
-        if (name == XmlContent) {
+        if (name == k_xml_content) {
             return InputValueType{object.node};
         }
-        const auto ownedName = std::string{name};
-        if (auto child = object.node.child(ownedName.c_str())) {
+        const auto owned_name = std::string{name};
+        if (auto child = object.node.child(owned_name.c_str())) {
             return InputValueType{child};
         }
-        if (auto attribute = object.node.attribute(ownedName.c_str())) {
+        if (auto attribute = object.node.attribute(owned_name.c_str())) {
             return InputValueType{attribute};
         }
         return sa::error(sa::ErrorCode::InvalidField, "Field '" + std::string{name} + "' not found");
@@ -119,7 +119,7 @@ public:
                     return true;
                 }
                 if constexpr (std::is_same_v<U, pugi::xml_node>) {
-                    const auto marker = value.attribute(NullMarker.data());
+                    const auto marker = value.attribute(k_null_marker.data());
                     return marker && std::string_view{marker.value()} == "true";
                 } else {
                     return std::string_view{value.value()} == "null";
@@ -185,11 +185,11 @@ public:
             return node.error();
         }
 
-        const auto marker = node.value().attribute(ArrayMarker.data());
-        if ((marker != nullptr) && std::string_view{marker.value()} == ArrayEmpty) {
+        const auto marker = node.value().attribute(k_array_marker.data());
+        if ((marker != nullptr) && std::string_view{marker.value()} == k_array_empty) {
             return InputArrayType{{}, {}, true};
         }
-        if ((marker != nullptr) && std::string_view{marker.value()} == ArrayContainer && input.unwrapArrayContainer) {
+        if ((marker != nullptr) && std::string_view{marker.value()} == k_array_container && input.unwrap_array_container) {
             auto first = node.value().first_child();
             while ((first != nullptr) && first.type() != pugi::node_element) {
                 first = first.next_sibling();
@@ -197,8 +197,8 @@ public:
             if (!first) {
                 return InputArrayType{{}, {}, true};
             }
-            const auto firstMarker = first.attribute(ArrayMarker.data());
-            if ((firstMarker != nullptr) && std::string_view{firstMarker.value()} == ArrayEmpty) {
+            const auto firstMarker = first.attribute(k_array_marker.data());
+            if ((firstMarker != nullptr) && std::string_view{firstMarker.value()} == k_array_empty) {
                 return InputArrayType{{}, {}, true};
             }
             return InputArrayType{first, first.name(), false};
@@ -216,7 +216,7 @@ public:
 
 private:
     static auto isInternalAttribute(std::string_view name) noexcept -> bool {
-        return name == ArrayMarker || name == NullMarker;
+        return name == k_array_marker || name == k_null_marker;
     }
 
     static auto valueView(const InputValueType& input) noexcept -> std::string_view {

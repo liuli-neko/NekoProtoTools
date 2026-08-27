@@ -7,6 +7,23 @@ PointerAlignment: Left
 ConstructorInitializerIndentWidth: 4
 AlwaysBreakTemplateDeclarations: true
 BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: false
+  AfterControlStatement: Never
+  AfterEnum: false
+  AfterFunction: false
+  AfterNamespace: false
+  AfterStruct: false
+  AfterUnion: false
+  BeforeCatch: false
+  BeforeElse: false
+  BeforeLambdaBody: false
+  BeforeWhile: false
+  IndentBraces: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
 AlignOperands: true
 AlignTrailingComments: true
 AlignConsecutiveMacros: true

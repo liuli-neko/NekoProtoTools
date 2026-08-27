@@ -161,14 +161,14 @@ template <typename T>
 auto assignValue(std::string_view text, T& value, bool case_insensitive_enum = false) -> std::error_code {
     using RawT = std::remove_cvref_t<T>;
     if constexpr (is_arg_optional_v<RawT>) {
-        optional_value_t<RawT> inner{};
+        OptionalValueT<RawT> inner{};
         if (auto error = parseScalar(text, inner, case_insensitive_enum)) {
             return error;
         }
         value = std::move(inner);
         return {};
     } else if constexpr (is_vector_v<RawT>) {
-        vector_value_t<RawT> inner{};
+        VectorValueT<RawT> inner{};
         if (auto error = parseScalar(text, inner, case_insensitive_enum)) {
             return error;
         }
@@ -233,9 +233,9 @@ inline constexpr bool is_choices_supported_v = []() consteval { // NOLINT
     if constexpr (is_choice_value_v<RawT>) {
         return true;
     } else if constexpr (is_arg_optional_v<RawT>) {
-        return is_choice_value_v<optional_value_t<RawT>>;
+        return is_choice_value_v<OptionalValueT<RawT>>;
     } else if constexpr (is_vector_v<RawT>) {
-        return is_choice_value_v<vector_value_t<RawT>>;
+        return is_choice_value_v<VectorValueT<RawT>>;
     } else {
         return false;
     }
@@ -650,7 +650,7 @@ auto fieldRelationshipActive(const FieldT& field, bool supplied) -> bool {
         if (!field.has_value()) {
             return false;
         }
-        if constexpr (std::is_same_v<optional_value_t<RawT>, bool>) {
+        if constexpr (std::is_same_v<OptionalValueT<RawT>, bool>) {
             return *field;
         }
         return true;
@@ -658,7 +658,7 @@ auto fieldRelationshipActive(const FieldT& field, bool supplied) -> bool {
         if (field.empty()) {
             return false;
         }
-        if constexpr (std::is_same_v<vector_value_t<RawT>, bool>) {
+        if constexpr (std::is_same_v<VectorValueT<RawT>, bool>) {
             return std::any_of(field.begin(), field.end(), [](bool value) { return value; });
         }
         return true;

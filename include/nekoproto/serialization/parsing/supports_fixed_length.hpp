@@ -13,7 +13,7 @@ namespace nekoproto {
 
 namespace parsing {
 template <typename W, typename T, typename Tags = NoTags>
-concept supports_fixed_length_writer =
+concept SupportsFixedLengthWriter =
     (requires(W writer, const T& value, std::size_t size) {
         { writer.fixedValueAsRoot(value, size) } -> std::same_as<typename W::OutputValueType>;
     } || requires(W writer, const T& value, std::size_t size, const Tags& tags) {
@@ -33,14 +33,14 @@ concept supports_fixed_length_writer =
     });
 
 template <typename R, typename T, typename Tags = NoTags>
-concept supports_fixed_length_reader = requires(typename R::InputValueType input, std::size_t size) {
+concept SupportsFixedLengthReader = requires(typename R::InputValueType input, std::size_t size) {
     { R::template toFixedBasicType<T>(input, size) } -> std::same_as<sa::Result<T>>;
 } || requires(typename R::InputValueType input, std::size_t size, const Tags& tags) {
     { R::template toFixedBasicType<T>(input, size, tags) } -> std::same_as<sa::Result<T>>;
 };
 
 template <typename R, typename W, typename T>
-concept supports_fixed_length = supports_fixed_length_reader<R, T> && supports_fixed_length_writer<W, T>;
+concept SupportsFixedLength = SupportsFixedLengthReader<R, T> && SupportsFixedLengthWriter<W, T>;
 } // namespace parsing
 
 } // namespace nekoproto
