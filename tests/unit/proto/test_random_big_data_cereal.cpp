@@ -303,10 +303,19 @@ struct CTestStruct4 {
     }
 };
 
-#include "big_data_test_data_1.cpp"
-#include "big_data_test_data_2.cpp"
+#include "big_data_generator.hpp"
 
-std::string makeData(const char* data, std::size_t size) { return std::string(data, size); }
+std::string makeCerealBigData(uint64_t seed) {
+    CTestStruct4 src;
+    nekoproto::test::DataGenerator gen(seed);
+    nekoproto::test::fillRandom(src, gen);
+    std::ostringstream os;
+    {
+        cereal::JSONOutputArchive oa(os);
+        src.serialize(oa);
+    }
+    return os.str();
+}
 
 TEST(BigProtoTest, Serializer) {
     NEKO_LOG_INFO("unit test", "Proto1 size {}", sizeof(CTestStruct1));
@@ -317,13 +326,15 @@ TEST(BigProtoTest, Serializer) {
 
     NEKO_LOG_INFO("unit test", "Proto4 size {}", sizeof(CTestStruct4));
 
+    auto data1 = makeCerealBigData(1);
+    auto data2 = makeCerealBigData(2);
+
     // 统计解析时长
-    auto data  = makeData(data_1, sizeof(data_1));
     auto start = std::chrono::high_resolution_clock::now();
     auto end   = start;
     CTestStruct4 proto1;
     {
-        std::istringstream is(data);
+        std::istringstream is(data1);
         cereal::JSONInputArchive ia(is);
         proto1.serialize(ia);
     }
@@ -332,11 +343,10 @@ TEST(BigProtoTest, Serializer) {
         std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::high_resolution_clock::now() - end)
             .count());
     NEKO_LOG_INFO("unit test", "Serializer data: {}", proto1.f0.size());
-    data = makeData(data_2, sizeof(data_2));
     end  = std::chrono::high_resolution_clock::now();
     CTestStruct4 proto2;
     {
-        std::istringstream is(data);
+        std::istringstream is(data2);
         cereal::JSONInputArchive ia(is);
         proto2.serialize(ia);
     }

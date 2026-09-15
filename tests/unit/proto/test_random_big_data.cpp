@@ -9,7 +9,9 @@
 #if NEKO_PROTO_ENABLE_SIMDJSON
 #include "nekoproto/serialization/json/simd_json_serializer.hpp"
 #endif
-#include "nekoproto/serialization/to_string.hpp"    // IWYU pragma: export
+#include "nekoproto/serialization/to_string.hpp" // IWYU pragma: export
+
+#include "big_data_generator.hpp"
 
 using namespace nekoproto;
 struct TestStruct1 {
@@ -241,10 +243,12 @@ struct TestStruct4 {
     NEKO_DECLARE_PROTOCOL(TestStruct4, JsonSerializer)
 };
 
-#include "big_data_test_data_1.cpp"
-#include "big_data_test_data_2.cpp"
-
-auto makeData(const char* data) -> std::vector<char> { return std::vector<char>(data, data + std::strlen(data)); }
+auto makeBigData(uint64_t seed) {
+    TestStruct4 src;
+    test::DataGenerator gen(seed);
+    test::fillRandom(src, gen);
+    return src.makeProto().toData();
+}
 
 TEST(BigProtoTest, Serializer) {
     NEKO_LOG_DEBUG("unit test", "{} size {}", ProtoFactory::protoName<TestStruct1>(), sizeof(TestStruct1));
@@ -263,21 +267,22 @@ TEST(BigProtoTest, Serializer) {
     NEKO_LOG_DEBUG("unit test", "{} type size {}", ProtoFactory::protoName<TestStruct4>(),
                    sizeof(TestStruct4::ProtoType));
 
+    auto data1 = makeBigData(1);
+    auto data2 = makeBigData(2);
+
     // 统计解析时长
-    auto data  = makeData(data_1);
     auto start = std::chrono::high_resolution_clock::now();
     auto end   = start;
     TestStruct4 proto1;
-    proto1.makeProto().fromData(data.data(), data.size());
+    proto1.makeProto().fromData(data1.data(), data1.size());
     NEKO_LOG_DEBUG(
         "unit test", "Serializer time: {}s",
         std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::high_resolution_clock::now() - end)
             .count());
     NEKO_LOG_DEBUG("unit test", "Serializer f0 size: {}", proto1.f0.size());
-    end  = std::chrono::high_resolution_clock::now();
-    data = makeData(data_2);
+    end = std::chrono::high_resolution_clock::now();
     TestStruct4 proto2;
-    proto2.makeProto().fromData(data.data(), data.size());
+    proto2.makeProto().fromData(data2.data(), data2.size());
     NEKO_LOG_DEBUG(
         "unit test", "Serializer time: {}s",
         std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::high_resolution_clock::now() - end)
@@ -301,16 +306,17 @@ TEST(BigProtoTest, SimdJsonSerializer) {
     NEKO_LOG_DEBUG("unit test", "Proto4 size {}", sizeof(TestStruct4));
     NEKO_LOG_DEBUG("unit test", "Proto4 type size {}", sizeof(TestStruct4::ProtoType));
 
+    auto data1 = makeBigData(1);
+
     // 统计解析时长
-    auto data  = makeData(data_1);
     auto start = std::chrono::high_resolution_clock::now();
     auto end   = start;
     TestStruct4 proto1;
     {
 #ifdef NEKO_PROTO_ENABLE_SIMDJSON
-        SimdJsonInputSerializer serializer(data.data(), data.size());
+        SimdJsonInputSerializer serializer(data1.data(), data1.size());
 #elif defined(NEKO_PROTO_ENABLE_RAPIDJSON)
-        JsonSerializer::InputSerializer serializer(data.data(), data.size());
+        JsonSerializer::InputSerializer serializer(data1.data(), data1.size());
 #endif
         serializer(proto1);
     }
@@ -321,7 +327,7 @@ TEST(BigProtoTest, SimdJsonSerializer) {
     NEKO_LOG_DEBUG("unit test", "Serializer f0 size: {}", proto1.f0.size());
     end = std::chrono::high_resolution_clock::now();
     TestStruct4 proto2;
-    proto2.makeProto().fromData(data.data(), data.size());
+    proto2.makeProto().fromData(data1.data(), data1.size());
     NEKO_LOG_DEBUG(
         "unit test", "Serializer time: {}s",
         std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::high_resolution_clock::now() - end)
