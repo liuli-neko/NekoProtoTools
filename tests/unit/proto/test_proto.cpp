@@ -70,6 +70,8 @@ struct BinaryProto {
 
     NEKO_SERIALIZER(a, b, c, d)
     NEKO_DECLARE_PROTOCOL(BinaryProto, BinarySerializer)
+
+    auto operator==(const BinaryProto&) const -> bool = default;
 };
 
 class ProtoTest : public testing::Test {
@@ -78,6 +80,56 @@ protected:
     virtual void TearDown() {}
     std::unique_ptr<ProtoFactory> mFactory;
 };
+
+TEST_F(ProtoTest, FactoryVersionAndInvalidIds) {
+    EXPECT_EQ(ProtoFactory().version(), 0x000001U);
+    EXPECT_EQ(ProtoFactory(1, 2, 3).version(), 0x010203U);
+    EXPECT_EQ(ProtoFactory(0x101, -1, 0x103).version(), 0x01FF03U);
+
+    EXPECT_TRUE(mFactory->create(nullptr) == nullptr);
+    EXPECT_TRUE(mFactory->create("") == nullptr);
+    EXPECT_TRUE(mFactory->create(-1) == nullptr);
+    EXPECT_TRUE(mFactory->create(0) == nullptr);
+
+    const auto type = ProtoFactory::protoType<BinaryProto>();
+    EXPECT_GT(type, reserved_proto_type_size);
+    EXPECT_EQ(ProtoFactory::specifyProtoType<BinaryProto>(-1), -1);
+    EXPECT_EQ(ProtoFactory::specifyProtoType<BinaryProto>(0), -1);
+    EXPECT_EQ(ProtoFactory::specifyProtoType<BinaryProto>(reserved_proto_type_size + 1), -1);
+    EXPECT_EQ(ProtoFactory::specifyProtoType<BinaryProto>(1), -1);
+    EXPECT_EQ(ProtoFactory::protoType<BinaryProto>(), type);
+}
+
+TEST_F(ProtoTest, FactoryRegistrationAndOwnership) {
+    const auto map_size = ProtoFactory::protoTypeMap().size();
+    mFactory->regist("", [] { return BinaryProto::emplaceProto(); });
+    mFactory->regist("missing_creator", {});
+    EXPECT_EQ(ProtoFactory::protoTypeMap().size(), map_size);
+
+    mFactory->regist(ProtoFactory::protoName<BinaryProto>(), [] { return IProto{}; });
+    EXPECT_TRUE(mFactory->create(ProtoFactory::protoType<BinaryProto>()) == nullptr);
+    mFactory->regist(ProtoFactory::protoName<BinaryProto>(), [] { return BinaryProto::emplaceProto(); });
+    EXPECT_TRUE(mFactory->create(ProtoFactory::protoType<BinaryProto>()).cast<BinaryProto>() != nullptr);
+
+    constexpr auto name = "runtime_binary_proto";
+    mFactory->regist(name, [] { return IProto{}; });
+    EXPECT_TRUE(mFactory->create(name) == nullptr);
+    mFactory->regist(name, [] {
+        BinaryProto value;
+        value.a = 42;
+        return BinaryProto::makeProto(value);
+    });
+    auto created = mFactory->create(name);
+    ASSERT_NE(created.cast<BinaryProto>(), nullptr);
+    EXPECT_EQ(created.cast<BinaryProto>()->a, 42);
+    EXPECT_TRUE(mFactory->create(ProtoFactory::protoTypeMap().at(name)).cast<BinaryProto>() != nullptr);
+
+    IProto empty;
+    EXPECT_TRUE(empty == static_cast<BinaryProto*>(nullptr));
+    EXPECT_FALSE(created == static_cast<BinaryProto*>(nullptr));
+    EXPECT_FALSE(empty == created.cast<BinaryProto>());
+    EXPECT_TRUE(created == created.cast<BinaryProto>());
+}
 
 TEST_F(ProtoTest, Reflection) {
     EXPECT_EQ(Reflect<TestP>::name(0), "a");
@@ -349,6 +401,25 @@ TEST_F(ProtoTest, BinaryProto) {
     EXPECT_EQ(proto2.a, proto.a);
     EXPECT_EQ(proto2.b, proto.b);
     EXPECT_EQ(proto2.c, proto.c);
+}
+
+TEST_F(ProtoTest, BinaryProtoFailedDecodePreservesOwnedAndBorrowedObjects) {
+    BinaryProto source;
+    source.a = 24;
+    source.b = "unchanged";
+    source.c = 123;
+    source.d = 7;
+    const auto wire = source.makeProto().toData();
+    ASSERT_GT(wire.size(), 1U);
+
+    auto owned = BinaryProto::makeProto(source);
+    ASSERT_FALSE(owned.fromData(wire.data(), wire.size() - 1U));
+    ASSERT_NE(owned.cast<BinaryProto>(), nullptr);
+    EXPECT_EQ(*owned.cast<BinaryProto>(), source);
+
+    auto borrowed = source.makeProto();
+    ASSERT_FALSE(borrowed.fromData(wire.data(), wire.size() - 1U));
+    EXPECT_EQ(source, *owned.cast<BinaryProto>());
 }
 
 struct ZTypeTest {

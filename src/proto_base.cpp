@@ -33,7 +33,9 @@ auto staticInitFuncs(const std::string_view& name = "", std::function<void(Proto
 } // namespace detail
 
 void ProtoFactory::setVersion(int major, int minor, int patch) noexcept {
-    version_ = ((major & 0xFF) << 16 | (minor & 0xFF) << 8 | (patch & 0xFF));
+    version_ = ((static_cast<uint32_t>(major) & 0xFFU) << 16U) |
+               ((static_cast<uint32_t>(minor) & 0xFFU) << 8U) |
+               (static_cast<uint32_t>(patch) & 0xFFU);
 }
 
 auto ProtoFactory::version() const noexcept -> uint32_t { return version_; }
@@ -52,14 +54,24 @@ ProtoFactory::ProtoFactory(int major, int minor, int patch) {
 }
 
 void ProtoFactory::regist(const std::string_view& name, std::function<IProto()> creator) noexcept {
+    if (name.empty() || !creator) {
+        NEKO_LOG_ERROR("proto", "Cannot register a protocol with an empty name or creator");
+        return;
+    }
     auto type = protoType(name, true);
-    if (type < (int)creater_list_.size()) {
-        creater_list_[type] = creator;
-    } else {
-        if (dynamic_creater_map_.find(type) != dynamic_creater_map_.end()) {
-            NEKO_LOG_ERROR("proto", "Duplicate regist proto type: {}, will cover origin creator.", name);
+    if (type <= 0) {
+        return;
+    }
+    if (type < static_cast<int>(creater_list_.size())) {
+        if (creater_list_[type]) {
+            NEKO_LOG_WARN("proto", "Replacing registered protocol creator: {}", name);
         }
-        dynamic_creater_map_.insert(std::make_pair(type, creator));
+        creater_list_[type] = std::move(creator);
+    } else {
+        const bool inserted = dynamic_creater_map_.insert_or_assign(type, std::move(creator)).second;
+        if (!inserted) {
+            NEKO_LOG_WARN("proto", "Replacing registered protocol creator: {}", name);
+        }
     }
 }
 
@@ -81,11 +93,9 @@ auto ProtoFactory::protoType(const std::string_view& name, const bool isDeclared
                     return -1;
                 }
             }
-            if (specifyType > reserved_proto_type_size) {
-                NEKO_LOG_ERROR(
-                    "proto",
-                    "specify proto type {} must be less than 100, because more than 100 is used for auto assignment",
-                    name);
+            if (specifyType <= 0 || specifyType > reserved_proto_type_size) {
+                NEKO_LOG_ERROR("proto", "specify proto type {} must be in the reserved range 1..{}", name,
+                               reserved_proto_type_size);
                 return -1;
             }
             NEKO_LOG_INFO("proto", "proto {} type is declared as {}", name, specifyType);
@@ -99,6 +109,10 @@ auto ProtoFactory::protoType(const std::string_view& name, const bool isDeclared
         }
         NEKO_LOG_ERROR("proto", "Proto type not declared: {}, are you created a ProtoFactory and declare this type?",
                        name);
+        return -1;
+    }
+    if (isDeclared && specifyType != -1 && item->second != specifyType) {
+        NEKO_LOG_ERROR("proto", "proto {} is already assigned type {}, not {}", name, item->second, specifyType);
         return -1;
     }
     return item->second;
@@ -117,7 +131,9 @@ auto ProtoFactory::create(int type) const noexcept -> IProto {
     return {};
 }
 
-auto ProtoFactory::create(const char* name) const noexcept -> IProto { return create(protoType(name, false)); }
+auto ProtoFactory::create(const char* name) const noexcept -> IProto {
+    return name == nullptr ? IProto{} : create(protoType(name, false));
+}
 
 auto ProtoFactory::protoTypeMap() noexcept -> const std::map<std::string_view, int>& { return staticProtoTypeMap(); }
 

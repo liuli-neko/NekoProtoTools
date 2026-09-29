@@ -1,0 +1,9 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+if(@NEKO_PROTO_ENABLE_RAPIDJSON@)
+    find_dependency(RapidJSON CONFIG)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/NekoProtoToolsTargets.cmake")
+check_required_components(NekoProtoTools)

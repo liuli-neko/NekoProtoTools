@@ -12,7 +12,7 @@ task("bench_compile_time")
             {'o', "output",   "kv", nil,     "Output directory for benchmark results (default: build/compile_time/<label>)"},
             {'l', "label",    "kv", "local", "Label for current run (default: local)"},
             {nil, "trace",    "k",  nil,     "Enable Clang -ftime-trace profiling (requires clang++)"},
-            {nil, "save",     "k",  nil,     "Save summary table to tests/manual/benchmarks/compile_time/RESULTS.md"}
+            {nil, "save",     "k",  nil,     "Save summary table to benchmarks/compile_time/RESULTS.md"}
         }
     })
 
@@ -26,7 +26,7 @@ task("bench_compile_time")
         config.load()
 
         local root = os.projectdir()
-        local bench_dir = path.join(root, "tests", "manual", "benchmarks", "compile_time")
+        local bench_dir = path.join(root, "benchmarks", "compile_time")
         local label = option.get("label") or "local"
         local repeats = tonumber(option.get("repeats") or "3") or 3
         local filter_pat = option.get("filter")

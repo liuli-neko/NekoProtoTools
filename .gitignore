@@ -15,3 +15,5 @@ vsxmake2022/
 **/global/config.h
 
 vsxmake*
+/plans/
+/benchmarks/results/

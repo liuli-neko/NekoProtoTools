@@ -14,7 +14,7 @@
  */
 #pragma once
 
-#include "config.h"
+#include <nekoproto/global/config.h>
 
 #include <string>
 #include <string_view>

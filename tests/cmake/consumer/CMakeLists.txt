@@ -1,0 +1,20 @@
+cmake_minimum_required(VERSION 3.23)
+project(NekoProtoConsumer LANGUAGES CXX)
+enable_testing()
+
+if(NEKO_USE_FETCHCONTENT)
+    include(FetchContent)
+    FetchContent_Declare(NekoProtoTools SOURCE_DIR "${NEKO_SOURCE_DIR}")
+    FetchContent_MakeAvailable(NekoProtoTools)
+else()
+    find_package(NekoProtoTools CONFIG REQUIRED)
+endif()
+
+add_executable(neko_consumer main.cpp)
+add_test(NAME neko_consumer_smoke COMMAND neko_consumer)
+target_link_libraries(neko_consumer PRIVATE NekoProto::ArgParser)
+
+if(TARGET NekoProto::Protocol)
+    target_link_libraries(neko_consumer PRIVATE NekoProto::Protocol)
+    target_compile_definitions(neko_consumer PRIVATE NEKO_CONSUMER_HAS_PROTOCOL)
+endif()

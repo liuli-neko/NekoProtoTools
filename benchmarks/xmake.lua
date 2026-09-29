@@ -1,0 +1,42 @@
+add_requires("rapidjson", "reflect-cpp", "glaze")
+
+local benchmark_sources = "json_benchmark.cpp"
+
+target("bench_json_nekoproto")
+    set_kind("binary")
+    set_default(false)
+    add_files(benchmark_sources)
+    add_defines("NEKO_BENCH_NEKO", "NEKO_PROTO_ENABLE_RAPIDJSON")
+    add_includedirs("../include")
+    add_deps("NekoSerializer")
+    add_packages("rapidjson")
+    add_tests("correctness", {runargs = {"5"}, group = "benchmark"})
+target_end()
+
+target("bench_json_reflect_cpp")
+    set_kind("binary")
+    set_default(false)
+    add_files(benchmark_sources)
+    add_defines("NEKO_BENCH_REFLECT_CPP")
+    add_packages("reflect-cpp")
+    add_tests("correctness", {runargs = {"5"}, group = "benchmark"})
+target_end()
+
+target("bench_json_glaze")
+    set_kind("binary")
+    set_default(false)
+    add_files(benchmark_sources)
+    add_defines("NEKO_BENCH_GLAZE")
+    add_packages("glaze")
+    add_tests("correctness", {runargs = {"5"}, group = "benchmark"})
+target_end()
+
+
+target("bench_json")
+    set_kind("phony")
+    set_default(false)
+    add_deps("bench_json_nekoproto", "bench_json_reflect_cpp", "bench_json_glaze")
+    on_run(function ()
+        os.execv("xmake", {"bench_json"})
+    end)
+target_end()

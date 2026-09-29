@@ -1,0 +1,54 @@
+name: CMake integration
+
+on:
+  push:
+    branches: [main, master, dev]
+  pull_request:
+    branches: [main, master, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            compiler: gcc
+          - os: ubuntu-latest
+            compiler: clang
+          - os: windows-latest
+            compiler: msvc
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Select Clang
+        if: matrix.compiler == 'clang'
+        run: |
+          echo "CC=clang" >> "$GITHUB_ENV"
+          echo "CXX=clang++" >> "$GITHUB_ENV"
+      - name: Configure
+        run: cmake -S . -B build -DNEKO_PROTO_BUILD_TESTS=ON
+      - name: Build
+        run: cmake --build build --config Release --parallel 2
+      - name: Run examples
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Install
+        run: cmake --install build --config Release --prefix "$RUNNER_TEMP/neko-install"
+      - name: Configure installed consumer
+        run: cmake -S tests/cmake/consumer -B "$RUNNER_TEMP/neko-consumer" -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/neko-install"
+      - name: Build installed consumer
+        run: cmake --build "$RUNNER_TEMP/neko-consumer" --config Release
+      - name: Run installed consumer
+        run: ctest --test-dir "$RUNNER_TEMP/neko-consumer" -C Release --output-on-failure
+      - name: Configure FetchContent consumer
+        run: cmake -S tests/cmake/consumer -B "$RUNNER_TEMP/neko-fetch" -DNEKO_USE_FETCHCONTENT=ON -DNEKO_SOURCE_DIR="$GITHUB_WORKSPACE"
+      - name: Build FetchContent consumer
+        run: cmake --build "$RUNNER_TEMP/neko-fetch" --config Release
+      - name: Run FetchContent consumer
+        run: ctest --test-dir "$RUNNER_TEMP/neko-fetch" -C Release --output-on-failure

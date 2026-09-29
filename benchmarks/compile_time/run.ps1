@@ -13,7 +13,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
-    $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
+    $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 } else {
     $root = (Resolve-Path -LiteralPath $ProjectRoot).Path
 }

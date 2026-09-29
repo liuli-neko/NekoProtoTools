@@ -1,6 +1,7 @@
 set_project("neko-proto-tools")
 add_rules("mode.debug", "mode.release", "mode.releasedbg", "mode.coverage", "mode.asan", "mode.ubsan", "mode.tsan")
-set_version("0.4.0", {build = "%Y%m%d%H%M"})
+includes("version.lua")
+set_version(project_version())
 add_repositories("btk-repo https://github.com/Btk-Project/xmake-repo.git")
 set_warnings("allextra")
 set_encodings("utf-8")
@@ -20,7 +21,8 @@ add_configfiles("include/nekoproto/global/config.h.in")
 set_configdir("include/nekoproto/global")
 
 includes("lua/hidetargets.lua")
-includes("lua/bench_compile_time.lua")
+includes("benchmarks/compile_time/xmake.lua")
+includes("benchmarks/bench_json_task.lua")
 
 option("has_std_expected")
     set_showmenu(false)
@@ -112,6 +114,20 @@ option("enable_tests")
     set_showmenu(true)
     set_description("Enable test")
     set_category("enable test")
+option_end()
+
+option("enable_benchmarks")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable JSON comparison benchmarks (NekoProtoTools, reflect-cpp, Glaze)")
+    set_category("benchmark")
+option_end()
+
+option("enable_examples")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Build standalone examples and register their smoke tests")
+    set_category("examples")
 option_end()
 
 -- Test sub-options must be declared at project scope. Declaring them only in
@@ -279,6 +295,14 @@ end
 if has_config("enable_tests") then
     add_requires("gtest", "cpptrace")
     includes("tests")
+end
+
+if has_config("enable_benchmarks") then
+    includes("benchmarks/xmake.lua")
+end
+
+if has_config("enable_examples") then
+    includes("examples/xmake.lua")
 end
 
 if is_mode("debug") or is_mode("asan") or is_mode("ubsan") or is_mode("tsan") then

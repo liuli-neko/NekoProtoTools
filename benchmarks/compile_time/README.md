@@ -1,5 +1,7 @@
 # Compile-Time Benchmark Suite
 
+These workloads are exploratory. Current NekoProto and reflect-cpp cases use different C++ language levels; do not publish their timings as a fair ranking until the method is aligned and rerun.
+
 This benchmark suite measures reflection and serialization compile-time performance, template expansion overhead, and object file symbol footprint, directly comparing **NekoProto** against **reflect-cpp** across multiple serialization formats and field-count dimensions.
 
 ## Features
@@ -67,4 +69,4 @@ xmake bench_compile_time --trace -o build/compile_time/trace_run
 Running the benchmark generates:
 - **Terminal Report**: High-resolution ASCII comparison table with colored delta indicators and format totals.
 - **CSV Data**: `build/compile_time/<label>/timings.csv` containing detailed `min`, `max`, `avg`, and `size_bytes`.
-- **Markdown Report**: `tests/manual/benchmarks/compile_time/RESULTS.md` (when triggered with `--save`).
+- **Markdown Report**: `benchmarks/compile_time/RESULTS.md` (when triggered with `--save`).
