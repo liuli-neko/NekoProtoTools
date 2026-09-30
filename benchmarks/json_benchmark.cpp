@@ -1,5 +1,9 @@
 #if defined(NEKO_BENCH_NEKO)
 #include "nekoproto_adapter.hpp"
+#elif defined(NEKO_BENCH_NEKO_SIMDJSON)
+#include "nekoproto_simdjson_adapter.hpp"
+#elif defined(NEKO_BENCH_RAPIDJSON_RAW)
+#include "rapidjson_raw_adapter.hpp"
 #elif defined(NEKO_BENCH_REFLECT_CPP)
 #include "reflect_cpp_adapter.hpp"
 #elif defined(NEKO_BENCH_GLAZE)

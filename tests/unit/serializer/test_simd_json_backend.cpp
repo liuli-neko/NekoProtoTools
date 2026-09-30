@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "nekoproto/global/global.hpp"
 #include <gtest/gtest.h>
 
 #ifdef NEKO_PROTO_ENABLE_SIMDJSON

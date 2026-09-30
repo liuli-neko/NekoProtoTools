@@ -24,7 +24,7 @@ task("bench_json")
 
         local output_dir = option.get("output") or path.join(os.projectdir(), "build", "benchmarks", "json")
         os.mkdir(output_dir)
-        local targets = {"bench_json_nekoproto", "bench_json_reflect_cpp", "bench_json_glaze"}
+        local targets = {"bench_json_rapidjson_raw", "bench_json_nekoproto", "bench_json_nekoproto_simdjson", "bench_json_reflect_cpp", "bench_json_glaze"}
         for _, name in ipairs(targets) do
             os.execv("xmake", {"build", name})
         end
@@ -46,7 +46,7 @@ task("bench_json")
         local resolved_packages = {}
         for _, name in ipairs(targets) do
             for _, pkg in ipairs(project.target(name):orderpkgs() or {}) do
-                if pkg:name() == "rapidjson" or pkg:name() == "reflect-cpp" or pkg:name() == "glaze" then
+                if pkg:name() == "rapidjson" or pkg:name() == "reflect-cpp" or pkg:name() == "glaze" or pkg:name() == "yyjson" or pkg:name() == "simdjson" then
                     resolved_packages[pkg:name()] = tostring(pkg:version() or "unknown")
                 end
             end
@@ -76,9 +76,11 @@ task("bench_json")
         local raw_rows = {"repeat,case,library,backend,operation,iterations,json_bytes,ns_per_op,mb_per_second"}
         local header = "case,library,backend,operation,iterations,json_bytes,ns_per_op,mb_per_second"
         local libraries = {
-            {name = "NekoProtoTools", backend = "RapidJSON", column = "neko"},
-            {name = "reflect-cpp", backend = "yyjson", column = "reflect_cpp"},
-            {name = "Glaze", backend = "Glaze JSON", column = "glaze"}
+            {name = "NekoProtoTools", backend = "yyjson", column = "neko_yyjson", label = "Neko / yyjson"},
+            {name = "NekoProtoTools", backend = "simdjson", column = "neko_simdjson", label = "Neko / simdjson"},
+            {name = "reflect-cpp", backend = "yyjson", column = "reflect_cpp", label = "reflect-cpp / yyjson"},
+            {name = "Glaze", backend = "Glaze JSON", column = "glaze", label = "Glaze"},
+            {name = "RapidJSON-Raw", backend = "Streaming", column = "rapidjson_raw", label = "RapidJSON (Handwritten)"}
         }
         local measurements = {}
         local function measurement(case_name, operation, column)
@@ -100,13 +102,13 @@ task("bench_json")
                         local fields = {}
                         for field in line:gmatch("[^,]+") do table.insert(fields, field) end
                         assert(#fields == 8 and tonumber(fields[5]) == iterations,
-                               "invalid benchmark CSV fields")
+                                "invalid benchmark CSV fields")
                         local known_case = false
                         for _, case_name in ipairs(cases) do
                             if fields[1] == case_name then known_case = true end
                         end
                         assert(known_case and (fields[4] == "serialize" or fields[4] == "deserialize"),
-                               "invalid benchmark case or operation")
+                                "invalid benchmark case or operation")
                         local library
                         for _, candidate in ipairs(libraries) do
                             if fields[2] == candidate.name and fields[3] == candidate.backend then
@@ -134,21 +136,35 @@ task("bench_json")
             if repeats % 2 == 1 then return values[(repeats + 1) / 2] end
             return (values[repeats / 2] + values[repeats / 2 + 1]) / 2
         end
+        local summary_ns_headers = {}
+        local summary_mb_headers = {}
+        local size_col_headers = {}
+        local col_labels = {}
+        local separators = {}
+        for _, lib in ipairs(libraries) do
+            table.insert(summary_ns_headers, lib.column .. "_ns_per_op")
+            table.insert(summary_mb_headers, lib.column .. "_mb_per_second")
+            table.insert(size_col_headers, lib.column .. "_bytes")
+            table.insert(col_labels, lib.label)
+            table.insert(separators, "---:")
+        end
         local summary_rows = {
-            "operation,case,iterations,neko_ns_per_op,reflect_cpp_ns_per_op,glaze_ns_per_op,neko_mb_per_second,reflect_cpp_mb_per_second,glaze_mb_per_second"
+            "operation,case,iterations," .. table.concat(summary_ns_headers, ",") .. "," .. table.concat(summary_mb_headers, ",")
         }
-        local size_rows = {"case,neko_bytes,reflect_cpp_bytes,glaze_bytes"}
+        local size_rows = {"case," .. table.concat(size_col_headers, ",")}
+        local table_header_line = "| Case | " .. table.concat(col_labels, " | ") .. " |"
+        local table_sep_line = "|---|" .. table.concat(separators, "|") .. "|"
         local comparison_tables = {}
         for _, operation in ipairs({"serialize", "deserialize"}) do
             local latency_table = {
                 "### ns/op (lower is better)", "",
-                "| Case | NekoProtoTools / RapidJSON | reflect-cpp / yyjson | Glaze |",
-                "|---|---:|---:|---:|"
+                table_header_line,
+                table_sep_line
             }
             local throughput_table = {
                 "### MB/s (higher is better)", "",
-                "| Case | NekoProtoTools / RapidJSON | reflect-cpp / yyjson | Glaze |",
-                "|---|---:|---:|---:|"
+                table_header_line,
+                table_sep_line
             }
             for _, case_name in ipairs(cases) do
                 local ns_values = {}
@@ -174,8 +190,8 @@ task("bench_json")
         end
         local size_table = {
             "## Serialized JSON bytes", "",
-            "| Case | NekoProtoTools / RapidJSON | reflect-cpp / yyjson | Glaze |",
-            "|---|---:|---:|---:|"
+            table_header_line,
+            table_sep_line
         }
         for _, case_name in ipairs(cases) do
             local sizes = {}
@@ -209,6 +225,8 @@ task("bench_json")
             "repeats: " .. repeats,
             "json.csv and summary.md: median of repeats; raw.csv: every measured repeat; json_sizes.csv: serialized output sizes",
             "NekoProtoTools: " .. (io.readfile(path.join(os.projectdir(), "version.lua")):match('return "([^"]+)"') or "unknown"),
+            "yyjson: " .. tostring(resolved_packages["yyjson"] or "unknown"),
+            "simdjson: " .. tostring(resolved_packages["simdjson"] or "unknown"),
             "RapidJSON: " .. tostring(resolved_packages["rapidjson"] or "unknown"),
             "reflect-cpp: " .. tostring(resolved_packages["reflect-cpp"] or "unknown") .. " (yyjson)",
             "Glaze: " .. tostring(resolved_packages["glaze"] or "unknown"),

@@ -98,8 +98,21 @@ template <typename R, typename Fn, typename Tags>
 auto readerForEachObjectMember(const typename R::InputObjectType& object, Fn&& fn, const Tags& tags) -> bool {
     if constexpr (requires { R::forEachObjectMember(object, std::forward<Fn>(fn), tags); }) {
         return R::forEachObjectMember(object, std::forward<Fn>(fn), tags);
-    } else {
+    } else if constexpr (requires { R::forEachObjectMember(object, std::forward<Fn>(fn)); }) {
         return R::forEachObjectMember(object, std::forward<Fn>(fn));
+    } else {
+        return false;
+    }
+}
+
+template <typename R, typename Fn, typename Tags>
+auto readerForEachArrayElement(const typename R::InputArrayType& array, Fn&& fn, const Tags& tags) -> bool {
+    if constexpr (requires { R::forEachArrayElement(array, std::forward<Fn>(fn), tags); }) {
+        return R::forEachArrayElement(array, std::forward<Fn>(fn), tags);
+    } else if constexpr (requires { R::forEachArrayElement(array, std::forward<Fn>(fn)); }) {
+        return R::forEachArrayElement(array, std::forward<Fn>(fn));
+    } else {
+        return false;
     }
 }
 

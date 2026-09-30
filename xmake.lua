@@ -12,7 +12,7 @@ option("stdcxx", {showmenu = true, default = 23, values = {26, 23, 20}})
 function stdc()   return "c"   .. tostring(get_config("stdc"))   end
 function stdcxx() return "c++" .. tostring(get_config("stdcxx")) end
 function json_serializer_enabled()
-    return has_config("enable_rapidjson") or has_config("enable_simdjson")
+    return has_config("enable_yyjson") or has_config("enable_rapidjson") or has_config("enable_simdjson")
 end
 
 set_languages(stdc(), stdcxx())
@@ -33,6 +33,14 @@ option("has_std_expected")
         #   error no std::expected support
         #endif
     ]])
+option_end()
+
+option("enable_yyjson")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable yyjson support, should install yyjson")
+    set_category("serializer provider")
+    set_configvar("NEKO_PROTO_ENABLE_YYJSON", true)
 option_end()
 
 option("enable_simdjson")
@@ -238,6 +246,10 @@ option("use_io_uring")
 option_end()
 
 
+if has_config("enable_yyjson") then
+    add_requires("yyjson", {configs = { shared = is_kind("shared")}})
+end
+
 if has_config("enable_simdjson") then
     add_requires("simdjson", {configs = { shared = false}})
 end
@@ -330,6 +342,7 @@ target("NekoSerializer")
     add_options("enable_spdlog", 
                 "enable_fmt", 
                 "enable_stdformat", 
+                "enable_yyjson",
                 "enable_rapidjson", 
                 "enable_simdjson", 
                 "enable_pugixml",
@@ -358,6 +371,7 @@ target("NekoArgParser")
     add_options("enable_spdlog",
                 "enable_fmt",
                 "enable_stdformat",
+                "enable_yyjson",
                 "enable_rapidjson",
                 "enable_simdjson",
                 "enable_libfyaml",

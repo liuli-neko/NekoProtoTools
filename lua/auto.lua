@@ -28,6 +28,10 @@ function autofunc.auto_add_packages(target, options)
     local uses_ilias = options.uses_ilias or false
     local uses_expected = options.uses_expected or false
 
+    if has_config("enable_yyjson") then
+        target:add("packages", "yyjson", {public = true})
+    end
+
     if has_config("enable_simdjson") then
         target:add("packages", "simdjson", {public = true})
         target:add("defines", "SIMDJSON_EXCEPTIONS=1")

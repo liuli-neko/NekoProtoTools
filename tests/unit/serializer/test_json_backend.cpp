@@ -520,7 +520,9 @@ TEST(RapidJsonBackendParser, InvalidJsonReportsParseErrorAndOffset) {
     EXPECT_FALSE(in(decoded));
     ASSERT_NE(in.error(), nullptr);
     EXPECT_EQ(in.error()->ec, sa::makeErrorCode(sa::ErrorCode::ParseError));
-#ifdef NEKO_PROTO_ENABLE_RAPIDJSON
+#if defined(NEKO_PROTO_ENABLE_YYJSON)
+    EXPECT_NE(in.error()->msg.find("yyjson parse error at offset"), std::string::npos) << in.error()->msg;
+#elif defined(NEKO_PROTO_ENABLE_RAPIDJSON)
     EXPECT_NE(in.error()->msg.find("RapidJSON parse error at offset"), std::string::npos) << in.error()->msg;
 #elif defined(NEKO_PROTO_ENABLE_SIMDJSON)
     EXPECT_NE(in.error()->msg.find("The JSON document has an improper structure: missing or superfluous commas, braces, missing keys, etc."), std::string::npos) << in.error()->msg;

@@ -20,6 +20,7 @@
 #endif
 
 #include "nekoproto/serialization/error.hpp"
+#include "nekoproto/serialization/json/rapid_json_stream_writer.hpp"
 
 namespace nekoproto {
 namespace rapid {

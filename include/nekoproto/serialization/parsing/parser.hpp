@@ -9,6 +9,7 @@
 
 #include <concepts>
 #include <string>
+#include <string_view>
 #include <type_traits>
 
 namespace nekoproto {
@@ -69,14 +70,44 @@ auto parserEmptyContainerLike(const T& value) -> T {
     }
 }
 
-inline auto parserContext(ParserResult result, std::string context) -> ParserResult {
+inline auto parserContext(ParserResult result, std::string_view context) -> ParserResult {
     if (result) {
         return result;
     }
     auto error = result.error();
-    error.msg  = std::move(context) + error.msg;
+    error.msg  = std::string(context) + error.msg;
     return sa::err(std::move(error));
 }
+
+template <typename F>
+    requires std::is_invocable_v<F>
+inline auto parserContextLazy(ParserResult result, F&& fn) -> ParserResult {
+    if (result) {
+        return result;
+    }
+    auto error = result.error();
+    error.msg  = fn() + error.msg;
+    return sa::err(std::move(error));
+}
+
+inline auto parserContextField(ParserResult result, std::string_view fieldName, std::string_view action = "parse") -> ParserResult {
+    if (result) {
+        return result;
+    }
+    auto error = result.error();
+    std::string prefix = "Failed to ";
+    prefix.append(action);
+    prefix.append(" field '");
+    prefix.append(fieldName);
+    prefix.append("': ");
+    error.msg = std::move(prefix) + error.msg;
+    return sa::err(std::move(error));
+}
+
+template <typename W>
+concept RequiresContainerSize = (!requires {
+    requires !bool(W::requires_field_count);
+});
 
 template <typename W, typename T, typename Enable = void>
 struct WriteParser {

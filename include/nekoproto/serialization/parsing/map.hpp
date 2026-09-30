@@ -53,8 +53,10 @@ auto parserWriteKeyValueArray(W& writer, const T& values, const ParentType& pare
         if (!result) {
             return parserContext(std::move(result), "Failed to write map entry " + std::to_string(index) + " value: ");
         }
+        parsing::Parent<W>::endObject(writer, object, typename parsing::Parent<W>::Array{&array});
         ++index;
     }
+    parsing::Parent<W>::endArray(writer, array, parent, tags);
     return sa::success();
 }
 
@@ -107,13 +109,15 @@ auto parserReadKeyValueArray(typename R::InputValueType in, T& values, const Tag
 
 template <typename W, typename T, typename ParentType, typename Tags>
 auto parserWriteStringKeyMap(W& writer, const T& values, const ParentType& parent, const Tags& tags) -> ParserResult {
-    auto object = parsing::Parent<W>::addObject(writer, values.size(), parent, tags);
+    const auto size = RequiresContainerSize<W> ? values.size() : 0;
+    auto object = parsing::Parent<W>::addObject(writer, size, parent, tags);
     for (const auto& item : values) {
         auto result = parserWrite<W>(writer, item.second, typename parsing::Parent<W>::Object{item.first, &object});
         if (!result) {
-            return parserContext(std::move(result), "Failed to write map field '" + std::string(item.first) + "': ");
+            return parserContextField(std::move(result), item.first, "write map");
         }
     }
+    parsing::Parent<W>::endObject(writer, object, parent, tags);
     return sa::success();
 }
 
@@ -132,9 +136,9 @@ auto parserReadStringKeyMap(typename R::InputValueType in, T& values, const Tags
                 return false;
             }
             typename T::mapped_type value{};
-            result =
-                parserContext(parserRead<R>(field, value), "Failed to parse map field '" + std::string(name) + "': ");
-            if (!result) {
+            auto subRes = parserRead<R>(field, value);
+            if (!subRes) {
+                result = parserContextField(std::move(subRes), name, "parse map");
                 return false;
             }
             auto inserted = parsed.emplace(typename T::key_type{name.data(), name.size()}, std::move(value));

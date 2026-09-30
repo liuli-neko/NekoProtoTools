@@ -23,12 +23,49 @@ namespace detail::simd {
 
 using RawJsonValue = simdjson::dom::element;
 
+struct SimdParserPool {
+    std::vector<std::unique_ptr<JsonParser>> pool;
+    bool active = true;
+    ~SimdParserPool() {
+        active = false;
+        pool.clear();
+    }
+};
+
+inline thread_local SimdParserPool g_simd_parser_pool;
+
+inline auto acquireParser() -> std::shared_ptr<JsonParser> {
+    std::unique_ptr<JsonParser> raw;
+    if (g_simd_parser_pool.active && !g_simd_parser_pool.pool.empty()) {
+        raw = std::move(g_simd_parser_pool.pool.back());
+        g_simd_parser_pool.pool.pop_back();
+    } else {
+        raw = std::make_unique<JsonParser>();
+    }
+
+    auto* ptr = raw.release();
+    return std::shared_ptr<JsonParser>(ptr, [](JsonParser* p) noexcept {
+        if (p == nullptr) {
+            return;
+        }
+        if (g_simd_parser_pool.active && g_simd_parser_pool.pool.size() < 4) {
+            try {
+                g_simd_parser_pool.pool.emplace_back(p);
+                return;
+            } catch (...) {
+            }
+        }
+        delete p;
+    });
+}
+
 class SimdJsonValue {
 public:
     SimdJsonValue() = default;
 
     explicit SimdJsonValue(const InputValue& value)
-        : value_(std::make_shared<RawJsonValue>(value.value)), parser_(value.owner) {}
+        : value_(std::make_shared<RawJsonValue>(value.value)),
+          parser_(value.owner != nullptr ? *value.owner : nullptr) {}
 
     SimdJsonValue(const RawJsonValue& value, std::shared_ptr<JsonParser> parser)
         : value_(std::make_shared<RawJsonValue>(value)), parser_(std::move(parser)) {}
@@ -38,6 +75,7 @@ public:
 
     auto nativeValue() const -> const RawJsonValue& { return *value_; }
     auto nativeValue() -> RawJsonValue& { return *value_; }
+    auto parser() const noexcept -> const std::shared_ptr<JsonParser>& { return parser_; }
 
     auto isObject() const -> bool { return value_ && value_->is_object(); }
     auto isArray() const -> bool { return value_ && value_->is_array(); }
@@ -51,7 +89,7 @@ public:
         if (!value_) {
             return false;
         }
-        auto result = Reader::template toBasicType<T>(InputValue{*value_, parser_});
+        auto result = Reader::template toBasicType<T>(InputValue{*value_, &parser_});
         if (!result) {
             return false;
         }
@@ -185,11 +223,11 @@ struct SimdJsonBackend {
                 return;
             }
             retained_value = value;
-            root           = detail::simd::InputValue{retained_value.nativeValue(), nullptr};
+            root           = detail::simd::InputValue{retained_value.nativeValue(), &retained_value.parser()};
         }
 
         explicit InputState(const char* buffer, std::size_t size) noexcept
-            : parser(std::make_shared<detail::simd::JsonParser>()) {
+            : parser(detail::simd::acquireParser()) {
             while (size > 0 && buffer[size - 1] == '\0') {
                 --size;
             }
@@ -203,7 +241,7 @@ struct SimdJsonBackend {
                                    "simdjson parse error: " + std::string(simdjson::error_message(parsed.error())));
                 return;
             }
-            root = detail::simd::InputValue{parsed.value_unsafe(), parser};
+            root = detail::simd::InputValue{parsed.value_unsafe(), &parser};
         }
 
         detail::simd::InputValue                  root;

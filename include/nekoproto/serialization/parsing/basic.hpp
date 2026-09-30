@@ -67,12 +67,21 @@ auto parserReadString(typename R::InputValueType in, std::string& value, const T
             return sa::success();
         }
     }
-    auto result = parsing::readerToBasic<R, std::string>(in, tags);
-    if (!result) {
-        return result.error();
+    if constexpr (requires { parsing::readerToStringView<R, char, std::char_traits<char>>(in, tags); }) {
+        auto result = parsing::readerToStringView<R, char, std::char_traits<char>>(in, tags);
+        if (!result) {
+            return result.error();
+        }
+        value.assign(result.value().data(), result.value().size());
+        return sa::success();
+    } else {
+        auto result = parsing::readerToBasic<R, std::string>(in, tags);
+        if (!result) {
+            return result.error();
+        }
+        value = result.value();
+        return sa::success();
     }
-    value = result.value();
-    return sa::success();
 }
 
 template <typename W, typename T>
@@ -224,13 +233,24 @@ struct ReadParser<R, std::basic_string<CharT, Traits, Alloc>, void> {
     template <typename Tags>
     static auto read(typename R::InputValueType in, String& value, const Tags& tags) -> ParserResult {
         static_assert(ParserIsByteCharV<CharT>, "Serialized strings must use byte-sized characters");
-        std::string tmp;
-        auto result = parserReadString<R>(in, tmp, tags);
-        if (!result) {
-            return parserContext(std::move(result), "Failed to parse string: ");
+        if constexpr (!tag_query::get<tag_property::RawString>(tags) &&
+                      requires { parsing::readerToStringView<R, CharT, Traits>(in, tags); }) {
+            auto result = parsing::readerToStringView<R, CharT, Traits>(in, tags);
+            if (!result) {
+                return parserContext(result.error(), "Failed to parse string: ");
+            }
+            const auto& sv = result.value();
+            value.assign(reinterpret_cast<const CharT*>(sv.data()), sv.size());
+            return sa::success();
+        } else {
+            std::string tmp;
+            auto result = parserReadString<R>(in, tmp, tags);
+            if (!result) {
+                return parserContext(std::move(result), "Failed to parse string: ");
+            }
+            value.assign(reinterpret_cast<const CharT*>(tmp.data()), tmp.size());
+            return sa::success();
         }
-        value.assign(reinterpret_cast<const CharT*>(tmp.data()), tmp.size());
-        return sa::success();
     }
 };
 

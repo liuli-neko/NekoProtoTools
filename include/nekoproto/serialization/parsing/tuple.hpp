@@ -19,17 +19,21 @@ struct WriteParser<W, std::tuple<Ts...>, void> {
                           std::index_sequence<Is...>, const Tags& tags) -> ParserResult {
         auto array = parsing::Parent<W>::addArray(writer, sizeof...(Ts), parent, tags);
         if constexpr (sizeof...(Ts) == 0) {
+            parsing::Parent<W>::endArray(writer, array, parent, tags);
             return sa::success();
         } else {
             ParserResult result;
             const auto writeElement = [&]<std::size_t I>() {
                 if (result) {
-                    result = parserContext(
-                        parserWrite<W>(writer, std::get<I>(value), typename parsing::Parent<W>::Array{&array}),
-                        "Failed to write tuple element " + std::to_string(I) + ": ");
+                    auto itemRes = parserWrite<W>(writer, std::get<I>(value), typename parsing::Parent<W>::Array{&array});
+                    if (!itemRes) {
+                        result = parserContext(std::move(itemRes),
+                                               "Failed to write tuple element " + std::to_string(I) + ": ");
+                    }
                 }
             };
             (writeElement.template operator()<Is>(), ...);
+            parsing::Parent<W>::endArray(writer, array, parent, tags);
             return result;
         }
     }
@@ -53,8 +57,11 @@ struct ReadParser<R, std::tuple<Ts...>, void> {
             ParserResult result;
             const auto readElement = [&]<std::size_t I>() {
                 if (result) {
-                    result = parserContext(parserRead<R>(R::arrayElement(array, I), std::get<I>(value)),
-                                            "Failed to parse tuple element " + std::to_string(I) + ": ");
+                    auto itemRes = parserRead<R>(R::arrayElement(array, I), std::get<I>(value));
+                    if (!itemRes) {
+                        result = parserContext(std::move(itemRes),
+                                               "Failed to parse tuple element " + std::to_string(I) + ": ");
+                    }
                 }
             };
             (readElement.template operator()<Is>(), ...);
@@ -100,9 +107,12 @@ struct WriteParser<W, std::pair<K, V>, void> {
         if (!result) {
             return parserContext(std::move(result), "Failed to write pair field 'first': ");
         }
-        return parserContext(
-            parserWrite<W>(writer, value.second, typename parsing::Parent<W>::Object{"second", &object}),
-            "Failed to write pair field 'second': ");
+        result = parserWrite<W>(writer, value.second, typename parsing::Parent<W>::Object{"second", &object});
+        if (!result) {
+            return parserContext(std::move(result), "Failed to write pair field 'second': ");
+        }
+        parsing::Parent<W>::endObject(writer, object, parent, tags);
+        return sa::success();
     }
 };
 
@@ -128,7 +138,11 @@ struct ReadParser<R, std::pair<K, V>, void> {
         if (!second) {
             return makeParserError(sa::ErrorCode::InvalidField, "Required pair field 'second' is missing");
         }
-        return parserContext(parserRead<R>(second.value(), value.second), "Failed to parse pair field 'second': ");
+        auto result2 = parserRead<R>(second.value(), value.second);
+        if (!result2) {
+            return parserContext(std::move(result2), "Failed to parse pair field 'second': ");
+        }
+        return sa::success();
     }
 };
 

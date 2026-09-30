@@ -20,17 +20,17 @@ using JsonParser = simdjson::dom::parser;
 
 struct InputValue {
     simdjson::dom::element value;
-    std::shared_ptr<JsonParser> owner;
+    const std::shared_ptr<JsonParser>* owner = nullptr;
 };
 
 struct InputArray {
     simdjson::dom::array value;
-    std::shared_ptr<JsonParser> owner;
+    const std::shared_ptr<JsonParser>* owner = nullptr;
 };
 
 struct InputObject {
     simdjson::dom::object value;
-    std::shared_ptr<JsonParser> owner;
+    const std::shared_ptr<JsonParser>* owner = nullptr;
 };
 
 struct Reader {
@@ -42,6 +42,16 @@ struct Reader {
 
     static auto arrayElement(const InputArrayType& array, std::size_t index) noexcept -> InputValueType {
         return {array.value.at(index).value_unsafe(), array.owner};
+    }
+
+    template <typename Fn>
+    static auto forEachArrayElement(const InputArrayType& array, Fn&& fn) -> bool {
+        for (const auto element : array.value) {
+            if (!fn(InputValueType{element, array.owner})) {
+                return false;
+            }
+        }
+        return true;
     }
 
     static auto objectSize(const InputObjectType& object) noexcept -> std::size_t { return object.value.size(); }

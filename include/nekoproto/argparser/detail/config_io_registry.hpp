@@ -33,7 +33,7 @@ struct JsonConfigIoBackend {
     static constexpr std::string_view defaultExportName = "export-json";
     static constexpr std::string_view importHelp        = "import options from a JSON file";
     static constexpr std::string_view exportHelp        = "export resolved options to a JSON file";
-#if defined(NEKO_PROTO_ENABLE_RAPIDJSON) || defined(NEKO_PROTO_ENABLE_SIMDJSON)
+#if defined(NEKO_PROTO_ENABLE_YYJSON) || defined(NEKO_PROTO_ENABLE_RAPIDJSON) || defined(NEKO_PROTO_ENABLE_SIMDJSON)
     using Serializer                = JsonSerializer;
     static constexpr bool available = true;
 #else

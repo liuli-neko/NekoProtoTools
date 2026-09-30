@@ -60,6 +60,8 @@ using JsonDocument    = rapidjson::Document;
 using OStreamWrapper  = rapidjson::OStreamWrapper;
 template <typename BufferT = OutBufferWrapper>
 using JsonWriter = rapidjson::Writer<BufferT>;
+#ifndef NEKO_JSON_PRETTY_WRITER_DEFINED
+#define NEKO_JSON_PRETTY_WRITER_DEFINED
 template <typename BufferT = std::vector<char>>
 struct PrettyJsonWriter {};
 
@@ -74,6 +76,7 @@ struct JsonOutputArgument<PrettyJsonWriter<T>> {
     using sink_type              = T;
     static constexpr bool pretty = true;
 };
+#endif
 
 template <typename SinkT, class enable = void>
 struct JsonOutputSinkTraits {
@@ -265,6 +268,20 @@ struct WriteParser<rapid::Writer, RapidJsonValue, void> {
     }
 };
 
+template <typename WriterT>
+struct WriteParser<rapid::StreamWriter<WriterT>, RapidJsonValue, void> {
+    template <typename ParentType, typename Tags>
+    static auto write(rapid::StreamWriter<WriterT>& writer, const RapidJsonValue& value, const ParentType& parent,
+                      const Tags& tags) -> ParserResult {
+        if (value.hasValue()) {
+            parsing::Parent<rapid::StreamWriter<WriterT>>::addValue(writer, value.nativeValue(), parent, tags);
+            return sa::success();
+        }
+        parsing::Parent<rapid::StreamWriter<WriterT>>::addNull(writer, parent, tags);
+        return sa::success();
+    }
+};
+
 template <>
 struct ReadParser<rapid::Reader, RapidJsonValue, void> {
     template <typename Tags>
@@ -288,23 +305,38 @@ struct RapidJsonBackend {
     template <typename BufferT>
     class OutputState {
     public:
-        using OutputTraits = detail::JsonOutputTraits<BufferT>;
-        using WriterType   = typename OutputTraits::writer_type;
+        using OutputTraits     = detail::JsonOutputTraits<BufferT>;
+        using WriterType       = typename OutputTraits::writer_type;
+        using StreamWriterType = rapid::StreamWriter<WriterType>;
 
-        explicit OutputState(typename OutputTraits::output_buffer_type& buffer) noexcept : stream(buffer) {}
+        explicit OutputState(typename OutputTraits::output_buffer_type& buffer) noexcept
+            : stream(buffer), json_writer(stream), writer(&json_writer) {
+            initFormat();
+        }
 
-        OutputState(typename OutputTraits::output_buffer_type& buffer, WriterType&& writer) noexcept : stream(buffer) {
-            static_cast<void>(writer);
+        OutputState(typename OutputTraits::output_buffer_type& buffer, WriterType&&) noexcept
+            : stream(buffer), json_writer(stream), writer(&json_writer) {
+            initFormat();
         }
 
         OutputState(typename OutputTraits::output_buffer_type& buffer,
                     const JsonOutputFormatOptions& format_options) noexcept
-            : stream(buffer), options(format_options), has_format_options(true) {}
+            : stream(buffer), options(format_options), has_format_options(true),
+              json_writer(stream), writer(&json_writer) {
+            initFormat();
+        }
+
+        void initFormat() {
+            if (has_format_options) {
+                detail::SetJsonFormatOption<WriterType>::setting(json_writer, options);
+            }
+        }
 
         typename OutputTraits::wrapper_type stream;
-        rapid::Writer                       writer;
         JsonOutputFormatOptions             options            = JsonOutputFormatOptions::defaultOptions();
         bool                                has_format_options = false;
+        WriterType                          json_writer;
+        StreamWriterType                    writer;
         bool                                has_root           = false;
         bool                                flushed            = false;
     };
@@ -346,8 +378,8 @@ struct RapidJsonBackend {
 
     template <typename BufferT, typename T>
     static auto write(OutputState<BufferT>& state, const T& value) -> sa::Result<void> {
-        state.writer.doc()->SetNull();
-        auto result    = parserWrite<rapid::Writer>(state.writer, value, parsing::Parent<rapid::Writer>::Root{});
+        using StreamWriterType = typename OutputState<BufferT>::StreamWriterType;
+        auto result    = parserWrite<StreamWriterType>(state.writer, value, typename parsing::Parent<StreamWriterType>::Root{});
         state.has_root = static_cast<bool>(result);
         state.flushed  = false;
         return result;
@@ -361,17 +393,8 @@ struct RapidJsonBackend {
         if (state.flushed) {
             return result;
         }
-
-        typename OutputState<BufferT>::WriterType writer(state.stream);
-        if (state.has_format_options) {
-            detail::SetJsonFormatOption<typename OutputState<BufferT>::WriterType>::setting(writer, state.options);
-        }
-        const auto flushed = state.writer.doc()->Accept(writer);
-        writer.Flush();
-        state.flushed = flushed;
-        if (!flushed) {
-            return sa::error(sa::ErrorCode::ParseError, "RapidJSON failed to flush the output document");
-        }
+        state.json_writer.Flush();
+        state.flushed = true;
         return result;
     }
 

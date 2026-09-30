@@ -13,19 +13,29 @@
 // default JsonSerializer type definition
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
+#if defined(NEKO_PROTO_ENABLE_YYJSON)
+#include "json/yyjson_serializer.hpp"
+#endif
+
 #if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
 #include "json/rapid_json_serializer.hpp"
-namespace nekoproto {
-using JsonSerializer = RapidJsonSerializer;
-} // namespace nekoproto
-#elif defined(NEKO_PROTO_ENABLE_SIMDJSON)
+#endif
+
+#if defined(NEKO_PROTO_ENABLE_SIMDJSON)
 #include "json/simd_json_serializer.hpp"
+#endif
+
 namespace nekoproto {
+#if defined(NEKO_PROTO_ENABLE_YYJSON)
+using JsonSerializer = YyJsonSerializer;
+#elif defined(NEKO_PROTO_ENABLE_RAPIDJSON)
+using JsonSerializer = RapidJsonSerializer;
+#elif defined(NEKO_PROTO_ENABLE_SIMDJSON)
 using JsonSerializer = SimdJsonSerializer;
-} // namespace nekoproto
 #else
 #define NEKO_PROTO_NO_JSON_SERIALIZER
 #endif
+} // namespace nekoproto
 
 #if !defined(NEKO_PROTO_NO_JSON_SERIALIZER)
 namespace nekoproto {

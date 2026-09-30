@@ -63,6 +63,7 @@ auto parserWriteSequence(W& writer, const T& values, const ParentType& parent, c
         }
         ++index;
     }
+    parsing::Parent<W>::endArray(writer, array, parent, tags);
     return sa::success();
 }
 
@@ -74,15 +75,45 @@ auto parserReadSequence(typename R::InputValueType in, T& values, const Tags& ta
     }
     T parsed = parserEmptyContainerLike(values);
     const auto size = R::arraySize(array.value());
-    for (std::size_t i = 0; i < size; ++i) {
-        typename T::value_type item{};
-        auto result = parserRead<R>(R::arrayElement(array.value(), i), item);
-        if (!result) {
-            return parserContext(std::move(result), "Failed to parse sequence element " + std::to_string(i) + ": ");
+    if constexpr (requires { parsed.reserve(size); }) {
+        parsed.reserve(size);
+    }
+    if constexpr (requires(const typename R::InputArrayType& arr) {
+                      R::forEachArrayElement(arr, [](typename R::InputValueType) { return true; });
+                  } || requires(const typename R::InputArrayType& arr, const Tags& t) {
+                      R::forEachArrayElement(arr, [](typename R::InputValueType) { return true; }, t);
+                  }) {
+        std::size_t i = 0;
+        ParserResult error;
+        bool ok = parsing::readerForEachArrayElement<R>(array.value(), [&](typename R::InputValueType element) -> bool {
+            typename T::value_type item{};
+            auto result = parserRead<R>(element, item);
+            if (!result) {
+                error = parserContext(std::move(result), "Failed to parse sequence element " + std::to_string(i) + ": ");
+                return false;
+            }
+            if (!parserInsertSequenceValue(parsed, std::move(item))) {
+                error = makeParserError(sa::ErrorCode::InvalidField,
+                                    "Duplicate value at sequence element " + std::to_string(i));
+                return false;
+            }
+            ++i;
+            return true;
+        }, tags);
+        if (!ok) {
+            return error ? error : makeParserError(sa::ErrorCode::ParseError, "Failed to iterate sequence");
         }
-        if (!parserInsertSequenceValue(parsed, std::move(item))) {
-            return makeParserError(sa::ErrorCode::InvalidField,
-                                "Duplicate value at sequence element " + std::to_string(i));
+    } else {
+        for (std::size_t i = 0; i < size; ++i) {
+            typename T::value_type item{};
+            auto result = parserRead<R>(R::arrayElement(array.value(), i), item);
+            if (!result) {
+                return parserContext(std::move(result), "Failed to parse sequence element " + std::to_string(i) + ": ");
+            }
+            if (!parserInsertSequenceValue(parsed, std::move(item))) {
+                return makeParserError(sa::ErrorCode::InvalidField,
+                                    "Duplicate value at sequence element " + std::to_string(i));
+            }
         }
     }
     values = std::move(parsed);
@@ -139,6 +170,7 @@ struct WriteParser<W, std::vector<bool, Alloc>, void> {
             }
             ++index;
         }
+        parsing::Parent<W>::endArray(writer, array, parent, tags);
         return sa::success();
     }
 };
@@ -207,6 +239,7 @@ struct WriteParser<W, std::array<T, N>, void> {
                                       "Failed to write fixed array element " + std::to_string(i) + ": ");
             }
         }
+        parsing::Parent<W>::endArray(writer, array, parent, tags);
         return sa::success();
     }
 };

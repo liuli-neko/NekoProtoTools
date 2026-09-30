@@ -286,6 +286,32 @@ struct Parent {
             static_assert(always_false_v<Type>, "Unsupported fixed-value parent.");
         }
     }
+
+    template <class ParentType, typename Tags = NoTags>
+    static void endObject(W& writer, OutputObjectType& object, const ParentType& /*parent*/,
+                          const Tags& /*tags*/ = Tags{}) {
+        if constexpr (requires { writer.endObject(&object); }) {
+            writer.endObject(&object);
+        }
+    }
+
+    template <class ParentType, typename Tags = NoTags>
+    static void endIdObject(W& writer, OutputIdObjectType& object, const ParentType& /*parent*/,
+                            const Tags& /*tags*/ = Tags{}) {
+        if constexpr (requires { writer.endObject(&object); }) {
+            writer.endObject(&object);
+        } else if constexpr (requires { writer.endIdObject(&object); }) {
+            writer.endIdObject(&object);
+        }
+    }
+
+    template <class ParentType, typename Tags = NoTags>
+    static void endArray(W& writer, OutputArrayType& array, const ParentType& /*parent*/,
+                         const Tags& /*tags*/ = Tags{}) {
+        if constexpr (requires { writer.endArray(&array); }) {
+            writer.endArray(&array);
+        }
+    }
 };
 #undef NEKO_RETURN_TAGGED
 } // namespace parsing

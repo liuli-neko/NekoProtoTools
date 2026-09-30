@@ -1015,6 +1015,21 @@ private:
     }
 
 public:
+    // Parser-oriented traversal: no FieldView or result tuple, and stop at the
+    // first field whose callback reports failure.
+    template <typename U, typename CallAbleT>
+    static constexpr bool forEachWhile(U&& obj, CallAbleT&& func) {
+        static_assert(Provider::has_values, "type has no values meta");
+        decltype(auto) accessors = Provider::accessors(obj);
+        constexpr auto fieldNames = Provider::names();
+        return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            return (static_cast<bool>(func(std::integral_constant<std::size_t, Is>{},
+                                           Provider::template getFrom<Is>(accessors, obj),
+                                           (Is < fieldNames.size()) ? fieldNames[Is] : std::string_view{},
+                                           std::get<Is>(field_tags))) && ...);
+        }(std::make_index_sequence<Provider::value_count>{});
+    }
+
     // STL-style field view iterator
     template <typename U, typename CallAbleT>
     static constexpr auto forEachField(U&& obj, CallAbleT&& func) {

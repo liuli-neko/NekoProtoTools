@@ -16,22 +16,22 @@ struct nekoproto::Meta<User> {
         "email", &User::email, "address", &User::address);
 };
 
-#include <nekoproto/serialization/json_serializer.hpp>
+#include <nekoproto/serialization/json/simd_json_serializer.hpp>
 
 #include <vector>
 
 struct BenchmarkAdapter {
     using Buffer = std::vector<char>;
     static constexpr const char* library = "NekoProtoTools";
-    static constexpr const char* backend = "yyjson";
+    static constexpr const char* backend = "simdjson";
 
     static auto encode(const User& value, Buffer& bytes) -> bool {
         bytes.clear();
-        nekoproto::JsonSerializer::OutputSerializer output(bytes);
+        nekoproto::SimdJsonSerializer::OutputSerializer output(bytes);
         return static_cast<bool>(output(value)) && static_cast<bool>(output.end());
     }
     static auto decode(const Buffer& bytes, User& value) -> bool {
-        nekoproto::JsonSerializer::InputSerializer input(bytes.data(), bytes.size());
+        nekoproto::SimdJsonSerializer::InputSerializer input(bytes.data(), bytes.size());
         return static_cast<bool>(input(value));
     }
 };
