@@ -35,4 +35,4 @@ xmake test -g benchmark
 
 ## 编译时间工作负载
 
-[compile_time/](compile_time/README.md) 保留现有反射和序列化编译工作负载，可在仓库根目录运行 `xmake bench_compile_time`。现有跨库编译案例的标准、编译参数和依赖发现方式尚未统一，因此其历史结果仅供探索，不与上面的运行时 JSON 对比混用。
+[compile_time/](compile_time/README.md) 保留反射和序列化编译工作负载，可在仓库根目录运行 `xmake bench_compile_time`。当前任务统一使用 C++20、`-O0 -c`、同一字段数和对应格式后端，输出每轮原始时间、编译参数与依赖路径；旧的 `RESULTS.md` 是方法对齐前的历史探索结果，不用于跨库排名，也不与上面的运行时 JSON 对比混用。

@@ -1,5 +1,7 @@
 # Reflection & Serialization Compile-Time Benchmark Results
 
+> Historical exploratory run. These measurements used different C++ standards and backend/configuration choices; do not use the percentages below as a current cross-library ranking. Rerun the C++20 task described in [README.md](README.md) and retain its raw data and compiler commands.
+
 Environment: linux (x86_64), Compiler: `Debian clang version 21.1.8 (3~bpo13+2)`, Optimization: `-O0`, Repeats: 3
 
 ## Head-to-Head Comparison: NekoProto vs reflect-cpp
