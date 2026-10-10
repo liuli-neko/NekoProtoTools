@@ -8,6 +8,8 @@
 #include "nekoproto/serialization/types/binary_data.hpp"
 #include "../common/json_semantic.hpp"
 
+#include <string_view>
+
 using namespace nekoproto;
 
 template <typename T>
@@ -194,13 +196,12 @@ TEST_F(ProtoTest, StructSerialize) {
     testp.l = "this a test for variant";
     std::vector<char> data;
     data = testp.makeProto().toData();
-    data.push_back('\0');
-    EXPECT_STREQ(
-        data.data(),
+    EXPECT_TRUE(neko_test::jsonEquivalent(
+        std::string_view(data.data(), data.size()),
         "{\"a\":3,\"b\":\"Struct "
         "test\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,3,0,0],\"h\":\"TEnum_A\","
         "\"i\":{\"a\":1,\"b\":\"hello\",\"c\":true,\"d\":3.141592654,\"e\":[1,2,3],\"f\":{\"a\":1,\"b\":2},\"g\":[1,2,"
-        "3,0,0],\"h\":\"TEnum_A\"},\"j\":[1,\"hello\"],\"l\":[1,\"this a test for variant\"]}");
+        "3,0,0],\"h\":\"TEnum_A\"},\"j\":[1,\"hello\"],\"l\":[1,\"this a test for variant\"]}"));
 }
 
 TEST_F(ProtoTest, StructDeserialize) {
