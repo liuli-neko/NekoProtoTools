@@ -104,10 +104,16 @@ inline auto parserContextField(ParserResult result, std::string_view fieldName, 
     return sa::err(std::move(error));
 }
 
+template <typename W, typename = void>
+struct WriterContainerSizeRequirement : std::true_type {};
+
 template <typename W>
-concept RequiresContainerSize = (!requires {
-    requires !bool(W::requires_field_count);
-});
+struct WriterContainerSizeRequirement<W,
+                                      std::void_t<decltype(std::bool_constant<static_cast<bool>(W::requires_field_count)>{})>>
+    : std::bool_constant<static_cast<bool>(W::requires_field_count)> {};
+
+template <typename W>
+concept RequiresContainerSize = WriterContainerSizeRequirement<W>::value;
 
 template <typename W, typename T, typename Enable = void>
 struct WriteParser {
