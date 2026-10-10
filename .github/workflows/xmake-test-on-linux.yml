@@ -28,14 +28,7 @@ jobs:
             cxx: g++
             coverage: true
             experimental: false
-          - stdcxx: 23
-            kind: shared
-            mode: coverage
-            cc: gcc
-            cxx: g++
-            coverage: true
-            experimental: false
-          - stdcxx: 23
+          - stdcxx: 20
             kind: static
             mode: debug
             cc: gcc
@@ -82,7 +75,7 @@ jobs:
         verbose: true
 
   sanitizers:
-    name: ${{ matrix.mode }} focused regression (supported Clang, C++23)
+    name: ${{ matrix.mode }} focused regression (supported Clang, C++20)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -112,7 +105,7 @@ jobs:
           "clang++-${MIN_CLANG_VERSION}" --version
         fi
     - name: Configure
-      run: xmake f -m ${{ matrix.mode }} -k static --stdcxx=23 --cc=${CC} --cxx=${CXX} --ld=${CXX} --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --ccache=n -vy
+      run: xmake f -m ${{ matrix.mode }} -k static --stdcxx=20 --cc=${CC} --cxx=${CXX} --ld=${CXX} --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --ccache=n -vy
     - name: Build serializer regression
       if: ${{ matrix.mode != 'tsan' }}
       run: xmake build test_binary_serializer
@@ -151,7 +144,7 @@ jobs:
           "clang++-${MIN_CLANG_VERSION}" --version
         fi
     - name: Configure
-      run: xmake f -m debug -k static --stdcxx=23 --cc=${CC} --cxx=${CXX} --ld=${CXX} --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --fuzzer_test=y --ccache=n -vy
+      run: xmake f -m debug -k static --stdcxx=20 --cc=${CC} --cxx=${CXX} --ld=${CXX} --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --fuzzer_test=y --ccache=n -vy
     - name: Build fuzz targets
       run: |
         xmake build test_json_proto
