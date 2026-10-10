@@ -2,7 +2,7 @@ task("bench_json")
     set_category("benchmark")
     set_menu({
         usage = "xmake bench_json [options]",
-        description = "Build and run the three-library JSON comparison",
+        description = "Build and run the five-adapter JSON comparison",
         options = {
             {'n', "iterations", "kv", "10000", "Operations per case (default: 10000)"},
             {'r', "repeats", "kv", "3", "Complete runs per library (default: 3)"},
@@ -208,7 +208,7 @@ task("bench_json")
         io.writefile(path.join(output_dir, "json_sizes.csv"), table.concat(size_rows, "\n") .. "\n")
         local report = {
             "# JSON benchmark comparison", "",
-            "Median of " .. repeats .. " repeats, " .. iterations .. " operations per case. Each row compares the same case and operation across three adapters.",
+            "Median of " .. repeats .. " repeats, " .. iterations .. " operations per case. Each row compares the same case and operation across five adapters.",
             "", "The deserialize input is the same NekoProtoTools JSON fixture for every adapter. Serialize throughput uses each adapter's own output size.",
             "", table.concat(comparison_tables, "\n"), table.concat(size_table, "\n"), "",
             "[Comparison CSV](json.csv) · [Raw repeat data](raw.csv) · [Environment](environment.txt) · [Compile commands](compile-commands.txt)", ""
@@ -232,7 +232,7 @@ task("bench_json")
             "Glaze: " .. tostring(resolved_packages["glaze"] or "unknown"),
             "command: xmake bench_json -n " .. iterations .. " -r " .. repeats .. " -o " .. output_dir,
             "model: benchmarks/benchmark_models.hpp; seeds: 0x4e454b4f20260400 and +4; warm-up: 100 per case",
-            "All three outputs were decoded by all three adapters before timing.",
+            "All five outputs were decoded by all five adapters before timing.",
             "Deserialize uses the same NekoProtoTools JSON fixture for every adapter; serialize measures each native output.",
             "json_bytes means produced bytes for serialize, fixture input bytes for deserialize.",
             "Every case passed round-trip checks before and after measurement."

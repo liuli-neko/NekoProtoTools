@@ -1,0 +1,26 @@
+category,workload,description,neko_avg_ms,neko_min_ms,neko_max_ms,neko_size_bytes,rfl_avg_ms,rfl_min_ms,rfl_max_ms,rfl_size_bytes,speedup_pct,speedup_ratio
+comparative,include_cost,Core header include overhead,1975.33,1956.00,1999.00,696,2609.33,2574.00,2662.00,744,24.30,1.32
+comparative,json_write_4,JSON write (4 fields),2494.33,2475.00,2520.00,213216,2749.67,2735.00,2772.00,130576,9.29,1.10
+comparative,json_read_4,JSON read (4 fields),2471.00,2464.00,2480.00,350024,2804.00,2781.00,2829.00,303112,11.88,1.13
+comparative,json_write_16,JSON write (16 fields),2687.00,2676.00,2708.00,857088,2982.00,2970.00,2996.00,389656,9.89,1.11
+comparative,json_read_16,JSON read (16 fields),2647.00,2636.00,2664.00,617264,3177.33,3159.00,3202.00,831304,16.69,1.20
+comparative,json_write_32,JSON write (32 fields),2894.33,2883.00,2908.00,1032040,3349.00,3297.00,3442.00,765272,13.58,1.16
+comparative,json_read_32,JSON read (32 fields),2977.67,2897.00,3125.00,869184,3733.00,3695.00,3796.00,1518968,20.23,1.25
+comparative,json_write_64,JSON write (64 fields),3481.67,3431.00,3561.00,1435560,4543.00,4529.00,4556.00,1955520,23.36,1.30
+comparative,json_read_64,JSON read (64 fields),3422.67,3388.00,3457.00,1463320,5429.00,5380.00,5476.00,3705608,36.96,1.59
+comparative,yaml_write_64,YAML write (64 fields),3831.00,3705.00,3938.00,1688208,4974.33,4912.00,5055.00,1971216,22.98,1.30
+comparative,yaml_read_64,YAML read (64 fields),3956.33,3887.00,4013.00,1684488,6097.00,6028.00,6235.00,3882256,35.11,1.54
+comparative,toml_write_64,TOML write (64 fields),4562.33,4356.00,4667.00,1845976,5628.33,5611.00,5650.00,2266320,18.94,1.23
+comparative,toml_read_64,TOML read (64 fields),4535.00,4478.00,4606.00,2245120,6658.33,6603.00,6721.00,4379656,31.89,1.47
+comparative,xml_write_64,XML write (64 fields),3716.33,3606.00,3785.00,1516888,4548.67,4511.00,4600.00,1982448,18.30,1.22
+comparative,xml_read_64,XML read (64 fields),3323.67,3283.00,3363.00,1172760,5347.67,5321.00,5365.00,3877408,37.85,1.61
+feature,binary_write_64,Neko binary write (64 fields),3803.67,3752.00,3862.00,2049848,,,,,
+feature,binary_read_64,Neko binary read (64 fields),3904.33,3838.00,3945.00,2586616,,,,,
+feature,foreach_4,Reflect::forEach (4 fields),2045.33,2036.00,2051.00,54600,,,,,
+feature,foreach_16,Reflect::forEach (16 fields),2163.00,2158.00,2166.00,185920,,,,,
+feature,foreach_32,Reflect::forEach (32 fields),2356.00,2346.00,2364.00,392296,,,,,
+feature,foreach_64,Reflect::forEach (64 fields),2942.33,2931.00,2952.00,941872,,,,,
+feature,foreach_64_sparse,Reflect::forEach (64 fields, 1 tag/field),2960.33,2952.00,2965.00,976648,,,,,
+feature,foreach_64_dense,Reflect::forEach (64 fields, 4 tags/field),3043.00,3015.00,3062.00,999624,,,,,
+feature,schema_64,Runtime schema generation (64 fields),3085.00,3030.00,3171.00,881392,,,,,
+feature,enum_heavy,Constexpr enum tables (10 enums),2729.00,2680.00,2773.00,688,,,,,

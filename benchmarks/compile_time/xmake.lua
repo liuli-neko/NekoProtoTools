@@ -370,6 +370,8 @@ task("bench_compile_time")
             }
         }
 
+        local recorded_commands = 0
+
         -- Helper to compile a single workload
         local function run_compile_benchmark(source_file, base_flags, extra_flags, out_obj_name)
             local args = {}
@@ -384,11 +386,12 @@ task("bench_compile_time")
             table.insert(args, "-o")
             table.insert(args, obj_file)
 
+            if recorded_commands > 0 then commands_file:write("\n") end
             commands_file:write(out_obj_name, "\n", string.format("%q", compiler), "\n")
             for _, arg in ipairs(args) do
                 commands_file:write(string.format("%q", arg), "\n")
             end
-            commands_file:write("\n")
+            recorded_commands = recorded_commands + 1
 
             if is_verbose then
                 print("[CMD]", compiler, table.concat(args, " "))
