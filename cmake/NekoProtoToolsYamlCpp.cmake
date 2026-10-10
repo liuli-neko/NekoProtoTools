@@ -16,7 +16,22 @@ if(NOT TARGET yaml-cpp::yaml-cpp AND NEKO_PROTO_FETCH_MISSING_DEPS)
         URL https://github.com/jbeder/yaml-cpp/archive/refs/tags/0.8.0.tar.gz
         URL_HASH SHA256=fbe74bbdcee21d656715688706da3c8becfd946d92cd44705cc6098bb23b3a16
         ${_neko_yamlcpp_fetch_options})
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL 4.0 AND
+       (NOT DEFINED CMAKE_POLICY_VERSION_MINIMUM OR CMAKE_POLICY_VERSION_MINIMUM VERSION_LESS 3.5))
+        if(DEFINED CMAKE_POLICY_VERSION_MINIMUM)
+            set(_neko_yamlcpp_saved_policy_minimum "${CMAKE_POLICY_VERSION_MINIMUM}")
+        endif()
+        set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+        set(_neko_yamlcpp_adjusted_policy_minimum TRUE)
+    endif()
     FetchContent_MakeAvailable(neko_yamlcpp)
+    if(_neko_yamlcpp_adjusted_policy_minimum)
+        if(DEFINED _neko_yamlcpp_saved_policy_minimum)
+            set(CMAKE_POLICY_VERSION_MINIMUM "${_neko_yamlcpp_saved_policy_minimum}")
+        else()
+            unset(CMAKE_POLICY_VERSION_MINIMUM)
+        endif()
+    endif()
 endif()
 
 if(TARGET yaml-cpp::yaml-cpp)
