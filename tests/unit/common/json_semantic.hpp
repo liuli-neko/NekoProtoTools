@@ -77,8 +77,9 @@ auto forEachJsonObjectKey(const JsonValue& value, Fn&& fn) -> void {
         fn(std::string_view{yyjson_get_str(key), yyjson_get_len(key)});
     }
 #elif defined(NEKO_PROTO_ENABLE_RAPIDJSON)
-    for (const auto& member : value.nativeValue().GetObject()) {
-        fn(std::string_view{member.name.GetString(), member.name.GetStringLength()});
+    const auto& native = value.nativeValue();
+    for (auto member = native.MemberBegin(); member != native.MemberEnd(); ++member) {
+        fn(std::string_view{member->name.GetString(), member->name.GetStringLength()});
     }
 #else
     for (const auto field : value.nativeValue().get_object().value_unsafe()) {
