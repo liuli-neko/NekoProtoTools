@@ -46,10 +46,12 @@ jobs:
       - name: Provision C++20 Ilias
         if: matrix.rpc == 'ON'
         run: |
-          xmake f -m release --stdcxx=20 --enable_protocol=y --enable_rapidjson=y --enable_communication=y --enable_jsonrpc=y --enable_rpc_trace=y --ccache=n -vy
-          ilias_pc=$(find "$HOME/.xmake/packages/i/ilias/0.5.0" -path '*/lib/pkgconfig/ilias.pc' -print -quit)
-          test -n "$ilias_pc"
-          ilias_prefix=$(dirname "$(dirname "$(dirname "$ilias_pc")")")
+          xmake f -m release --stdcxx=20 --enable_protocol=y --enable_rapidjson=y --enable_communication=y --enable_jsonrpc=y --enable_rpc_trace=y --ccache=n -y
+          ilias_prefix=$(xmake show -t NekoJsonRpc --format=json | python3 -c 'import json, sys; from pathlib import Path; target = json.load(sys.stdin); print(next(Path(item["value"]).parent for item in target["linkdirs"] if item.get("source", {}).get("tips") == "package(ilias)"))')
+          if ! test -f "$ilias_prefix/lib/pkgconfig/ilias.pc"; then
+            echo "::error::xmake did not expose an ilias.pc file at $ilias_prefix"
+            exit 1
+          fi
           echo "NEKO_ILIAS_PREFIX=$ilias_prefix" >> "$GITHUB_ENV"
       - name: Configure
         run: cmake -S . -B build -DNEKO_PROTO_BUILD_TESTS=ON -DNEKO_PROTO_ENABLE_RAPIDJSON=ON -DNEKO_PROTO_ENABLE_YYJSON=ON -DNEKO_PROTO_ENABLE_SIMDJSON=ON -DNEKO_PROTO_ENABLE_PUGIXML=ON -DNEKO_PROTO_ENABLE_YAMLCPP=ON -DNEKO_PROTO_ENABLE_LIBFYAML=${{ matrix.libfyaml }} -DNEKO_PROTO_ENABLE_TOMLPLUSPLUS=ON -DNEKO_PROTO_ENABLE_COMMUNICATION=${{ matrix.rpc }} -DNEKO_PROTO_ENABLE_JSONRPC=${{ matrix.rpc }} -DNEKO_PROTO_ENABLE_RPC_TRACE=${{ matrix.rpc }} -DCMAKE_PREFIX_PATH="$NEKO_ILIAS_PREFIX" -DCMAKE_CXX_STANDARD=20 -DCMAKE_CXX_STANDARD_REQUIRED=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON
