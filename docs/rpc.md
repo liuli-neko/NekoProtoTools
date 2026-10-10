@@ -6,4 +6,4 @@
 
 Neko RPC 普通帧以 `4E 52 01`（`NR`、wire 版本 1）开头，固定头的多字节整数按大端序编码，之后依次是方法标识、TLV 扩展和序列化负载。接收端会拒绝未知 wire 版本；`codec` 字段区分负载序列化方式，方法表的版本号是独立的扩展字段。测试中已固定包含 TLV 与 Binary V2 负载的完整 V1 帧向量。若要改变 V1 帧头或已有字段的解释，应升级 wire 版本并设计迁移；当前仍不承诺跨发布版本的 RPC wire 兼容性。
 
-RPC 仍是实验性模块。`RpcBackend` concept、可替换压缩 codec、方法 ID 协商和公共头内的 `private/`、`detail/` 实现尚不构成稳定的第三方后端扩展承诺。本地 `test_neko_rpc_backend` 的 41 项测试覆盖多连接、取消、超时、关闭、负载限制、方法表更新和固定帧向量；CMake C++20 下安装包及源码消费者已验证 target 和依赖链接。远端平台的完整 RPC 运行测试尚未验证。
+RPC 仍是实验性模块。`RpcBackend` concept、可替换压缩 codec、方法 ID 协商和公共头内的 `private/`、`detail/` 实现尚不构成稳定的第三方后端扩展承诺。本地 C++20 `test_neko_rpc_backend` 的 41 项测试覆盖多连接、取消、超时、关闭、负载限制、方法表更新和固定帧向量；远端 Windows xmake MSVC、clang-cl 与 Linux C++20 常规测试已通过。CMake C++20 下 GCC 的安装包及源码消费者已验证 target 和依赖链接；Windows CMake RPC 组合仍待验证。
