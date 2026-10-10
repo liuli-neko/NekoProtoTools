@@ -20,6 +20,8 @@ xmake test -g benchmark
 
 输出文件包含可并排阅读的延迟、吞吐量、输出大小，以及原始记录和环境：
 
+[C++20 本机样例结果](results/json-cpp20-2026-10-10/summary.md)保留了 4 个适配器、4 个 case、3 轮测量的完整原始记录及固定输入。
+
 | 文件 | 内容 |
 |---|---|
 | `json.csv` | 主对比表：先列全部 serialize、再列全部 deserialize；四个 `ns_per_op` 列相邻，四个 `mb_per_second` 列相邻；值为各轮中位数 |

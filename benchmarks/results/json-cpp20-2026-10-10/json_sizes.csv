@@ -1,0 +1,5 @@
+case,neko_yyjson_bytes,neko_simdjson_bytes,reflect_cpp_bytes,rapidjson_raw_bytes
+small,167,167,167,167
+medium,332,324,332,332
+large,1552,1422,1552,1552
+small_null_email,167,165,167,167
