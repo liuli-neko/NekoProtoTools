@@ -1,4 +1,4 @@
-add_requires("rapidjson", "reflect-cpp", "glaze", "yyjson", "simdjson")
+add_requires("rapidjson", "reflect-cpp", "yyjson", "simdjson")
 
 local benchmark_sources = "json_benchmark.cpp"
 
@@ -33,15 +33,6 @@ target("bench_json_reflect_cpp")
     add_tests("correctness", {runargs = {"5"}, group = "benchmark"})
 target_end()
 
-target("bench_json_glaze")
-    set_kind("binary")
-    set_default(false)
-    add_files(benchmark_sources)
-    add_defines("NEKO_BENCH_GLAZE")
-    add_packages("glaze")
-    add_tests("correctness", {runargs = {"5"}, group = "benchmark"})
-target_end()
-
 target("bench_json_rapidjson_raw")
     set_kind("binary")
     set_default(false)
@@ -56,7 +47,7 @@ target_end()
 target("bench_json")
     set_kind("phony")
     set_default(false)
-    add_deps("bench_json_rapidjson_raw", "bench_json_nekoproto", "bench_json_nekoproto_simdjson", "bench_json_reflect_cpp", "bench_json_glaze")
+    add_deps("bench_json_rapidjson_raw", "bench_json_nekoproto", "bench_json_nekoproto_simdjson", "bench_json_reflect_cpp")
     on_run(function ()
         os.execv("xmake", {"bench_json"})
     end)
