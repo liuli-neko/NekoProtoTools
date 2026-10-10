@@ -2,11 +2,11 @@
 
 [English](README_en.md) · [MIT License](LICENSE) · [Linux CI](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-linux.yml) · [Windows CI](https://github.com/liuli-neko/neko-proto-tools/actions/workflows/xmake-test-on-windows.yml)
 
-**NekoProtoTools 是一个 C++23 元数据工具库：同一份类型描述可用于反射、序列化、命令行解析和协议工具。** 当前开发版本见 [version.lua](version.lua)；稳定性状态见下文。
+**NekoProtoTools 是一个 C++20 元数据工具库：同一份类型描述可用于反射、序列化、命令行解析和协议工具。** 当前开发版本见 [version.lua](version.lua)；稳定性状态见下文。
 
 ## 快速开始
 
-下面示例使用内置 Binary 序列化器，无需第三方库。完整代码见 [serialization.cpp](examples/serialization.cpp)。
+下面示例使用内置 Binary 序列化器，无需启用第三方格式后端。C++20 构建需要 zeus_expected；CMake 可查找已安装的头文件，也可按下面的配置获取缺失依赖。完整代码见 [serialization.cpp](examples/serialization.cpp)。
 
 ```cpp
 #include <nekoproto/reflect.hpp>
@@ -35,7 +35,7 @@ int main() {
 ```
 
 ```sh
-cmake -S . -B build -DNEKO_PROTO_BUILD_TESTS=ON
+cmake -S . -B build -DNEKO_PROTO_BUILD_TESTS=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
@@ -43,9 +43,9 @@ ctest --test-dir build --output-on-failure
 ## 核心能力
 
 - **反射与 metadata**：非侵入 `Meta<T>`、字段遍历和 tags；见 [反射示例](examples/reflection.cpp)。
-- **序列化**：内置 Binary；JSON、XML、YAML、TOML 后端按需启用，其中 CMake 当前已支持 RapidJSON；见 [序列化示例](examples/serialization.cpp)。
+- **序列化**：内置 Binary；JSON、XML、YAML、TOML 后端可按需用 CMake 或 xmake 启用；见 [序列化示例](examples/serialization.cpp)。
 - **ArgParser**：从同一份 metadata 解析 CLI；见 [CLI 示例](examples/argparser.cpp)。
-- **协议与 RPC**：xmake 已提供 Protocol、Communication 和 JSON/Binary RPC 目标；CMake 当前导出 Protocol，RPC 的 CMake 依赖映射仍在整理。
+- **协议与 RPC**：两套构建系统均支持 Protocol、Communication 和 JSON/Binary RPC；RPC 需要 Ilias，具体选项见 [构建说明](docs/build-options.md)。
 
 [一体化示例](examples/all_in_one.cpp) 使用同一份 `Meta<User>` 完成 CLI 解析、二进制往返和字段遍历。
 
@@ -60,7 +60,7 @@ FetchContent_MakeAvailable(NekoProtoTools)
 target_link_libraries(your_app PRIVATE NekoProto::Serializer NekoProto::ArgParser)
 ```
 
-安装后可使用 `find_package(NekoProtoTools CONFIG REQUIRED)` 和相同 targets。CMake 选项、RapidJSON 依赖以及 xmake 配置见 [构建说明](docs/build-options.md)。
+安装后可使用 `find_package(NekoProtoTools CONFIG REQUIRED)` 和相同 targets。CMake 与 xmake 的可选模块、依赖发现及缺失报告见 [构建说明](docs/build-options.md)。
 
 xmake 用户可使用 `xmake f -m release --enable_rapidjson=y && xmake`；库的 xmake target 为 `NekoSerializer`、`NekoArgParser`、`NekoProtoBase`，可选 RPC target 为 `NekoJsonRpc`。
 

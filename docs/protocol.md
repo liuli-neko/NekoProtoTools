@@ -1,6 +1,6 @@
 # Protocol 与 Communication
 
-`ProtoFactory`/`IProto` 提供协议对象与工厂功能；CMake 导出 `NekoProto::Protocol`，xmake target 名为 `NekoProtoBase`。Communication 依赖 Ilias，目前仅由 xmake 构建。
+`ProtoFactory`/`IProto` 提供协议对象与工厂功能；CMake 导出 `NekoProto::Protocol`，xmake target 名为 `NekoProtoBase`。Communication 依赖 Ilias，CMake 设置 `NEKO_PROTO_ENABLE_COMMUNICATION=ON` 后导出 `NekoProto::Communication`；xmake 可启用 `enable_communication=y`。
 
 协议工厂接口位于 `<nekoproto/proto/proto_base.hpp>`。构造时的版本号按每段低 8 位打包为 `major << 16 | minor << 8 | patch`；它只是工厂元数据，不参与 Binary 输入的版本校验。
 
