@@ -45,7 +45,7 @@ ctest --test-dir build --output-on-failure
 - **反射与 metadata**：非侵入 `Meta<T>`、字段遍历和 tags；见 [反射示例](examples/reflection.cpp)。
 - **序列化**：内置 Binary；JSON、XML、YAML、TOML 后端可按需用 CMake 或 xmake 启用；见 [序列化示例](examples/serialization.cpp)。
 - **ArgParser**：从同一份 metadata 解析 CLI；见 [CLI 示例](examples/argparser.cpp)。
-- **协议与 RPC**：两套构建系统均支持 Protocol、Communication 和 JSON/Binary RPC；RPC 需要 Ilias，具体选项见 [构建说明](docs/build-options.md)。
+- **协议与 RPC**：两套构建系统均支持 Protocol、Communication 和 JSON/Binary RPC；[类型 ID 示例](examples/protocol_ids.cpp)展示进程间如何使用固定 ID。RPC 需要 Ilias，具体选项见 [构建说明](docs/build-options.md)。
 
 [一体化示例](examples/all_in_one.cpp) 使用同一份 `Meta<User>` 完成 CLI 解析、二进制往返和字段遍历。
 

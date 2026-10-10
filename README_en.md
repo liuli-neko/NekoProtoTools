@@ -45,7 +45,7 @@ ctest --test-dir build --output-on-failure
 - **Reflection and metadata**: non-intrusive `Meta<T>`, field iteration, and tags; see the [reflection example](examples/reflection.cpp).
 - **Serialization**: built-in Binary and optional JSON, XML, YAML, and TOML backends through CMake or xmake; see the [serialization example](examples/serialization.cpp).
 - **ArgParser**: parse CLI options using the same metadata; see the [CLI example](examples/argparser.cpp).
-- **Protocol and RPC**: both build systems support Protocol, Communication, and JSON/Binary RPC. RPC requires Ilias; see [build options](docs/build-options.md).
+- **Protocol and RPC**: both build systems support Protocol, Communication, and JSON/Binary RPC. The [type ID example](examples/protocol_ids.cpp) shows why protocols exchanged between processes need fixed IDs. RPC requires Ilias; see [build options](docs/build-options.md).
 
 The [all-in-one example](examples/all_in_one.cpp) uses one `Meta<User>` for CLI parsing, binary round trips, and field iteration.
 
