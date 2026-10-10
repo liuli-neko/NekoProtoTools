@@ -291,7 +291,7 @@ end
 if not has_config("has_std_expected") then
     add_requires("zeus_expected")
     if not has_config("3rd_custom") then
-        add_requireconfs("**zeus_expected", {version = "v1.3.1"})
+        add_requireconfs("**zeus_expected", {version = "v1.4.0"})
     end
 end
 

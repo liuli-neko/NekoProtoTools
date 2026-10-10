@@ -99,6 +99,11 @@ public:
         return {val};
     }
 
+    auto valueAsRoot(yyjson_mut_val* value) noexcept -> OutputValueType {
+        yyjson_mut_doc_set_root(doc_, value);
+        return {value};
+    }
+
     template <typename T>
     auto valueAsRoot(const T& value) noexcept -> OutputValueType {
         auto* val = fromBasicType(value);
@@ -143,6 +148,11 @@ public:
         return {val};
     }
 
+    auto addValueToArray(yyjson_mut_val* value, OutputArrayType* parent) noexcept -> OutputValueType {
+        yyjson_mut_arr_append(parent->value, value);
+        return {value};
+    }
+
     template <typename T>
     auto addValueToObject(std::string_view name, const T& value, OutputObjectType* parent) noexcept -> OutputValueType {
         auto* key = yyjson_mut_strncpy(doc_, name.data(), name.size());
@@ -156,6 +166,13 @@ public:
         auto* val = yyjson_mut_rawncpy(doc_, value.text.data(), value.text.size());
         yyjson_mut_obj_add(parent->value, key, val);
         return {val};
+    }
+
+    auto addValueToObject(std::string_view name, yyjson_mut_val* value, OutputObjectType* parent) noexcept
+        -> OutputValueType {
+        auto* key = yyjson_mut_strncpy(doc_, name.data(), name.size());
+        yyjson_mut_obj_add(parent->value, key, value);
+        return {value};
     }
 
     auto addNullToArray(OutputArrayType* parent) noexcept -> OutputValueType {

@@ -1,0 +1,31 @@
+if(TARGET NekoProto::Ilias)
+    set(NEKO_PROTO_ILIAS_FOUND TRUE)
+    return()
+endif()
+
+find_package(ilias 0.5.0 CONFIG QUIET)
+if(TARGET ilias::ilias)
+    set(_neko_ilias_target ilias::ilias)
+elseif(TARGET ilias)
+    set(_neko_ilias_target ilias)
+else()
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(NEKO_PROTO_ILIAS QUIET IMPORTED_TARGET GLOBAL ilias>=0.5.0)
+        if(TARGET PkgConfig::NEKO_PROTO_ILIAS)
+            set(_neko_ilias_target PkgConfig::NEKO_PROTO_ILIAS)
+        endif()
+    endif()
+endif()
+
+if(_neko_ilias_target)
+    add_library(NekoProto::Ilias INTERFACE IMPORTED GLOBAL)
+    set_target_properties(NekoProto::Ilias PROPERTIES
+        INTERFACE_LINK_LIBRARIES "${_neko_ilias_target};NekoProto::Expected"
+        INTERFACE_COMPILE_DEFINITIONS ILIAS_USE_ZEUS_EXPECTED=1)
+    set(NEKO_PROTO_ILIAS_FOUND TRUE)
+else()
+    set(NEKO_PROTO_ILIAS_FOUND FALSE)
+    set(NEKO_PROTO_ILIAS_DIAGNOSTIC
+        "Communication and JSON-RPC require ilias >= 0.5.0. Install a CMake package exporting ilias::ilias, or install ilias.pc and set CMAKE_PREFIX_PATH or PKG_CONFIG_PATH. Automatic source fetching is not provided for ilias.")
+endif()

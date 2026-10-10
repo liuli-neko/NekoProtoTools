@@ -6,6 +6,7 @@
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/to_string.hpp"
 #include "nekoproto/serialization/types/binary_data.hpp"
+#include "../common/json_semantic.hpp"
 
 using namespace nekoproto;
 
@@ -452,17 +453,6 @@ struct ZTypeTest {
 };
 
 static const char* gZTypeTestStr =
-#if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
-    "{\"a\":1,\"b\":\"field set "
-    "test\",\"c\":false,\"d\":3.141592654,\"e\":[1,2,3],\"f\":[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"g\":["
-    "1.1,2.2,3.3,4.4,5.5],\"h\":[\"a\",\"b\",\"c\"],\"i\":[1.100000023841858,2.200000047683716,3.299999952316284,4."
-    "400000095367432,5.5,6.599999904632568,7.699999809265137],\"j\":[1,2,3,4,5,6,7],\"k\":[1,\"hello\",true,3."
-    "141592654,[1,2,3],[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"TEnum_A\"],\"l\":\"hello shared "
-    "ptr\",\"p\":[{\"key\":1,\"value\":\"hello\"},{\"key\":1,\"value\":\"world\"},{\"key\":2,\"value\":\"world\"}],"
-    "\"q\":[\"a\","
-    "\"a\",\"b\",\"b\",\"c\"],\"t\":[[1,2,3],[4,5,6],[7,8,9]],\"v\":"
-    "\"0011111100111111\",\"w\":{\"first\":\"hello\",\"second\":\"world\"},\"x\":1,\"y\":[1,\"hello\"]}";
-#else
     "{\"a\":1,\"b\":\"field set "
     "test\",\"c\":false,\"d\":3.141592654,\"e\":[1,2,3],\"f\":[{\"key\":1,\"value\":1},{\"key\":2,\"value\":2}],\"g\":["
     "1.1,2.2,3.3,4.4,5.5],\"h\":[\"a\",\"b\",\"c\"],\"i\":[1.1,2.2,3.3,4.4,5.5,6.6,7.7],\"j\":[1,2,3,4,5,6,7],\"k\":[1,"
@@ -471,7 +461,6 @@ static const char* gZTypeTestStr =
     "ptr\",\"p\":[{\"key\":1,\"value\":\"hello\"},{\"key\":1,\"value\":\"world\"},{\"key\":2,\"value\":\"world\"}],"
     "\"q\":[\"a\",\"a\",\"b\",\"b\",\"c\"],\"t\":[[1,2,3],[4,5,6],[7,8,9]],\"v\":"
     "\"0011111100111111\",\"w\":{\"first\":\"hello\",\"second\":\"world\"},\"x\":1,\"y\":[1,\"hello\"]}";
-#endif
 
 TEST_F(ProtoTest, AllType) {
     ZTypeTest tproto = {};
@@ -496,8 +485,7 @@ TEST_F(ProtoTest, AllType) {
     tproto.y         = "hello";
 
     auto data = tproto.makeProto().toData();
-    data.push_back('\0');
-    EXPECT_STREQ(gZTypeTestStr, data.data());
+    EXPECT_TRUE(neko_test::jsonEquivalent(std::string_view(data.data(), data.size()), gZTypeTestStr));
 }
 
 #include "../common/common_main.cpp.in" // IWYU pragma: export

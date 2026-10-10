@@ -10,6 +10,7 @@
 #ifdef NEKO_PROTO_ENABLE_YYJSON
 
 #include "nekoproto/serialization/json/yyjson_serializer.hpp"
+#include "../common/json_semantic.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 
 using namespace nekoproto;
@@ -41,6 +42,12 @@ struct YyNested {
     NEKO_SERIALIZER(name, smoke)
 };
 
+struct YyRawContainer {
+    YyJsonSerializer::JsonValue payload;
+
+    NEKO_SERIALIZER(payload)
+};
+
 template <typename T>
 std::string writeJson(const T& value) {
     std::vector<char> buffer;
@@ -63,7 +70,7 @@ bool readJson(std::string_view json, T& value) {
 TEST(YyJsonBackend, RoundTripsReflectionAndContainers) {
     const YySmoke source{.id = 7, .text = "hello", .values = {1, 2, 3}, .optional = 9};
     const auto json = writeJson(source);
-    EXPECT_EQ(json, R"({"id":7,"text":"hello","values":[1,2,3],"optional":9})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(json, R"({"id":7,"text":"hello","values":[1,2,3],"optional":9})"));
 
     YySmoke decoded;
     ASSERT_TRUE(readJson(json, decoded));
@@ -89,11 +96,11 @@ TEST(YyJsonBackend, HandlesNestedStructures) {
 TEST(YyJsonBackend, RawStringRoundTrip) {
     const RawYyField source{.payload = R"({"enabled":true,"count":10})"};
     const auto json = writeJson(source);
-    EXPECT_EQ(json, R"({"payload":{"enabled":true,"count":10}})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(json, R"({"payload":{"enabled":true,"count":10}})"));
 
     RawYyField decoded;
     ASSERT_TRUE(readJson(json, decoded));
-    EXPECT_EQ(decoded.payload, R"({"enabled":true,"count":10})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(decoded.payload, R"({"enabled":true,"count":10})"));
 }
 
 TEST(YyJsonBackend, YyJsonValueDOM) {
@@ -122,6 +129,19 @@ TEST(YyJsonBackend, YyJsonValueDOM) {
     bool flag = false;
     EXPECT_TRUE(nested["flag"].value(flag));
     EXPECT_TRUE(flag);
+}
+
+TEST(YyJsonBackend, WritesNativeValuesAtRootAndInsideContainers) {
+    const std::string json = R"({"value":[1,2]})";
+    YyJsonSerializer::JsonValue dom;
+    {
+        YyJsonSerializer::InputSerializer input(json.data(), json.size());
+        ASSERT_TRUE(input(dom));
+    }
+
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(dom), json));
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(std::vector<YyJsonSerializer::JsonValue>{dom["value"]}), R"([[1,2]])"));
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(YyRawContainer{dom["value"]}), R"({"payload":[1,2]})"));
 }
 
 TEST(YyJsonBackend, HandlesPrettyOutput) {

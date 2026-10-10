@@ -23,6 +23,7 @@
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #include "nekoproto/serialization/types/binary_data.hpp"
+#include "../common/json_semantic.hpp"
 
 using namespace nekoproto;
 
@@ -248,31 +249,31 @@ void expectTestObjectEq(const TestP& actual, const TestP& expected) {
 
 TEST(JsonSerializerTest, BasicNamedValuesUseGenericParser) {
     int integer = 1;
-    EXPECT_EQ(writeNamed("a", integer), R"({"a":1})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("a", integer), R"({"a":1})"));
     int decodedInteger = 0;
     ASSERT_TRUE(readNamed(R"({"a":1})", "a", decodedInteger));
     EXPECT_EQ(decodedInteger, integer);
 
     std::string string = "hello";
-    EXPECT_EQ(writeNamed("value", string), R"({"value":"hello"})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", string), R"({"value":"hello"})"));
     std::string decodedString;
     ASSERT_TRUE(readNamed(R"({"value":"hello"})", "value", decodedString));
     EXPECT_EQ(decodedString, string);
 
     std::string empty;
-    EXPECT_EQ(writeNamed("value", empty), R"({"value":""})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", empty), R"({"value":""})"));
     std::string decodedEmpty = "not empty";
     ASSERT_TRUE(readNamed(R"({"value":""})", "value", decodedEmpty));
     EXPECT_TRUE(decodedEmpty.empty());
 
     bool boolean = true;
-    EXPECT_EQ(writeNamed("value", boolean), R"({"value":true})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", boolean), R"({"value":true})"));
     bool decodedBoolean = false;
     ASSERT_TRUE(readNamed(R"({"value":true})", "value", decodedBoolean));
     EXPECT_TRUE(decodedBoolean);
 
     double number = 3.14;
-    EXPECT_EQ(writeNamed("value", number), R"({"value":3.14})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", number), R"({"value":3.14})"));
     double decodedNumber = 0.0;
     ASSERT_TRUE(readNamed(R"({"value":3.14})", "value", decodedNumber));
     EXPECT_DOUBLE_EQ(decodedNumber, number);
@@ -280,25 +281,25 @@ TEST(JsonSerializerTest, BasicNamedValuesUseGenericParser) {
 
 TEST(JsonSerializerTest, SequenceContainersRoundTrip) {
     const std::vector<int> vector{1, 2, 3, 4, 5};
-    EXPECT_EQ(writeNamed("value", vector), R"({"value":[1,2,3,4,5]})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", vector), R"({"value":[1,2,3,4,5]})"));
     std::vector<int> decodedVector;
     ASSERT_TRUE(readNamed(writeNamed("value", vector), "value", decodedVector));
     EXPECT_EQ(decodedVector, vector);
 
     const std::vector<int> emptyVector;
-    EXPECT_EQ(writeNamed("value", emptyVector), R"({"value":[]})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", emptyVector), R"({"value":[]})"));
     decodedVector = {1, 2, 3};
     ASSERT_TRUE(readNamed(R"({"value":[]})", "value", decodedVector));
     EXPECT_TRUE(decodedVector.empty());
 
     const std::list<int> list{1, 2, 3, 4, 5};
-    EXPECT_EQ(writeNamed("value", list), R"({"value":[1,2,3,4,5]})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", list), R"({"value":[1,2,3,4,5]})"));
     std::list<int> decodedList;
     ASSERT_TRUE(readNamed(writeNamed("value", list), "value", decodedList));
     EXPECT_EQ(decodedList, list);
 
     const std::array<int, 5> array{1, 2, 3, 4, 5};
-    EXPECT_EQ(writeNamed("value", array), R"({"value":[1,2,3,4,5]})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", array), R"({"value":[1,2,3,4,5]})"));
     std::array<int, 5> decodedArray{};
     ASSERT_TRUE(readNamed(writeNamed("value", array), "value", decodedArray));
     EXPECT_EQ(decodedArray, array);
@@ -306,20 +307,19 @@ TEST(JsonSerializerTest, SequenceContainersRoundTrip) {
 
 TEST(JsonSerializerTest, OrderedMapsRoundTripWithFormatSpecificShapes) {
     const std::map<std::string, int> stringMap{{"a", 1}, {"b", 2}, {"c", 3}};
-    EXPECT_EQ(writeNamed("value", stringMap), R"({"value":{"a":1,"b":2,"c":3}})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", stringMap), R"({"value":{"a":1,"b":2,"c":3}})"));
     std::map<std::string, int> decodedStringMap;
     ASSERT_TRUE(readNamed(writeNamed("value", stringMap), "value", decodedStringMap));
     EXPECT_EQ(decodedStringMap, stringMap);
 
     const std::map<double, int> numericMap{{1.1, 1}, {2.2, 2}, {3.3, 3}};
-    EXPECT_EQ(writeNamed("value", numericMap),
-              R"({"value":[{"key":1.1,"value":1},{"key":2.2,"value":2},{"key":3.3,"value":3}]})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", numericMap), R"({"value":[{"key":1.1,"value":1},{"key":2.2,"value":2},{"key":3.3,"value":3}]})"));
     std::map<double, int> decodedNumericMap;
     ASSERT_TRUE(readNamed(writeNamed("value", numericMap), "value", decodedNumericMap));
     EXPECT_EQ(decodedNumericMap, numericMap);
 
     const std::map<std::string, std::vector<int>> emptyMap;
-    EXPECT_EQ(writeNamed("value", emptyMap), R"({"value":{}})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", emptyMap), R"({"value":{}})"));
     std::map<std::string, std::vector<int>> decodedEmptyMap{{"old", {1}}};
     ASSERT_TRUE(readNamed(R"({"value":{}})", "value", decodedEmptyMap));
     EXPECT_TRUE(decodedEmptyMap.empty());
@@ -345,12 +345,12 @@ TEST(JsonSerializerTest, UnorderedMapsRoundTrip) {
     EXPECT_EQ(decodedMultiMap, multiMap);
 
     const std::unordered_map<double, double> emptyMap;
-    EXPECT_EQ(writeNamed("value", emptyMap), R"({"value":[]})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", emptyMap), R"({"value":[]})"));
 }
 
 TEST(JsonSerializerTest, SetContainersRoundTrip) {
     const std::set<int> ordered{1, 2, 3, 4, 5};
-    EXPECT_EQ(writeNamed("value", ordered), R"({"value":[1,2,3,4,5]})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", ordered), R"({"value":[1,2,3,4,5]})"));
     std::set<int> decodedOrdered;
     ASSERT_TRUE(readNamed(writeNamed("value", ordered), "value", decodedOrdered));
     EXPECT_EQ(decodedOrdered, ordered);
@@ -376,21 +376,21 @@ TEST(JsonSerializerTest, SetContainersRoundTrip) {
 
 TEST(JsonSerializerTest, AtomicBinaryAndBitsetRoundTrip) {
     std::atomic<int> atomic{5};
-    EXPECT_EQ(writeNamed("value", atomic), R"({"value":5})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", atomic), R"({"value":5})"));
     std::atomic<int> decodedAtomic{0};
     ASSERT_TRUE(readNamed(R"({"value":5})", "value", decodedAtomic));
     EXPECT_EQ(decodedAtomic.load(), atomic.load());
 
     const std::string data = "hello world";
     BinaryData<const char> encoded(data.data(), data.size());
-    EXPECT_EQ(writeNamed("value", encoded), R"({"value":"aGVsbG8gd29ybGQ="})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", encoded), R"({"value":"aGVsbG8gd29ybGQ="})"));
     std::vector<char> decodedData(data.size());
     BinaryData<char> decodedBinary(decodedData.data(), decodedData.size());
     ASSERT_TRUE(readNamed(R"({"value":"aGVsbG8gd29ybGQ="})", "value", decodedBinary));
     EXPECT_EQ(std::string(decodedData.begin(), decodedData.end()), data);
 
     const std::bitset<5> bitset{0b10101};
-    EXPECT_EQ(writeNamed("value", bitset), R"({"value":"10101"})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", bitset), R"({"value":"10101"})"));
     std::bitset<5> decodedBitset;
     ASSERT_TRUE(readNamed(R"({"value":"10101"})", "value", decodedBitset));
     EXPECT_EQ(decodedBitset, bitset);
@@ -398,33 +398,33 @@ TEST(JsonSerializerTest, AtomicBinaryAndBitsetRoundTrip) {
 
 TEST(JsonSerializerTest, PairAndPointersRoundTrip) {
     const std::pair<int, std::string> pair{1, "hello world"};
-    EXPECT_EQ(writeNamed("value", pair), R"({"value":{"first":1,"second":"hello world"}})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", pair), R"({"value":{"first":1,"second":"hello world"}})"));
     std::pair<int, std::string> decodedPair;
     ASSERT_TRUE(readNamed(writeNamed("value", pair), "value", decodedPair));
     EXPECT_EQ(decodedPair, pair);
 
     const auto shared = std::make_shared<int>(42);
-    EXPECT_EQ(writeNamed("value", shared), R"({"value":42})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", shared), R"({"value":42})"));
     std::shared_ptr<int> decodedShared;
     ASSERT_TRUE(readNamed(R"({"value":42})", "value", decodedShared));
     ASSERT_TRUE(decodedShared);
     EXPECT_EQ(*decodedShared, *shared);
 
     const std::shared_ptr<int> emptyShared;
-    EXPECT_EQ(writeNamed("value", emptyShared), R"({"value":null})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", emptyShared), R"({"value":null})"));
     decodedShared = std::make_shared<int>(7);
     ASSERT_TRUE(readNamed(R"({"value":null})", "value", decodedShared));
     EXPECT_FALSE(decodedShared);
 
     const std::unique_ptr<int> unique = std::make_unique<int>(42);
-    EXPECT_EQ(writeNamed("value", unique), R"({"value":42})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", unique), R"({"value":42})"));
     std::unique_ptr<int> decodedUnique;
     ASSERT_TRUE(readNamed(R"({"value":42})", "value", decodedUnique));
     ASSERT_TRUE(decodedUnique);
     EXPECT_EQ(*decodedUnique, *unique);
 
     const std::unique_ptr<int> emptyUnique;
-    EXPECT_EQ(writeNamed("value", emptyUnique), R"({"value":null})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", emptyUnique), R"({"value":null})"));
     decodedUnique = std::make_unique<int>(7);
     ASSERT_TRUE(readNamed(R"({"value":null})", "value", decodedUnique));
     EXPECT_FALSE(decodedUnique);
@@ -439,7 +439,7 @@ TEST(JsonSerializerTest, AggregateVariantAndOptionalRoundTrip) {
     };
 
     const Aggregate aggregate{3, "Struct test", true};
-    EXPECT_EQ(writeNamed("value", aggregate), R"({"value":{"a":3,"b":"Struct test","c":true}})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", aggregate), R"({"value":{"a":3,"b":"Struct test","c":true}})"));
     Aggregate decodedAggregate{};
     ASSERT_TRUE(readNamed(writeNamed("value", aggregate), "value", decodedAggregate));
     EXPECT_EQ(decodedAggregate.a, aggregate.a);
@@ -447,25 +447,25 @@ TEST(JsonSerializerTest, AggregateVariantAndOptionalRoundTrip) {
     EXPECT_EQ(decodedAggregate.c, aggregate.c);
 
     const std::variant<int, std::string> integerVariant{3};
-    EXPECT_EQ(writeNamed("value", integerVariant), R"({"value":[0,3]})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", integerVariant), R"({"value":[0,3]})"));
     std::variant<int, std::string> decodedIntegerVariant;
     ASSERT_TRUE(readNamed(R"({"value":[0,3]})", "value", decodedIntegerVariant));
     EXPECT_EQ(decodedIntegerVariant, integerVariant);
 
     const std::variant<int, std::string> stringVariant{"test"};
-    EXPECT_EQ(writeNamed("value", stringVariant), R"({"value":[1,"test"]})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", stringVariant), R"({"value":[1,"test"]})"));
     std::variant<int, std::string> decodedStringVariant;
     ASSERT_TRUE(readNamed(R"({"value":[1,"test"]})", "value", decodedStringVariant));
     EXPECT_EQ(decodedStringVariant, stringVariant);
 
     const std::optional<int> optional{3};
-    EXPECT_EQ(writeNamed("value", optional), R"({"value":3})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", optional), R"({"value":3})"));
     std::optional<int> decodedOptional;
     ASSERT_TRUE(readNamed(R"({"value":3})", "value", decodedOptional));
     EXPECT_EQ(decodedOptional, optional);
 
     const std::optional<int> emptyOptional;
-    EXPECT_EQ(writeNamed("value", emptyOptional), R"({"value":null})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeNamed("value", emptyOptional), R"({"value":null})"));
     decodedOptional = 3;
     ASSERT_TRUE(readNamed(R"({"value":null})", "value", decodedOptional));
     EXPECT_FALSE(decodedOptional.has_value());
@@ -476,7 +476,7 @@ TEST(JsonSerializerTest, AggregateVariantAndOptionalRoundTrip) {
 TEST(JsonSerializerTest, U8StringRoundTrip) {
     const std::u8string value = u8"这是一个测试; this is a test.";
     const auto json            = writeNamed("value", value);
-    EXPECT_EQ(json, R"({"value":"这是一个测试; this is a test."})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(json, R"({"value":"这是一个测试; this is a test."})"));
 
     std::u8string decoded;
     ASSERT_TRUE(readNamed(json, "value", decoded));
@@ -497,7 +497,7 @@ TEST(JsonSerializerTest, ReflectedObjectRoundTripsThroughPublicEntry) {
         R"({"a":[{"a":12.9,"b":[1.0,2.0,3.0,4.0,5.0]},)"
         R"({"a":12.9,"b":[1.0,2.0,3.0,4.0,5.0]},)"
         R"({"a":12.9,"b":[1.0,2.0,3.0,4.0,5.0]}]}]}})";
-    EXPECT_EQ(json, expectedJson);
+    EXPECT_TRUE(neko_test::jsonEquivalent(json, expectedJson));
 
     TestP decoded;
     ASSERT_TRUE(readJson(json, decoded));

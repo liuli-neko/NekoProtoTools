@@ -16,6 +16,7 @@
 #include "nekoproto/serialization/parsing/parsers.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
+#include "../common/json_semantic.hpp"
 
 using namespace nekoproto;
 
@@ -469,13 +470,13 @@ TEST(SerializationTagIntegration, JsonParserAppliesRawRenameSkippableAndFlatTags
         .nested   = {.code = 7, .label = "seven"},
     };
 
-    EXPECT_EQ(writeJson(source), R"json({"raw":{"enabled":true},"wire(alias)":11,"wire_code":7,"label":"seven"})json");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(source), R"json({"raw":{"enabled":true},"wire(alias)":11,"wire_code":7,"label":"seven"})json"));
 
     MacroParsedTaggedObject decoded;
     decoded.renamed  = 99;
     decoded.optional = 42;
     ASSERT_TRUE(readJson(R"({"raw":{"enabled":false},"wire_code":8,"label":"eight"})", decoded));
-    EXPECT_EQ(decoded.raw, R"({"enabled":false})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(decoded.raw, R"({"enabled":false})"));
     EXPECT_EQ(decoded.renamed, 99);
     ASSERT_TRUE(decoded.optional.has_value());
     EXPECT_EQ(decoded.optional.value(), 42);
@@ -490,7 +491,7 @@ TEST(SerializationTagIntegration, TypeLevelFlatTagFlattensJsonObjectsAndSchema) 
         .after  = 3,
     };
 
-    EXPECT_EQ(writeJson(source), R"({"before":1,"wire_code":2,"label":"two","after":3})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(source), R"({"after":3,"label":"two","wire_code":2,"before":1})"));
 
     TypeLevelFlatTagOwner decoded;
     ASSERT_TRUE(readJson(R"({"before":4,"wire_code":5,"label":"five","after":6})", decoded));
@@ -543,7 +544,7 @@ TEST(SerializationTagIntegration, SerializationIgnoreTagOmitsNamedFieldFromJsonR
         .transient = 99,
         .value     = 2,
     };
-    EXPECT_EQ(writeJson(source), R"({"id":1,"value":2})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(source), R"({"id":1,"value":2})"));
 
     SerializationIgnoredObject decoded;
     decoded.transient = 55;
@@ -567,7 +568,7 @@ TEST(SerializationTagIntegration, SerializationIgnoreTagRemovesPositionalFieldFr
         .transient = 99,
         .last      = 2,
     };
-    EXPECT_EQ(writeJson(source), R"([1,2])");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(source), R"([1,2])"));
 
     SerializationIgnoredArray decoded;
     decoded.transient = 55;

@@ -1,0 +1,45 @@
+if(TARGET NekoProto::YamlCpp)
+    set(NEKO_PROTO_YAMLCPP_FOUND TRUE)
+    return()
+endif()
+
+find_package(yaml-cpp CONFIG QUIET)
+if(NOT TARGET yaml-cpp::yaml-cpp AND NEKO_PROTO_FETCH_MISSING_DEPS)
+    include(FetchContent)
+    set(_neko_yamlcpp_fetch_options)
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
+        list(APPEND _neko_yamlcpp_fetch_options DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    endif()
+    set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "Build yaml-cpp tests")
+    set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "Build yaml-cpp tools")
+    FetchContent_Declare(neko_yamlcpp
+        URL https://github.com/jbeder/yaml-cpp/archive/refs/tags/0.8.0.tar.gz
+        URL_HASH SHA256=fbe74bbdcee21d656715688706da3c8becfd946d92cd44705cc6098bb23b3a16
+        ${_neko_yamlcpp_fetch_options})
+    FetchContent_MakeAvailable(neko_yamlcpp)
+endif()
+
+if(TARGET yaml-cpp::yaml-cpp)
+    add_library(NekoProto::YamlCpp INTERFACE IMPORTED GLOBAL)
+    set_target_properties(NekoProto::YamlCpp PROPERTIES
+        INTERFACE_LINK_LIBRARIES yaml-cpp::yaml-cpp)
+    if(WIN32)
+        get_target_property(_neko_yamlcpp_type yaml-cpp::yaml-cpp TYPE)
+        if(_neko_yamlcpp_type STREQUAL "SHARED_LIBRARY")
+            get_target_property(_neko_yamlcpp_dll yaml-cpp::yaml-cpp IMPORTED_LOCATION_RELEASE)
+            if(NOT _neko_yamlcpp_dll)
+                get_target_property(_neko_yamlcpp_dll yaml-cpp::yaml-cpp IMPORTED_LOCATION)
+            endif()
+            if(_neko_yamlcpp_dll)
+                get_filename_component(_neko_yamlcpp_runtime_dir "${_neko_yamlcpp_dll}" DIRECTORY)
+                set_property(TARGET NekoProto::YamlCpp PROPERTY
+                    NEKO_PROTO_RUNTIME_DIR "${_neko_yamlcpp_runtime_dir}")
+            endif()
+        endif()
+    endif()
+    set(NEKO_PROTO_YAMLCPP_FOUND TRUE)
+else()
+    set(NEKO_PROTO_YAMLCPP_FOUND FALSE)
+    set(NEKO_PROTO_YAMLCPP_DIAGNOSTIC
+        "NEKO_PROTO_ENABLE_YAMLCPP=ON requires the yaml-cpp CMake package with target yaml-cpp::yaml-cpp. Install yaml-cpp 0.8.0 and set CMAKE_PREFIX_PATH or yaml-cpp_DIR, or set NEKO_PROTO_FETCH_MISSING_DEPS=ON.")
+endif()

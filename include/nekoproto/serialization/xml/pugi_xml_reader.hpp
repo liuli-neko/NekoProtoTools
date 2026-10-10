@@ -25,6 +25,10 @@ namespace xml {
 
 class Reader {
 public:
+    // XML array fields are represented by repeated siblings, and xml_content by node text.
+    // Neither can be decoded correctly by visiting each child as a separate object field.
+    static constexpr bool supports_single_pass_reflection = false;
+
     struct InputArrayType {
         pugi::xml_node first;
         std::string name;
