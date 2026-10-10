@@ -3,7 +3,13 @@ if(TARGET NekoProto::RapidJSON)
     return()
 endif()
 
-find_package(RapidJSON CONFIG QUIET)
+if(NEKO_PROTO_FETCH_MISSING_DEPS)
+    # xmake's temporary RapidJSON build can register an incomplete CMake package.
+    # Installed packages in explicit prefixes remain discoverable; otherwise fetch headers.
+    find_package(RapidJSON CONFIG QUIET NO_CMAKE_PACKAGE_REGISTRY)
+else()
+    find_package(RapidJSON CONFIG QUIET)
+endif()
 if(NOT TARGET RapidJSON AND NEKO_PROTO_FETCH_MISSING_DEPS)
     include(FetchContent)
     set(_neko_rapidjson_fetch_options)
