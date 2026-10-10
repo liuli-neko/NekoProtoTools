@@ -126,6 +126,53 @@ auto waitUntil(Predicate predicate, std::chrono::milliseconds budget = std::chro
 
 } // namespace
 
+TEST(NekoRpcBackend, FrameV1GoldenVectorAndVersionGate) {
+    const std::array method{std::byte{'a'}, std::byte{'d'}, std::byte{'d'}};
+    const std::array payload{std::byte{0x4e}, std::byte{0x50}, std::byte{0x02}, std::byte{0x08}, std::byte{0x02},
+                             std::byte{0x03}, std::byte{0x28}, std::byte{0x03}, std::byte{0x2c}};
+    const std::array tableVersion{std::byte{0x01}, std::byte{0x02}, std::byte{0x03}, std::byte{0x04}};
+    rpc::NekoRpcFrameCodec::ExtensionMapType extensions;
+    extensions[rpc::NekoRpcExtensionType::MethodTableVersion] = tableVersion;
+
+    rpc::NekoRpcFrameCodec::Header header;
+    header.kind = rpc::NekoRpcKind::Request;
+    header.id = 0x0102030405060708ULL;
+    const auto encoded = rpc::NekoRpcFrameCodec::encodeFrame({
+        .header = header,
+        .method = method,
+        .extensions = extensions,
+        .payload = payload,
+    });
+
+    // NR v1, request, extensions flag, codec 0, then big-endian lengths/id,
+    // method, one TLV, and a Binary V2 tuple payload [20, 22].
+    const std::array<std::uint8_t, 44> golden{
+        0x4e, 0x52, 0x01, 0x01, 0x04, 0x00, 0x00, 0x08,
+        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+        0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x09,
+        'a', 'd', 'd',
+        0x00, 0x02, 0x00, 0x04, 0x01, 0x02, 0x03, 0x04,
+        0x4e, 0x50, 0x02, 0x08, 0x02, 0x03, 0x28, 0x03, 0x2c,
+    };
+    std::vector<std::uint8_t> encodedBytes;
+    for (const auto byte : encoded) encodedBytes.push_back(std::to_integer<std::uint8_t>(byte));
+    EXPECT_EQ(encodedBytes, (std::vector<std::uint8_t>{golden.begin(), golden.end()}));
+
+    std::vector<std::byte> fixedFrame;
+    for (const auto byte : golden) fixedFrame.push_back(static_cast<std::byte>(byte));
+    rpc::NekoRpcFrameCodec::FrameParts parts;
+    ASSERT_TRUE(rpc::NekoRpcFrameCodec::parseFrame(asBytes(fixedFrame), 0, parts));
+    EXPECT_EQ(parts.header.version, rpc::NekoRpcFrameCodec::Version);
+    EXPECT_EQ(parts.header.id, header.id);
+    EXPECT_TRUE(std::equal(parts.method.begin(), parts.method.end(), method.begin(), method.end()));
+    EXPECT_TRUE(std::equal(parts.payload.begin(), parts.payload.end(), payload.begin(), payload.end()));
+    const auto extension = parts.extensions.at(rpc::NekoRpcExtensionType::MethodTableVersion);
+    EXPECT_TRUE(std::equal(extension.begin(), extension.end(), tableVersion.begin(), tableVersion.end()));
+
+    fixedFrame[2] = std::byte{0x02};
+    EXPECT_FALSE(rpc::NekoRpcFrameCodec::parseFrame(asBytes(fixedFrame), 0, parts));
+}
+
 TEST(NekoRpcBackend, CallsRegisteredMethodThroughBinaryFrame) {
     ilias::PlatformContext context;
     context.install();
