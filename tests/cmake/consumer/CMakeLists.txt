@@ -30,6 +30,14 @@ if(TARGET NekoProto::JsonRpc)
     target_compile_definitions(neko_consumer PRIVATE NEKO_CONSUMER_HAS_JSONRPC)
 endif()
 
+if(TARGET NekoProto::Ilias AND WIN32)
+    get_target_property(_neko_ilias_runtime_dir NekoProto::Ilias NEKO_PROTO_RUNTIME_DIR)
+    if(_neko_ilias_runtime_dir)
+        set_property(TEST neko_consumer_smoke APPEND PROPERTY ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:${_neko_ilias_runtime_dir}")
+    endif()
+endif()
+
 if(TARGET NekoProto::PugiXml)
     target_compile_definitions(neko_consumer PRIVATE NEKO_CONSUMER_HAS_PUGIXML)
     if(WIN32)
