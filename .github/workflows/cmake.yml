@@ -56,7 +56,12 @@ jobs:
           matches = list(packages.glob("*/lib/pkgconfig/ilias.pc"))
           if len(matches) != 1:
               raise SystemExit(f"Expected one Ilias 0.5.0 package at {packages}, found {len(matches)}")
-          print(matches[0].parents[2].as_posix())
+          prefix = matches[0].parents[2]
+          if os.name == "nt":
+              for relative in ("include/ilias/task.hpp", "lib/ilias.lib", "bin/ilias.dll"):
+                  if not (prefix / relative).is_file():
+                      raise SystemExit(f"Ilias package is missing {prefix / relative}")
+          print(prefix.as_posix())
           PY
           )
           echo "NEKO_ILIAS_PREFIX=$ilias_prefix" >> "$GITHUB_ENV"
