@@ -43,15 +43,18 @@ jobs:
         uses: xmake-io/github-action-setup-xmake@3a1a5dddfc7fa625d9a698738334bf55655a861a # v1.2.5
         with:
           xmake-version: 3.0.9
-      - name: Provision C++20 Ilias
+      - name: Provision C++20 Ilias on Unix
+        if: matrix.rpc == 'ON' && runner.os != 'Windows'
+        run: xmake f -m release --stdcxx=20 --enable_protocol=y --enable_rapidjson=y --enable_communication=y --enable_jsonrpc=y --enable_rpc_trace=y --ccache=n -y
+      - name: Provision C++20 Ilias with MSVC
+        if: matrix.rpc == 'ON' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          xmake f -m debug -k shared --stdcxx=20 --enable_protocol=y --enable_rapidjson=y --enable_communication=y --enable_jsonrpc=y --enable_rpc_trace=y --ccache=n -y
+          xmake build NekoJsonRpc
+      - name: Locate C++20 Ilias
         if: matrix.rpc == 'ON'
         run: |
-          ilias_toolchain=()
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            ilias_toolchain=(--toolchain=msvc)
-          fi
-          xmake f -m debug -k shared --stdcxx=20 --enable_protocol=y --enable_rapidjson=y --enable_communication=y --enable_jsonrpc=y --enable_rpc_trace=y --ccache=n "${ilias_toolchain[@]}" -y
-          xmake build NekoJsonRpc
           ilias_prefix=$(python3 - <<'PY'
           import os
           from pathlib import Path
