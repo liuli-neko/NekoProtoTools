@@ -297,10 +297,11 @@ end
 
 if has_config("enable_communication") or
    (has_config("enable_jsonrpc") and json_serializer_enabled()) then
-    add_requires("ilias")
-    if not has_config("3rd_custom") then
-        -- configurations of required libraries
-        add_requireconfs("**ilias", {version = "0.5.0", configs = { shared = is_kind("shared"), stdcxx = tonumber(get_config("stdcxx"))}})
+    if has_config("3rd_custom") then
+        add_requires("ilias")
+    else
+        -- Pin the direct dependency too: add_requireconfs only affects transitive requirements.
+        add_requires("ilias 0.5.0", {configs = {shared = is_kind("shared"), stdcxx = tonumber(get_config("stdcxx"))}})
     end
 end
 
