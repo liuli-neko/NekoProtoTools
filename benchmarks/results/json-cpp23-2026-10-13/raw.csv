@@ -1,0 +1,121 @@
+repeat,case,library,backend,operation,iterations,json_bytes,ns_per_op,mb_per_second
+1,small,Glaze,Glaze JSON,serialize,1000,167,90.115,1853.19
+1,small,Glaze,Glaze JSON,deserialize,1000,167,150.051,1112.95
+1,medium,Glaze,Glaze JSON,serialize,1000,324,511.269,633.717
+1,medium,Glaze,Glaze JSON,deserialize,1000,332,426.721,778.026
+1,large,Glaze,Glaze JSON,serialize,1000,1422,3499,406.402
+1,large,Glaze,Glaze JSON,deserialize,1000,1552,2403.38,645.756
+1,small_null_email,Glaze,Glaze JSON,serialize,1000,165,79.664,2071.2
+1,small_null_email,Glaze,Glaze JSON,deserialize,1000,167,160.125,1042.94
+1,small,RapidJSON-Raw,Streaming,serialize,1000,167,586.453,284.763
+1,small,RapidJSON-Raw,Streaming,deserialize,1000,167,422.217,395.531
+1,medium,RapidJSON-Raw,Streaming,serialize,1000,332,1144.03,290.203
+1,medium,RapidJSON-Raw,Streaming,deserialize,1000,332,803.676,413.102
+1,large,RapidJSON-Raw,Streaming,serialize,1000,1552,5854.09,265.114
+1,large,RapidJSON-Raw,Streaming,deserialize,1000,1552,3138.91,494.439
+1,small_null_email,RapidJSON-Raw,Streaming,serialize,1000,167,289.573,576.711
+1,small_null_email,RapidJSON-Raw,Streaming,deserialize,1000,167,420.595,397.057
+1,small,NekoProtoTools,yyjson,serialize,1000,167,219.73,760.024
+1,small,NekoProtoTools,yyjson,deserialize,1000,167,228.286,731.539
+1,medium,NekoProtoTools,yyjson,serialize,1000,332,637.274,520.969
+1,medium,NekoProtoTools,yyjson,deserialize,1000,332,483.23,687.043
+1,large,NekoProtoTools,yyjson,serialize,1000,1552,3352.27,462.97
+1,large,NekoProtoTools,yyjson,deserialize,1000,1552,2632.6,589.531
+1,small_null_email,NekoProtoTools,yyjson,serialize,1000,167,208.988,799.089
+1,small_null_email,NekoProtoTools,yyjson,deserialize,1000,167,229.186,728.666
+1,small,NekoProtoTools,simdjson,serialize,1000,167,497.567,335.633
+1,small,NekoProtoTools,simdjson,deserialize,1000,167,300.232,556.237
+1,medium,NekoProtoTools,simdjson,serialize,1000,324,2068.34,156.647
+1,medium,NekoProtoTools,simdjson,deserialize,1000,332,614.875,539.947
+1,large,NekoProtoTools,simdjson,serialize,1000,1422,12484.2,113.904
+1,large,NekoProtoTools,simdjson,deserialize,1000,1552,2947.93,526.471
+1,small_null_email,NekoProtoTools,simdjson,serialize,1000,165,492.248,335.197
+1,small_null_email,NekoProtoTools,simdjson,deserialize,1000,167,296.151,563.902
+1,small,reflect-cpp,yyjson,serialize,1000,167,211.017,791.405
+1,small,reflect-cpp,yyjson,deserialize,1000,167,317.252,526.395
+1,medium,reflect-cpp,yyjson,serialize,1000,332,625.178,531.049
+1,medium,reflect-cpp,yyjson,deserialize,1000,332,559.815,593.053
+1,large,reflect-cpp,yyjson,serialize,1000,1552,3502.19,443.152
+1,large,reflect-cpp,yyjson,deserialize,1000,1552,2582.3,601.016
+1,small_null_email,reflect-cpp,yyjson,serialize,1000,167,200.089,834.629
+1,small_null_email,reflect-cpp,yyjson,deserialize,1000,167,321.367,519.655
+2,small,RapidJSON-Raw,Streaming,serialize,1000,167,543.228,307.422
+2,small,RapidJSON-Raw,Streaming,deserialize,1000,167,342.754,487.23
+2,medium,RapidJSON-Raw,Streaming,serialize,1000,332,924.227,359.219
+2,medium,RapidJSON-Raw,Streaming,deserialize,1000,332,686.73,483.451
+2,large,RapidJSON-Raw,Streaming,serialize,1000,1552,5724.1,271.134
+2,large,RapidJSON-Raw,Streaming,deserialize,1000,1552,2976.34,521.447
+2,small_null_email,RapidJSON-Raw,Streaming,serialize,1000,167,551.31,302.915
+2,small_null_email,RapidJSON-Raw,Streaming,deserialize,1000,167,344.501,484.759
+2,small,NekoProtoTools,yyjson,serialize,1000,167,219.36,761.306
+2,small,NekoProtoTools,yyjson,deserialize,1000,167,230.237,725.34
+2,medium,NekoProtoTools,yyjson,serialize,1000,332,643.415,515.997
+2,medium,NekoProtoTools,yyjson,deserialize,1000,332,484.492,685.254
+2,large,NekoProtoTools,yyjson,serialize,1000,1552,3325.25,466.731
+2,large,NekoProtoTools,yyjson,deserialize,1000,1552,2411.65,643.543
+2,small_null_email,NekoProtoTools,yyjson,serialize,1000,167,209.698,796.383
+2,small_null_email,NekoProtoTools,yyjson,deserialize,1000,167,228.33,731.398
+2,small,NekoProtoTools,simdjson,serialize,1000,167,480.37,347.649
+2,small,NekoProtoTools,simdjson,deserialize,1000,167,271.578,614.925
+2,medium,NekoProtoTools,simdjson,serialize,1000,324,1892.83,171.172
+2,medium,NekoProtoTools,simdjson,deserialize,1000,332,597.274,555.859
+2,large,NekoProtoTools,simdjson,serialize,1000,1422,11102.5,128.079
+2,large,NekoProtoTools,simdjson,deserialize,1000,1552,2794.17,555.443
+2,small_null_email,NekoProtoTools,simdjson,serialize,1000,165,486.27,339.318
+2,small_null_email,NekoProtoTools,simdjson,deserialize,1000,167,297.139,562.027
+2,small,reflect-cpp,yyjson,serialize,1000,167,211.04,791.319
+2,small,reflect-cpp,yyjson,deserialize,1000,167,329.185,507.314
+2,medium,reflect-cpp,yyjson,serialize,1000,332,640.78,518.119
+2,medium,reflect-cpp,yyjson,deserialize,1000,332,571.888,580.533
+2,large,reflect-cpp,yyjson,serialize,1000,1552,3360.74,461.804
+2,large,reflect-cpp,yyjson,deserialize,1000,1552,2447.09,634.223
+2,small_null_email,reflect-cpp,yyjson,serialize,1000,167,206.085,810.345
+2,small_null_email,reflect-cpp,yyjson,deserialize,1000,167,322.257,518.22
+2,small,Glaze,Glaze JSON,serialize,1000,167,89.321,1869.66
+2,small,Glaze,Glaze JSON,deserialize,1000,167,152.396,1095.83
+2,medium,Glaze,Glaze JSON,serialize,1000,324,508.19,637.557
+2,medium,Glaze,Glaze JSON,deserialize,1000,332,467.165,710.67
+2,large,Glaze,Glaze JSON,serialize,1000,1422,3508.49,405.303
+2,large,Glaze,Glaze JSON,deserialize,1000,1552,2397.17,647.431
+2,small_null_email,Glaze,Glaze JSON,serialize,1000,165,79.449,2076.8
+2,small_null_email,Glaze,Glaze JSON,deserialize,1000,167,160.062,1043.35
+3,small,NekoProtoTools,yyjson,serialize,1000,167,229.811,726.684
+3,small,NekoProtoTools,yyjson,deserialize,1000,167,217.175,768.965
+3,medium,NekoProtoTools,yyjson,serialize,1000,332,582.309,570.144
+3,medium,NekoProtoTools,yyjson,deserialize,1000,332,447.187,742.419
+3,large,NekoProtoTools,yyjson,serialize,1000,1552,3048.7,509.07
+3,large,NekoProtoTools,yyjson,deserialize,1000,1552,2243.89,691.658
+3,small_null_email,NekoProtoTools,yyjson,serialize,1000,167,190.862,874.978
+3,small_null_email,NekoProtoTools,yyjson,deserialize,1000,167,206.025,810.581
+3,small,NekoProtoTools,simdjson,serialize,1000,167,501.709,332.862
+3,small,NekoProtoTools,simdjson,deserialize,1000,167,300.433,555.864
+3,medium,NekoProtoTools,simdjson,serialize,1000,324,1966.93,164.723
+3,medium,NekoProtoTools,simdjson,deserialize,1000,332,548.586,605.192
+3,large,NekoProtoTools,simdjson,serialize,1000,1422,13414.8,106.002
+3,large,NekoProtoTools,simdjson,deserialize,1000,1552,2951.72,525.795
+3,small_null_email,NekoProtoTools,simdjson,serialize,1000,165,487.469,338.483
+3,small_null_email,NekoProtoTools,simdjson,deserialize,1000,167,296.979,562.329
+3,small,reflect-cpp,yyjson,serialize,1000,167,210.457,793.511
+3,small,reflect-cpp,yyjson,deserialize,1000,167,314.941,530.258
+3,medium,reflect-cpp,yyjson,serialize,1000,332,659.942,503.075
+3,medium,reflect-cpp,yyjson,deserialize,1000,332,561.272,591.514
+3,large,reflect-cpp,yyjson,serialize,1000,1552,3392.77,457.444
+3,large,reflect-cpp,yyjson,deserialize,1000,1552,2416.29,642.308
+3,small_null_email,reflect-cpp,yyjson,serialize,1000,167,361.772,461.617
+3,small_null_email,reflect-cpp,yyjson,deserialize,1000,167,382.793,436.267
+3,small,Glaze,Glaze JSON,serialize,1000,167,90.988,1835.41
+3,small,Glaze,Glaze JSON,deserialize,1000,167,150.093,1112.64
+3,medium,Glaze,Glaze JSON,serialize,1000,324,528,613.636
+3,medium,Glaze,Glaze JSON,deserialize,1000,332,435.147,762.961
+3,large,Glaze,Glaze JSON,serialize,1000,1422,3665.27,387.966
+3,large,Glaze,Glaze JSON,deserialize,1000,1552,2337.66,663.911
+3,small_null_email,Glaze,Glaze JSON,serialize,1000,165,82.264,2005.74
+3,small_null_email,Glaze,Glaze JSON,deserialize,1000,167,158.105,1056.26
+3,small,RapidJSON-Raw,Streaming,serialize,1000,167,403.137,414.251
+3,small,RapidJSON-Raw,Streaming,deserialize,1000,167,375.5,444.74
+3,medium,RapidJSON-Raw,Streaming,serialize,1000,332,1285.22,258.322
+3,medium,RapidJSON-Raw,Streaming,deserialize,1000,332,769.734,431.318
+3,large,RapidJSON-Raw,Streaming,serialize,1000,1552,6104.38,254.244
+3,large,RapidJSON-Raw,Streaming,deserialize,1000,1552,3199.66,485.052
+3,small_null_email,RapidJSON-Raw,Streaming,serialize,1000,167,553.817,301.544
+3,small_null_email,RapidJSON-Raw,Streaming,deserialize,1000,167,413.454,403.914
