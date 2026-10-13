@@ -46,7 +46,11 @@ jobs:
       - name: Provision C++20 Ilias
         if: matrix.rpc == 'ON'
         run: |
-          xmake f -m debug -k shared --stdcxx=20 --enable_protocol=y --enable_rapidjson=y --enable_communication=y --enable_jsonrpc=y --enable_rpc_trace=y --ccache=n -y
+          ilias_toolchain=()
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            ilias_toolchain=(--toolchain=msvc)
+          fi
+          xmake f -m debug -k shared --stdcxx=20 --enable_protocol=y --enable_rapidjson=y --enable_communication=y --enable_jsonrpc=y --enable_rpc_trace=y --ccache=n "${ilias_toolchain[@]}" -y
           xmake build NekoJsonRpc
           ilias_prefix=$(python3 - <<'PY'
           import os
