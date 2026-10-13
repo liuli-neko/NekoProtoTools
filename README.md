@@ -35,9 +35,9 @@ int main() {
 ```
 
 ```sh
-cmake -S . -B build -DNEKO_PROTO_BUILD_TESTS=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON
-cmake --build build
-ctest --test-dir build --output-on-failure
+cmake -S . -B build -DNEKO_PROTO_BUILD_TESTS=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON -DCMAKE_CXX_STANDARD=20
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
 ```
 
 ## 核心能力
@@ -62,10 +62,12 @@ target_link_libraries(your_app PRIVATE NekoProto::Serializer NekoProto::ArgParse
 
 安装后可使用 `find_package(NekoProtoTools CONFIG REQUIRED)` 和相同 targets。CMake 与 xmake 的可选模块、依赖发现及缺失报告见 [构建说明](docs/build-options.md)。
 
-xmake 用户可使用 `xmake f -m release --enable_rapidjson=y && xmake`；库的 xmake target 为 `NekoSerializer`、`NekoArgParser`、`NekoProtoBase`，可选 RPC target 为 `NekoJsonRpc`。
+xmake 用户可使用 `xmake f -m release --stdcxx=20 --enable_rapidjson=y && xmake`；库的 xmake target 为 `NekoSerializer`、`NekoArgParser`、`NekoProtoBase`，可选 RPC target 为 `NekoJsonRpc`。
 
 ## 文档
 
 [入门](docs/getting-started.md) · [反射](docs/reflection.md) · [序列化](docs/serialization.md) · [ArgParser](docs/argparser.md) · [协议与 RPC](docs/rpc.md) · [CMake 集成](docs/cmake-integration.md) · [构建选项](docs/build-options.md) · [Benchmark](benchmarks/README.md)
 
-当前稳定性说明：反射、Binary 和 ArgParser 是正式 API 的候选；RPC 与跨版本 wire 兼容性仍在评估。欢迎通过 issue 或 PR 反馈使用问题。
+## 稳定性范围
+
+当前是 0.4.0 开发版本，尚未发布正式的跨版本兼容承诺。反射的 `Meta<T>` / `Object` / `Reflect<T>`、Binary 和 ArgParser 是公开 API 的稳定候选；`NEKO_SERIALIZER` 保留给已有代码，新代码推荐 `Meta<T>`。Protocol 已有显式类型 ID 的跨进程验证，但自动 ID 取决于注册顺序。RPC、Communication 和第三方后端扩展仍是实验性接口。Binary 与 RPC 的 wire 格式均不承诺跨发布版本兼容；格式后端也不承诺输出文本完全相同。详情见 [序列化](docs/serialization.md)、[协议](docs/protocol.md) 和 [RPC](docs/rpc.md)。欢迎通过 issue 或 PR 反馈使用问题。
