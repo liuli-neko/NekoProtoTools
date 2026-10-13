@@ -127,7 +127,7 @@ option_end()
 option("enable_benchmarks")
     set_default(false)
     set_showmenu(true)
-    set_description("Enable JSON comparison benchmarks (NekoProtoTools, reflect-cpp, Glaze)")
+    set_description("Enable JSON comparison benchmarks (Glaze requires C++23)")
     set_category("benchmark")
 option_end()
 
