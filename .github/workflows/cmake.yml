@@ -36,6 +36,11 @@ jobs:
             libfyaml: OFF
             rpc: ON
             stdcxx: 20
+          - os: windows-latest
+            compiler: msvc
+            libfyaml: OFF
+            rpc: ON
+            stdcxx: 23
     defaults:
       run:
         shell: bash
