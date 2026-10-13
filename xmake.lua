@@ -8,7 +8,7 @@ set_encodings("utf-8")
 set_policy("package.cmake_generator.ninja", true)
 
 option("stdc",   {showmenu = true, default = 23, values = {23}})
-option("stdcxx", {showmenu = true, default = 23, values = {26, 23, 20}})
+option("stdcxx", {showmenu = true, default = 20, values = {26, 23, 20}})
 function stdc()   return "c"   .. tostring(get_config("stdc"))   end
 function stdcxx() return "c++" .. tostring(get_config("stdcxx")) end
 function json_serializer_enabled()
