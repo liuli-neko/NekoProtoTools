@@ -30,7 +30,7 @@ xmake test -g benchmark
 | `raw.csv` | 每轮原始测量，便于核对中位数 |
 | `json_sizes.csv` | 每套实现各 case 的序列化输出字节数 |
 | `environment.txt`、`compile-commands.txt` | 实际解析的依赖版本、运行参数和编译命令 |
-| `fixtures/` | 固定输入与四套实现生成的 JSON |
+| `fixtures/` | 仓库保留每个 case 的固定输入；运行任务时会临时生成各适配器的输出用于交叉解析 |
 
 所有启用的适配器使用 [`benchmark_models.hpp`](benchmark_models.hpp) 中相同的 C++ 类型与固定种子。计时前，每套适配器都要能解析其余适配器生成的 JSON；反序列化始终读取相同的 NekoProtoTools JSON。每个 case 计时前后验证往返结果，先做 100 次预热。序列化吞吐量按各自输出字节数计算，反序列化吞吐量按共同输入字节数计算。不同实现产生的 JSON 字节数可能不同，应结合 `json_sizes.csv` 解读吞吐量。
 

@@ -6,7 +6,7 @@
 
 - Installable CMake targets for Serializer, ArgParser, Protocol, optional format backends, Communication, and experimental JSON-RPC. Missing optional dependencies now have actionable diagnostics and can be fetched on demand where supported.
 - Standalone examples and downstream CMake integration checks.
-- C++20 JSON runtime and compile-time benchmark samples with raw measurements, compiler commands, dependency versions, and fixed inputs where applicable.
+- C++20 and C++23 JSON runtime benchmark samples, plus C++20 compile-time samples, with raw measurements, compiler commands, dependency versions, and fixed inputs where applicable. The C++23 JSON comparison includes Glaze.
 - Binary V2 and RPC V1 fixed-frame regression vectors and explicit rejection of unknown frame versions.
 
 ### Changed
