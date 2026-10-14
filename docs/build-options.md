@@ -14,7 +14,7 @@
 | toml++ / TOML | `NEKO_PROTO_ENABLE_TOMLPLUSPLUS=ON`，自动查找 tomlplusplus 包或可选 FetchContent 下载 | `enable_tomlplusplus=y` |
 | 示例与运行检查 | `NEKO_PROTO_BUILD_EXAMPLES=ON` / `NEKO_PROTO_BUILD_TESTS=ON` | `enable_examples=y`，`xmake run example_reflection`、`xmake test -g examples` |
 | 项目测试 | CMake 的 `NEKO_PROTO_BUILD_TESTS` 运行示例 smoke tests | `enable_tests=y`，依赖按需解析 |
-| 三方 JSON benchmark | 不提供 | `enable_benchmarks=y`，`xmake run bench_json` |
+| 多方 JSON benchmark | 不提供 | `enable_benchmarks=y`，`xmake run bench_json` |
 | Communication | `NEKO_PROTO_ENABLE_COMMUNICATION=ON`，导出 `NekoProto::Communication`；需要 Protocol 和 Ilias | `enable_communication=y`，`NekoCommunication` |
 | JSON-RPC / Neko RPC | `NEKO_PROTO_ENABLE_JSONRPC=ON`，导出 `NekoProto::JsonRpc`；需要 Ilias 及 RapidJSON 或 simdjson | `enable_jsonrpc=y`，`NekoJsonRpc` |
 | RPC tracing | `NEKO_PROTO_ENABLE_RPC_TRACE=ON`，需要 JSON-RPC | `enable_rpc_trace=y` |
