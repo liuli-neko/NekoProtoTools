@@ -1,0 +1,24 @@
+JSON benchmark run
+source commit: e3b46d5457afbc6d342c4c75a694f8d4d38539cc
+working tree: modified
+modified files:  M tests/unit/proto/test_random_big_data.cpp
+xmake: xmake v3.0.9+20260714, A cross-platform build utility based on Lua
+platform: linux/x86_64
+mode: release
+standard: c++20
+compiler: /usr/bin/g++
+configured CXX: xmake default
+iterations per case: 1000
+repeats: 3
+json.csv and summary.md: median of repeats; raw.csv: every measured repeat; json_sizes.csv: serialized output sizes
+NekoProtoTools: 0.4.0
+yyjson: 0.12.0
+simdjson: v4.6.11
+RapidJSON: 2025.02.05
+reflect-cpp: v0.25.0 (yyjson)
+command: xmake bench_json -n 1000 -r 3 -o benchmarks/results/json-cpp20-2026-10-10
+model: benchmarks/benchmark_models.hpp; seeds: 0x4e454b4f20260400 and +4; warm-up: 100 per case
+All four outputs were decoded by all four adapters before timing.
+Deserialize uses the same NekoProtoTools JSON fixture for every adapter; serialize measures each native output.
+json_bytes means produced bytes for serialize, fixture input bytes for deserialize.
+Every case passed round-trip checks before and after measurement.

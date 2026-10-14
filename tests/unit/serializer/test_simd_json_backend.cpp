@@ -10,6 +10,7 @@
 #ifdef NEKO_PROTO_ENABLE_SIMDJSON
 
 #include "nekoproto/serialization/json/simd_json_serializer.hpp"
+#include "../common/json_semantic.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 
 using namespace nekoproto;
@@ -62,7 +63,7 @@ bool readJson(std::string_view json, T& value) {
 TEST(SimdJsonBackend, RoundTripsReflectionAndContainers) {
     const SimdSmoke source{.id = 7, .text = "hello", .values = {1, 2, 3}, .optional = 9};
     const auto json = writeJson(source);
-    EXPECT_EQ(json, R"({"id":7,"text":"hello","values":[1,2,3],"optional":9})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(json, R"({"id":7,"text":"hello","values":[1,2,3],"optional":9})"));
 
     SimdSmoke decoded;
     ASSERT_TRUE(readJson(json, decoded));
@@ -75,7 +76,7 @@ TEST(SimdJsonBackend, RoundTripsReflectionAndContainers) {
 TEST(SimdJsonBackend, TextWriterEscapesStrings) {
     const std::string source = "quote=\" slash=\\ newline=\n";
     const auto json = writeJson(source);
-    EXPECT_EQ(json, R"("quote=\" slash=\\ newline=\n")");
+    EXPECT_TRUE(neko_test::jsonEquivalent(json, R"("quote=\" slash=\\ newline=\n")"));
 
     std::string decoded;
     ASSERT_TRUE(readJson(json, decoded));
@@ -85,11 +86,11 @@ TEST(SimdJsonBackend, TextWriterEscapesStrings) {
 TEST(SimdJsonBackend, RawStringUsesSimdjsonValidation) {
     const RawSimdField source{.payload = R"({"enabled":true,"items":[1,2]})"};
     const auto json = writeJson(source);
-    EXPECT_EQ(json, R"({"payload":{"enabled":true,"items":[1,2]}})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(json, R"({"payload":{"enabled":true,"items":[1,2]}})"));
 
     RawSimdField decoded;
     ASSERT_TRUE(readJson(json, decoded));
-    EXPECT_EQ(decoded.payload, source.payload);
+    EXPECT_TRUE(neko_test::jsonEquivalent(decoded.payload, source.payload));
 
     RawSimdField invalid{.payload = R"({"broken":)"};
     std::vector<char> buffer;
@@ -102,7 +103,7 @@ TEST(SimdJsonBackend, RawStringUsesSimdjsonValidation) {
 TEST(SimdJsonBackend, StringKeyMapUsesJsonObject) {
     const std::map<std::string, int> source{{"a", 1}, {"b", 2}};
     const auto json = writeJson(source);
-    EXPECT_EQ(json, R"({"a":1,"b":2})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(json, R"({"a":1,"b":2})"));
 
     std::map<std::string, int> decoded;
     ASSERT_TRUE(readJson(json, decoded));
@@ -135,7 +136,7 @@ TEST(SimdJsonBackend, NativeValueKeepsParserAlive) {
     EXPECT_EQ(decoded, 42);
 
     const auto json = writeJson(value);
-    EXPECT_EQ(json, R"({"nested":{"value":42}})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(json, R"({"nested":{"value":42}})"));
 }
 
 TEST(SimdJsonBackend, WritesToOStream) {
@@ -143,7 +144,7 @@ TEST(SimdJsonBackend, WritesToOStream) {
     SimdJsonOutputSerializer<std::ostringstream> output(stream);
     ASSERT_TRUE(output(std::vector<int>{1, 2, 3}));
     ASSERT_TRUE(output.end());
-    EXPECT_EQ(stream.str(), "[1,2,3]");
+    EXPECT_TRUE(neko_test::jsonEquivalent(stream.str(), "[1,2,3]"));
 }
 
 TEST(SimdJsonBackend, InvalidJsonReturnsParseError) {

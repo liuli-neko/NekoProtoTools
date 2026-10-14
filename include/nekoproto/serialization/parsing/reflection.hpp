@@ -261,13 +261,17 @@ auto parserWriteReflectField(W& writer, ObjectType& object, const T& field, std:
 
 template <typename T>
 consteval auto parserReflectHasFlatField() -> bool {
-    bool hasFlat = false;
-    Reflect<T>::visitMetaFull([&]<typename Field>(std::type_identity<Field>, std::string_view, const auto& tags) {
-        if constexpr (tag_query::get<tag_property::Flat<Field>>(tags)) {
-            hasFlat = true;
-        }
-    });
-    return hasFlat;
+    return []<std::size_t... Is>(std::index_sequence<Is...>) {
+        return (ParserFieldPlan<T, Is>::flat || ...);
+    }(std::make_index_sequence<Reflect<T>::value_count>{});
+}
+
+template <typename R>
+constexpr auto parserReaderSupportsSinglePassReflection() -> bool {
+    if constexpr (requires { R::supports_single_pass_reflection; }) {
+        return R::supports_single_pass_reflection;
+    }
+    return true;
 }
 
 template <typename T, std::size_t I>
@@ -540,7 +544,8 @@ auto parserReadReflectFields(const typename R::InputObjectType& object, T& value
     constexpr std::size_t FieldCount = Reflect<RawT>::value_count;
     if constexpr (FieldCount == 0) {
         return sa::success();
-    } else if constexpr (FieldCount > 64 || parserReflectHasFlatField<RawT>()) {
+    } else if constexpr (FieldCount > 64 || parserReflectHasFlatField<RawT>() ||
+                         !parserReaderSupportsSinglePassReflection<R>()) {
         return parserReadReflectFieldsSlow<R>(object, value, tags);
     } else if constexpr ((requires(const typename R::InputObjectType& obj) {
                               { R::forEachObjectMember(obj, [](std::string_view, typename R::InputValueType) { return true; }) } -> std::convertible_to<bool>;

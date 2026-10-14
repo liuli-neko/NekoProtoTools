@@ -153,6 +153,22 @@ struct VersionTwoObject {
     NEKO_SERIALIZER(second, first, added)
 };
 
+struct BinaryV2GoldenNested {
+    bool ok = false;
+
+    NEKO_SERIALIZER(ok)
+};
+
+struct BinaryV2GoldenRecord {
+    std::int32_t id = 0;
+    std::vector<std::int32_t> v;
+    BinaryV2GoldenNested sub;
+    std::string payloadName;
+    std::optional<std::string> gone;
+
+    NEKO_SERIALIZER(id, v, sub, payloadName, gone)
+};
+
 struct MapEntryWireValue {
     int key = 0;
     int value = 0;
@@ -592,6 +608,64 @@ TEST(BinarySerializer, NullStringAndVariantGoldenVectorsRemainStable) {
         0x4eU, 0x50U, 0x02U, 0x08U, 0x02U, 0x04U, 0x01U, 0x07U, 0x01U,
         static_cast<std::uint8_t>('A')};
     EXPECT_EQ(bytesOf(std::variant<int, std::string>{std::in_place_index<1>, "A"}), variantGolden);
+}
+
+TEST(BinarySerializer, ReflectedObjectGoldenVectorRemainsStable) {
+    const BinaryV2GoldenRecord source{
+        .id = -2,
+        .v = {0, 127, -1},
+        .sub = {.ok = true},
+        .payloadName = "A",
+        .gone = std::nullopt,
+    };
+
+    // Binary V2: magic, four present fields, literal keys for id/v/sub,
+    // then the FNV-1a key for payloadName. The absent optional has no field.
+    const std::vector<std::uint8_t> golden{
+        0x4eU, 0x50U, 0x02U, 0x0aU, 0x04U,
+        0x04U, 'i', 'd', 0x03U, 0x03U,
+        0x02U, 'v', 0x08U, 0x03U, 0x03U, 0x00U, 0x03U, 0xfeU, 0x01U, 0x03U, 0x01U,
+        0x06U, 's', 'u', 'b', 0x0aU, 0x01U, 0x04U, 'o', 'k', 0x02U,
+        0xcdU, 0x86U, 0x96U, 0xafU, 0x16U, 0x07U, 0x01U, 'A',
+    };
+
+    std::vector<char> encoded;
+    BinarySerializer::OutputSerializer output(encoded);
+    ASSERT_TRUE(output(source)) << (output.error() == nullptr ? "" : output.error()->msg);
+    EXPECT_EQ(std::vector<std::uint8_t>(encoded.begin(), encoded.end()), golden);
+
+    const std::vector<char> fixedInput(golden.begin(), golden.end());
+    BinaryV2GoldenRecord decoded;
+    BinarySerializer::InputSerializer input(fixedInput.data(), fixedInput.size());
+    ASSERT_TRUE(input(decoded)) << (input.error() == nullptr ? "" : input.error()->msg);
+    EXPECT_EQ(decoded.id, source.id);
+    EXPECT_EQ(decoded.v, source.v);
+    EXPECT_EQ(decoded.sub.ok, source.sub.ok);
+    EXPECT_EQ(decoded.payloadName, source.payloadName);
+    EXPECT_EQ(decoded.gone, source.gone);
+}
+
+TEST(BinarySerializer, RejectsUnknownFramedVersionButAllowsExplicitRawRecord) {
+    const std::vector<char> futureFrame{'N', 'P', static_cast<char>(0x03), static_cast<char>(0x00)};
+    std::uint32_t value = 99;
+    BinarySerializer::InputSerializer unknownInput(futureFrame.data(), futureFrame.size());
+    EXPECT_FALSE(unknownInput(value));
+    ASSERT_NE(unknownInput.error(), nullptr);
+    EXPECT_EQ(unknownInput.error()->ec, sa::makeErrorCode(sa::ErrorCode::ParseError));
+    EXPECT_EQ(value, 99U);
+
+    const RawFixedHeader source{.length = 0x4E500304U, .data = -2, .type = 0x0506U};
+    std::vector<char> rawBytes;
+    BinarySerializer::OutputSerializer output(rawBytes);
+    ASSERT_TRUE(output(makeTags<BinaryTag{.raw_fixed_data = true}>(source)));
+
+    RawFixedHeader decoded;
+    BinarySerializer::InputSerializer rawInput(rawBytes.data(), rawBytes.size());
+    auto taggedDecoded = makeTags<BinaryTag{.raw_fixed_data = true}>(decoded);
+    ASSERT_TRUE(rawInput(taggedDecoded)) << (rawInput.error() == nullptr ? "" : rawInput.error()->msg);
+    EXPECT_EQ(decoded.length, source.length);
+    EXPECT_EQ(decoded.data, source.data);
+    EXPECT_EQ(decoded.type, source.type);
 }
 
 TEST(BinarySerializer, StrictModeRejectsTrailingAndNonCanonicalData) {

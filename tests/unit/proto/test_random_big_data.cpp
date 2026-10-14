@@ -315,7 +315,7 @@ TEST(BigProtoTest, SimdJsonSerializer) {
     {
 #ifdef NEKO_PROTO_ENABLE_SIMDJSON
         SimdJsonInputSerializer serializer(data1.data(), data1.size());
-#elif defined(NEKO_PROTO_ENABLE_RAPIDJSON)
+#else
         JsonSerializer::InputSerializer serializer(data1.data(), data1.size());
 #endif
         serializer(proto1);

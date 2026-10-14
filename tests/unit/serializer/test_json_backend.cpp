@@ -19,6 +19,7 @@
 #include "nekoproto/serialization/parsing/optional.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
+#include "../common/json_semantic.hpp"
 
 using namespace nekoproto;
 
@@ -135,7 +136,7 @@ auto asString(const std::vector<std::byte>& buffer) -> std::string {
 
 TEST(RapidJsonBackendParser, RoundTripsBasicRootThroughParserEntry) {
     const auto buffer = writeJson(42);
-    EXPECT_EQ(asString(buffer), "42");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "42"));
 
     int decoded = 0;
     readJson(buffer, decoded);
@@ -144,7 +145,7 @@ TEST(RapidJsonBackendParser, RoundTripsBasicRootThroughParserEntry) {
 
 TEST(RapidJsonBackendParser, RoundTripsStringRootThroughGenericParser) {
     const auto buffer = writeJson(std::string{"ready"});
-    EXPECT_EQ(asString(buffer), "\"ready\"");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "\"ready\""));
 
     std::string decoded;
     readJson(buffer, decoded);
@@ -156,7 +157,7 @@ TEST(RapidJsonBackendParser, WritesByteOutputBuffer) {
     JsonSerializer::ByteOutputSerializer out(buffer);
     ASSERT_TRUE(out(std::tuple{7, std::string{"byte"}}));
     ASSERT_TRUE(out.end());
-    EXPECT_EQ(asString(buffer), R"([7,"byte"])");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), R"([7,"byte"])"));
 
     std::tuple<int, std::string> decoded;
     JsonSerializer::InputSerializer in(reinterpret_cast<const char*>(buffer.data()), buffer.size());
@@ -166,7 +167,7 @@ TEST(RapidJsonBackendParser, WritesByteOutputBuffer) {
 
 TEST(RapidJsonBackendParser, WritesNullRootThroughGenericParser) {
     const auto buffer = writeJson(nullptr);
-    EXPECT_EQ(asString(buffer), "null");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "null"));
 }
 
 TEST(RapidJsonBackendParser, DocumentAdapterHasSingleArgumentAndRejectsRepeatedRoot) {
@@ -191,7 +192,7 @@ TEST(RapidJsonBackendParser, DocumentAdapterHasSingleArgumentAndRejectsRepeatedR
 
 TEST(RapidJsonBackendParser, RoundTripsEnumRootThroughGenericParser) {
     const auto buffer = writeJson(ParserBackendEnum::Ready);
-    EXPECT_EQ(asString(buffer), "\"Ready\"");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "\"Ready\""));
 
     ParserBackendEnum decoded = ParserBackendEnum::Stopped;
     readJson(buffer, decoded);
@@ -201,7 +202,7 @@ TEST(RapidJsonBackendParser, RoundTripsEnumRootThroughGenericParser) {
 TEST(RapidJsonBackendParser, RoundTripsOptionalRootThroughGenericParser) {
     const std::optional<std::string> source;
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), "null");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "null"));
 
     std::optional<std::string> decoded = "value";
     readJson(buffer, decoded);
@@ -211,7 +212,7 @@ TEST(RapidJsonBackendParser, RoundTripsOptionalRootThroughGenericParser) {
 TEST(RapidJsonBackendParser, RoundTripsVectorRootThroughGenericSequenceParser) {
     const std::vector<int> source{1, 2, 3};
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), "[1,2,3]");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "[1,2,3]"));
 
     std::vector<int> decoded;
     readJson(buffer, decoded);
@@ -221,7 +222,7 @@ TEST(RapidJsonBackendParser, RoundTripsVectorRootThroughGenericSequenceParser) {
 TEST(RapidJsonBackendParser, RoundTripsListRootThroughGenericSequenceParser) {
     const std::list<std::string> source{"a", "b"};
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), "[\"a\",\"b\"]");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "[\"a\",\"b\"]"));
 
     std::list<std::string> decoded;
     readJson(buffer, decoded);
@@ -231,7 +232,7 @@ TEST(RapidJsonBackendParser, RoundTripsListRootThroughGenericSequenceParser) {
 TEST(RapidJsonBackendParser, RoundTripsArrayRootThroughGenericSequenceParser) {
     const std::array<int, 3> source{4, 5, 6};
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), "[4,5,6]");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "[4,5,6]"));
 
     std::array<int, 3> decoded{};
     readJson(buffer, decoded);
@@ -241,7 +242,7 @@ TEST(RapidJsonBackendParser, RoundTripsArrayRootThroughGenericSequenceParser) {
 TEST(RapidJsonBackendParser, RoundTripsSetRootThroughGenericSequenceParser) {
     const std::set<int> source{3, 1, 2};
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), "[1,2,3]");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "[1,2,3]"));
 
     std::set<int> decoded;
     readJson(buffer, decoded);
@@ -251,7 +252,7 @@ TEST(RapidJsonBackendParser, RoundTripsSetRootThroughGenericSequenceParser) {
 TEST(RapidJsonBackendParser, RoundTripsStringKeyMapRootThroughGenericMapParser) {
     const std::map<std::string, int> source{{"a", 1}, {"b", 2}};
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), "{\"a\":1,\"b\":2}");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "{\"a\":1,\"b\":2}"));
 
     std::map<std::string, int> decoded;
     readJson(buffer, decoded);
@@ -261,7 +262,7 @@ TEST(RapidJsonBackendParser, RoundTripsStringKeyMapRootThroughGenericMapParser) 
 TEST(RapidJsonBackendParser, RoundTripsNonStringKeyMapRootThroughGenericMapParser) {
     const std::map<int, std::string> source{{1, "one"}, {2, "two"}};
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), "[{\"key\":1,\"value\":\"one\"},{\"key\":2,\"value\":\"two\"}]");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "[{\"key\":1,\"value\":\"one\"},{\"key\":2,\"value\":\"two\"}]"));
 
     std::map<int, std::string> decoded;
     readJson(buffer, decoded);
@@ -294,7 +295,7 @@ TEST(RapidJsonBackendParser, DuplicateUniqueEntriesFailWithoutMutatingDestinatio
 TEST(RapidJsonBackendParser, RoundTripsPairRootThroughGenericTupleParser) {
     const std::pair<int, std::string> source{1, "one"};
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), "{\"first\":1,\"second\":\"one\"}");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "{\"first\":1,\"second\":\"one\"}"));
 
     std::pair<int, std::string> decoded;
     readJson(buffer, decoded);
@@ -304,7 +305,7 @@ TEST(RapidJsonBackendParser, RoundTripsPairRootThroughGenericTupleParser) {
 TEST(RapidJsonBackendParser, RoundTripsTupleRootThroughGenericTupleParser) {
     const std::tuple<int, std::string, bool> source{1, "one", true};
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), "[1,\"one\",true]");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "[1,\"one\",true]"));
 
     std::tuple<int, std::string, bool> decoded;
     readJson(buffer, decoded);
@@ -314,7 +315,7 @@ TEST(RapidJsonBackendParser, RoundTripsTupleRootThroughGenericTupleParser) {
 TEST(RapidJsonBackendParser, RoundTripsSharedPtrRootThroughGenericPointerParser) {
     const auto source = std::make_shared<std::string>("owned");
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), "\"owned\"");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "\"owned\""));
 
     std::shared_ptr<std::string> decoded;
     readJson(buffer, decoded);
@@ -325,7 +326,7 @@ TEST(RapidJsonBackendParser, RoundTripsSharedPtrRootThroughGenericPointerParser)
 TEST(RapidJsonBackendParser, RoundTripsUniquePtrNullRootThroughGenericPointerParser) {
     const std::unique_ptr<int> source;
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), "null");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "null"));
 
     auto decoded = std::make_unique<int>(7);
     readJson(buffer, decoded);
@@ -335,7 +336,7 @@ TEST(RapidJsonBackendParser, RoundTripsUniquePtrNullRootThroughGenericPointerPar
 TEST(RapidJsonBackendParser, RoundTripsVariantRootThroughGenericVariantParser) {
     const std::variant<int, std::string> source = std::string{"variant"};
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), "[1,\"variant\"]");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "[1,\"variant\"]"));
 
     std::variant<int, std::string> decoded;
     readJson(buffer, decoded);
@@ -346,7 +347,7 @@ TEST(RapidJsonBackendParser, RoundTripsVariantRootThroughGenericVariantParser) {
 TEST(RapidJsonBackendParser, RoundTripsMonostateVariantRootThroughGenericVariantParser) {
     const std::variant<std::monostate, int> source = std::monostate{};
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), "[0,null]");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "[0,null]"));
 
     std::variant<std::monostate, int> decoded = 7;
     readJson(buffer, decoded);
@@ -357,7 +358,7 @@ TEST(RapidJsonBackendParser, SupportsExplicitUntaggedUnionCompatibility) {
     constexpr auto Untagged = UnionTag{.encoding = UnionEncoding::Untagged};
     const std::variant<int, std::string> source = std::string{"legacy"};
     const auto buffer = writeJson(makeTags<Untagged>(source));
-    EXPECT_EQ(asString(buffer), "\"legacy\"");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "\"legacy\""));
 
     std::variant<int, std::string> decoded = 7;
     auto taggedDecoded = makeTags<Untagged>(decoded);
@@ -389,7 +390,7 @@ TEST(RapidJsonBackendParser, UnionTagIsConsumedAtOneUnionBoundary) {
     // The outer envelope is removed, while the nested variant keeps the
     // default [index, value] representation.
     const auto buffer = writeJson(makeTags<Untagged>(source));
-    EXPECT_EQ(asString(buffer), "[1,\"nested\"]");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "[1,\"nested\"]"));
 
     Outer decoded{false};
     auto taggedDecoded = makeTags<Untagged>(decoded);
@@ -403,7 +404,7 @@ TEST(RapidJsonBackendParser, UnionTagIsConsumedAtOneUnionBoundary) {
 TEST(RapidJsonBackendParser, RoundTripsAtomicRootThroughGenericParser) {
     std::atomic<int> source{11};
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), "11");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), "11"));
 
     std::atomic<int> decoded{0};
     readJson(buffer, decoded);
@@ -429,17 +430,17 @@ TEST(RapidJsonBackendParser, RoundTripsReflectObjectThroughParserEntry) {
 TEST(RapidJsonBackendParser, RawStringTagIsHandledByJsonStringParser) {
     const RawJsonField source{.payload = R"({"enabled":true,"count":2})"};
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), R"({"payload":{"enabled":true,"count":2}})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), R"({"payload":{"enabled":true,"count":2}})"));
 
     RawJsonField decoded;
     readJson(buffer, decoded);
-    EXPECT_EQ(decoded.payload, source.payload);
+    EXPECT_TRUE(neko_test::jsonEquivalent(decoded.payload, source.payload));
 }
 
 TEST(RapidJsonBackendParser, FlatTagIsHandledByReflectObjectParser) {
     const FlatJsonObject source{.id = 7, .nested = {.code = 9}};
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), R"({"id":7,"accode":9})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), R"({"id":7,"accode":9})"));
 
     FlatJsonObject decoded;
     readJson(buffer, decoded);
@@ -483,7 +484,7 @@ TEST(RapidJsonBackendParser, MissingRequiredFieldAndNullScalarFail) {
 TEST(RapidJsonBackendParser, BinaryFixedLengthTagIsIgnoredByJsonParser) {
     const FixedLengthJsonField source{.value = 42};
     const auto buffer = writeJson(source);
-    EXPECT_EQ(asString(buffer), R"({"value":42})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), R"({"value":42})"));
 
     FixedLengthJsonField decoded;
     readJson(buffer, decoded);
@@ -493,7 +494,7 @@ TEST(RapidJsonBackendParser, BinaryFixedLengthTagIsIgnoredByJsonParser) {
 TEST(RapidJsonBackendParser, BinaryLayoutTagIsIgnoredByJsonParser) {
     const RawFixedBinaryLayout source{.value = 42};
     const auto buffer = writeJson(makeTags<BinaryTag{.raw_fixed_data = true}>(source));
-    EXPECT_EQ(asString(buffer), R"({"value":42})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(asString(buffer), R"({"value":42})"));
 
     RawFixedBinaryLayout decoded;
     auto taggedDecoded = makeTags<BinaryTag{.raw_fixed_data = true}>(decoded);

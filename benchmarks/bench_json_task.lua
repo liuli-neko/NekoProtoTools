@@ -2,7 +2,7 @@ task("bench_json")
     set_category("benchmark")
     set_menu({
         usage = "xmake bench_json [options]",
-        description = "Build and run the three-library JSON comparison",
+        description = "Build and run the C++20 JSON comparison, adding Glaze with C++23",
         options = {
             {'n', "iterations", "kv", "10000", "Operations per case (default: 10000)"},
             {'r', "repeats", "kv", "3", "Complete runs per library (default: 3)"},
@@ -20,11 +20,13 @@ task("bench_json")
         assert(iterations and iterations > 0 and iterations == math.floor(iterations), "iterations must be a positive integer")
         assert(repeats and repeats > 0 and repeats == math.floor(repeats), "repeats must be a positive integer")
         assert(config.get("mode") == "release" and config.get("enable_benchmarks"),
-               "Configure first: xmake f -m release --enable_benchmarks=y")
+               "Configure first: xmake f -m release --stdcxx=20 --enable_benchmarks=y (or --stdcxx=23 for Glaze)")
 
         local output_dir = option.get("output") or path.join(os.projectdir(), "build", "benchmarks", "json")
         os.mkdir(output_dir)
-        local targets = {"bench_json_rapidjson_raw", "bench_json_nekoproto", "bench_json_nekoproto_simdjson", "bench_json_reflect_cpp", "bench_json_glaze"}
+        local targets = {"bench_json_rapidjson_raw", "bench_json_nekoproto", "bench_json_nekoproto_simdjson", "bench_json_reflect_cpp"}
+        local glaze_enabled = tonumber(config.get("stdcxx") or 20) >= 23
+        if glaze_enabled then table.insert(targets, "bench_json_glaze") end
         for _, name in ipairs(targets) do
             os.execv("xmake", {"build", name})
         end
@@ -46,7 +48,7 @@ task("bench_json")
         local resolved_packages = {}
         for _, name in ipairs(targets) do
             for _, pkg in ipairs(project.target(name):orderpkgs() or {}) do
-                if pkg:name() == "rapidjson" or pkg:name() == "reflect-cpp" or pkg:name() == "glaze" or pkg:name() == "yyjson" or pkg:name() == "simdjson" then
+                if pkg:name() == "rapidjson" or pkg:name() == "reflect-cpp" or pkg:name() == "yyjson" or pkg:name() == "simdjson" or pkg:name() == "glaze" then
                     resolved_packages[pkg:name()] = tostring(pkg:version() or "unknown")
                 end
             end
@@ -79,9 +81,11 @@ task("bench_json")
             {name = "NekoProtoTools", backend = "yyjson", column = "neko_yyjson", label = "Neko / yyjson"},
             {name = "NekoProtoTools", backend = "simdjson", column = "neko_simdjson", label = "Neko / simdjson"},
             {name = "reflect-cpp", backend = "yyjson", column = "reflect_cpp", label = "reflect-cpp / yyjson"},
-            {name = "Glaze", backend = "Glaze JSON", column = "glaze", label = "Glaze"},
             {name = "RapidJSON-Raw", backend = "Streaming", column = "rapidjson_raw", label = "RapidJSON (Handwritten)"}
         }
+        if glaze_enabled then
+            table.insert(libraries, {name = "Glaze", backend = "Glaze JSON", column = "glaze", label = "Glaze"})
+        end
         local measurements = {}
         local function measurement(case_name, operation, column)
             local key = case_name .. "/" .. operation .. "/" .. column
@@ -208,18 +212,26 @@ task("bench_json")
         io.writefile(path.join(output_dir, "json_sizes.csv"), table.concat(size_rows, "\n") .. "\n")
         local report = {
             "# JSON benchmark comparison", "",
-            "Median of " .. repeats .. " repeats, " .. iterations .. " operations per case. Each row compares the same case and operation across three adapters.",
+            "Median of " .. repeats .. " repeats, " .. iterations .. " operations per case. Each row compares the same case and operation across " .. #targets .. " adapters.",
             "", "The deserialize input is the same NekoProtoTools JSON fixture for every adapter. Serialize throughput uses each adapter's own output size.",
             "", table.concat(comparison_tables, "\n"), table.concat(size_table, "\n"), "",
             "[Comparison CSV](json.csv) · [Raw repeat data](raw.csv) · [Environment](environment.txt) · [Compile commands](compile-commands.txt)", ""
         }
         io.writefile(path.join(output_dir, "summary.md"), table.concat(report, "\n"))
         local xmake_version = os.iorunv("xmake", {"--version"}):gsub("\27%[[0-9;]*m", "")
+        local source_commit = os.iorunv("git", {"rev-parse", "HEAD"}):gsub("%s+$", "")
+        local git_status = os.iorunv("git", {"status", "--short"})
+        local modified_files = git_status:gsub("%s+$", ""):gsub("\n", "; ")
         local metadata = {
             "JSON benchmark run",
+            "source commit: " .. source_commit,
+            "working tree: " .. (git_status == "" and "clean" or "modified"),
+            "modified files: " .. (modified_files == "" and "none" or modified_files),
             "xmake: " .. (xmake_version:match("[^\r\n]+") or "unknown"),
             "platform: " .. os.host() .. "/" .. os.arch(),
             "mode: release",
+            "standard: c++" .. tostring(config.get("stdcxx") or "unspecified"),
+            "compiler: " .. tostring(compile_commands[1]:match("^.-:%s+([^%s]+)") or "unknown"),
             "configured CXX: " .. tostring(config.get("cxx") or "xmake default"),
             "iterations per case: " .. iterations,
             "repeats: " .. repeats,
@@ -229,14 +241,16 @@ task("bench_json")
             "simdjson: " .. tostring(resolved_packages["simdjson"] or "unknown"),
             "RapidJSON: " .. tostring(resolved_packages["rapidjson"] or "unknown"),
             "reflect-cpp: " .. tostring(resolved_packages["reflect-cpp"] or "unknown") .. " (yyjson)",
-            "Glaze: " .. tostring(resolved_packages["glaze"] or "unknown"),
             "command: xmake bench_json -n " .. iterations .. " -r " .. repeats .. " -o " .. output_dir,
             "model: benchmarks/benchmark_models.hpp; seeds: 0x4e454b4f20260400 and +4; warm-up: 100 per case",
-            "All three outputs were decoded by all three adapters before timing.",
+            "All " .. #targets .. " outputs were decoded by all " .. #targets .. " adapters before timing.",
             "Deserialize uses the same NekoProtoTools JSON fixture for every adapter; serialize measures each native output.",
             "json_bytes means produced bytes for serialize, fixture input bytes for deserialize.",
             "Every case passed round-trip checks before and after measurement."
         }
+        if glaze_enabled then
+            table.insert(metadata, "Glaze: " .. tostring(resolved_packages["glaze"] or "unknown"))
+        end
         io.writefile(path.join(output_dir, "environment.txt"), table.concat(metadata, "\n") .. "\n")
         cprint("${green}JSON benchmark results: %s${clear}", csv_path)
     end)

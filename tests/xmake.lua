@@ -111,9 +111,12 @@ local function define_test_target(file, config)
     target_end()
 end
 
-function neko_define_test(file, enabled)
+function neko_define_test(file, enabled, run_timeout)
     local config = default_test_config(file)
     if enabled and config.enabled then
+        if run_timeout then
+            config.run_timeout = run_timeout
+        end
         define_test_target(file, config)
     end
 end

@@ -36,6 +36,22 @@ task("bench_compile_time")
 
         local output_root = option.get("output") or path.join(root, "build", "compile_time", label)
         os.mkdir(output_root)
+        assert(repeats >= 1 and repeats == math.floor(repeats), "repeats must be a positive integer")
+
+        -- Keep optional backends selected per workload, regardless of the
+        -- project's current xmake configuration.
+        local generated_config = io.readfile(path.join(root, "include", "nekoproto", "global", "config.h"))
+        assert(generated_config, "Run xmake f before bench_compile_time to generate config.h")
+        for _, name in ipairs({"NEKO_PROTO_ENABLE_PUGIXML", "NEKO_PROTO_ENABLE_YYJSON",
+                              "NEKO_PROTO_ENABLE_RAPIDJSON", "NEKO_PROTO_ENABLE_SIMDJSON",
+                              "NEKO_PROTO_ENABLE_LIBFYAML", "NEKO_PROTO_ENABLE_YAMLCPP",
+                              "NEKO_PROTO_ENABLE_TOMLPLUSPLUS", "NEKO_PROTO_RPC_TRACE"}) do
+            generated_config = generated_config:gsub("#define " .. name .. "[^\r\n]*", "/* benchmark selects " .. name .. " per workload */")
+        end
+        local bench_config_dir = path.join(output_root, "config")
+        local bench_config_file = path.join(bench_config_dir, "nekoproto", "global", "config.h")
+        os.mkdir(path.directory(bench_config_file))
+        io.writefile(bench_config_file, generated_config)
 
         -- 2. Detect Compiler
         local compiler = option.get("compiler")
@@ -54,7 +70,6 @@ task("bench_compile_time")
         end
 
         local is_clang = compiler:find("clang", 1, true) ~= nil
-        local is_msvc = compiler:find("cl", 1, true) ~= nil and compiler:find("clang", 1, true) == nil
 
         -- Get compiler version
         local compiler_version = "unknown"
@@ -116,23 +131,15 @@ task("bench_compile_time")
         end
 
         local inc_fmt = find_package_include("fmt")
-        local inc_rapidjson = find_package_include("rapidjson")
-        local inc_simdjson = find_package_include("simdjson")
+        local inc_zeus = find_package_include("zeus_expected")
+        local inc_yyjson = find_package_include("yyjson")
         local inc_pugixml = find_package_include("pugixml")
-        local inc_libfyaml = find_package_include("libfyaml")
         local inc_toml = find_package_include("toml++", "tomlplusplus")
         local inc_yamlcpp = find_package_include("yaml-cpp", "yamlcpp")
         local inc_rfl = find_package_include("reflect-cpp", "reflectcpp")
 
-        -- Auto-install reflect-cpp if missing
-        if not inc_rfl then
-            cprint("${yellow}[benchmark] reflect-cpp not found in cache. Attempting auto-install via xrepo...${clear}")
-            try {
-                function ()
-                    os.execv("xrepo", {"install", "-y", "reflect-cpp"})
-                    inc_rfl = find_package_include("reflect-cpp", "reflectcpp")
-                end
-            }
+        local function include_flag(dir)
+            return dir and ("-I" .. dir) or ""
         end
 
         -- Print Banner
@@ -144,19 +151,36 @@ task("bench_compile_time")
         cprint("Output Path    : %s", output_root)
         cprint("Repeats        : %d iterations per workload", repeats)
         cprint("Trace Profile  : %s", enable_trace and "Enabled (-ftime-trace)" or "Disabled")
-        cprint("reflect-cpp Inc: %s", inc_rfl or "${red}NOT FOUND (reflect-cpp benchmarks skipped)${clear}")
+        cprint("C++ standard  : C++20 for both implementations")
+        cprint("reflect-cpp Inc: %s", inc_rfl or "${red}NOT FOUND (install with xrepo install reflect-cpp)${clear}")
         cprint("${cyan}----------------------------------------------------------------------------------------${clear}")
 
         -- 4. Workload Definitions
         -- Base compiler flags
-        local std_flag = "-std=c++23"
-        local neko_common_flags = {std_flag, "-O0", "-c", "-I" .. path.join(root, "include"), "-I" .. bench_dir}
+        local std_flag = "-std=c++20"
+        local neko_common_flags = {std_flag, "-O0", "-c", "-I" .. bench_config_dir,
+                                   "-I" .. path.join(root, "include"), "-I" .. bench_dir}
         if inc_fmt then table.insert(neko_common_flags, "-I" .. inc_fmt) end
+        if inc_zeus then table.insert(neko_common_flags, "-I" .. inc_zeus) end
         if enable_trace and is_clang then table.insert(neko_common_flags, "-ftime-trace") end
 
-        local rfl_common_flags = {"-std=c++20", "-O0", "-c", "-I" .. bench_dir}
+        local rfl_common_flags = {std_flag, "-O0", "-c", "-I" .. bench_dir}
         if inc_rfl then table.insert(rfl_common_flags, "-I" .. inc_rfl) end
         if enable_trace and is_clang then table.insert(rfl_common_flags, "-ftime-trace") end
+
+        local git_commit = os.iorunv("git", {"rev-parse", "HEAD"}):gsub("%s+$", "")
+        local git_status = os.iorunv("git", {"status", "--short"})
+        local modified_files = git_status:gsub("%s+$", ""):gsub("\n", "; ")
+        io.writefile(path.join(output_root, "environment.txt"), string.format(
+            "commit=%s\nworking_tree=%s\nmodified_files=%s\ncompiler=%s\ncompiler_version=%s\nplatform=%s/%s\nstandard=c++20\noptimization=-O0\nrepeats=%d\nbenchmark_config=%s\nfmt=%s\nzeus_expected=%s\nyyjson=%s\nyaml-cpp=%s\ntoml++=%s\npugixml=%s\nreflect-cpp=%s\n",
+            git_commit, git_status == "" and "clean" or "modified", modified_files == "" and "none" or modified_files,
+            compiler, compiler_version,
+            os.host(), os.arch(), repeats, bench_config_file, inc_fmt or "missing", inc_zeus or "missing",
+            inc_yyjson or "missing", inc_yamlcpp or "missing", inc_toml or "missing",
+            inc_pugixml or "missing", inc_rfl or "missing"))
+        local raw_file = assert(io.open(path.join(output_root, "raw.csv"), "w"))
+        raw_file:write("workload,iteration,duration_ms\n")
+        local commands_file = assert(io.open(path.join(output_root, "commands.txt"), "w"))
 
         -- Comparative cases (Neko vs reflect-cpp)
         local comp_cases = {
@@ -173,80 +197,80 @@ task("bench_compile_time")
                 desc = "JSON write (4 fields)",
                 neko_source = "json_write.cpp",
                 rfl_source  = "rfl_json_write.cpp",
-                neko_flags  = {"-DNEKO_PROTO_ENABLE_RAPIDJSON", "-DNEKO_BENCH_FIELD_COUNT=4", inc_rapidjson and ("-I" .. inc_rapidjson) or ""},
-                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=4"}
+                neko_flags  = {"-DNEKO_PROTO_ENABLE_YYJSON", "-DNEKO_BENCH_FIELD_COUNT=4", include_flag(inc_yyjson)},
+                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=4", include_flag(inc_yyjson)}
             },
             {
                 name = "json_read_4",
                 desc = "JSON read (4 fields)",
                 neko_source = "json_read.cpp",
                 rfl_source  = "rfl_json_read.cpp",
-                neko_flags  = {"-DNEKO_PROTO_ENABLE_RAPIDJSON", "-DNEKO_BENCH_FIELD_COUNT=4", inc_rapidjson and ("-I" .. inc_rapidjson) or ""},
-                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=4"}
+                neko_flags  = {"-DNEKO_PROTO_ENABLE_YYJSON", "-DNEKO_BENCH_FIELD_COUNT=4", include_flag(inc_yyjson)},
+                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=4", include_flag(inc_yyjson)}
             },
             {
                 name = "json_write_16",
                 desc = "JSON write (16 fields)",
                 neko_source = "json_write.cpp",
                 rfl_source  = "rfl_json_write.cpp",
-                neko_flags  = {"-DNEKO_PROTO_ENABLE_RAPIDJSON", "-DNEKO_BENCH_FIELD_COUNT=16", inc_rapidjson and ("-I" .. inc_rapidjson) or ""},
-                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=16"}
+                neko_flags  = {"-DNEKO_PROTO_ENABLE_YYJSON", "-DNEKO_BENCH_FIELD_COUNT=16", include_flag(inc_yyjson)},
+                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=16", include_flag(inc_yyjson)}
             },
             {
                 name = "json_read_16",
                 desc = "JSON read (16 fields)",
                 neko_source = "json_read.cpp",
                 rfl_source  = "rfl_json_read.cpp",
-                neko_flags  = {"-DNEKO_PROTO_ENABLE_RAPIDJSON", "-DNEKO_BENCH_FIELD_COUNT=16", inc_rapidjson and ("-I" .. inc_rapidjson) or ""},
-                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=16"}
+                neko_flags  = {"-DNEKO_PROTO_ENABLE_YYJSON", "-DNEKO_BENCH_FIELD_COUNT=16", include_flag(inc_yyjson)},
+                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=16", include_flag(inc_yyjson)}
             },
             {
                 name = "json_write_32",
                 desc = "JSON write (32 fields)",
                 neko_source = "json_write.cpp",
                 rfl_source  = "rfl_json_write.cpp",
-                neko_flags  = {"-DNEKO_PROTO_ENABLE_RAPIDJSON", "-DNEKO_BENCH_FIELD_COUNT=32", inc_rapidjson and ("-I" .. inc_rapidjson) or ""},
-                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=32"}
+                neko_flags  = {"-DNEKO_PROTO_ENABLE_YYJSON", "-DNEKO_BENCH_FIELD_COUNT=32", include_flag(inc_yyjson)},
+                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=32", include_flag(inc_yyjson)}
             },
             {
                 name = "json_read_32",
                 desc = "JSON read (32 fields)",
                 neko_source = "json_read.cpp",
                 rfl_source  = "rfl_json_read.cpp",
-                neko_flags  = {"-DNEKO_PROTO_ENABLE_RAPIDJSON", "-DNEKO_BENCH_FIELD_COUNT=32", inc_rapidjson and ("-I" .. inc_rapidjson) or ""},
-                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=32"}
+                neko_flags  = {"-DNEKO_PROTO_ENABLE_YYJSON", "-DNEKO_BENCH_FIELD_COUNT=32", include_flag(inc_yyjson)},
+                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=32", include_flag(inc_yyjson)}
             },
             {
                 name = "json_write_64",
                 desc = "JSON write (64 fields)",
                 neko_source = "json_write.cpp",
                 rfl_source  = "rfl_json_write.cpp",
-                neko_flags  = {"-DNEKO_PROTO_ENABLE_RAPIDJSON", "-DNEKO_BENCH_FIELD_COUNT=64", inc_rapidjson and ("-I" .. inc_rapidjson) or ""},
-                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=64"}
+                neko_flags  = {"-DNEKO_PROTO_ENABLE_YYJSON", "-DNEKO_BENCH_FIELD_COUNT=64", include_flag(inc_yyjson)},
+                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=64", include_flag(inc_yyjson)}
             },
             {
                 name = "json_read_64",
                 desc = "JSON read (64 fields)",
                 neko_source = "json_read.cpp",
                 rfl_source  = "rfl_json_read.cpp",
-                neko_flags  = {"-DNEKO_PROTO_ENABLE_RAPIDJSON", "-DNEKO_BENCH_FIELD_COUNT=64", inc_rapidjson and ("-I" .. inc_rapidjson) or ""},
-                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=64"}
+                neko_flags  = {"-DNEKO_PROTO_ENABLE_YYJSON", "-DNEKO_BENCH_FIELD_COUNT=64", include_flag(inc_yyjson)},
+                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=64", include_flag(inc_yyjson)}
             },
             {
                 name = "yaml_write_64",
                 desc = "YAML write (64 fields)",
                 neko_source = "yaml_write.cpp",
                 rfl_source  = "rfl_yaml_write.cpp",
-                neko_flags  = {"-DNEKO_PROTO_ENABLE_LIBFYAML", "-DNEKO_BENCH_FIELD_COUNT=64", inc_libfyaml and ("-I" .. inc_libfyaml) or ""},
-                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=64", inc_yamlcpp and ("-I" .. inc_yamlcpp) or ""}
+                neko_flags  = {"-DNEKO_PROTO_ENABLE_YAMLCPP", "-DNEKO_BENCH_FIELD_COUNT=64", include_flag(inc_yamlcpp)},
+                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=64", include_flag(inc_yamlcpp)}
             },
             {
                 name = "yaml_read_64",
                 desc = "YAML read (64 fields)",
                 neko_source = "yaml_read.cpp",
                 rfl_source  = "rfl_yaml_read.cpp",
-                neko_flags  = {"-DNEKO_PROTO_ENABLE_LIBFYAML", "-DNEKO_BENCH_FIELD_COUNT=64", inc_libfyaml and ("-I" .. inc_libfyaml) or ""},
-                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=64", inc_yamlcpp and ("-I" .. inc_yamlcpp) or ""}
+                neko_flags  = {"-DNEKO_PROTO_ENABLE_YAMLCPP", "-DNEKO_BENCH_FIELD_COUNT=64", include_flag(inc_yamlcpp)},
+                rfl_flags   = {"-DNEKO_BENCH_FIELD_COUNT=64", include_flag(inc_yamlcpp)}
             },
             {
                 name = "toml_write_64",
@@ -346,6 +370,8 @@ task("bench_compile_time")
             }
         }
 
+        local recorded_commands = 0
+
         -- Helper to compile a single workload
         local function run_compile_benchmark(source_file, base_flags, extra_flags, out_obj_name)
             local args = {}
@@ -359,6 +385,13 @@ task("bench_compile_time")
             local obj_file = path.join(output_root, out_obj_name .. ".o")
             table.insert(args, "-o")
             table.insert(args, obj_file)
+
+            if recorded_commands > 0 then commands_file:write("\n") end
+            commands_file:write(out_obj_name, "\n", string.format("%q", compiler), "\n")
+            for _, arg in ipairs(args) do
+                commands_file:write(string.format("%q", arg), "\n")
+            end
+            recorded_commands = recorded_commands + 1
 
             if is_verbose then
                 print("[CMD]", compiler, table.concat(args, " "))
@@ -376,7 +409,7 @@ task("bench_compile_time")
                     catch {
                         function (err)
                             ok = false
-                            cprint("${red}Compilation failed for %s: %s${clear}", source_file, tostring(err):sub(1, 200))
+                            cprint("${red}Compilation failed for %s: %s${clear}", source_file, tostring(err))
                         end
                     }
                 }
@@ -384,7 +417,9 @@ task("bench_compile_time")
                 if not ok then
                     return nil
                 end
-                table.insert(durations, t1 - t0)
+                local duration = t1 - t0
+                table.insert(durations, duration)
+                raw_file:write(string.format("%s,%d,%.3f\n", out_obj_name, i, duration))
             end
 
             if os.isfile(obj_file) then
@@ -424,8 +459,11 @@ task("bench_compile_time")
         cprint("\n${yellow}>>> [1/2] Head-to-Head Comparison: NekoProto vs reflect-cpp${clear}\n")
 
         local comp_results = {}
+        local failed_count = 0
+        local selected_count = 0
         for _, c in ipairs(comp_cases) do
             if not filter_pat or c.name:find(filter_pat) or c.desc:find(filter_pat) then
+                selected_count = selected_count + 1
                 printf("Running %-22s ... ", c.name)
                 io.flush()
 
@@ -455,6 +493,9 @@ task("bench_compile_time")
                 else
                     cprint("${red}FAILED${clear}")
                 end
+                if not neko_res or not rfl_res then
+                    failed_count = failed_count + 1
+                end
 
                 table.insert(comp_results, {
                     name = c.name,
@@ -471,6 +512,7 @@ task("bench_compile_time")
         local feature_results = {}
         for _, c in ipairs(neko_feature_cases) do
             if not filter_pat or c.name:find(filter_pat) or c.desc:find(filter_pat) then
+                selected_count = selected_count + 1
                 printf("Running %-22s ... ", c.name)
                 io.flush()
                 local res = run_compile_benchmark(c.source, neko_common_flags, c.flags, "neko_" .. c.name)
@@ -479,6 +521,7 @@ task("bench_compile_time")
                            res.avg_ms, res.min_ms, res.max_ms, format_size(res.size_bytes))
                 else
                     cprint("${red}FAILED${clear}")
+                    failed_count = failed_count + 1
                 end
                 table.insert(feature_results, {
                     name = c.name,
@@ -547,7 +590,7 @@ task("bench_compile_time")
             local total_neko_s_str = format_size(total_neko_obj)
             local total_rfl_s_str = format_size(total_rfl_obj)
 
-            local sum_head = string.format("%-20s | %12s | %12s | ", "TOTAL (ALL FORMATS)", total_neko_t_str, total_rfl_t_str)
+            local sum_head = string.format("%-20s | %12s | %12s | ", "TOTAL (MATCHED)", total_neko_t_str, total_rfl_t_str)
             local sum_delta = string.format("%-18s", overall_delta)
             local sum_tail = string.format(" | %11s | %11s", total_neko_s_str, total_rfl_s_str)
             cprint("${cyan}%s${green}%s${cyan}%s${clear}", sum_head, sum_delta, sum_tail)
@@ -601,7 +644,7 @@ task("bench_compile_time")
         end
 
         -- Optionally update RESULTS.md
-        if save_results then
+        if save_results and failed_count == 0 and selected_count > 0 then
             local results_md = path.join(bench_dir, "RESULTS.md")
             local f_md = io.open(results_md, "w")
             if f_md then
@@ -630,7 +673,7 @@ task("bench_compile_time")
                 if comp_count > 0 then
                     local overall_pct = ((total_rfl_time - total_neko_time) / total_rfl_time) * 100.0
                     local overall_x = total_rfl_time / total_neko_time
-                    f_md:write(string.format("| **TOTAL (ALL FORMATS)** | Cumulative Benchmark Sum | **%.1f** | **%.1f** | **%+.1f%%** | **%.2fx** | **%s** | **%s** |\n",
+                    f_md:write(string.format("| **TOTAL (MATCHED)** | Cumulative Benchmark Sum | **%.1f** | **%.1f** | **%+.1f%%** | **%.2fx** | **%s** | **%s** |\n",
                         total_neko_time, total_rfl_time, overall_pct, overall_x, format_size(total_neko_obj), format_size(total_rfl_obj)))
                 end
 
@@ -645,5 +688,13 @@ task("bench_compile_time")
                 f_md:close()
                 cprint("${green}Updated benchmark report at: %s${clear}", results_md)
             end
+        end
+        raw_file:close()
+        commands_file:close()
+        if selected_count == 0 then
+            raise("No benchmark workload matched the selected filter")
+        end
+        if failed_count > 0 then
+            raise(string.format("%d selected benchmark workload(s) did not compile on both sides; inspect commands.txt and compiler diagnostics", failed_count))
         end
     end)

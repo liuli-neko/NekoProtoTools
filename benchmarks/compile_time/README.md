@@ -1,8 +1,8 @@
 # Compile-Time Benchmark Suite
 
-These workloads are exploratory. Current NekoProto and reflect-cpp cases use different C++ language levels; do not publish their timings as a fair ranking until the method is aligned and rerun.
+These workloads are exploratory. The task now compiles both implementations with C++20, `-O0 -c`, the same selected field count, and matching JSON (yyjson), YAML (yaml-cpp), TOML (toml++), and XML (pugixml) backends. The older checked-in [RESULTS.md](RESULTS.md) predates this alignment and is historical only. Validate feature and output equivalence before publishing a ranking.
 
-This benchmark suite measures reflection and serialization compile-time performance, template expansion overhead, and object file symbol footprint, directly comparing **NekoProto** against **reflect-cpp** across multiple serialization formats and field-count dimensions.
+This benchmark suite measures translation-unit compile time and object file size for reflection and serialization workloads, comparing **NekoProto** with **reflect-cpp** across multiple formats and field counts.
 
 ## Features
 
@@ -20,7 +20,7 @@ This benchmark suite measures reflection and serialization compile-time performa
 - **Zero Build Pollution**:
   - Integrated directly into `xmake` as a manual on-demand task (`xmake bench_compile_time`)
   - Never run automatically during standard builds (`xmake build` or `xmake test`)
-  - Auto-discovers and resolves package include paths (`rapidjson`, `simdjson`, `libfyaml`, `yaml-cpp`, `toml++`, `pugixml`, `reflect-cpp`, `fmt`)
+  - Resolves package include paths (`yyjson`, `yaml-cpp`, `toml++`, `pugixml`, `reflect-cpp`, `zeus_expected`, `fmt`) and records the paths used
 
 ---
 
@@ -29,7 +29,8 @@ This benchmark suite measures reflection and serialization compile-time performa
 ### 1. Basic Execution (Manual Trigger via xmake)
 
 ```bash
-# Run with default settings (auto compiler, 3 iterations per workload)
+# Configure once, then run with the auto-selected compiler and 3 iterations
+xmake f -m release --stdcxx=20
 xmake bench_compile_time
 
 # Run and automatically save the results table to RESULTS.md
@@ -66,7 +67,10 @@ xmake bench_compile_time --trace -o build/compile_time/trace_run
 
 ### 4. Output Artifacts
 
+Install missing dependencies before running comparative cases, for example with `xrepo install reflect-cpp`. The task does not install packages during measurement. It uses an isolated copy of `config.h` so optional backends from the current xmake configuration do not affect unrelated workloads. A selected workload that fails compilation makes the task fail.
+
 Running the benchmark generates:
 - **Terminal Report**: High-resolution ASCII comparison table with colored delta indicators and format totals.
 - **CSV Data**: `build/compile_time/<label>/timings.csv` containing detailed `min`, `max`, `avg`, and `size_bytes`.
+- **Raw data**: `raw.csv` with every compile duration, `commands.txt` with the exact compiler argv, and `environment.txt` with the source commit, compiler, flags, and resolved package paths.
 - **Markdown Report**: `benchmarks/compile_time/RESULTS.md` (when triggered with `--save`).

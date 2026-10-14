@@ -8,7 +8,7 @@ set_encodings("utf-8")
 set_policy("package.cmake_generator.ninja", true)
 
 option("stdc",   {showmenu = true, default = 23, values = {23}})
-option("stdcxx", {showmenu = true, default = 23, values = {26, 23, 20}})
+option("stdcxx", {showmenu = true, default = 20, values = {26, 23, 20}})
 function stdc()   return "c"   .. tostring(get_config("stdc"))   end
 function stdcxx() return "c++" .. tostring(get_config("stdcxx")) end
 function json_serializer_enabled()
@@ -127,7 +127,7 @@ option_end()
 option("enable_benchmarks")
     set_default(false)
     set_showmenu(true)
-    set_description("Enable JSON comparison benchmarks (NekoProtoTools, reflect-cpp, Glaze)")
+    set_description("Enable JSON comparison benchmarks (Glaze requires C++23)")
     set_category("benchmark")
 option_end()
 
@@ -291,16 +291,17 @@ end
 if not has_config("has_std_expected") then
     add_requires("zeus_expected")
     if not has_config("3rd_custom") then
-        add_requireconfs("**zeus_expected", {version = "v1.3.1"})
+        add_requireconfs("**zeus_expected", {version = "v1.4.0"})
     end
 end
 
 if has_config("enable_communication") or
    (has_config("enable_jsonrpc") and json_serializer_enabled()) then
-    add_requires("ilias")
-    if not has_config("3rd_custom") then
-        -- configurations of required libraries
-        add_requireconfs("**ilias", {version = "0.5.0", configs = { shared = is_kind("shared"), stdcxx = tonumber(get_config("stdcxx"))}})
+    if has_config("3rd_custom") then
+        add_requires("ilias")
+    else
+        -- Pin the direct dependency too: add_requireconfs only affects transitive requirements.
+        add_requires("ilias 0.5.0", {configs = {shared = is_kind("shared"), stdcxx = tonumber(get_config("stdcxx"))}})
     end
 end
 

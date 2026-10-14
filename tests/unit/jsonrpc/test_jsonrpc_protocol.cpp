@@ -13,6 +13,7 @@
 #include "nekoproto/rpc/method.hpp"
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/reflection.hpp"
+#include "../common/json_semantic.hpp"
 
 using namespace nekoproto;
 
@@ -69,8 +70,8 @@ TEST(JsonRpcProtocol, NamedParamsRequestRoundTripsAsObject) {
     request.id       = uint64_t{7};
     detail::JsonRpcRequestWithContext<Request> requestWithContext{request, context};
 
-    EXPECT_EQ(writeJson(requestWithContext),
-              R"({"jsonrpc":"2.0","method":"math.add","id":7,"params":{"lhs":20,"rhs":22}})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(requestWithContext),
+                                         R"({"jsonrpc":"2.0","method":"math.add","id":7,"params":{"lhs":20,"rhs":22}})"));
 
     Request decoded;
     detail::JsonRpcRequestWithContext<Request> decodedWithContext{decoded, context};
@@ -91,7 +92,7 @@ TEST(JsonRpcProtocol, PositionalParamsRequestUsesArrayForUnnamedParameters) {
     request.params = std::make_tuple(3, 4);
     request.id     = std::string{"req-1"};
 
-    EXPECT_EQ(writeJson(request), R"({"jsonrpc":"2.0","method":"math.add","id":"req-1","params":[3,4]})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(request), R"({"jsonrpc":"2.0","method":"math.add","id":"req-1","params":[3,4]})"));
 
     Request decoded;
     ASSERT_TRUE(readJson(R"({"jsonrpc":"2.0","method":"math.add","id":"req-1","params":[3,4]})", decoded));
@@ -110,8 +111,8 @@ TEST(JsonRpcProtocol, ReflectedSingleParameterExpandsToParamsObject) {
     request.params.label = "three";
     request.id           = std::string{"object-id"};
 
-    EXPECT_EQ(writeJson(request),
-              R"({"jsonrpc":"2.0","method":"object.echo","id":"object-id","params":{"count":3,"label":"three"}})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(request),
+                                         R"({"jsonrpc":"2.0","method":"object.echo","id":"object-id","params":{"count":3,"label":"three"}})"));
 
     Request decoded;
     ASSERT_TRUE(readJson(
@@ -128,7 +129,7 @@ TEST(JsonRpcProtocol, SingleTupleParameterKeepsTopLevelParamsArray) {
     request.method = "tuple.echo";
     request.params = std::make_tuple(1, 2.5, true);
 
-    EXPECT_EQ(writeJson(request), R"({"jsonrpc":"2.0","method":"tuple.echo","params":[1,2.5,true]})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(request), R"({"jsonrpc":"2.0","method":"tuple.echo","params":[1,2.5,true]})"));
 
     Request decoded;
     ASSERT_TRUE(readJson(R"({"jsonrpc":"2.0","method":"tuple.echo","id":null,"params":[1,2.5,true]})", decoded));
@@ -142,7 +143,7 @@ TEST(JsonRpcProtocol, EmptyParamsRequestWritesEmptyArray) {
     Request request;
     request.method = "ping";
 
-    EXPECT_EQ(writeJson(request), R"({"jsonrpc":"2.0","method":"ping","params":[]})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(request), R"({"jsonrpc":"2.0","method":"ping","params":[]})"));
 
     Request decoded;
     ASSERT_TRUE(readJson(R"({"jsonrpc":"2.0","method":"ping","id":null,"params":[]})", decoded));
@@ -182,7 +183,7 @@ TEST(JsonRpcProtocol, HelperObjectCanFallbackToTupleArrayWithoutNames) {
     std::tuple<int, std::string> params{7, "seven"};
     detail::JsonRpcSerializerHelperObject<decltype(params)> helper{params};
 
-    EXPECT_EQ(writeJson(helper), R"([7,"seven"])");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(helper), R"([7,"seven"])"));
 
     std::tuple<int, std::string> decodedParams;
     detail::JsonRpcSerializerHelperObject<decltype(decodedParams)> decoded{decodedParams};
@@ -198,7 +199,7 @@ TEST(JsonRpcProtocol, MethodProbeIgnoresParamsAndKeepsRequestId) {
     EXPECT_EQ(method.method, "math.add");
     ASSERT_TRUE(std::holds_alternative<std::string>(method.id));
     EXPECT_EQ(std::get<std::string>(method.id), "probe");
-    EXPECT_EQ(writeJson(method), R"({"jsonrpc":"2.0","method":"math.add","id":"probe"})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(method), R"({"jsonrpc":"2.0","method":"math.add","id":"probe"})"));
 }
 
 TEST(JsonRpcProtocol, SuccessResponseSkipsErrorField) {
@@ -206,7 +207,7 @@ TEST(JsonRpcProtocol, SuccessResponseSkipsErrorField) {
     response.result = 42;
     response.id     = uint64_t{9};
 
-    EXPECT_EQ(writeJson(response), R"({"jsonrpc":"2.0","result":42,"id":9})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(response), R"({"jsonrpc":"2.0","result":42,"id":9})"));
 
     detail::JsonRpcResponse<AddTraits> decoded;
     ASSERT_TRUE(readJson(R"({"jsonrpc":"2.0","result":42,"id":9})", decoded));
@@ -231,7 +232,7 @@ TEST(JsonRpcProtocol, VoidResponseDoesNotExposeResultField) {
     detail::JsonRpcResponse<void> response;
     response.error = detail::JsonRpcErrorResponse{.code = -32603, .message = "internal"};
 
-    EXPECT_EQ(writeJson(response), R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"internal"}})");
+    EXPECT_TRUE(neko_test::jsonEquivalent(writeJson(response), R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"internal"}})"));
 
     detail::JsonRpcResponse<void> decoded;
     ASSERT_TRUE(readJson(R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"internal"},"id":null})", decoded));

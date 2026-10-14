@@ -65,6 +65,7 @@ private:
         ParseLimits limits;
         std::size_t remainingAllocation = 0;
         bool framed = false;
+        bool unsupportedVersion = false;
         std::optional<sa::Error> error;
     };
 
@@ -139,9 +140,13 @@ public:
             state_.error = sa::error(sa::ErrorCode::InvalidLength, "Binary input exceeds configured byte limit");
             return;
         }
-        if (size >= sizeof(BinaryMagic) && std::memcmp(data, BinaryMagic, sizeof(BinaryMagic)) == 0) {
-            state_.framed = true;
-            state_.offset = sizeof(BinaryMagic);
+        if (size >= sizeof(BinaryMagic) && data[0] == 'N' && data[1] == 'P') {
+            if (static_cast<std::uint8_t>(data[2]) != static_cast<std::uint8_t>(BinaryMagic[2])) {
+                state_.unsupportedVersion = true;
+            } else {
+                state_.framed = true;
+                state_.offset = sizeof(BinaryMagic);
+            }
         }
     }
 
@@ -151,6 +156,7 @@ public:
 
     void beginRawFixedDataAsRoot() noexcept {
         state_.framed = false;
+        state_.unsupportedVersion = false;
         state_.offset = 0;
     }
 
@@ -164,6 +170,9 @@ public:
 
     auto root() -> InputValueType {
         if (state_.error) return errorValue(state_, *state_.error);
+        if (state_.unsupportedVersion) {
+            return errorValue(state_, sa::error(sa::ErrorCode::ParseError, "Unsupported Binary wire version"));
+        }
         if (!state_.framed) return rawValue(state_);
         auto cursor = state_.offset;
         auto parsed = parseNode(state_, cursor, state_.size, 0);

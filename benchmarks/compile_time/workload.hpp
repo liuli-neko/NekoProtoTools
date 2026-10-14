@@ -107,6 +107,7 @@ struct BenchmarkStruct {
     double f01{};
     std::string f02;
     std::optional<int> f03;
+#if NEKO_BENCH_FIELD_COUNT >= 16
     std::vector<int> f04;
     BenchEnum f05{};
     Nested f06;
@@ -119,6 +120,8 @@ struct BenchmarkStruct {
     Nested f13;
     int f14{};
     double f15{};
+#endif
+#if NEKO_BENCH_FIELD_COUNT >= 32
     std::string f16;
     std::optional<int> f17;
     std::vector<int> f18;
@@ -135,6 +138,8 @@ struct BenchmarkStruct {
     double f29{};
     std::string f30;
     std::optional<int> f31;
+#endif
+#if NEKO_BENCH_FIELD_COUNT >= 64
     std::vector<int> f32;
     BenchEnum f33{};
     Nested f34;
@@ -167,6 +172,7 @@ struct BenchmarkStruct {
     BenchEnum f61{};
     Nested f62;
     int f63{};
+#endif
 
 #if NEKO_BENCH_FIELD_COUNT == 4
     NEKO_BENCH_APPLY_SERIALIZER(NEKO_BENCH_ARGS_4)

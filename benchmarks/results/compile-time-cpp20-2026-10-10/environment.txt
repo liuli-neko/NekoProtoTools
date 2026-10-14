@@ -1,0 +1,17 @@
+commit=3a927c8e15dbce17eab10f0aebda2da438d94e31
+working_tree=modified
+modified_files= M tests/unit/proto/test_random_big_data.cpp
+compiler=/usr/bin/clang++
+compiler_version=Debian clang version 21.1.8 (3~bpo13+2)
+platform=linux/x86_64
+standard=c++20
+optimization=-O0
+repeats=3
+benchmark_config=benchmarks/results/compile-time-cpp20-2026-10-10/config/nekoproto/global/config.h
+fmt=/home/user/.xmake/packages/f/fmt/12.2.0/a643780bd7184facae8990cc80af6cbe/include
+zeus_expected=/home/user/.xmake/packages/z/zeus_expected/v1.4.0/af4969ae63d6478a8fce0ef696eeebcf/include
+yyjson=/home/user/.xmake/packages/y/yyjson/0.12.0/320fdcac3d9048e1b0e4c184a10ac0bc/include
+yaml-cpp=/home/user/.xmake/packages/y/yaml-cpp/0.8.0/c41b70635ed74ae9a0628bd794bd504b/include
+toml++=/home/user/.xmake/packages/t/toml++/v3.4.0/e421fe9405114b07bdec3b9074c8427e/include
+pugixml=/home/user/.xmake/packages/p/pugixml/v1.16/b0e864a9747d45c2adbf6d91f502dd56/include
+reflect-cpp=/home/user/.xmake/packages/r/reflect-cpp/v0.25.0/29394b4f45b34f8ea9c59a3fc76e5aaf/include
