@@ -9,11 +9,10 @@
  *
  */
 #pragma once
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/global/macros.hpp"
+#include "nekoproto/reflect.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
-#include "nekoproto/global/log.hpp"
-#include "nekoproto/global/reflect.hpp"
 
 #include <cstddef>
 #include <cstring>
@@ -46,6 +45,7 @@
 #include "nekoproto/serialization/private/helpers.hpp"
 #include "nekoproto/serialization/serializer_adapter.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace detail {
@@ -455,6 +455,7 @@ struct RapidJsonSerializer {
 };
 
 } // namespace nekoproto
+NEKO_END_EXPORT
 
 #ifdef _WIN32
 #pragma pop_macro("GetObject")

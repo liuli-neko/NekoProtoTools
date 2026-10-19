@@ -1,10 +1,12 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/serialization/parsing/parser.hpp"
 
 #include <atomic>
 #include <utility>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail {
 
@@ -37,3 +39,4 @@ struct SchemaParser<std::atomic<T>, void> {
 
 } // namespace detail
 } // namespace nekoproto
+NEKO_END_EXPORT

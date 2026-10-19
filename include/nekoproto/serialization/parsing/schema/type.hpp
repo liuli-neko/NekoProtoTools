@@ -1,6 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -12,6 +13,7 @@
 #include <variant>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace parsing::schema {
@@ -81,3 +83,4 @@ inline auto unwrapOptional(const Type& type) -> const Type& {
 } // namespace parsing::schema
 
 } // namespace nekoproto
+NEKO_END_EXPORT

@@ -1,11 +1,13 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <string>
 #include <system_error>
 #include <type_traits>
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 enum class RpcError {
@@ -92,3 +94,4 @@ inline auto make_error_code(RpcError value) noexcept -> std::error_code { // NOL
 
 template <>
 struct std::is_error_code_enum<nekoproto::RpcError> : std::true_type {};
+NEKO_END_EXPORT

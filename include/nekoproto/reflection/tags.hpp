@@ -1,7 +1,9 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
+#include "features.hpp"
 
 #include "nekoproto/global/global.hpp"
-#include "nekoproto/global/reflect.hpp"
+#include "nekoproto/reflection/detail/utility.hpp"
 #include "nekoproto/global/string_literal.hpp"
 
 #include <concepts>
@@ -14,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail {
 
@@ -187,9 +190,14 @@ namespace detail {
 template <std::size_t I, auto... Tags>
 struct TagListElement {
     static_assert(I < sizeof...(Tags), "TagList index out of range");
+#if NEKO_USE_PACK_INDEXING
+    using type = decltype(Tags...[I]);
+    constexpr static auto value = Tags...[I];
+#else
     using tuple_type = std::tuple<decltype(Tags)...>;
     using type       = std::tuple_element_t<I, tuple_type>;
     constexpr static auto value = std::get<I>(std::tuple<decltype(Tags)...>{Tags...});
+#endif
 };
 
 template <std::size_t I, auto... Tags>
@@ -646,106 +654,8 @@ constexpr auto get(nekoproto::TagList<Tags...>&& tags) noexcept -> nekoproto::de
 }
 } // namespace std
 
-#ifdef NEKO_PROTO_USE_FMT
-#include <fmt/format.h>
-namespace fmt {
-template <typename T>
-struct formatter<nekoproto::tag_detail::TagValue<T>> {
-    constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin()) { return ctx.begin(); }
+NEKO_END_EXPORT
 
-    template <typename FormatContext>
-    auto format(const nekoproto::tag_detail::TagValue<T>& value, FormatContext& ctx) const -> decltype(ctx.out()) {
-        if (!value.declared) {
-            return fmt::format_to(ctx.out(), "<undeclared>");
-        }
-        return fmt::format_to(ctx.out(), "{}", value.value);
-    }
-};
-} // namespace fmt
-#elif defined(NEKO_PROTO_USE_STD_FORMAT)
-#include <format>
-namespace std {
-template <typename T>
-struct formatter<nekoproto::tag_detail::TagValue<T>> {
-    constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin()) { return ctx.begin(); }
+#include "nekoproto/reflection/tag_format.hpp"
 
-    template <typename FormatContext>
-    auto format(const nekoproto::tag_detail::TagValue<T>& value, FormatContext& ctx) const -> decltype(ctx.out()) {
-        if (!value.declared) {
-            return std::format_to(ctx.out(), "<undeclared>");
-        }
-        return std::format_to(ctx.out(), "{}", value.value);
-    }
-};
-} // namespace std
-#endif
-#define NEKO_DETAIL_DEFINE_TAG_PROPERTY(Type, member, ClassName)                                                       \
-    struct ClassName {                                                                                                 \
-        using type = Type;                                                                                             \
-        static constexpr auto missing() noexcept -> type { return {}; }                                                \
-        template <typename Tag>                                                                                        \
-        static constexpr auto has(const Tag& tag) -> bool {                                                            \
-            if constexpr (requires { tag.member; }) {                                                                  \
-                return nekoproto::tag_detail::tagValueDeclared(tag.member);                                            \
-            } else {                                                                                                   \
-                return false;                                                                                          \
-            }                                                                                                          \
-        }                                                                                                              \
-        template <typename Tag>                                                                                        \
-        static constexpr auto get(const Tag& tag) -> type                                                              \
-            requires requires { tag.member; }                                                                          \
-        {                                                                                                              \
-            return nekoproto::tag_detail::makeTagValueCommon(tag.member);                                              \
-        }                                                                                                              \
-    };
-
-#define NEKO_DETAIL_DEFINE_TAG_VALUE_PROPERTY(member, ClassName)                                                       \
-    struct ClassName {                                                                                                 \
-        template <typename Tag>                                                                                        \
-        static constexpr auto has(const Tag& tag) -> bool {                                                            \
-            if constexpr (requires { tag.member; }) {                                                                  \
-                return nekoproto::tag_detail::tagValueDeclared(tag.member);                                            \
-            } else {                                                                                                   \
-                return false;                                                                                          \
-            }                                                                                                          \
-        }                                                                                                              \
-        template <typename Tag>                                                                                        \
-        static constexpr auto get(const Tag& tag) -> decltype(auto)                                                    \
-            requires requires { tag.member; }                                                                          \
-        {                                                                                                              \
-            return nekoproto::tag_detail::makeTagValueCommon(tag.member);                                              \
-        }                                                                                                              \
-    };
-
-#define NEKO_DETAIL_DEFINE_TYPE_TAG_PROPERTY(Type, member, ClassName, TraitName)                                       \
-    template <typename Value>                                                                                          \
-    struct ClassName {                                                                                                 \
-        using type = Type;                                                                                             \
-        static constexpr auto missing() noexcept -> type {                                                             \
-            if constexpr (requires { TraitName<Value>::value; }) {                                                     \
-                return TraitName<Value>::value;                                                                        \
-            } else {                                                                                                   \
-                return {};                                                                                             \
-            }                                                                                                          \
-        }                                                                                                              \
-        template <typename Tag>                                                                                        \
-        static constexpr auto has(const Tag& tag) -> bool {                                                            \
-            if constexpr (requires { tag.member; }) {                                                                  \
-                return nekoproto::tag_detail::tagValueDeclared(tag.member);                                            \
-            } else {                                                                                                   \
-                return false;                                                                                          \
-            }                                                                                                          \
-        }                                                                                                              \
-        template <typename Tag>                                                                                        \
-        static constexpr auto get(const Tag& tag) -> type                                                              \
-            requires requires { tag.member; }                                                                          \
-        {                                                                                                              \
-            return static_cast<type>(tag.member);                                                                      \
-        }                                                                                                              \
-    };
-
-#define NEKO_DEFINE_TAG_PROPERTY(Type, member, ClassName) NEKO_DETAIL_DEFINE_TAG_PROPERTY(Type, member, ClassName)
-#define NEKO_DEFINE_TAG_VALUE_PROPERTY(member, ClassName) NEKO_DETAIL_DEFINE_TAG_VALUE_PROPERTY(member, ClassName)
-#define NEKO_DEFINE_TYPE_TAG_PROPERTY(Type, member, ClassName, TraitName)                                              \
-    NEKO_DETAIL_DEFINE_TYPE_TAG_PROPERTY(Type, member, ClassName, TraitName)
-
+#include "nekoproto/reflection/tag_macros.hpp"

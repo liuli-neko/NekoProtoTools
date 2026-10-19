@@ -1,6 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_YAMLCPP)
 
@@ -17,6 +18,7 @@
 #include <string_view>
 #include <type_traits>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace yamlcpp {
 
@@ -158,5 +160,6 @@ private:
 
 } // namespace yamlcpp
 } // namespace nekoproto
+NEKO_END_EXPORT
 
 #endif

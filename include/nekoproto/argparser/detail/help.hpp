@@ -1,7 +1,8 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/argparser/detail/schema.hpp"
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <algorithm>
 #include <iomanip>
@@ -10,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace argparser::detail {
 
@@ -335,3 +337,4 @@ inline auto formatPlaceholderCommandHelp(std::string_view programName, std::stri
 
 } // namespace argparser::detail
 } // namespace nekoproto
+NEKO_END_EXPORT

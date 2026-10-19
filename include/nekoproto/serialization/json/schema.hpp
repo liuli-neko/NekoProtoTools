@@ -10,8 +10,9 @@
  */
 
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <array>
 #include <map>
@@ -22,8 +23,8 @@
 
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/parsing/parsers.hpp"
-#include "nekoproto/serialization/reflection.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace detail {
@@ -334,3 +335,4 @@ auto generateSchema([[maybe_unused]] const T& value, JsonSchema& schema) -> bool
     return generateSchema<std::decay_t<T>>(schema);
 }
 } // namespace nekoproto
+NEKO_END_EXPORT

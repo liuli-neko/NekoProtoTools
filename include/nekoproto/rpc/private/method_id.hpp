@@ -1,12 +1,14 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/rpc/private/global.hpp"
 
 #include <cstddef>
 #include <map>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace rpc {
 
@@ -83,3 +85,4 @@ private:
 
 } // namespace rpc
 } // namespace nekoproto
+NEKO_END_EXPORT

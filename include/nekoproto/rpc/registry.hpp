@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <string>
 #include <string_view>
@@ -6,8 +7,9 @@
 
 #include "nekoproto/rpc/method.hpp"
 #include "nekoproto/rpc/properties.hpp"
-#include "nekoproto/serialization/reflection.hpp"
+#include "nekoproto/reflect.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail {
 
@@ -93,3 +95,4 @@ void rpcVisitField(Field& field, std::string_view field_name, const Tags& tags, 
 } // namespace detail
 
 } // namespace nekoproto
+NEKO_END_EXPORT

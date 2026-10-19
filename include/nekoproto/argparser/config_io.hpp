@@ -1,8 +1,9 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/argparser/detail/config_io_registry.hpp"
-#include "nekoproto/global/expected.hpp"
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/serialization.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <cctype>
 #include <cerrno>
@@ -20,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace argparser::config_io {
 
@@ -387,3 +389,4 @@ namespace std {
 template <>
 struct is_error_code_enum<nekoproto::argparser::config_io::ConfigIoErrorCode> : true_type {};
 } // namespace std
+NEKO_END_EXPORT

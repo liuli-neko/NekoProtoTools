@@ -1,6 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <cstdint>
 
@@ -8,6 +9,7 @@
 #include <arpa/inet.h>
 #endif
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 inline auto htobe(const std::int16_t value) noexcept -> std::int16_t {
@@ -107,3 +109,4 @@ inline auto betoh(const std::uint64_t value) noexcept -> std::uint64_t {
 }
 
 } // namespace nekoproto
+NEKO_END_EXPORT

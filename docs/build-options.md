@@ -13,11 +13,12 @@
 | libfyaml / YAML | `NEKO_PROTO_ENABLE_LIBFYAML=ON`，自动查找 libfyaml 包；Unix 可选 FetchContent 下载 | `enable_libfyaml=y` |
 | toml++ / TOML | `NEKO_PROTO_ENABLE_TOMLPLUSPLUS=ON`，自动查找 tomlplusplus 包或可选 FetchContent 下载 | `enable_tomlplusplus=y` |
 | 示例与运行检查 | `NEKO_PROTO_BUILD_EXAMPLES=ON` / `NEKO_PROTO_BUILD_TESTS=ON` | `enable_examples=y`，`xmake run example_reflection`、`xmake test -g examples` |
-| 项目测试 | CMake 的 `NEKO_PROTO_BUILD_TESTS` 运行示例 smoke tests | `enable_tests=y`，依赖按需解析 |
+| 项目测试 | `NEKO_PROTO_BUILD_TESTS=ON`，运行示例及反射回归 | `enable_tests=y`，依赖按需解析 |
 | 多方 JSON benchmark | 不提供 | `enable_benchmarks=y`，`xmake run bench_json` |
 | Communication | `NEKO_PROTO_ENABLE_COMMUNICATION=ON`，导出 `NekoProto::Communication`；需要 Protocol 和 Ilias | `enable_communication=y`，`NekoCommunication` |
 | JSON-RPC / Neko RPC | `NEKO_PROTO_ENABLE_JSONRPC=ON`，导出 `NekoProto::JsonRpc`；需要 Ilias 及 RapidJSON 或 simdjson | `enable_jsonrpc=y`，`NekoJsonRpc` |
 | RPC tracing | `NEKO_PROTO_ENABLE_RPC_TRACE=ON`，需要 JSON-RPC | `enable_rpc_trace=y` |
+| 命名模块发布 | `NEKO_PROTO_BUILD_MODULES=ON`，为所有已启用组件提供模块目标 | `enable_modules=y` |
 
 版本号只在根目录的 [`version.lua`](../version.lua) 修改；xmake 调用其中的函数，CMake 从同一行读取语义版本。CMake 的最低标准为 C++20，使用 [zeus_expected](https://github.com/zeus-cpp/expected) 提供 `expected`。CMake 先尝试 `find_package(zeus_expected CONFIG)`，再查找已安装的 `zeus/expected.hpp`；缺失时会报告可用的配置办法。可通过 `CMAKE_PREFIX_PATH` 指向依赖的安装前缀，或用 `NEKO_PROTO_ZEUS_EXPECTED_INCLUDE_DIR` 指向头文件目录。设置 `NEKO_PROTO_FETCH_MISSING_DEPS=ON` 可让 CMake 用 FetchContent 下载 v1.4.0；此选项也适用于安装后的消费者。xmake 在标准库 `std::expected` 不可用时自动引入 zeus_expected。
 
@@ -33,4 +34,6 @@ ctest --test-dir build --output-on-failure
 
 RapidJSON、yyjson、simdjson 后端分别可加 `-DNEKO_PROTO_ENABLE_RAPIDJSON=ON`、`-DNEKO_PROTO_ENABLE_YYJSON=ON`、`-DNEKO_PROTO_ENABLE_SIMDJSON=ON`。CMake 先查找各自的 CMake 包；自动下载时使用与 xmake 相同的 RapidJSON 2025-02-05 提交、yyjson 0.12.0 和 simdjson v4.6.11。XML 后端可加 `-DNEKO_PROTO_ENABLE_PUGIXML=ON`，YAML 后端可加 `-DNEKO_PROTO_ENABLE_YAMLCPP=ON` 或 `-DNEKO_PROTO_ENABLE_LIBFYAML=ON`，TOML 后端可加 `-DNEKO_PROTO_ENABLE_TOMLPLUSPLUS=ON`；自动下载时分别使用 pugixml v1.16、yaml-cpp 0.8.0、libfyaml v0.9.5 和 toml++ v3.4.0。libfyaml 源码获取仅支持 Unix，Windows 需提供已安装的 CMake 包。安装包消费者从 `CMAKE_PREFIX_PATH` 查找这些包，缺失时可设置 `NEKO_PROTO_FETCH_MISSING_DEPS=ON`。
 
-Communication 和 JSON-RPC 需要 Ilias 0.5.0 或更新版本。CMake 会查找导出 `ilias::ilias` 的安装包或 `ilias.pc`；可通过 `CMAKE_PREFIX_PATH` 或 `PKG_CONFIG_PATH` 指向安装位置。对于只有头文件和库文件的安装（包括 Windows xmake 包），可设置 `NEKO_PROTO_ILIAS_ROOT` 为包含 `include/ilias/task.hpp`、`lib/ilias.lib` 的安装前缀；Windows 运行时还需该前缀的 `bin/ilias.dll`，本项目的 CTest 消费者会将其加入 PATH。Ilias 暂不自动下载，缺失时配置会给出直接的依赖诊断。C++20 构建使用 Ilias 的 zeus_expected 配置。JSON-RPC 需同时打开 RapidJSON 或 simdjson；tracing 需先打开 JSON-RPC。这些选项会随安装包导出，消费者通过 `find_package(NekoProtoTools CONFIG REQUIRED)` 获得相应 target。
+Communication 和 JSON-RPC 需要 Ilias 0.5.1 或更新版本。CMake 会查找导出 `ilias::ilias` 的安装包（支持 `IliasConfig.cmake` 和 `iliasConfig.cmake`）或 `ilias.pc`；可通过 `CMAKE_PREFIX_PATH` 或 `PKG_CONFIG_PATH` 指向安装位置。对于只有头文件和库文件的安装（包括 Windows xmake 包），可设置 `NEKO_PROTO_ILIAS_ROOT` 为包含 `include/ilias/task.hpp`、`lib/ilias.lib` 的安装前缀；Windows 运行时还需该前缀的 `bin/ilias.dll`，本项目的 CTest 消费者会将其加入 PATH。设置 `NEKO_PROTO_FETCH_MISSING_DEPS=ON` 后，若找不到已有安装，CMake 会自动获取带 SHA256 校验的 Ilias v0.5.1 并参与构建；此路径需要 CMake 3.25 或更新版本，且适用于源码集成和安装包消费者。关闭该选项可保持离线依赖查找。自动构建的 Ilias 和消费者统一使用 zeus_expected，支持 C++20 和 C++23；上游默认启用 TLS，Linux 需要 OpenSSL 开发包，可用 `ILIAS_TLS=OFF` 关闭。JSON-RPC 需同时打开 RapidJSON 或 simdjson；tracing 需先打开 JSON-RPC。这些选项会随安装包导出，消费者通过 `find_package(NekoProtoTools CONFIG REQUIRED)` 获得相应 target。
+
+模块入口、目标和反射后端配置见 [C++26 与模块](cpp26.md)。模块构建与头文件共用声明，安装包继续提供头文件。

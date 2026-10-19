@@ -72,7 +72,8 @@ static_assert(RpcBackend<JsonSerializedRpcBackend>);
 static_assert(BackendSerializable<BinaryRpcBackend, int>);
 static_assert(BackendSerializable<BinaryRpcBackend, std::tuple<int, int>>);
 static_assert(BackendSerializable<JsonSerializedRpcBackend, std::tuple<int, int>>);
-static_assert(!BackendSerializable<BinaryRpcBackend, UnsupportedBinaryRpcValue>);
+// Native discovery also supports an empty class with a user-provided constructor.
+static_assert(BackendSerializable<BinaryRpcBackend, UnsupportedBinaryRpcValue> == bool(NEKO_USE_NATIVE_REFLECTION));
 
 auto contains(const std::vector<std::string>& values, std::string_view expected) -> bool {
     return std::any_of(values.begin(), values.end(),

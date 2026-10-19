@@ -1,10 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
-#include "nekoproto/global/reflection_tags.hpp"
-#include "nekoproto/global/string_literal.hpp"
-#include "nekoproto/global/traits.hpp"
-#include "nekoproto/serialization/reflection.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <array>
 #include <concepts>
@@ -14,6 +11,7 @@
 #include <type_traits>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace argparser {
 
@@ -551,3 +549,4 @@ struct Ignore {
 
 } // namespace argparser
 } // namespace nekoproto
+NEKO_END_EXPORT

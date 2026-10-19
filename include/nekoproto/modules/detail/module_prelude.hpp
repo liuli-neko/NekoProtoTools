@@ -1,0 +1,83 @@
+#pragma once
+// Shared external dependency prelude. No NekoProto declarations belong here:
+// a module loads this file in its global module fragment, then the original API.
+#include "nekoproto/global/macros.hpp"
+#include "nekoproto/reflection/features.hpp"
+#include <nekoproto/global/config.h>
+#include <algorithm>
+#include <any>
+#include <array>
+#include <atomic>
+#include <bit>
+#include <bitset>
+#include <cctype>
+#include <cerrno>
+#include <charconv>
+#include <chrono>
+#include <cmath>
+#include <compare>
+#include <concepts>
+#include <coroutine>
+#include <cstdarg>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <deque>
+#include <filesystem>
+#include <fstream>
+#include <functional>
+#include <iomanip>
+#include <iostream>
+#include <istream>
+#include <iterator>
+#include <limits>
+#include <list>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <ostream>
+#include <set>
+#include <span>
+#include <sstream>
+#include <stdexcept>
+#include <stop_token>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <tuple>
+#include <type_traits>
+#include <typeinfo>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <variant>
+#include <vector>
+#include <cassert>
+#include <climits>
+#include <csignal>
+#include <ctime>
+#include <exception>
+#include <ranges>
+#include <version>
+#if __has_include(<format>)
+#include <format>
+#endif
+#if __has_include(<expected>)
+#include <expected>
+#endif
+#ifdef __GNUC__
+#include <cxxabi.h>
+#endif
+#if NEKO_USE_NATIVE_REFLECTION
+#include <meta>
+#endif
+#ifdef NEKO_PROTO_USE_FMT
+#include <fmt/format.h>
+#elif defined(NEKO_PROTO_USE_SPDLOG)
+#include <spdlog/spdlog.h>
+#elif defined(NEKO_PROTO_USE_STD_FORMAT)
+#include <format>
+#endif

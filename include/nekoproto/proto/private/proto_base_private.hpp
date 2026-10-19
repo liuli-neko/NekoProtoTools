@@ -9,15 +9,17 @@
  *
  */
 #pragma once
+#include "nekoproto/global/macros.hpp"
 #include <cstring>
 #include <functional>
 #include <map>
 #include <type_traits>
 #include <vector>
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 #include "reflection_serializer.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 class NEKO_PROTO_API ProtoFactory;
 namespace detail {
@@ -84,7 +86,7 @@ protected:
 
 private:
     std::unique_ptr<ReflectionSerializer>      reflection_serializer_ = {};
-    std::unique_ptr<ProtoT, void (*)(ProtoT*)> data_                  = {};
+    std::unique_ptr<ProtoT, void (*)(ProtoT*)> data_{nullptr, nullptr};
     static std::string_view                    s_proto_name;
 };
 class ProtoMethodAccess {
@@ -232,3 +234,4 @@ auto ProtoBase<T, SerializerT>::fromData(const char* data, std::size_t size) noe
 } // namespace detail
 
 } // namespace nekoproto
+NEKO_END_EXPORT

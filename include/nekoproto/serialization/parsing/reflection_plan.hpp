@@ -1,10 +1,12 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/serialization/reflection.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <cstddef>
 #include <string_view>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto::detail {
 
 // Keep field policy in constant metadata. Node tags remain available to
@@ -28,3 +30,4 @@ struct ParserFieldPlan {
 };
 
 } // namespace nekoproto::detail
+NEKO_END_EXPORT

@@ -1,10 +1,12 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <concepts>
 #include <string_view>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace parsing {
@@ -17,3 +19,4 @@ concept SupportsComments =
 } // namespace parsing
 
 } // namespace nekoproto
+NEKO_END_EXPORT

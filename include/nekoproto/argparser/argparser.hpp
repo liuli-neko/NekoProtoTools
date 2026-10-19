@@ -9,6 +9,9 @@
  *
  */
 #pragma once
+#include "nekoproto/global/macros.hpp"
+
+#if !defined(NEKO_BUILDING_MODULE) || NEKO_BUILDING_MODULE == NEKO_MODULE_ARGPARSER
 
 #include "nekoproto/argparser/config.hpp"
 #include "nekoproto/argparser/config_io.hpp"
@@ -18,9 +21,8 @@
 #include "nekoproto/argparser/detail/materializer.hpp"
 #include "nekoproto/argparser/error.hpp"
 #include "nekoproto/argparser/tags.hpp"
-#include "nekoproto/global/expected.hpp"
-#include "nekoproto/global/global.hpp"
-#include "nekoproto/serialization/reflection.hpp"
+#include "nekoproto/serialization.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <iterator>
 #include <string>
@@ -31,6 +33,7 @@
 #include <utility>
 #include <variant>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace argparser::detail {
 
@@ -782,3 +785,5 @@ auto parser(int argc, char** argv,
 
 } // namespace argparser
 } // namespace nekoproto
+NEKO_END_EXPORT
+#endif // current component: argparser

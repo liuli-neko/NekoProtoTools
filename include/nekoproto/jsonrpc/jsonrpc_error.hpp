@@ -9,15 +9,17 @@
  *
  */
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include <ilias/io/error.hpp>
+#include "nekoproto/transport/endpoint.hpp"
 #include <string>
 #include <system_error>
 #include <type_traits>
 
 #include "nekoproto/global/config.h"
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 enum class JsonRpcError {
@@ -91,3 +93,4 @@ inline auto make_error_code(JsonRpcError value) noexcept -> std::error_code { //
 
 template <>
 struct std::is_error_code_enum<nekoproto::JsonRpcError> : std::true_type {};
+NEKO_END_EXPORT

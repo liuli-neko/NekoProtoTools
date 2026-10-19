@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -10,17 +11,16 @@
 #include <string_view>
 #include <system_error>
 
-#include <ilias/result.hpp>
-
-#include "nekoproto/global/global.hpp"
-#include "nekoproto/global/log.hpp"
+#include "nekoproto/transport/endpoint.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/rpc/error.hpp"
 #include "nekoproto/rpc/private/backend_base.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace rpc {
 
-static constexpr auto nekoRpcCompressionAlgorithmName(NekoRpcCompressionAlgorithm algorithm) noexcept
+inline constexpr auto nekoRpcCompressionAlgorithmName(NekoRpcCompressionAlgorithm algorithm) noexcept
     -> std::string_view {
     switch (algorithm) {
     case NekoRpcCompressionAlgorithm::None:
@@ -160,3 +160,4 @@ auto nekoRpcDecompressIncomingPayload(const typename Backend::Options& options, 
 
 } // namespace rpc
 } // namespace nekoproto
+NEKO_END_EXPORT

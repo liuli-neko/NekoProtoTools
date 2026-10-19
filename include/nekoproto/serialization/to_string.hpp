@@ -9,6 +9,7 @@
  *
  */
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/serialization/json_serializer.hpp"
 #include "nekoproto/serialization/parsing/parsers.hpp"
@@ -18,6 +19,7 @@
 #include <utility>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 class PrintSerializer {
@@ -63,3 +65,4 @@ inline auto toJsonString(T&& value) -> std::string {
 #endif
 
 } // namespace nekoproto
+NEKO_END_EXPORT

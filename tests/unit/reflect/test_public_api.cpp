@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
 
 #include "nekoproto/reflect.hpp"
-#include "nekoproto/tags.hpp"
+#include "nekoproto/serialization/tags.hpp"
 #include "nekoproto/serializer.hpp"
-#include "nekoproto/to_string.hpp"
-#include "nekoproto/string_literal.hpp"
+#include "nekoproto/serialization/to_string.hpp"
+#include "nekoproto/global/string_literal.hpp"
 
 #include <optional>
 #include <string>

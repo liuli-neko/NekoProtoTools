@@ -1,12 +1,14 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/serialization/error.hpp"
 
 #include <concepts>
 #include <cstddef>
 #include <utility>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 template <typename Backend, typename BufferT = typename Backend::DefaultOutputBuffer>
@@ -159,3 +161,4 @@ using InputSerializerAdapter = nekoproto::InputSerializerAdapter<Backend, Source
 } // namespace detail
 
 } // namespace nekoproto
+NEKO_END_EXPORT

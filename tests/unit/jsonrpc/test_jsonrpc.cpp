@@ -56,7 +56,7 @@ static_assert(traits::Serializable<int>);
 static_assert(traits::Serializable<std::string>);
 static_assert(traits::Serializable<std::vector<int>>);
 static_assert(traits::Serializable<MXXParams>);
-static_assert(!traits::Serializable<UnsupportedRpcValue>);
+static_assert(traits::Serializable<UnsupportedRpcValue> == bool(NEKO_USE_NATIVE_REFLECTION));
 static_assert(traits::IsSerializable<void>::value);
 
 auto add(int aa, int bb) -> int { return aa + bb; }
@@ -134,6 +134,12 @@ struct CommonApi {
 struct NoPrefixApi {
     CommonApi common;
 };
+
+#if NEKO_USE_NATIVE_REFLECTION
+struct NativeNoPrefixApi {
+    [[=rpc_no_prefix]] CommonApi common;
+};
+#endif
 
 template <>
 struct nekoproto::Meta<NoPrefixApi> {
@@ -483,6 +489,16 @@ TEST_F(JsonRpcTest, NoPrefixTagKeepsCppPath) {
     auto text              = std::string_view{ret.data(), ret.size()};
     EXPECT_NE(text.find(R"("result":"1.0")"), std::string_view::npos);
 }
+
+#if NEKO_USE_NATIVE_REFLECTION
+TEST_F(JsonRpcTest, NativeAnnotationKeepsCppPathAndRemoteName) {
+    JsonRpcServer<NativeNoPrefixApi> server{*gContext};
+    EXPECT_EQ(server->common.version.name(), "version");
+    server->common.version = []() -> ilias::IoTask<std::string> { co_return "native"; };
+    auto ret = server.callMethod(R"({"jsonrpc":"2.0","method":"version","params":[],"id":1})").wait();
+    EXPECT_NE(std::string_view(ret.data(), ret.size()).find(R"("result":"native")"), std::string_view::npos);
+}
+#endif
 
 TEST_F(JsonRpcTest, InvalidStreamClientUrlsFailBeforeOpeningSockets) {
     EXPECT_FALSE(detail::makeTcpStreamClient("tcp://not-an-endpoint").wait().has_value());

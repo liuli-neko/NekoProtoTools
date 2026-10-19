@@ -66,8 +66,8 @@ xmake 用户可使用 `xmake f -m release --stdcxx=20 --enable_rapidjson=y && xm
 
 ## 文档
 
-[入门](docs/getting-started.md) · [反射](docs/reflection.md) · [序列化](docs/serialization.md) · [ArgParser](docs/argparser.md) · [协议与 RPC](docs/rpc.md) · [CMake 集成](docs/cmake-integration.md) · [构建选项](docs/build-options.md) · [Benchmark](benchmarks/README.md)
+[入门](docs/getting-started.md) · [反射](docs/reflection.md) · [C++26 与模块](docs/cpp26.md) · [序列化](docs/serialization.md) · [ArgParser](docs/argparser.md) · [协议与 RPC](docs/rpc.md) · [CMake 集成](docs/cmake-integration.md) · [构建选项](docs/build-options.md) · [Benchmark](benchmarks/README.md)
 
 ## 稳定性范围
 
-当前是 0.4.0 开发版本，尚未发布正式的跨版本兼容承诺。反射的 `Meta<T>` / `Object` / `Reflect<T>`、Binary 和 ArgParser 是公开 API 的稳定候选；`NEKO_SERIALIZER` 保留给已有代码，新代码推荐 `Meta<T>`。Protocol 已有显式类型 ID 的跨进程验证，但自动 ID 取决于注册顺序。RPC、Communication 和第三方后端扩展仍是实验性接口。Binary 与 RPC 的 wire 格式均不承诺跨发布版本兼容；格式后端也不承诺输出文本完全相同。详情见 [序列化](docs/serialization.md)、[协议](docs/protocol.md) 和 [RPC](docs/rpc.md)。欢迎通过 issue 或 PR 反馈使用问题。
+当前是 0.4.1 开发版本，尚未发布正式的跨版本兼容承诺。反射的 `Meta<T>` / `Object` / `Reflect<T>`、Binary 和 ArgParser 是公开 API 的稳定候选；`NEKO_SERIALIZER` 保留给已有代码，新代码推荐 `Meta<T>`。Protocol 已有显式类型 ID 的跨进程验证，但自动 ID 取决于注册顺序。RPC、Communication 和第三方后端扩展仍是实验性接口。Binary 与 RPC 的 wire 格式均不承诺跨发布版本兼容；格式后端也不承诺输出文本完全相同。详情见 [序列化](docs/serialization.md)、[协议](docs/protocol.md) 和 [RPC](docs/rpc.md)。欢迎通过 issue 或 PR 反馈使用问题。

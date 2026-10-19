@@ -1,10 +1,11 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <array>
 #include <concepts>
 #include <cstddef>
 #include <functional>
-#include <ilias/task.hpp>
+#include "nekoproto/transport/endpoint.hpp"
 #include <map>
 #include <optional>
 #include <string>
@@ -14,12 +15,11 @@
 #include <variant>
 #include <vector>
 
-#include <ilias/io.hpp>
-
 #include "nekoproto/global/config.h"
-#include "nekoproto/global/reflect.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/rpc/error.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace detail {
@@ -245,3 +245,4 @@ using RpcMethodTraitsUnpacker =
 } // namespace traits
 
 } // namespace nekoproto
+NEKO_END_EXPORT

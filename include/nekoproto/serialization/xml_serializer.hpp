@@ -9,12 +9,12 @@
  *
  */
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_PUGIXML)
 
-#include "nekoproto/global/reflect.hpp"
 #include "nekoproto/serialization/parsing/parsers.hpp"
 #include "nekoproto/serialization/serializer_adapter.hpp"
 #include "nekoproto/serialization/xml/pugi_xml_reader.hpp"
@@ -31,6 +31,7 @@
 #include <utility>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace detail {
@@ -203,5 +204,6 @@ struct PugiXmlSerializer {
 using XmlSerializer = PugiXmlSerializer;
 
 } // namespace nekoproto
+NEKO_END_EXPORT
 
 #endif

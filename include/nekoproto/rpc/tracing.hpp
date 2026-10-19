@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -18,6 +19,7 @@
 #include "nekoproto/rpc/endpoint.hpp"
 #include "nekoproto/rpc/options.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 enum class RpcCallStage : std::uint8_t {
@@ -318,3 +320,4 @@ private:
 #endif // defined(NEKO_PROTO_RPC_TRACE)
 
 } // namespace nekoproto
+NEKO_END_EXPORT

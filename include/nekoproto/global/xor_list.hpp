@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "global.hpp"
 #include "nekoproto/global/reflect.hpp"

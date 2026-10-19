@@ -71,7 +71,11 @@ function autofunc.auto_add_packages(target, options)
     end
     
     if uses_ilias then
-        target:add("packages", "ilias", {public = true})
+        if has_config("enable_modules") then
+            target:add("deps", "NekoIliasModule", {public = true})
+        else
+            target:add("packages", "ilias", {public = true})
+        end
     end
     
     if has_config("enable_tests") then

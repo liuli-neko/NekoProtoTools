@@ -1,9 +1,11 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <cstdint>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace rpc {
 enum class NekoRpcExtensionType : std::uint16_t {
@@ -32,3 +34,4 @@ enum class NekoRpcExtensionType : std::uint16_t {
 };
 }
 } // namespace nekoproto
+NEKO_END_EXPORT

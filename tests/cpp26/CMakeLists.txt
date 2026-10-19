@@ -1,0 +1,40 @@
+function(neko_reflection_test name source)
+    add_executable(${name} ${source})
+    target_link_libraries(${name} PRIVATE NekoProtoSerializer)
+    add_test(NAME ${name} COMMAND ${name})
+endfunction()
+
+neko_reflection_test(reflection_public_api public_api.cpp)
+if(CMAKE_CXX_STANDARD GREATER_EQUAL 26)
+    foreach(count IN ITEMS 64 65 128 129)
+        if(count EQUAL 129 AND NOT NEKO_PROTO_REFLECTION_BACKEND STREQUAL "native" AND
+           NOT NEKO_PROTO_REFLECTION_MODULE_BINDING_PACKS AND NOT NEKO_PROTO_BINDING_PACKS STREQUAL "on")
+            continue()
+        endif()
+        neko_reflection_test(reflection_boundary_${count} boundaries.cpp)
+        target_compile_definitions(reflection_boundary_${count} PRIVATE NEKO_TEST_FIELD_COUNT=${count})
+    endforeach()
+    neko_reflection_test(reflection_generated_boundary boundaries.cpp)
+    target_compile_definitions(reflection_generated_boundary PRIVATE NEKO_TEST_FIELD_COUNT=128 NEKO_TEST_GENERATED_BINDING)
+endif()
+if(NEKO_PROTO_REFLECTION_BACKEND STREQUAL "auto" AND
+   (NEKO_PROTO_REFLECTION_WITHOUT_FLAG OR NEKO_PROTO_REFLECTION_WITH_FLAG))
+    neko_reflection_test(reflection_auto_backend auto_backend.cpp)
+endif()
+if(NEKO_PROTO_REFLECTION_BACKEND STREQUAL "native")
+    neko_reflection_test(reflection_native_backend native_backend.cpp)
+    neko_reflection_test(reflection_native_enum native_enum.cpp)
+    if(NEKO_PROTO_ENABLE_RAPIDJSON AND NEKO_PROTO_ENABLE_PUGIXML AND
+       (NEKO_PROTO_ENABLE_LIBFYAML OR NEKO_PROTO_ENABLE_YAMLCPP) AND NEKO_PROTO_ENABLE_TOMLPLUSPLUS)
+        neko_reflection_test(reflection_native_integration native_integration.cpp)
+    endif()
+    foreach(case IN ITEMS annotation metadata)
+        add_executable(reflection_invalid_${case} EXCLUDE_FROM_ALL invalid_${case}.cpp)
+        target_link_libraries(reflection_invalid_${case} PRIVATE NekoProtoSerializer)
+        add_test(NAME reflection_invalid_${case}
+            COMMAND ${CMAKE_COMMAND} "-DBUILD_DIR=${PROJECT_BINARY_DIR}" "-DCONFIG=$<CONFIG>"
+                "-DTARGET=reflection_invalid_${case}" "-DCASE=${case}"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/expected_failure.cmake")
+        set_tests_properties(reflection_invalid_${case} PROPERTIES RUN_SERIAL TRUE)
+    endforeach()
+endif()

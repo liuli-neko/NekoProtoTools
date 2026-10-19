@@ -1,12 +1,9 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <array>
 #include <chrono>
-#include <ilias/platform.hpp>
-#include <ilias/sync/mutex.hpp>
-#include <ilias/sync/oneshot.hpp>
-#include <ilias/task.hpp>
-#include <ilias/task/scope.hpp>
+#include "nekoproto/transport/endpoint.hpp"
 #include <iostream>
 #include <map>
 #include <memory>
@@ -17,13 +14,14 @@
 #include <utility>
 #include <vector>
 
-#include "nekoproto/global/log.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/rpc/builtin.hpp"
 #include "nekoproto/rpc/concepts.hpp"
 #include "nekoproto/rpc/endpoint.hpp"
 #include "nekoproto/rpc/options.hpp"
 #include "nekoproto/rpc/registry.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 template <RpcBackend Backend>
@@ -686,3 +684,4 @@ public:
 };
 
 } // namespace nekoproto
+NEKO_END_EXPORT

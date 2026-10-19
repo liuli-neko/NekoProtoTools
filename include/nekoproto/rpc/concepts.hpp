@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <concepts>
 #include <cstddef>
@@ -7,8 +8,9 @@
 #include <system_error>
 #include <type_traits>
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 template <typename Backend>
@@ -41,3 +43,4 @@ template <typename Backend, typename T>
 concept BackendSerializable = std::is_void_v<T> || requires { requires Backend::template serializable<T>(); };
 
 } // namespace nekoproto
+NEKO_END_EXPORT

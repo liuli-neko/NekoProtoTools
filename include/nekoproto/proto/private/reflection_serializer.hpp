@@ -10,6 +10,7 @@
  */
 
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <map>
 #include <memory>
@@ -17,10 +18,9 @@
 #include <string>
 #include <typeinfo>
 
-#include "nekoproto/global/global.hpp"
-#include "nekoproto/global/log.hpp"
-#include "nekoproto/serialization/reflection.hpp"
+#include "nekoproto/reflect.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace detail {
@@ -185,3 +185,4 @@ private:
 };
 
 } // namespace nekoproto
+NEKO_END_EXPORT

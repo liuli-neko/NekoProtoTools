@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -19,16 +20,8 @@
 #include <utility>
 #include <vector>
 
-#include <ilias/buffer.hpp>
-#include <ilias/io.hpp>
-#include <ilias/io/error.hpp>
-#include <ilias/io/ext.hpp>
-#include <ilias/io/traits.hpp>
-#include <ilias/result.hpp>
-#include <ilias/sync/mutex.hpp>
-#include <ilias/task.hpp>
-
-#include "nekoproto/global/log.hpp"
+#include "nekoproto/transport/endpoint.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/rpc/concepts.hpp"
 #include "nekoproto/rpc/endpoint.hpp"
 #include "nekoproto/rpc/error.hpp"
@@ -37,10 +30,9 @@
 #include "nekoproto/rpc/private/backend_method_id.hpp"
 #include "nekoproto/rpc/private/backend_support.hpp"
 #include "nekoproto/rpc/private/stream_endpoint.hpp"
-#include "nekoproto/serialization/binary_serializer.hpp"
-#include "nekoproto/serialization/parsing/parser.hpp"
-#include "nekoproto/serialization/serializer_base.hpp"
+#include "nekoproto/serialization.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 template <typename Serializer, std::uint8_t CodecId = 0, typename CompressionCodecT = rpc::NekoRpcCompressionCodec>
@@ -1021,3 +1013,4 @@ private:
 using BinaryRpcBackend = NekoRpcBackend<BinarySerializer, 0>;
 
 } // namespace nekoproto
+NEKO_END_EXPORT

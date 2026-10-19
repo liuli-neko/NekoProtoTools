@@ -1,12 +1,11 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/argparser/config.hpp"
 #include "nekoproto/argparser/detail/config_io_registry.hpp"
 #include "nekoproto/argparser/error.hpp"
 #include "nekoproto/argparser/tags.hpp"
-#include "nekoproto/global/global.hpp"
-#include "nekoproto/global/log.hpp"
-#include "nekoproto/serialization/reflection.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <algorithm>
 #include <optional>
@@ -17,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace argparser::detail {
 enum class ArgValueCompletion {
@@ -682,3 +682,4 @@ inline auto validateSchemaDefinition(ArgSchema& schema, const ArgParserConfig& /
 
 } // namespace argparser::detail
 } // namespace nekoproto
+NEKO_END_EXPORT

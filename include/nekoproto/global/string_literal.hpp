@@ -9,11 +9,13 @@
  *
  */
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "global.hpp"
 
 #include <array>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 template <size_t N>
@@ -151,3 +153,5 @@ template <std::size_t N>
 struct IsConstexprString<ConstexprString<N>, void> : std::true_type {};
 
 } // namespace nekoproto
+
+NEKO_END_EXPORT

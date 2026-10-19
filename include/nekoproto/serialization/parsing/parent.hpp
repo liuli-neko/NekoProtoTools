@@ -1,7 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
-#include "nekoproto/global/reflection_tags.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/serialization/parsing/schemaful/is_schemaful_writer.hpp"
 #include "nekoproto/serialization/parsing/supports_attributes.hpp"
 #include "nekoproto/serialization/parsing/supports_comments.hpp"
@@ -9,6 +9,7 @@
 #include <string_view>
 #include <type_traits>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace parsing {
@@ -317,3 +318,4 @@ struct Parent {
 } // namespace parsing
 
 } // namespace nekoproto
+NEKO_END_EXPORT

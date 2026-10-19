@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -7,15 +8,14 @@
 #include <system_error>
 #include <vector>
 
-#include <ilias/result.hpp>
-
-#include "nekoproto/global/global.hpp"
-#include "nekoproto/global/log.hpp"
+#include "nekoproto/transport/endpoint.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/rpc/endpoint.hpp"
 #include "nekoproto/rpc/error.hpp"
 #include "nekoproto/rpc/private/backend_base.hpp"
 #include "nekoproto/rpc/private/method_id.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace rpc {
 
@@ -158,3 +158,4 @@ auto nekoRpcIncomingMethodName(typename Backend::ServerContext& context, typenam
 
 } // namespace rpc
 } // namespace nekoproto
+NEKO_END_EXPORT

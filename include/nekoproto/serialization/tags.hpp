@@ -9,10 +9,11 @@
  *
  */
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/global/reflect.hpp"
-#include "nekoproto/global/reflection_tags.hpp"
+#include "nekoproto/reflection/tags.hpp"
 #include "nekoproto/global/string_literal.hpp"
 #include "nekoproto/global/traits.hpp"
 
@@ -22,6 +23,7 @@
 #include <string_view>
 #include <type_traits>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 template <typename T, class = void>
 struct IsFlatTag : std::false_type {};
@@ -414,3 +416,5 @@ struct SerializerTags {
 };
 
 } // namespace nekoproto
+
+NEKO_END_EXPORT

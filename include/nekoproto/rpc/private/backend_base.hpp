@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <atomic>
 #include <cstddef>
@@ -15,14 +16,13 @@
 #include <utility>
 #include <vector>
 
-#include <ilias/result.hpp>
-
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/transport/endpoint.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/rpc/private/global.hpp"
 #include "nekoproto/rpc/private/method_id.hpp"
-#include "nekoproto/serialization/reflection.hpp"
-#include "nekoproto/serialization/serializer_base.hpp"
+#include "nekoproto/serialization.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace rpc {
 
@@ -327,3 +327,4 @@ struct Meta<rpc::NekoRpcCompressionAlgorithm, void> {
 };
 
 } // namespace nekoproto
+NEKO_END_EXPORT

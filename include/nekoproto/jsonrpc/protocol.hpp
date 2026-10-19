@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <optional>
 #include <string>
@@ -6,11 +7,10 @@
 #include <vector>
 
 #include "nekoproto/jsonrpc/jsonrpc_traits.hpp"
-#include "nekoproto/rpc/method.hpp"
-#include "nekoproto/serialization/json_serializer.hpp"
-#include "nekoproto/serialization/parsing/parsers.hpp"
-#include "nekoproto/serialization/parsing/reflection.hpp"
+#include "nekoproto/rpc/rpc.hpp"
+#include "nekoproto/serialization.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail {
 
@@ -99,7 +99,7 @@ struct WriteParser<W, JsonRpcSerializerHelperObject<T>, void> {
 
     template <typename ParentType, typename Tags>
     static auto write(W& writer, const Helper& value, const ParentType& parent, const Tags& tags) -> ParserResult {
-        if constexpr (is_std_tuple_v<Tuple>) {
+        if constexpr (nekoproto::is_tuple_v<Tuple>) {
             constexpr auto tupleSize = std::tuple_size_v<Tuple>;
             if (!value.context.arg_names.empty()) {
                 if (value.context.arg_names.size() != tupleSize) {
@@ -135,7 +135,7 @@ struct ReadParser<R, JsonRpcSerializerHelperObject<T>, void> {
 
     template <typename Tags>
     static auto read(typename R::InputValueType in, Helper& value, const Tags& tags) -> ParserResult {
-        if constexpr (is_std_tuple_v<Tuple>) {
+        if constexpr (nekoproto::is_tuple_v<Tuple>) {
             constexpr auto tupleSize = std::tuple_size_v<Tuple>;
             if (!value.context.arg_names.empty()) {
                 if (value.context.arg_names.size() != tupleSize) {
@@ -156,7 +156,7 @@ struct ReadParser<R, JsonRpcSerializerHelperObject<T>, void> {
 
 template <typename T>
 consteval auto jsonRpcParamsSize() -> std::size_t {
-    if constexpr (is_std_tuple_v<T>) {
+    if constexpr (nekoproto::is_tuple_v<T>) {
         return std::tuple_size_v<T>;
     } else {
         return 1;
@@ -201,7 +201,7 @@ struct JsonRpcRequestParser {
                 return makeParserError(sa::ErrorCode::InvalidLength,
                                        "Named JSON-RPC params count does not match params size");
             }
-            if constexpr (ParamsSize > 0 && is_std_tuple_v<ParamsTupleType>) {
+            if constexpr (ParamsSize > 0 && nekoproto::is_tuple_v<ParamsTupleType>) {
                 JsonRpcSerializerHelperObject<const ParamsTupleType> paramsHelper(value.params, context);
                 result = parserWriteReflectField<W>(writer, object, paramsHelper, "params", NoTags{});
             } else {
@@ -237,7 +237,7 @@ struct JsonRpcRequestParser {
                 return makeParserError(sa::ErrorCode::InvalidLength,
                                        "Named JSON-RPC params count does not match params size");
             }
-            if constexpr (ParamsSize > 0 && is_std_tuple_v<ParamsTupleType>) {
+            if constexpr (ParamsSize > 0 && nekoproto::is_tuple_v<ParamsTupleType>) {
                 JsonRpcSerializerHelperObject<ParamsTupleType> params_helper(value.params, context);
                 result = parserReadReflectField<R>(in, params_helper, "params", NoTags{});
             } else {
@@ -383,3 +383,4 @@ using JsonRpcResponse = typename JsonRpcResponseHelper<T>::type;
 } // namespace detail
 
 } // namespace nekoproto
+NEKO_END_EXPORT

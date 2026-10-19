@@ -7,6 +7,9 @@ task("bench_compile_time")
         description = "Run compile-time benchmarks and compare NekoProto with reflect-cpp",
         options = {
             {'c', "compiler", "kv", nil,     "Path or name of compiler (default: clang++ or g++)"},
+            {nil, "std", "kv", "20", "C++ standard: 20, 23 or 26"},
+            {nil, "include-root", "kv", nil, "Alternate NekoProto include tree for baseline comparison"},
+            {nil, "reflection-backend", "kv", "legacy", "legacy, native or auto (native/auto add -freflection)"},
             {'r', "repeats",  "kv", "3",     "Number of iterations to average per workload (default: 3)"},
             {'f', "filter",   "kv", nil,     "Filter workload names by substring or pattern (e.g. 'json', 'yaml')"},
             {'o', "output",   "kv", nil,     "Output directory for benchmark results (default: build/compile_time/<label>)"},
@@ -26,6 +29,12 @@ task("bench_compile_time")
         config.load()
 
         local root = os.projectdir()
+        local standard = option.get("std") or "20"
+        assert(standard == "20" or standard == "23" or standard == "26", "std must be 20, 23 or 26")
+        local backend = option.get("reflection-backend") or "legacy"
+        local backend_id = ({legacy = 0, native = 1, auto = 2})[backend]
+        assert(backend_id, "reflection-backend must be legacy, native or auto")
+        local neko_include = option.get("include-root") or path.join(root, "include")
         local bench_dir = path.join(root, "benchmarks", "compile_time")
         local label = option.get("label") or "local"
         local repeats = tonumber(option.get("repeats") or "3") or 3
@@ -151,15 +160,17 @@ task("bench_compile_time")
         cprint("Output Path    : %s", output_root)
         cprint("Repeats        : %d iterations per workload", repeats)
         cprint("Trace Profile  : %s", enable_trace and "Enabled (-ftime-trace)" or "Disabled")
-        cprint("C++ standard  : C++20 for both implementations")
+        cprint("C++ standard  : C++%s for both implementations; Neko backend=%s", standard, backend)
         cprint("reflect-cpp Inc: %s", inc_rfl or "${red}NOT FOUND (install with xrepo install reflect-cpp)${clear}")
         cprint("${cyan}----------------------------------------------------------------------------------------${clear}")
 
         -- 4. Workload Definitions
         -- Base compiler flags
-        local std_flag = "-std=c++20"
+        local std_flag = "-std=c++" .. standard
         local neko_common_flags = {std_flag, "-O0", "-c", "-I" .. bench_config_dir,
-                                   "-I" .. path.join(root, "include"), "-I" .. bench_dir}
+                                   "-I" .. neko_include, "-I" .. bench_dir,
+                                   "-DNEKO_PROTO_REFLECTION_BACKEND=" .. backend_id}
+        if backend ~= "legacy" then table.insert(neko_common_flags, "-freflection") end
         if inc_fmt then table.insert(neko_common_flags, "-I" .. inc_fmt) end
         if inc_zeus then table.insert(neko_common_flags, "-I" .. inc_zeus) end
         if enable_trace and is_clang then table.insert(neko_common_flags, "-ftime-trace") end
@@ -172,10 +183,10 @@ task("bench_compile_time")
         local git_status = os.iorunv("git", {"status", "--short"})
         local modified_files = git_status:gsub("%s+$", ""):gsub("\n", "; ")
         io.writefile(path.join(output_root, "environment.txt"), string.format(
-            "commit=%s\nworking_tree=%s\nmodified_files=%s\ncompiler=%s\ncompiler_version=%s\nplatform=%s/%s\nstandard=c++20\noptimization=-O0\nrepeats=%d\nbenchmark_config=%s\nfmt=%s\nzeus_expected=%s\nyyjson=%s\nyaml-cpp=%s\ntoml++=%s\npugixml=%s\nreflect-cpp=%s\n",
+            "commit=%s\nworking_tree=%s\nmodified_files=%s\ncompiler=%s\ncompiler_version=%s\nplatform=%s/%s\nstandard=c++%s\noptimization=-O0\nrepeats=%d\nbenchmark_config=%s\nfmt=%s\nzeus_expected=%s\nyyjson=%s\nyaml-cpp=%s\ntoml++=%s\npugixml=%s\nreflect-cpp=%s\n",
             git_commit, git_status == "" and "clean" or "modified", modified_files == "" and "none" or modified_files,
             compiler, compiler_version,
-            os.host(), os.arch(), repeats, bench_config_file, inc_fmt or "missing", inc_zeus or "missing",
+            os.host(), os.arch(), standard, repeats, bench_config_file, inc_fmt or "missing", inc_zeus or "missing",
             inc_yyjson or "missing", inc_yamlcpp or "missing", inc_toml or "missing",
             inc_pugixml or "missing", inc_rfl or "missing"))
         local raw_file = assert(io.open(path.join(output_root, "raw.csv"), "w"))

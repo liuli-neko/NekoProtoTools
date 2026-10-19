@@ -1,23 +1,11 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
-#include <version>
+#include "nekoproto/global/detail/expected_dependency.hpp"
 
-#ifndef NEKO_PROTO_USE_STD_EXPECTED
-    #if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
-        #define NEKO_PROTO_USE_STD_EXPECTED 1
-    #else
-        #define NEKO_PROTO_USE_STD_EXPECTED 0
-    #endif
-#endif
-
-#if NEKO_PROTO_USE_STD_EXPECTED
-    #include <expected>
-#else
-    #include <zeus/expected.hpp>
-#endif
-
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace expected {
 
@@ -53,3 +41,4 @@ using bad_expected_access = zeus::bad_expected_access<E>;
 
 } // namespace expected
 } // namespace nekoproto
+NEKO_END_EXPORT

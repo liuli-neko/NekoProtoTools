@@ -1,4 +1,12 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
+
+#if !defined(NEKO_BUILDING_MODULE) || NEKO_BUILDING_MODULE == NEKO_MODULE_TRANSPORT
+
+#ifndef NEKO_BUILDING_MODULE
+#include <ilias.hpp>
+#endif
+#include "nekoproto/serialization.hpp"
 
 // Ilias-based stream and message endpoint helpers shared by optional transport modules.
 
@@ -14,16 +22,9 @@
 #include <utility>
 #include <vector>
 
-#include <ilias/io.hpp>
-#include <ilias/io/error.hpp>
-#include <ilias/io/ext.hpp>
-#include <ilias/io/traits.hpp>
-#include <ilias/result.hpp>
-#include <ilias/sync/mutex.hpp>
-#include <ilias/task.hpp>
+#include "nekoproto/reflect.hpp"
 
-#include "nekoproto/global/global.hpp"
-
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 template <typename T>
@@ -346,3 +347,5 @@ private:
 } // namespace detail
 
 } // namespace nekoproto
+NEKO_END_EXPORT
+#endif // current component: transport

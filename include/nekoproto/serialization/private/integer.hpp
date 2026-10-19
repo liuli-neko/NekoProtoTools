@@ -1,7 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
-#include "nekoproto/global/log.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <cstdint>
 #include <limits>
@@ -9,6 +9,7 @@
 #include <type_traits>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail {
 
@@ -153,3 +154,4 @@ inline auto IntegerDecoder::decode(const uint8_t* buffer, int size, T& value, ui
 
 } // namespace detail
 } // namespace nekoproto
+NEKO_END_EXPORT

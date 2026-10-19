@@ -9,6 +9,7 @@
  *
  */
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "../json_serializer.hpp"
 #include "../parsing/parser.hpp"
@@ -19,6 +20,7 @@
 #include <string_view>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 /// ================== Base 64 ==========================
@@ -147,7 +149,7 @@ struct Base64Covert {
     }
 };
 #if NEKO_CPP_PLUS < 17
-const char Base64Covert::Table[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+inline const char Base64Covert::Table[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 #endif
 /// ===================end base 64=========================
 
@@ -208,3 +210,4 @@ struct SchemaParser<BinaryData<T>, void> {
 } // namespace detail
 
 } // namespace nekoproto
+NEKO_END_EXPORT

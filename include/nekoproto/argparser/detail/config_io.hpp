@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/argparser/config_io.hpp"
 #include "nekoproto/argparser/detail/raw_parser.hpp"
@@ -11,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace argparser::detail {
 
@@ -112,3 +114,4 @@ auto exportConfigFiles(const ConfigIoSelection& selection, const T& value) -> st
 
 } // namespace argparser::detail
 } // namespace nekoproto
+NEKO_END_EXPORT

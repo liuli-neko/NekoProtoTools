@@ -9,9 +9,10 @@
  *
  */
 #pragma once
+#include "nekoproto/global/macros.hpp"
 // #####################################################
 // default JsonSerializer type definition
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/serialization/serializer_base.hpp"
 #if defined(NEKO_PROTO_ENABLE_YYJSON)
 #include "json/yyjson_serializer.hpp"
@@ -25,6 +26,7 @@
 #include "json/simd_json_serializer.hpp"
 #endif
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 #if defined(NEKO_PROTO_ENABLE_YYJSON)
 using JsonSerializer = YyJsonSerializer;
@@ -61,3 +63,4 @@ auto toJsonValue(const T& obj) -> sa::Result<typename JsonSerializer::JsonValue>
 }
 } // namespace nekoproto
 #endif
+NEKO_END_EXPORT

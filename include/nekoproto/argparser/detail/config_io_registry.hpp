@@ -1,10 +1,8 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
-#include "nekoproto/serialization/binary_serializer.hpp"
-#include "nekoproto/serialization/json_serializer.hpp"
-#include "nekoproto/serialization/toml_serializer.hpp"
-#include "nekoproto/serialization/yaml_serializer.hpp"
+#include "nekoproto/reflect.hpp"
+#include "nekoproto/serialization.hpp"
 
 #include <array>
 #include <string_view>
@@ -12,6 +10,7 @@
 #include <type_traits>
 #include <utility>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace argparser::detail {
 
@@ -117,3 +116,4 @@ inline auto configIoDirectionName(ConfigIoDirection direction) -> std::string_vi
 
 } // namespace argparser::detail
 } // namespace nekoproto
+NEKO_END_EXPORT

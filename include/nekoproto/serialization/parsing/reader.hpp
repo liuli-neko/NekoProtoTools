@@ -1,12 +1,14 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
-// #include "nekoproto/global/reflection_tags.hpp"
+#include "nekoproto/reflect.hpp"
+// #include "nekoproto/reflection/tags.hpp"
 // #include "nekoproto/serialization/tags.hpp"
 
 #include <cstddef>
 #include <utility>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace parsing {
 
@@ -118,3 +120,4 @@ auto readerForEachArrayElement(const typename R::InputArrayType& array, Fn&& fn,
 
 } // namespace parsing
 } // namespace nekoproto
+NEKO_END_EXPORT

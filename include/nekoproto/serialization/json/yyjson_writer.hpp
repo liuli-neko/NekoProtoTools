@@ -1,6 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_YYJSON)
 
@@ -13,6 +14,7 @@
 
 #include "nekoproto/serialization/error.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail::yyjson {
 
@@ -216,5 +218,6 @@ private:
 
 } // namespace detail::yyjson
 } // namespace nekoproto
+NEKO_END_EXPORT
 
 #endif

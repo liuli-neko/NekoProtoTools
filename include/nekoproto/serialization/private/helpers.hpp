@@ -1,6 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <cstddef>
 #include <cstring>
@@ -10,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 template <class T>
@@ -135,3 +137,4 @@ inline void OutBufferWrapper::Clear() noexcept { vec_->clear(); }
 } // namespace detail
 
 } // namespace nekoproto
+NEKO_END_EXPORT

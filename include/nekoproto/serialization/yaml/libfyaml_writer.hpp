@@ -1,11 +1,11 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_LIBFYAML)
 
 #include "nekoproto/serialization/error.hpp"
-#include "nekoproto/serialization/tags.hpp"
 
 #include <libfyaml.h>
 
@@ -20,6 +20,7 @@
 #include <string_view>
 #include <type_traits>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace yaml {
 
@@ -382,5 +383,6 @@ private:
 } // namespace yaml
 
 } // namespace nekoproto
+NEKO_END_EXPORT
 
 #endif

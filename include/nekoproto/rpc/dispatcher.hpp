@@ -1,14 +1,11 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <compare>
-#include <ilias/io/system_error.hpp>
-#include <ilias/platform.hpp>
-#include <ilias/sync/mutex.hpp>
-#include <ilias/sync/semaphore.hpp>
-#include <ilias/task/group.hpp>
+#include "nekoproto/transport/endpoint.hpp"
 #include <iterator>
 #include <limits>
 #include <map>
@@ -22,13 +19,14 @@
 #include <variant>
 #include <vector>
 
-#include "nekoproto/global/log.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/rpc/concepts.hpp"
 #include "nekoproto/rpc/endpoint.hpp"
 #include "nekoproto/rpc/method.hpp"
 #include "nekoproto/rpc/options.hpp"
 #include "nekoproto/rpc/tracing.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail {
 
@@ -935,3 +933,4 @@ auto RpcContextMethodWrapperImpl<Backend, T, ContextFunction>::call(const typena
 } // namespace detail
 
 } // namespace nekoproto
+NEKO_END_EXPORT

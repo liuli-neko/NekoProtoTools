@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <optional>
 #include <string_view>
@@ -6,6 +7,7 @@
 
 #include "nekoproto/rpc/tags.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail {
 
@@ -52,3 +54,4 @@ auto collectRpcProperties(const Tags& tags) -> RpcPropertyPatch {
 
 } // namespace detail
 } // namespace nekoproto
+NEKO_END_EXPORT

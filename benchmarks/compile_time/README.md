@@ -1,6 +1,6 @@
 # Compile-Time Benchmark Suite
 
-These workloads are exploratory. The task now compiles both implementations with C++20, `-O0 -c`, the same selected field count, and matching JSON (yyjson), YAML (yaml-cpp), TOML (toml++), and XML (pugixml) backends. The older checked-in [RESULTS.md](RESULTS.md) predates this alignment and is historical only. Validate feature and output equivalence before publishing a ranking.
+These workloads are exploratory. The task defaults to C++20 (select `--std=20/23/26`), compiling both implementations with `-O0 -c`, the same selected field count, and matching JSON (yyjson), YAML (yaml-cpp), TOML (toml++), and XML (pugixml) backends. The older checked-in [RESULTS.md](RESULTS.md) predates this alignment and is historical only. Validate feature and output equivalence before publishing a ranking.
 
 This benchmark suite measures translation-unit compile time and object file size for reflection and serialization workloads, comparing **NekoProto** with **reflect-cpp** across multiple formats and field counts.
 
@@ -74,3 +74,10 @@ Running the benchmark generates:
 - **CSV Data**: `build/compile_time/<label>/timings.csv` containing detailed `min`, `max`, `avg`, and `size_bytes`.
 - **Raw data**: `raw.csv` with every compile duration, `commands.txt` with the exact compiler argv, and `environment.txt` with the source commit, compiler, flags, and resolved package paths.
 - **Markdown Report**: `benchmarks/compile_time/RESULTS.md` (when triggered with `--save`).
+
+## C++26 backend and feature comparisons
+
+Reuse this task with `--std=26 --reflection-backend=legacy/native/auto` and an
+optional `--include-root=/path/to/include` snapshot. GCC native/auto comparisons
+add `-freflection`. Run the existing baseline once with `-r 1`; it is not a new
+test framework.

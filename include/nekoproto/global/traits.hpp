@@ -9,6 +9,7 @@
  *
  */
 #pragma once
+#include "nekoproto/global/macros.hpp"
 #include "nekoproto/global/global.hpp"
 
 #include <array>
@@ -29,6 +30,7 @@
 #include <variant>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace traits {
 template <typename T, class enable = void>
@@ -192,3 +194,5 @@ using MemberClassOfT = typename MemberClassOf<T>::type;
 
 } // namespace traits
 } // namespace nekoproto
+
+NEKO_END_EXPORT

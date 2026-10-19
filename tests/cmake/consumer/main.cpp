@@ -33,6 +33,11 @@
 #endif
 #endif
 
+#if defined(NEKO_CONSUMER_HAS_COMMUNICATION) || defined(NEKO_CONSUMER_HAS_JSONRPC)
+#include <ilias/platform.hpp>
+#include <chrono>
+#endif
+
 #include <string>
 #include <vector>
 
@@ -78,6 +83,11 @@ int main() {
 #endif
 #ifdef NEKO_CONSUMER_HAS_COMMUNICATION
     if (std::string{nekoproto::ErrorCategory::instance().name()} != "NekoCommunicationError") return 24;
+#endif
+#if defined(NEKO_CONSUMER_HAS_COMMUNICATION) || defined(NEKO_CONSUMER_HAS_JSONRPC)
+    ilias::PlatformContext context;
+    context.install();
+    ilias::sleep(std::chrono::milliseconds(1)).wait();
 #endif
 #ifdef NEKO_CONSUMER_HAS_JSONRPC
     if (nekoproto::rpc::NekoRpcFrameCodec::headerSize() == 0) return 25;

@@ -9,10 +9,10 @@
  *
  */
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/global/expected.hpp"
-#include "nekoproto/global/global.hpp"
-#include "nekoproto/global/log.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <cstdint>
 #include <string>
@@ -20,6 +20,7 @@
 #include <type_traits>
 #include <utility>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace sa {
@@ -118,3 +119,4 @@ inline auto success() -> Result<void> { return {}; }
 
 template <>
 struct std::is_error_code_enum<nekoproto::sa::ErrorCode> : std::true_type {};
+NEKO_END_EXPORT

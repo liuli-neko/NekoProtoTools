@@ -1,12 +1,14 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <cstddef>
 #include <concepts>
 #include <string>
 #include <string_view>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace parsing::schemaful {
@@ -44,3 +46,4 @@ concept IsSchemafulWriter =
 }
 
 } // namespace nekoproto
+NEKO_END_EXPORT

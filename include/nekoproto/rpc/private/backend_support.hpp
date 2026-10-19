@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -7,10 +8,11 @@
 #include <type_traits>
 #include <vector>
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/rpc/error.hpp"
-#include "nekoproto/serialization/serializer_base.hpp"
+#include "nekoproto/serialization.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace rpc {
 
@@ -41,3 +43,4 @@ struct NekoRpcByteOutputSerializerAvailable<SerializerT, BufferT,
 
 } // namespace rpc
 } // namespace nekoproto
+NEKO_END_EXPORT

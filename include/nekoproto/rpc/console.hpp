@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <memory>
 #include <string>
@@ -7,6 +8,7 @@
 #include "nekoproto/global/config.h"
 #include "nekoproto/rpc/tracing.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 #if defined(NEKO_PROTO_RPC_TRACE)
@@ -67,4 +69,4 @@ private:
 #endif // defined(NEKO_PROTO_RPC_TRACE)
 
 } // namespace nekoproto
-
+NEKO_END_EXPORT

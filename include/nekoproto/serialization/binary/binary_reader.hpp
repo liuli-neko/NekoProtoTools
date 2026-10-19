@@ -1,6 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/serialization/binary/binary_writer.hpp"
 #include "nekoproto/serialization/binary/endian.hpp"
 #include "nekoproto/serialization/error.hpp"
@@ -19,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace binary {
 
@@ -715,3 +717,4 @@ private:
 
 } // namespace binary
 } // namespace nekoproto
+NEKO_END_EXPORT

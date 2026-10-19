@@ -3,3 +3,15 @@
 公共入口为 `<nekoproto/reflect.hpp>`；业务类型可以通过 `nekoproto::Meta<T>` 非侵入地声明 `Object(...)`。`Reflect<T>::forEach` 可按字段遍历，`Reflect<T>::names()` 和 `value_count` 可读取字段信息。字段 tags 用于格式、CLI 等不同调用上下文。
 
 可编译的最小示例：[examples/reflection.cpp](../examples/reflection.cpp)；复用同一份 metadata 的示例：[examples/all_in_one.cpp](../examples/all_in_one.cpp)。
+
+C++26 接入约定：默认假设每个类型只采用一种反射声明方式。若多种来源并存，优先级固定为：
+
+1. 自定义 metadata（`Meta<T>` 或类型内的 `T::Neko`）。
+2. 原生反射及语法注解（`[[=...]]`）。
+3. 自动推导。
+
+每个类型整体选择一个来源，字段集合、顺序、名称与 tags 均由该来源决定；不同来源之间不合并、不补全。选中来源的信息缺省或声明错误按其自身规则处理，不从低优先级来源借用信息。不同类型可以分别采用不同方式。
+
+能力判断优先使用标准 feature-test 宏，其次使用 CMake / xmake 原生编译探测；仍不明确的部分保留 TODO。保持上层接口，优先完成 C++26 原生反射与注解能力，性能测量用于识别明显回退和后续优化。
+
+原生对象、注解、枚举及 `nekoproto.reflect` 模块已接入，首次发布默认 `legacy`。使用方式、范围和回退配置见 [C++26 使用文档](cpp26.md)。

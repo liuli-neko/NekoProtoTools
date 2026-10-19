@@ -61,6 +61,10 @@
  *
  */
 #pragma once
+#include <cstdint>
+#include "nekoproto/global/macros.hpp"
+
+#if !defined(NEKO_BUILDING_MODULE) || NEKO_BUILDING_MODULE == NEKO_MODULE_PROTOCOL
 
 #include <cstring>
 #include <functional>
@@ -68,10 +72,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include "nekoproto/global/global.hpp"
-#include "nekoproto/global/reflect.hpp"
+#include "nekoproto/reflect.hpp"
 #include "private/proto_base_private.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 inline constexpr int reserved_proto_type_size = 64;
 
@@ -379,21 +383,8 @@ std::string_view ProtoBase<ProtoT, SerializerT>::s_proto_name = []() noexcept {
 
 } // namespace detail
 
-#define NEKO_DECLARE_PROTOCOL(className, Serializer)                                                                   \
-public:                                                                                                                \
-    using ProtoType = typename nekoproto::detail::ProtoBase<className, Serializer>;                                    \
-    /** @brief make proto from self pointer */                                                                         \
-    inline nekoproto::IProto makeProto() noexcept { return nekoproto::IProto{new ProtoType(this)}; }                   \
-    /** @brief make proto with structure */                                                                            \
-    template <typename... Args>                                                                                        \
-    inline static nekoproto::IProto emplaceProto(Args&&... args) noexcept {                                            \
-        static_assert(std::is_move_constructible<className>::value, "class " #className " must be copable");           \
-        return nekoproto::IProto{new ProtoType(className{std::forward<Args>(args)...})};                               \
-    }                                                                                                                  \
-    /** @brief make proto by copying other */                                                                          \
-    inline static nekoproto::IProto makeProto(const className& other) noexcept {                                       \
-        static_assert(std::is_copy_constructible<className>::value, "class " #className " must be copable");           \
-        return nekoproto::IProto{new ProtoType(other)};                                                                \
-    }
-
 } // namespace nekoproto
+NEKO_END_EXPORT
+
+#include "nekoproto/proto/macros.hpp"
+#endif // current component: proto

@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/serialization/parsing/parser.hpp"
 
@@ -7,6 +8,7 @@
 #include <tuple>
 #include <utility>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail {
 
@@ -159,3 +161,4 @@ struct SchemaParser<std::pair<K, V>, void> {
 
 } // namespace detail
 } // namespace nekoproto
+NEKO_END_EXPORT

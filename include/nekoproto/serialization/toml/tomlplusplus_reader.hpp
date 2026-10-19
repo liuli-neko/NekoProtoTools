@@ -1,6 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_TOMLPLUSPLUS)
 
@@ -24,6 +25,7 @@
 #include <type_traits>
 #include <utility>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace tomlplusplus {
 
@@ -167,5 +169,6 @@ public:
 } // namespace tomlplusplus
 
 } // namespace nekoproto
+NEKO_END_EXPORT
 
 #endif

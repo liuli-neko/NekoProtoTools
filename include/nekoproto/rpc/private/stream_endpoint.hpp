@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -7,17 +8,13 @@
 #include <utility>
 #include <vector>
 
-#include <ilias/io.hpp>
-#include <ilias/io/error.hpp>
-#include <ilias/io/traits.hpp>
-#include <ilias/sync/mutex.hpp>
-#include <ilias/task.hpp>
-
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/transport/endpoint.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/rpc/endpoint.hpp"
 #include "nekoproto/rpc/error.hpp"
 #include "nekoproto/rpc/private/backend_base.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace rpc {
 
@@ -131,3 +128,4 @@ private:
 
 } // namespace rpc
 } // namespace nekoproto
+NEKO_END_EXPORT

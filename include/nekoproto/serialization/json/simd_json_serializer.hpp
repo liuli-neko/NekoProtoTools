@@ -1,6 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_SIMDJSON)
 
@@ -17,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace detail::simd {
@@ -318,5 +320,6 @@ struct SimdJsonSerializer {
 };
 
 } // namespace nekoproto
+NEKO_END_EXPORT
 
 #endif

@@ -1,0 +1,13 @@
+execute_process(COMMAND "${CMAKE_COMMAND}" --build "${BUILD_DIR}" --config "${CONFIG}" --target "${TARGET}"
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE errors)
+if(result EQUAL 0)
+    message(FATAL_ERROR "${TARGET} unexpectedly compiled")
+endif()
+if(CASE STREQUAL "annotation")
+    set(expected "raw_string")
+else()
+    set(expected "invalid custom reflection metadata")
+endif()
+if(NOT "${output}${errors}" MATCHES "${expected}")
+    message(FATAL_ERROR "${TARGET} failed without the expected diagnostic: ${output}${errors}")
+endif()

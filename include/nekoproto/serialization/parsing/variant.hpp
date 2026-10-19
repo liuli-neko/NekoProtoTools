@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/serialization/parsing/parser.hpp"
 #include "nekoproto/serialization/parsing/reflection.hpp"
@@ -9,6 +10,7 @@
 #include <utility>
 #include <variant>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail {
 
@@ -233,3 +235,4 @@ struct SchemaParser<std::variant<Ts...>, void> {
 
 } // namespace detail
 } // namespace nekoproto
+NEKO_END_EXPORT

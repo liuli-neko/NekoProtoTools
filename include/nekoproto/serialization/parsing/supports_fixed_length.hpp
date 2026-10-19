@@ -1,7 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
-#include "nekoproto/global/reflection_tags.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/serialization/error.hpp"
 // #include "nekoproto/serialization/tags.hpp"
 
@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <string_view>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace parsing {
@@ -44,3 +45,4 @@ concept SupportsFixedLength = SupportsFixedLengthReader<R, T> && SupportsFixedLe
 } // namespace parsing
 
 } // namespace nekoproto
+NEKO_END_EXPORT

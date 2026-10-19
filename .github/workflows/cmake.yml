@@ -51,46 +51,8 @@ jobs:
         run: |
           echo "CC=clang" >> "$GITHUB_ENV"
           echo "CXX=clang++" >> "$GITHUB_ENV"
-      - name: Set up xmake for Ilias
-        if: matrix.rpc == 'ON'
-        uses: xmake-io/github-action-setup-xmake@3a1a5dddfc7fa625d9a698738334bf55655a861a # v1.2.5
-        with:
-          xmake-version: 3.0.9
-      # CMake forces ILIAS_USE_ZEUS_EXPECTED=1 for both C++20 and C++23 consumers.
-      # Keep the provisioned Ilias binary on the same expected ABI.
-      - name: Provision Ilias with zeus_expected on Unix
-        if: matrix.rpc == 'ON' && runner.os != 'Windows'
-        run: xmake f -m release --stdcxx=20 --enable_protocol=y --enable_rapidjson=y --enable_communication=y --enable_jsonrpc=y --enable_rpc_trace=y --ccache=n -y
-      - name: Provision Ilias with zeus_expected and MSVC
-        if: matrix.rpc == 'ON' && runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          xmake f -m debug -k shared --stdcxx=20 --enable_protocol=y --enable_rapidjson=y --enable_communication=y --enable_jsonrpc=y --enable_rpc_trace=y --ccache=n -y
-          xmake build NekoJsonRpc
-      - name: Locate Ilias
-        if: matrix.rpc == 'ON'
-        run: |
-          ilias_prefix=$(python3 - <<'PY'
-          import os
-          from pathlib import Path
-
-          root = Path(os.environ["LOCALAPPDATA"]) if os.name == "nt" else Path.home()
-          packages = root / ".xmake" / "packages" / "i" / "ilias" / "0.5.0"
-          matches = list(packages.glob("*/lib/pkgconfig/ilias.pc"))
-          if len(matches) != 1:
-              raise SystemExit(f"Expected one Ilias 0.5.0 package at {packages}, found {len(matches)}")
-          prefix = matches[0].parents[2]
-          if os.name == "nt":
-              for relative in ("include/ilias/task.hpp", "lib/ilias.lib", "bin/ilias.dll"):
-                  if not (prefix / relative).is_file():
-                      contents = [item.name for item in (prefix / "lib").iterdir()]
-                      raise SystemExit(f"Ilias package is missing {prefix / relative}; lib contains {contents}")
-          print(prefix.as_posix())
-          PY
-          )
-          echo "NEKO_ILIAS_PREFIX=$ilias_prefix" >> "$GITHUB_ENV"
       - name: Configure
-        run: cmake -S . -B build -DNEKO_PROTO_BUILD_TESTS=ON -DNEKO_PROTO_ENABLE_RAPIDJSON=ON -DNEKO_PROTO_ENABLE_YYJSON=ON -DNEKO_PROTO_ENABLE_SIMDJSON=ON -DNEKO_PROTO_ENABLE_PUGIXML=ON -DNEKO_PROTO_ENABLE_YAMLCPP=ON -DNEKO_PROTO_ENABLE_LIBFYAML=${{ matrix.libfyaml }} -DNEKO_PROTO_ENABLE_TOMLPLUSPLUS=ON -DNEKO_PROTO_ENABLE_COMMUNICATION=${{ matrix.rpc }} -DNEKO_PROTO_ENABLE_JSONRPC=${{ matrix.rpc }} -DNEKO_PROTO_ENABLE_RPC_TRACE=${{ matrix.rpc }} -DNEKO_PROTO_ILIAS_ROOT="$NEKO_ILIAS_PREFIX" -DCMAKE_PREFIX_PATH="$NEKO_ILIAS_PREFIX" -DCMAKE_CXX_STANDARD=${{ matrix.stdcxx }} -DCMAKE_CXX_STANDARD_REQUIRED=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON
+        run: cmake -S . -B build -DNEKO_PROTO_BUILD_TESTS=ON -DNEKO_PROTO_ENABLE_RAPIDJSON=ON -DNEKO_PROTO_ENABLE_YYJSON=ON -DNEKO_PROTO_ENABLE_SIMDJSON=ON -DNEKO_PROTO_ENABLE_PUGIXML=ON -DNEKO_PROTO_ENABLE_YAMLCPP=ON -DNEKO_PROTO_ENABLE_LIBFYAML=${{ matrix.libfyaml }} -DNEKO_PROTO_ENABLE_TOMLPLUSPLUS=ON -DNEKO_PROTO_ENABLE_COMMUNICATION=${{ matrix.rpc }} -DNEKO_PROTO_ENABLE_JSONRPC=${{ matrix.rpc }} -DNEKO_PROTO_ENABLE_RPC_TRACE=${{ matrix.rpc }} -DCMAKE_CXX_STANDARD=${{ matrix.stdcxx }} -DCMAKE_CXX_STANDARD_REQUIRED=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON
       - name: Build
         run: cmake --build build --config Release --parallel 2
       - name: Run examples
@@ -98,13 +60,13 @@ jobs:
       - name: Install
         run: cmake --install build --config Release --prefix "$RUNNER_TEMP/neko-install"
       - name: Configure installed consumer
-        run: cmake -S tests/cmake/consumer -B "$RUNNER_TEMP/neko-consumer" -DNEKO_PROTO_ILIAS_ROOT="$NEKO_ILIAS_PREFIX" -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/neko-install;$NEKO_ILIAS_PREFIX" -DCMAKE_CXX_STANDARD=${{ matrix.stdcxx }} -DCMAKE_CXX_STANDARD_REQUIRED=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON
+        run: cmake -S tests/cmake/consumer -B "$RUNNER_TEMP/neko-consumer" -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/neko-install" -DCMAKE_CXX_STANDARD=${{ matrix.stdcxx }} -DCMAKE_CXX_STANDARD_REQUIRED=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON
       - name: Build installed consumer
         run: cmake --build "$RUNNER_TEMP/neko-consumer" --config Release
       - name: Run installed consumer
         run: ctest --test-dir "$RUNNER_TEMP/neko-consumer" -C Release --output-on-failure
       - name: Configure FetchContent consumer
-        run: cmake -S tests/cmake/consumer -B "$RUNNER_TEMP/neko-fetch" -DNEKO_USE_FETCHCONTENT=ON -DNEKO_SOURCE_DIR="$GITHUB_WORKSPACE" -DNEKO_PROTO_ENABLE_RAPIDJSON=ON -DNEKO_PROTO_ENABLE_YYJSON=ON -DNEKO_PROTO_ENABLE_SIMDJSON=ON -DNEKO_PROTO_ENABLE_PUGIXML=ON -DNEKO_PROTO_ENABLE_YAMLCPP=ON -DNEKO_PROTO_ENABLE_LIBFYAML=${{ matrix.libfyaml }} -DNEKO_PROTO_ENABLE_TOMLPLUSPLUS=ON -DNEKO_PROTO_ENABLE_COMMUNICATION=${{ matrix.rpc }} -DNEKO_PROTO_ENABLE_JSONRPC=${{ matrix.rpc }} -DNEKO_PROTO_ENABLE_RPC_TRACE=${{ matrix.rpc }} -DNEKO_PROTO_ILIAS_ROOT="$NEKO_ILIAS_PREFIX" -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/neko-install;$NEKO_ILIAS_PREFIX" -DCMAKE_CXX_STANDARD=${{ matrix.stdcxx }} -DCMAKE_CXX_STANDARD_REQUIRED=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON
+        run: cmake -S tests/cmake/consumer -B "$RUNNER_TEMP/neko-fetch" -DNEKO_USE_FETCHCONTENT=ON -DNEKO_SOURCE_DIR="$GITHUB_WORKSPACE" -DNEKO_PROTO_ENABLE_RAPIDJSON=ON -DNEKO_PROTO_ENABLE_YYJSON=ON -DNEKO_PROTO_ENABLE_SIMDJSON=ON -DNEKO_PROTO_ENABLE_PUGIXML=ON -DNEKO_PROTO_ENABLE_YAMLCPP=ON -DNEKO_PROTO_ENABLE_LIBFYAML=${{ matrix.libfyaml }} -DNEKO_PROTO_ENABLE_TOMLPLUSPLUS=ON -DNEKO_PROTO_ENABLE_COMMUNICATION=${{ matrix.rpc }} -DNEKO_PROTO_ENABLE_JSONRPC=${{ matrix.rpc }} -DNEKO_PROTO_ENABLE_RPC_TRACE=${{ matrix.rpc }} -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/neko-install" -DCMAKE_CXX_STANDARD=${{ matrix.stdcxx }} -DCMAKE_CXX_STANDARD_REQUIRED=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON
       - name: Build FetchContent consumer
         run: cmake --build "$RUNNER_TEMP/neko-fetch" --config Release
       - name: Run FetchContent consumer

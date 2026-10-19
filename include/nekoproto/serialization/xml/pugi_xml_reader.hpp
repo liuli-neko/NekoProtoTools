@@ -1,6 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_PUGIXML)
 
@@ -20,6 +21,7 @@
 #include <type_traits>
 #include <variant>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace xml {
 
@@ -252,5 +254,6 @@ private:
 
 } // namespace xml
 } // namespace nekoproto
+NEKO_END_EXPORT
 
 #endif

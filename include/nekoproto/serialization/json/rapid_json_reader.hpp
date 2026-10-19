@@ -1,10 +1,11 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
-#include "nekoproto/global/log.hpp"
 
+#include <istream>
 #include <limits>
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
@@ -24,6 +25,7 @@
 
 #include "nekoproto/serialization/error.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace rapid {
 #if NEKO_CPP_PLUS < 20
@@ -220,6 +222,7 @@ struct Reader {
 };
 } // namespace rapid
 } // namespace nekoproto
+NEKO_END_EXPORT
 #ifdef _WIN32
 #pragma pop_macro("GetObject")
 #endif

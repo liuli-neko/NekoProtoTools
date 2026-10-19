@@ -1,6 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/serialization/error.hpp"
 #include "nekoproto/serialization/parsing/parent.hpp"
 #include "nekoproto/serialization/parsing/reader.hpp"
@@ -12,6 +13,7 @@
 #include <string_view>
 #include <type_traits>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 using ParserResult = sa::Result<void>;
@@ -255,3 +257,4 @@ inline auto parserSchema(const Tags& tags) -> parsing::schema::Type {
 }
 
 } // namespace nekoproto
+NEKO_END_EXPORT

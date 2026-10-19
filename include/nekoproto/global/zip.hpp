@@ -9,6 +9,7 @@
  *
  */
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <tuple>
 

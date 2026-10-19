@@ -9,6 +9,15 @@ set_policy("package.cmake_generator.ninja", true)
 
 option("stdc",   {showmenu = true, default = 23, values = {23}})
 option("stdcxx", {showmenu = true, default = 20, values = {26, 23, 20}})
+option("reflection_backend", {showmenu = true, default = "legacy", values = {"legacy", "native", "automatic"}})
+option("binding_packs", {showmenu = true, default = "automatic", values = {"automatic", "on", "off"}})
+option("pack_indexing", {showmenu = true, default = "automatic", values = {"automatic", "on", "off"}})
+option("expansion_statements", {showmenu = true, default = false})
+option("enable_modules", {showmenu = true, default = false, description = "Build named modules for all enabled components"})
+if has_config("enable_modules") then
+    set_policy("build.c++.modules", true)
+    set_policy("build.c++.modules.std", false)
+end
 function stdc()   return "c"   .. tostring(get_config("stdc"))   end
 function stdcxx() return "c++" .. tostring(get_config("stdcxx")) end
 function json_serializer_enabled()
@@ -16,6 +25,63 @@ function json_serializer_enabled()
 end
 
 set_languages(stdc(), stdcxx())
+
+option("has_native_reflection")
+    set_showmenu(false)
+    set_languages(stdcxx())
+    add_cxxincludes("meta")
+    add_cxxsnippets("native_reflection", [[
+        #if !defined(__cpp_impl_reflection) || __cpp_impl_reflection < 202506L || !defined(__cpp_lib_reflection) || __cpp_lib_reflection < 202506L
+        #error reflection unavailable
+        #endif
+        static_assert(std::meta::is_type(^^int));
+    ]])
+option_end()
+option("has_native_reflection_flag")
+    set_showmenu(false)
+    set_languages(stdcxx())
+    add_cxxflags("-freflection", {force = true})
+    add_cxxincludes("meta")
+    add_cxxsnippets("native_reflection_flag", [[
+        #if !defined(__cpp_impl_reflection) || __cpp_impl_reflection < 202506L || !defined(__cpp_lib_reflection) || __cpp_lib_reflection < 202506L
+        #error reflection unavailable
+        #endif
+        static_assert(std::meta::is_type(^^int));
+    ]])
+option_end()
+
+option("has_binding_packs")
+    set_showmenu(false)
+    set_languages(stdcxx())
+    add_cxxsnippets("has_binding_packs", [[
+        #if !defined(__cpp_structured_bindings) || __cpp_structured_bindings < 202411L
+        #error no binding packs
+        #endif
+    ]])
+option_end()
+option("has_pack_indexing")
+    set_showmenu(false)
+    set_languages(stdcxx())
+    add_cxxsnippets("has_pack_indexing", [[
+        #if !defined(__cpp_pack_indexing) || __cpp_pack_indexing < 202311L
+        #error no pack indexing
+        #endif
+    ]])
+option_end()
+
+local reflection_backend = get_config("reflection_backend") or "legacy"
+-- xmake reserves the literal "auto" for its own configuration machinery.
+if reflection_backend == "automatic" then reflection_backend = "auto" end
+local syntax_features = {binding_packs = "NEKO_USE_STRUCTURED_BINDING_PACKS", pack_indexing = "NEKO_USE_PACK_INDEXING"}
+for option_name, macro in pairs(syntax_features) do
+    local value = get_config(option_name) or "automatic"
+    if value ~= "automatic" then add_defines(macro .. "=" .. (value == "on" and "1" or "0")) end
+end
+if has_config("expansion_statements") then add_defines("NEKO_USE_EXPANSION_STATEMENTS=1") end
+add_defines("NEKO_PROTO_REFLECTION_BACKEND=" .. ({legacy = 0, native = 1, auto = 2})[reflection_backend])
+if reflection_backend ~= "legacy" and not has_config("has_native_reflection") and has_config("has_native_reflection_flag") then
+    add_cxxflags("-freflection", {force = true})
+end
 
 add_configfiles("include/nekoproto/global/config.h.in")
 set_configdir("include/nekoproto/global")
@@ -298,10 +364,10 @@ end
 if has_config("enable_communication") or
    (has_config("enable_jsonrpc") and json_serializer_enabled()) then
     if has_config("3rd_custom") then
-        add_requires("ilias")
+        add_requires("ilias", {configs = {modules = has_config("enable_modules"), stdcxx = tonumber(get_config("stdcxx"))}})
     else
         -- Pin the direct dependency too: add_requireconfs only affects transitive requirements.
-        add_requires("ilias 0.5.0", {configs = {shared = is_kind("shared"), stdcxx = tonumber(get_config("stdcxx"))}})
+        add_requires("ilias 0.5.1", {configs = {shared = is_kind("shared"), stdcxx = tonumber(get_config("stdcxx")), modules = has_config("enable_modules")}})
     end
 end
 
@@ -333,11 +399,83 @@ if is_plat("windows") then
     add_cxxflags("/bigobj", "/Zc:preprocessor")
 end
 
+local function reflection_headers()
+    add_headerfiles("include/(nekoproto/reflect.hpp)")
+    add_headerfiles("include/(nekoproto/reflection/**.hpp)")
+    add_headerfiles("include/(nekoproto/modules/**.hpp)")
+    add_headerfiles("include/(nekoproto/global/**.hpp)")
+    add_headerfiles("include/(nekoproto/global/**.h)")
+    add_headerfiles("include/(nekoproto/serialization/reflection.hpp)", "include/(nekoproto/serialization/tags.hpp)")
+end
+
+local function reflection_settings()
+    add_defines("NEKO_PROTO_REFLECTION_BACKEND=" .. ({legacy = 0, native = 1, auto = 2})[reflection_backend], {public = true})
+    for option_name, macro in pairs(syntax_features) do
+        local value = get_config(option_name) or "automatic"
+        if value ~= "automatic" then add_defines(macro .. "=" .. (value == "on" and "1" or "0"), {public = true}) end
+    end
+    if has_config("expansion_statements") then add_defines("NEKO_USE_EXPANSION_STATEMENTS=1", {public = true}) end
+    if reflection_backend ~= "legacy" and not has_config("has_native_reflection") and has_config("has_native_reflection_flag") then
+        add_cxxflags("-freflection", {public = true, force = true})
+    end
+end
+
+local module_headers_hash
+local function module_settings(target, bytes)
+    -- xmake's BMI cache currently watches module sources and flags, not their
+    -- textual includes. Keep shared headers/configuration in that cache key.
+    if not module_headers_hash then
+        local headers = os.files(path.join(os.projectdir(), "include/nekoproto/**.hpp"))
+        table.join2(headers, os.files(path.join(os.projectdir(), "include/nekoproto/**.h")))
+        table.sort(headers)
+        local hashes = {}
+        for _, header in ipairs(headers) do table.insert(hashes, hash.sha256(header)) end
+        module_headers_hash = hash.sha256(bytes(table.concat(hashes, ":"))):sub(1, 16)
+    end
+    target:add("defines", "NEKO_MODULE_HEADERS_" .. module_headers_hash, {public = true})
+    local function selected(option_name, detected)
+        local value = get_config(option_name) or "automatic"
+        return value == "on" or (value == "automatic" and has_config(detected))
+    end
+    local native = reflection_backend ~= "legacy" and
+                   (has_config("has_native_reflection") or has_config("has_native_reflection_flag"))
+    target:add("defines", "NEKO_USE_NATIVE_REFLECTION=" .. (native and "1" or "0"), {public = true})
+    target:add("defines", "NEKO_USE_STRUCTURED_BINDING_PACKS=" .. (selected("binding_packs", "has_binding_packs") and "1" or "0"), {public = true})
+    target:add("defines", "NEKO_USE_PACK_INDEXING=" .. (selected("pack_indexing", "has_pack_indexing") and "1" or "0"), {public = true})
+    target:add("defines", "NEKO_USE_EXPANSION_STATEMENTS=" .. (has_config("expansion_statements") and "1" or "0"), {public = true})
+end
+
+local function reflection_log_packages(target)
+    if has_config("enable_fmt") then target:add("packages", "fmt", {public = true}) end
+    if has_config("enable_spdlog") then target:add("packages", "spdlog", {public = true}) end
+end
+
+target("NekoReflection")
+    set_kind("headeronly")
+    reflection_headers()
+    reflection_settings()
+    add_options("enable_fmt", "enable_stdformat", "enable_spdlog", "has_binding_packs", "has_pack_indexing")
+    add_includedirs("include", {public = true})
+    on_load(function (target)
+        reflection_log_packages(target)
+        if has_config("enable_modules") then
+            import("core.base.bytes")
+            module_settings(target, bytes)
+        end
+        if reflection_backend == "native" then
+            assert(tonumber(get_config("stdcxx")) == 26, "native reflection requires --stdcxx=26")
+            assert(has_config("has_native_reflection") or has_config("has_native_reflection_flag"), "native reflection feature probe failed")
+        end
+    end)
+target_end()
+
 target("NekoSerializer")
     set_kind("headeronly")
+    add_deps("NekoReflection", {public = true})
     add_headerfiles("include/(nekoproto/global/**.hpp)")
     add_headerfiles("include/(nekoproto/global/**.h)")
     add_headerfiles("include/(nekoproto/serialization/**.hpp)")
+    add_headerfiles("include/(nekoproto/serializer.hpp)", "include/(nekoproto/serialization.hpp)")
     add_includedirs("include")
 
     add_options("enable_spdlog", 
@@ -362,6 +500,7 @@ target_end()
 
 target("NekoArgParser")
     set_kind("headeronly")
+    add_deps("NekoReflection", {public = true})
     add_headerfiles("include/(nekoproto/global/**.hpp)")
     add_headerfiles("include/(nekoproto/global/**.h)")
     add_headerfiles("include/(nekoproto/serialization/reflection.hpp)")
@@ -458,4 +597,47 @@ if has_config("enable_communication") then
             auto().auto_add_packages(target, {uses_ilias = true})
         end)
     target_end()
+end
+
+-- Module publication follows component enablement; headers remain installed.
+if has_config("enable_modules") then
+    if has_config("enable_communication") or (has_config("enable_jsonrpc") and json_serializer_enabled()) then
+        target("NekoIliasModule")
+            set_kind("static")
+            add_packages("ilias", {public = true})
+            add_files("modules/ilias.cpp")
+        target_end()
+    end
+    local function component_module(component, name, deps, uses_ilias)
+        target("Neko" .. component .. "Module")
+            set_kind("static")
+            set_policy("build.c++.modules", true)
+            add_files("modules/nekoproto." .. name .. ".cppm", {public = true})
+            for _, dep in ipairs(deps) do add_deps(dep, {public = true}) end
+            add_headerfiles("include/(nekoproto/**.hpp)", "include/(nekoproto/**.h)")
+            add_includedirs("include", {public = true})
+            on_load(function (target)
+                import("lua.auto", {rootdir = os.projectdir()})
+                import("core.base.bytes")
+                auto().auto_add_packages(target, {uses_expected = true, uses_ilias = uses_ilias})
+                module_settings(target, bytes)
+            end)
+        target_end()
+    end
+    component_module("Reflection", "reflect", {"NekoReflection"})
+    component_module("Serializer", "serializer", {"NekoSerializer", "NekoReflectionModule"})
+    component_module("ArgParser", "argparser", {"NekoArgParser", "NekoSerializerModule"})
+    if has_config("enable_protocol") then
+        component_module("Protocol", "proto", {"NekoProtoBase", "NekoSerializerModule"})
+    end
+    if has_config("enable_communication") or (has_config("enable_jsonrpc") and json_serializer_enabled()) then
+        component_module("Transport", "transport", {"NekoSerializerModule"}, true)
+    end
+    if has_config("enable_jsonrpc") and json_serializer_enabled() then
+        component_module("Rpc", "rpc", {"NekoJsonRpc", "NekoTransportModule"}, true)
+        component_module("JsonRpc", "jsonrpc", {"NekoJsonRpc", "NekoRpcModule"}, true)
+    end
+    if has_config("enable_communication") then
+        component_module("Communication", "communication", {"NekoCommunication", "NekoProtocolModule", "NekoTransportModule"}, true)
+    end
 end

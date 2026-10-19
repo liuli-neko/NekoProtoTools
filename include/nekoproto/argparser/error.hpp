@@ -1,12 +1,14 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <utility>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace argparser {
 
@@ -114,3 +116,4 @@ namespace std {
 template <>
 struct is_error_code_enum<nekoproto::argparser::ArgParserError> : true_type {};
 } // namespace std
+NEKO_END_EXPORT

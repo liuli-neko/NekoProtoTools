@@ -9,8 +9,15 @@
  *
  */
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
+#include "nekoproto/reflection/features.hpp"
+#if NEKO_USE_STRUCTURED_BINDING_PACKS
+#include "nekoproto/reflection/detail/binding_packs.hpp"
+#else
 #include "detail/unwrap_struct.hpp"
+#endif
+#include "nekoproto/reflection/detail/utility.hpp"
 #include "global.hpp"
 #include "string_literal.hpp"
 
@@ -25,6 +32,7 @@
 #include <tuple>
 #endif
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail {
 #if defined(__GNUC__) || defined(__MINGW__) || defined(__clang__)
@@ -79,19 +87,14 @@ constexpr auto memberCount([[maybe_unused]] Args&&... args) noexcept {
 }
 
 template <typename T>
-static constexpr size_t member_count_v = memberCount<T>();
+#if NEKO_USE_STRUCTURED_BINDING_PACKS
+inline constexpr size_t member_count_v = decltype(bindingCount(std::declval<T&>()))::value;
+#else
+inline constexpr size_t member_count_v = memberCount<T>();
+#endif
 
 template <typename T>
-struct IsStdArray : std::false_type {};
-
-template <typename T, size_t N>
-struct IsStdArray<std::array<T, N>> : std::true_type {
-    using value_type             = T;
-    constexpr static size_t size = N;
-};
-
-template <typename T>
-static constexpr bool can_unwrap_v = std::is_aggregate_v<std::remove_cv_t<T>> && !IsStdArray<T>::value;
+inline constexpr bool can_unwrap_v = std::is_aggregate_v<std::remove_cv_t<T>> && !IsStdArray<T>::value;
 
 /**
  * @brief Convert the struct reference to tuple
@@ -103,13 +106,16 @@ static constexpr bool can_unwrap_v = std::is_aggregate_v<std::remove_cv_t<T>> &&
 template <typename T>
 constexpr auto unwrapStruct(T& data) noexcept {
     static_assert(can_unwrap_v<T>, "The struct must be aggregate");
-    static_assert(member_count_v<T> > 0, "The struct must have at least one member");
+#if NEKO_USE_STRUCTURED_BINDING_PACKS
+    return bindAggregate(data);
+#else
     static_assert(member_count_v<T> <= max_unwrap_struct_size, "The struct is too large");
     return unwrapStructImpl<member_count_v<T>>(data);
+#endif
 }
 
 template <class T>
-inline static T s_external;
+inline T s_external;
 
 template <class T>
 struct PtrT final {
@@ -118,7 +124,7 @@ struct PtrT final {
 
 template <size_t N, class T>
 constexpr auto getPtr(T&& dt) noexcept {
-    auto& val = get<N>(unwrapStruct(dt));
+    auto& val = std::get<N>(unwrapStruct(dt));
     return PtrT<std::remove_cvref_t<decltype(val)>>{&val};
 }
 
@@ -136,14 +142,14 @@ template <class T>
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
 template <auto N, class T>
-constexpr std::string_view get_name_impl = mangledName<getPtr<N>(s_external<std::remove_volatile_t<T>>)>();
+inline constexpr std::string_view get_name_impl = mangledName<getPtr<N>(s_external<std::remove_volatile_t<T>>)>();
 #pragma clang diagnostic pop
 #elif __GNUC__
 template <auto N, class T>
-constexpr std::string_view get_name_impl = mangledName<getPtr<N>(s_external<std::remove_volatile_t<T>>)>();
+inline constexpr std::string_view get_name_impl = mangledName<getPtr<N>(s_external<std::remove_volatile_t<T>>)>();
 #else
 template <auto N, class T>
-constexpr std::string_view get_name_impl = mangledName<getPtr<N>(s_external<std::remove_volatile_t<T>>)>();
+inline constexpr std::string_view get_name_impl = mangledName<getPtr<N>(s_external<std::remove_volatile_t<T>>)>();
 #endif
 
 struct NekoReflector {
@@ -493,3 +499,4 @@ consteval auto memberPointerName() -> std::string_view {
 #endif
 } // namespace detail
 } // namespace nekoproto
+NEKO_END_EXPORT

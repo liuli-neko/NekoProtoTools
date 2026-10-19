@@ -1,13 +1,14 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <array>
 #include <string_view>
 #include <type_traits>
 #include <vector>
 
-#include "nekoproto/global/reflection_tags.hpp"
-#include "nekoproto/global/string_literal.hpp"
+#include "nekoproto/reflect.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace tag_detail {
 template <ConstexprString Prefix>
@@ -106,3 +107,4 @@ NEKO_DETAIL_DEFINE_TAG_PROPERTY(bool, notification, RpcNotificationFlag);
 } // namespace tag_property
 
 } // namespace nekoproto
+NEKO_END_EXPORT

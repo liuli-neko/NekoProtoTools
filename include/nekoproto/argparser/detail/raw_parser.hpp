@@ -1,15 +1,17 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/argparser/detail/schema.hpp"
 #include "nekoproto/argparser/error.hpp"
-#include "nekoproto/global/expected.hpp"
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/serialization.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <cctype>
 #include <string_view>
 #include <system_error>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace argparser::detail {
 
@@ -270,3 +272,4 @@ inline auto parseRawArguments(const ArgSchema& schema, int argc,
 
 } // namespace argparser::detail
 } // namespace nekoproto
+NEKO_END_EXPORT

@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/serialization/parsing/parser.hpp"
 #include "nekoproto/serialization/private/helpers.hpp"
@@ -9,6 +10,7 @@
 #include <string>
 #include <string_view>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail {
 
@@ -116,3 +118,4 @@ struct SchemaParser<NameValuePair<T>, void> {
 
 } // namespace detail
 } // namespace nekoproto
+NEKO_END_EXPORT

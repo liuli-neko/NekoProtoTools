@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/serialization/binary/binary_reader.hpp"
 #include "nekoproto/serialization/binary/binary_writer.hpp"
@@ -11,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 struct BinaryBackend {
@@ -128,3 +130,4 @@ struct BinarySerializer {
 };
 
 } // namespace nekoproto
+NEKO_END_EXPORT

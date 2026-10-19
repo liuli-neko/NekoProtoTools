@@ -1,10 +1,11 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/traits.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/serialization/parsing/parser.hpp"
 #include "nekoproto/serialization/parsing/reflection_plan.hpp"
 #include "nekoproto/serialization/parsing/supports_unframed_objects.hpp"
-#include "nekoproto/serialization/reflection.hpp"
+#include "nekoproto/serialization/private/helpers.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -13,11 +14,23 @@
 #include <type_traits>
 #include <utility>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
+template <typename T>
+struct BinaryData;
 namespace detail {
 
 template <typename T>
 struct DisableReflectParser : std::false_type {};
+
+// This public wrapper has its own wire representation. Native reflection also
+// discovers non-aggregate classes, so parser dispatch must exclude it explicitly.
+template <typename T>
+struct DisableReflectParser<NameValuePair<T>> : std::true_type {};
+template <typename T>
+struct DisableReflectParser<BinaryData<T>> : std::true_type {};
+template <typename K, typename V>
+struct DisableReflectParser<std::pair<K, V>> : std::true_type {};
 
 template <typename FieldT>
 auto parserShouldSkipEmptyField(const FieldT& field) -> bool {
@@ -431,7 +444,7 @@ auto parserReadFieldByIndex(std::size_t matchIndex, typename R::InputValueType m
                             std::index_sequence<Is...>) -> ParserResult {
     ParserResult result;
     auto readOne = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
-        auto&& field = detail::ReflectProvider<T>::template getFrom<I>(accessors, value);
+        auto&& field = detail::ReflectProvider<T>::template getBound<I>(accessors);
         using Plan = ParserFieldPlan<T, I>;
         using FieldType = typename Plan::FieldType;
         if constexpr (Plan::ignored) {
@@ -464,7 +477,7 @@ auto parserCheckMissingFields(std::uint64_t visited_mask, T& value, Accessors& a
             return;
         }
         if ((visited_mask & (1ULL << I)) == 0) {
-            auto&& field = detail::ReflectProvider<T>::template getFrom<I>(accessors, value);
+            auto&& field = detail::ReflectProvider<T>::template getBound<I>(accessors);
             using Plan = ParserFieldPlan<T, I>;
             if constexpr (!Plan::ignored) {
                 result = parserReadMissingField(field, fieldNames[I], Plan::tags);
@@ -483,7 +496,7 @@ auto parserReadReflectFieldsSinglePass(const typename R::InputObjectType& object
         return sa::success();
     } else {
         constexpr auto fieldNames = parserReflectEffectiveFieldNames<RawT>();
-        decltype(auto) accessors = detail::ReflectProvider<RawT>::accessors(value);
+        decltype(auto) accessors = detail::ReflectProvider<RawT>::bind(value);
         std::uint64_t visited_mask = 0;
         std::size_t cursor = 0;
         ParserResult result;
@@ -813,3 +826,4 @@ struct SchemaParser<T, std::enable_if_t<HasValuesMeta<T> && (!is_tagged_field_v<
 
 } // namespace detail
 } // namespace nekoproto
+NEKO_END_EXPORT

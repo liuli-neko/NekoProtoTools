@@ -5,6 +5,7 @@ if has_config("ui_test") and has_config("enable_communication") and json_seriali
 end
 
 add_defines("ILIAS_ENABLE_LOG")
+includes("cpp26/xmake.lua", "modules/xmake.lua")
 
 local function append_values(values, ...)
     for _, value in ipairs({...}) do

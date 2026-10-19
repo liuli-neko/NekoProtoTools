@@ -10,27 +10,21 @@
  */
 
 #pragma once
+#include "nekoproto/global/macros.hpp"
+
+#if !defined(NEKO_BUILDING_MODULE) || NEKO_BUILDING_MODULE == NEKO_MODULE_COMMUNICATION
 
 #include <errno.h>
 
-#include <ilias/defines.hpp>
-#include <ilias/io/dyn_traits.hpp>
-#include <ilias/io/traits.hpp>
-#include <ilias/net.hpp>
-#include <ilias/platform.hpp>
-#include <ilias/result.hpp>
-#include <ilias/task.hpp>
-#include <ilias/task/task.hpp>
-#include <ilias/task/utils.hpp>
+#include "nekoproto/transport/endpoint.hpp"
 #include <set>
 #include <system_error>
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/proto/proto_base.hpp"
-#include "nekoproto/serialization/binary_serializer.hpp"
-#include "nekoproto/serialization/serializer_base.hpp"
-#include "nekoproto/transport/endpoint.hpp"
+#include "nekoproto/serialization.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 using Error = std::error_code;
@@ -45,6 +39,11 @@ using ilias::IPEndpoint;
 using ilias::networkToHost;
 using ilias::Task;
 using ilias::unstoppable;
+
+struct ProtocolTable;
+struct RawDataMessage;
+extern template class NEKO_PROTO_API detail::ProtoBase<ProtocolTable, BinarySerializer>;
+extern template class NEKO_PROTO_API detail::ProtoBase<RawDataMessage, BinarySerializer>;
 
 enum MessageType {
     Complete,            // all message data will be received once, the length field is the total length of the message
@@ -219,7 +218,7 @@ inline bool operator!(StreamFlag flag1) { return static_cast<uint32_t>(flag1) ==
 
 namespace detail {
 
-class ProtoClientBase {
+class NEKO_PROTO_API ProtoClientBase {
 protected:
     ProtoClientBase() = default;
     explicit ProtoClientBase(ProtoFactory& factory) : mFactory(&factory) {}
@@ -239,130 +238,6 @@ protected:
     ProtoFactory* mFactory       = nullptr;
     ProtocolTable mProtocolTable = {};
 };
-
-inline auto ProtoClientBase::serializeMessageData(const IProto& message, bool runInThread, bool reserveHeader) const
-    -> IoTask<std::vector<char>> {
-    std::vector<char> data;
-    if (reserveHeader) {
-        data.resize(MessageHeader::size());
-    }
-    bool ok = false;
-    if (runInThread) {
-        ok = co_await blocking([&]() -> bool { return message.toData(data); });
-    } else {
-        ok = message.toData(data);
-    }
-    if (!ok) {
-        data.clear();
-    }
-    co_return data;
-}
-
-inline auto ProtoClientBase::serializeHeader(const MessageHeader& header) const -> std::vector<char> {
-    std::vector<char> headerData;
-    BinarySerializer::OutputSerializer serializer(headerData);
-    if (!serializer(makeTags<BinaryTag{.raw_fixed_data = true}>(header)) || !serializer.end()) {
-        headerData.clear();
-    }
-    return headerData;
-}
-
-inline auto ProtoClientBase::serializeVersionPacket() const -> IoTask<std::vector<char>> {
-    ProtocolTable protocolTable = {};
-    if (mFactory != nullptr) {
-        protocolTable.protocol_factory_version = mFactory->version();
-        for (const auto& [name, type] : ProtoFactory::protoTypeMap()) {
-            if (type > reserved_proto_type_size) {
-                protocolTable.proto_table[type] = name;
-            }
-        }
-    }
-
-    IProto proto = protocolTable.makeProto();
-    auto dataRet = co_await serializeMessageData(proto, false, true);
-    if (!dataRet) {
-        co_return Err(dataRet.error());
-    }
-    auto data = std::move(dataRet.value());
-    if (data.empty() || static_cast<int>(data.size()) == MessageHeader::size()) {
-        co_return std::vector<char>{};
-    }
-
-    auto headerData = serializeHeader(MessageHeader(static_cast<uint32_t>(data.size() - MessageHeader::size()),
-                                                    proto.type(), MessageType::VersionVerification));
-    if (headerData.empty()) {
-        co_return std::vector<char>{};
-    }
-    memcpy(data.data(), headerData.data(), headerData.size());
-    co_return data;
-}
-
-inline auto ProtoClientBase::syncProtocolTable(std::span<std::byte> payload, const MessageHeader& header)
-    -> IoTask<void> {
-    IProto proto{new ProtocolTable::ProtoType{}};
-    if (header.data != proto.type()) {
-        co_return Err(Error(ErrorCode::InvalidProtoType));
-    }
-    if (!proto.fromData(reinterpret_cast<char*>(payload.data()), payload.size())) {
-        co_return Err(Error(ErrorCode::InvalidProtoData));
-    }
-
-    auto* protoTable = proto.cast<ProtocolTable>();
-    if (mFactory != nullptr && protoTable->protocol_factory_version != mFactory->version()) {
-        NEKO_LOG_WARN("Communication", "ProtoFactory version mismatch: {} != {}", protoTable->protocol_factory_version,
-                      mFactory->version());
-    }
-    mProtocolTable = *protoTable;
-    NEKO_LOG_INFO("Communication", "sync message proto table, version: {}. size: {}",
-                  mProtocolTable.protocol_factory_version, mProtocolTable.proto_table.size());
-    for (const auto& [type, name] : mProtocolTable.proto_table) {
-        NEKO_LOG_INFO("Communication", "Proto table: {} -> {}", name, type);
-    }
-    co_return {};
-}
-
-inline auto ProtoClientBase::finishMessage(IProto message, const MessageHeader& header,
-                                           std::vector<std::byte>&& payload, StreamFlag flag) -> IoTask<IProto> {
-    if (message == nullptr) {
-        if (static_cast<int>(flag & StreamFlag::RecvUnknownTypeData) != 0) {
-            auto rawData  = mFactory->create(RawDataMessage::specifyType());
-            auto* proto   = rawData.cast<RawDataMessage>();
-            proto->type   = header.data;
-            proto->length = header.length;
-            proto->name   = mProtocolTable.proto_table[header.data];
-            proto->data   = std::move(payload);
-            co_return rawData;
-        }
-        co_return Err(Error(ErrorCode::UnrecognizedMessage));
-    }
-
-    const auto parsePayload = [&]() -> bool {
-        return message.fromData(reinterpret_cast<char*>(payload.data()), payload.size());
-    };
-    if (static_cast<int>(flag & StreamFlag::SerializerInThread) != 0) {
-        auto ret = co_await blocking(parsePayload);
-        if (!ret) {
-            co_return Err(Error(ErrorCode::InvalidProtoData));
-        }
-    } else if (!parsePayload()) {
-        co_return Err(Error(ErrorCode::InvalidProtoData));
-    }
-    co_return std::move(message);
-}
-
-inline auto ProtoClientBase::createProto(const uint32_t type) const -> IProto {
-    if (mFactory == nullptr) {
-        return {};
-    }
-    if (type <= reserved_proto_type_size || mProtocolTable.proto_table.empty()) {
-        return mFactory->create(type);
-    }
-    auto it = mProtocolTable.proto_table.find(type);
-    if (it != mProtocolTable.proto_table.end()) {
-        return mFactory->create(it->second.c_str());
-    }
-    return {};
-}
 
 } // namespace detail
 
@@ -934,3 +809,5 @@ inline auto ProtoDatagramClient<T>::getProtoTable() const -> const ProtocolTable
 }
 
 } // namespace nekoproto
+NEKO_END_EXPORT
+#endif // current component: communication

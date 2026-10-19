@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <array>
 #include <string>
@@ -8,12 +9,12 @@
 #include <utility>
 #include <vector>
 
-#include <ilias/io.hpp>
-
+#include "nekoproto/transport/endpoint.hpp"
 #include "nekoproto/rpc/properties.hpp"
 #include "nekoproto/rpc/tags.hpp"
 #include "nekoproto/rpc/traits.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail {
 
@@ -346,3 +347,4 @@ using detail::RpcMethodFN;
 using detail::RpcMethodSpec;
 
 } // namespace nekoproto
+NEKO_END_EXPORT

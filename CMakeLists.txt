@@ -10,7 +10,8 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
 option(NEKO_PROTO_BUILD_EXAMPLES "Build standalone examples" OFF)
-option(NEKO_PROTO_BUILD_TESTS "Run example smoke tests" OFF)
+option(NEKO_PROTO_BUILD_TESTS "Build regression and example smoke tests" OFF)
+option(NEKO_PROTO_BUILD_MODULES "Build named modules for all enabled components (CMake 3.28+)" OFF)
 option(NEKO_PROTO_ENABLE_RAPIDJSON "Enable the RapidJSON serializer" OFF)
 option(NEKO_PROTO_ENABLE_YYJSON "Enable the yyjson JSON serializer" OFF)
 option(NEKO_PROTO_ENABLE_SIMDJSON "Enable the simdjson JSON serializer" OFF)
@@ -102,10 +103,13 @@ endif()
 configure_file(cmake/config.h.in
     "${CMAKE_CURRENT_BINARY_DIR}/generated/nekoproto/global/config.h" @ONLY)
 
+include(cmake/NekoProtoToolsReflection.cmake)
+
 add_library(NekoProtoSerializer INTERFACE)
 add_library(NekoProto::Serializer ALIAS NekoProtoSerializer)
 set_target_properties(NekoProtoSerializer PROPERTIES EXPORT_NAME Serializer)
 target_compile_features(NekoProtoSerializer INTERFACE cxx_std_20)
+target_link_libraries(NekoProtoSerializer INTERFACE NekoProtoReflection)
 target_include_directories(NekoProtoSerializer INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -171,15 +175,26 @@ if(NEKO_PROTO_ENABLE_JSONRPC)
     endif()
 endif()
 
+include(cmake/NekoProtoToolsModules.cmake)
+
 if(NEKO_PROTO_BUILD_EXAMPLES)
     add_subdirectory(examples)
+endif()
+if(NEKO_PROTO_BUILD_TESTS)
+    add_executable(neko_provider_contract_test tests/unit/reflect/test_provider_contract.cpp)
+    target_link_libraries(neko_provider_contract_test PRIVATE NekoProtoReflection)
+    add_test(NAME reflection_provider_contract COMMAND neko_provider_contract_test)
+    add_subdirectory(tests/cpp26)
+    if(NEKO_PROTO_BUILD_MODULES)
+        add_subdirectory(tests/modules)
+    endif()
 endif()
 install(DIRECTORY include/nekoproto DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.h.in" EXCLUDE)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/nekoproto/global/config.h"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/nekoproto/global")
 
-set(_neko_targets NekoProtoSerializer NekoProtoArgParser)
+set(_neko_targets NekoProtoReflection NekoProtoSerializer NekoProtoArgParser)
 if(NEKO_PROTO_ENABLE_PROTOCOL)
     list(APPEND _neko_targets NekoProtoProtocol)
 endif()
@@ -193,7 +208,12 @@ install(TARGETS ${_neko_targets} EXPORT NekoProtoToolsTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+set(_neko_module_export_options)
+if(NEKO_PROTO_BUILD_MODULES)
+    list(APPEND _neko_module_export_options CXX_MODULES_DIRECTORY cxx-modules)
+endif()
 install(EXPORT NekoProtoToolsTargets NAMESPACE NekoProto::
+    ${_neko_module_export_options}
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/NekoProtoTools")
 
 configure_package_config_file(cmake/NekoProtoToolsConfig.cmake.in

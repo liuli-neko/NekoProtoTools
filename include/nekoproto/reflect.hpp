@@ -9,11 +9,15 @@
  *
  */
 #pragma once
+#include "nekoproto/global/macros.hpp"
+
+#if !defined(NEKO_BUILDING_MODULE) || NEKO_BUILDING_MODULE == NEKO_MODULE_REFLECTION
 
 #include "nekoproto/global/global.hpp"
 #include "nekoproto/global/reflect.hpp"
-#include "nekoproto/global/reflection_tags.hpp"
+#include "nekoproto/reflection/tags.hpp"
 #include "nekoproto/global/string_literal.hpp"
 #include "nekoproto/global/traits.hpp"
 #include "nekoproto/serialization/reflection.hpp"
 #include "nekoproto/serialization/tags.hpp"
+#endif // current component: reflect

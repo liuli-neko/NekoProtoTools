@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <chrono>
 #include <cstddef>
@@ -10,8 +11,9 @@
 #include <string_view>
 #include <utility>
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace detail {
@@ -114,3 +116,4 @@ struct RpcMetricsSnapshot {
 };
 
 } // namespace nekoproto
+NEKO_END_EXPORT

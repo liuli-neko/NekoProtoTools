@@ -1,6 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_TOMLPLUSPLUS)
 
@@ -28,6 +29,7 @@
 #include <utility>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace detail {
@@ -242,6 +244,7 @@ struct TomlplusplusSerializer {
 using TomlSerializer = TomlplusplusSerializer;
 
 } // namespace nekoproto
+NEKO_END_EXPORT
 
 #else
 #define NEKO_PROTO_NO_TOML_SERIALIZER

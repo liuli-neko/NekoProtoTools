@@ -1,10 +1,9 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/argparser/detail/raw_parser.hpp"
 #include "nekoproto/argparser/error.hpp"
-#include "nekoproto/global/global.hpp"
-#include "nekoproto/global/traits.hpp"
-#include "nekoproto/serialization/reflection.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -19,6 +18,7 @@
 #include <type_traits>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace argparser::detail {
 
@@ -771,3 +771,4 @@ auto materializeOptionsInto(T& object, const ArgSchema& schema, const RawParseRe
 
 } // namespace argparser::detail
 } // namespace nekoproto
+NEKO_END_EXPORT

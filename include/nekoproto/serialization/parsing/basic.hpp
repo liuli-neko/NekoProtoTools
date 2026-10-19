@@ -1,8 +1,9 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/serialization/parsing/parser.hpp"
 #include "nekoproto/serialization/parsing/supports_fixed_length.hpp"
-#include "nekoproto/serialization/reflection.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <cstddef>
 #include <limits>
@@ -10,6 +11,7 @@
 #include <string_view>
 #include <type_traits>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail {
 
@@ -348,3 +350,4 @@ struct SchemaParser<T, std::enable_if_t<std::is_enum_v<T>>> {
 
 } // namespace detail
 } // namespace nekoproto
+NEKO_END_EXPORT

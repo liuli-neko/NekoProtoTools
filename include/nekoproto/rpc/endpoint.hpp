@@ -1,11 +1,13 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <string>
 #include <utility>
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 #include "nekoproto/transport/endpoint.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace detail {
@@ -29,3 +31,4 @@ concept RpcStreamBackend = CommunicationStream<StreamT> && requires(StreamT stre
 } // namespace detail
 
 } // namespace nekoproto
+NEKO_END_EXPORT

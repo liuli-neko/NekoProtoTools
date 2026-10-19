@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/serialization/parsing/parser.hpp"
 
@@ -13,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail {
 
@@ -325,3 +327,4 @@ struct SchemaParser<std::unordered_multiset<T, Hash, Eq, Alloc>, void> : Sequenc
 
 } // namespace detail
 } // namespace nekoproto
+NEKO_END_EXPORT

@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <array>
 #include <chrono>
@@ -11,19 +12,13 @@
 #include <utility>
 #include <vector>
 
-#include <ilias/io/error.hpp>
-#include <ilias/io/ext.hpp>
-#include <ilias/io/traits.hpp>
-#include <ilias/result.hpp>
-
+#include "nekoproto/transport/endpoint.hpp"
 #include "nekoproto/jsonrpc/jsonrpc_error.hpp"
 #include "nekoproto/jsonrpc/protocol.hpp"
-#include "nekoproto/rpc/client.hpp"
-#include "nekoproto/rpc/concepts.hpp"
-#include "nekoproto/rpc/error.hpp"
-#include "nekoproto/rpc/server.hpp"
-#include "nekoproto/serialization/json_serializer.hpp"
+#include "nekoproto/rpc/rpc.hpp"
+#include "nekoproto/serialization.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 struct JsonRpcBackend {
@@ -508,3 +503,4 @@ template <typename... Protocols>
 using JsonRpcClient = RpcClient<JsonRpcBackend, Protocols...>;
 
 } // namespace nekoproto
+NEKO_END_EXPORT

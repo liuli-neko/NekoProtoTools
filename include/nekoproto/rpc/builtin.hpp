@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include <cstdint>
 #include <map>
@@ -6,8 +7,9 @@
 #include <vector>
 
 #include "nekoproto/rpc/method.hpp"
-#include "nekoproto/serialization/serializer_base.hpp"
+#include "nekoproto/serialization.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 // clang-format off
@@ -60,3 +62,4 @@ struct RpcBuiltinMethods {
 // clang-format on
 
 } // namespace nekoproto
+NEKO_END_EXPORT

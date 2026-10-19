@@ -9,25 +9,15 @@
  *
  */
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include <ilias/io/dyn_traits.hpp>
-#include <ilias/io/error.hpp>
-#include <ilias/io/traits.hpp>
-#include <ilias/net/sockopt.hpp>
-#include <ilias/net/system.hpp>
-#include <ilias/net/tcp.hpp>
-#include <ilias/net/udp.hpp>
-#include <ilias/sync/event.hpp>
-#include <ilias/sync/mutex.hpp>
-#include <ilias/task.hpp>
-#include <ilias/task/scope.hpp>
+#include "nekoproto/transport/endpoint.hpp"
 #include <system_error>
 
-#include "ilias/defines.hpp"
-#include "ilias/task/utils.hpp"
-#include "nekoproto/global/global.hpp"
-#include "nekoproto/rpc/endpoint.hpp"
+#include "nekoproto/reflect.hpp"
+#include "nekoproto/rpc/rpc.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace detail {
@@ -65,3 +55,4 @@ auto makeUdpStreamClient(const std::string& url) -> IoTask<IliasChunkedDatagramM
 } // namespace detail
 
 } // namespace nekoproto
+NEKO_END_EXPORT

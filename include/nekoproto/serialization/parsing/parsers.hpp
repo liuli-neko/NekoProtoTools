@@ -1,4 +1,5 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/serialization/parsing/atomic.hpp"
 #include "nekoproto/serialization/parsing/basic.hpp"

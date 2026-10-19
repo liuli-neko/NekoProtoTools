@@ -1,9 +1,9 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_RAPIDJSON)
-#include "nekoproto/global/log.hpp"
 
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
@@ -22,6 +22,7 @@
 #include "nekoproto/serialization/error.hpp"
 #include "nekoproto/serialization/json/rapid_json_stream_writer.hpp"
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace rapid {
 class Writer {
@@ -233,6 +234,7 @@ private:
 };
 } // namespace rapid
 } // namespace nekoproto
+NEKO_END_EXPORT
 #ifdef _WIN32
 #pragma pop_macro("GetObject")
 #endif

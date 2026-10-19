@@ -816,7 +816,11 @@ TEST(RandomProtoTest, EnumTest) {
     out.end();
     EXPECT_TRUE(neko_test::jsonEquivalent(
         std::string_view(buffer.data(), buffer.size()),
+#if NEKO_USE_NATIVE_REFLECTION && NEKO_PROTO_REFLECTION_BACKEND == NEKO_REFLECTION_NATIVE
+        R"({"a":"TestEnumBG8AC0","b":"TestEnumBG8AC10","c":"TestEnumBG8AC20","d":"TestEnumBG8AC30","e":"TestEnumBG8AC40","f":"TestEnumBG8AC50","g":"TestEnumBG8AC60","h":"TestEnumBG8AC61"})"));
+#else
         R"({"a":"TestEnumBG8AC0","b":"TestEnumBG8AC10","c":"TestEnumBG8AC20","d":"TestEnumBG8AC30","e":"TestEnumBG8AC40","f":"TestEnumBG8AC50","g":60,"h":61})"));
+#endif
 }
 
 #include "../common/common_main.cpp.in" // IWYU pragma: export

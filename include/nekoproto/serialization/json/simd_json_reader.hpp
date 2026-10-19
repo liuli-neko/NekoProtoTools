@@ -1,6 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_SIMDJSON)
 
@@ -13,6 +14,7 @@
 #include <string_view>
 #include <type_traits>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace detail::simd {
 
@@ -162,5 +164,6 @@ struct Reader {
 
 } // namespace detail::simd
 } // namespace nekoproto
+NEKO_END_EXPORT
 
 #endif

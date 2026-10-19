@@ -1,8 +1,9 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
 #include "nekoproto/argparser/config.hpp"
 #include "nekoproto/argparser/detail/schema.hpp"
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -12,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 namespace argparser {
 
@@ -578,3 +580,4 @@ inline auto formatCompletionModel(const CompletionModel& model, CompletionShell 
 } // namespace detail
 } // namespace argparser
 } // namespace nekoproto
+NEKO_END_EXPORT

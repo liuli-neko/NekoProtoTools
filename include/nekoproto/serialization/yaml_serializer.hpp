@@ -1,6 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
 
-#include "nekoproto/global/global.hpp"
+#include "nekoproto/reflect.hpp"
 
 #if defined(NEKO_PROTO_ENABLE_LIBFYAML) || defined(NEKO_PROTO_ENABLE_YAMLCPP)
 
@@ -33,6 +34,7 @@
 #include <sstream>
 #endif
 
+NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
 namespace detail {
@@ -419,6 +421,7 @@ using YamlSerializer = YamlCppSerializer;
 #endif
 
 } // namespace nekoproto
+NEKO_END_EXPORT
 
 #else
 #define NEKO_PROTO_NO_YAML_SERIALIZER

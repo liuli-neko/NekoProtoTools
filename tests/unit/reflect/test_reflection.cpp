@@ -41,10 +41,11 @@ static_assert(requires(const Test1& test) {
 });
 static_assert(!canReflectRefAnyFromRvalueIndex<Test1>());
 static_assert(!canReflectRefAnyFromRvalueName<Test1>());
-static_assert(!detail::native_reflection_provider_available_v<Test1>);
+static_assert(detail::native_reflection_provider_available_v<Test1> == bool(NEKO_USE_NATIVE_REFLECTION));
 static_assert(std::is_same_v<std::decay_t<decltype(detail::native_reflection_field_tags_v<Test1, 0>)>, NoTags>);
 static_assert(tag_query::get<tag_property::Skippable>(detail::native_annotation_tags_v<JsonTag{.skippable = true}>));
-static_assert(detail::ReflectProvider<Test1>::provider_kind == detail::ReflectProviderKind::LegacyAutoUnwrap);
+static_assert(detail::ReflectProvider<Test1>::provider_kind ==
+              (NEKO_USE_NATIVE_REFLECTION ? detail::ReflectProviderKind::NativeReflection : detail::ReflectProviderKind::LegacyAutoUnwrap));
 static_assert(detail::ReflectProvider<Test1>::kind == detail::MetaKind::AutoUnwrap);
 static_assert(detail::ReflectProvider<Test1>::has_names);
 static_assert(detail::ReflectProvider<Test1>::has_values);

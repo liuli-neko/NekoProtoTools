@@ -1,4 +1,7 @@
 #pragma once
+#include "nekoproto/global/macros.hpp"
+
+#if !defined(NEKO_BUILDING_MODULE) || NEKO_BUILDING_MODULE == NEKO_MODULE_RPC
 
 #include "nekoproto/rpc/backend.hpp"
 #include "nekoproto/rpc/builtin.hpp"
@@ -15,3 +18,4 @@
 #include "nekoproto/rpc/tracing.hpp"
 #include "nekoproto/rpc/console.hpp"
 #include "nekoproto/rpc/traits.hpp"
+#endif // current component: rpc
