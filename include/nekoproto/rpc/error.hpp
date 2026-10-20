@@ -28,6 +28,7 @@ enum class RpcError {
     CompressionRequiredButUnsupported = 14,
     Overloaded                        = 15,
     DeadlineExceeded                  = 16,
+    UnsupportedVersion                = 17,
 };
 
 class RpcErrorCategory : public std::error_category {
@@ -73,6 +74,8 @@ public:
             return "RPC Server Overloaded";
         case RpcError::DeadlineExceeded:
             return "RPC Deadline Exceeded";
+        case RpcError::UnsupportedVersion:
+            return "Unsupported RPC Wire Version";
         default:
             return "Unknown RPC Error";
         }

@@ -160,6 +160,9 @@ public:
 
     static auto validateMessage(const ClientContext& context, std::span<const std::byte> message)
         -> ilias::Result<void, std::error_code> {
+        if (Codec::isUnsupportedVersion(message)) {
+            return ilias::Err(RpcError::UnsupportedVersion);
+        }
         return validateFrameSize(message, context.options.frame_limits);
     }
 
@@ -183,6 +186,16 @@ public:
         DecodeResult result;
         if (!validFrameSize(message, context.options.frame_limits)) {
             NEKO_LOG_WARN("rpc", "rpc backend incoming frame rejected: reason=size_limit bytes={}", message.size());
+            return result;
+        }
+        if (Codec::isUnsupportedVersion(message)) {
+            result.ok = true;
+            return result;
+        }
+        if (Codec::needsVersionError(message)) {
+            result.ok = true;
+            result.responses.push_back(
+                {.header = {.kind = Kind::UnsupportedVersion}, .method = {}, .extensions = {}, .payload = {}});
             return result;
         }
         typename Codec::FrameParts parts;
@@ -294,6 +307,15 @@ public:
         } else {
             co_return co_await std::apply(method, std::move(params));
         }
+    }
+
+    template <typename Method, typename Function>
+    static auto invokeWithContext(Function& function, const RpcRequestContext& context,
+                                  rpc::NekoRpcDecayTupleType<typename Method::RawParamsType> params)
+        -> ilias::IoTask<typename Method::RawReturnType> {
+        co_return co_await std::apply(
+            [&](auto&&... args) { return function(context, std::forward<decltype(args)>(args)...); },
+            std::move(params));
     }
 
     template <typename Method>
@@ -433,7 +455,10 @@ public:
         static_assert(BackendSerializable<NekoRpcBackend, typename Method::RawReturnType>,
                       "NekoRpcBackend: response type is not serializable by this Serializer");
 
-        ILIAS_TRYV(validateFrameSize(buffer, context.options.frame_limits));
+        ILIAS_TRYV(validateMessage(context, buffer));
+        if (Codec::needsVersionError(buffer)) {
+            return ilias::Err(RpcError::UnsupportedVersion);
+        }
         FrameParts parts;
         if (!Codec::parseFrame(buffer, CodecId, parts)) {
             return ilias::Err(RpcError::InvalidRequest);
@@ -559,7 +584,9 @@ public:
 
         std::vector<std::byte> response;
         ILIAS_CO_TRY(auto received, co_await endpoint.recv(response));
-        if (received == 0U || !handleClientControl(context, session, response)) {
+        ILIAS_CO_TRYV(validateMessage(context, response));
+        ILIAS_CO_TRY(auto handled, co_await handleClientControl(context, session, endpoint, response));
+        if (received == 0U || !handled) {
             co_return ilias::Err(RpcError::InvalidRequest);
         }
 
@@ -581,6 +608,19 @@ public:
             return false;
         }
         return handleServerHello(session, message);
+    }
+
+    template <typename Endpoint>
+    static auto handleClientControl(ClientContext& context, PeerSession& session, Endpoint& endpoint,
+                                    std::span<const std::byte> message) -> ilias::IoTask<bool> {
+        if (Codec::isUnsupportedVersion(message)) {
+            co_return ilias::Err(RpcError::UnsupportedVersion);
+        }
+        if (validFrameSize(message, context.options.frame_limits) && Codec::needsVersionError(message)) {
+            ILIAS_CO_TRYV(co_await sendVersionError(endpoint));
+            co_return ilias::Err(RpcError::UnsupportedVersion);
+        }
+        co_return handleClientControl(context, session, message);
     }
 
     static auto encodeCancel(Id id) -> Message {
@@ -608,6 +648,13 @@ public:
     template <typename Endpoint>
     static auto handleServerControl(ServerContext& context, PeerSession& session, Endpoint& endpoint,
                                     std::span<const std::byte> message) -> ilias::IoTask<bool> {
+        if (Codec::isUnsupportedVersion(message)) {
+            co_return true;
+        }
+        if (validFrameSize(message, context.options.frame_limits) && Codec::needsVersionError(message)) {
+            ILIAS_CO_TRYV(co_await sendVersionError(endpoint));
+            co_return true;
+        }
         if (!isHello(message)) {
             co_return false;
         }
@@ -656,6 +703,16 @@ public:
 
 private:
     using FrameParts = typename Codec::FrameParts;
+
+    template <typename Endpoint>
+    static auto sendVersionError(Endpoint& endpoint) -> ilias::IoTask<void> {
+        const auto response = Codec::encodeUnsupportedVersion();
+        ILIAS_CO_TRY(auto sent, co_await endpoint.send(rpc::NekoRpcExtensionCodec::asBytes(response)));
+        if (sent != response.size()) {
+            co_return ilias::Err(ilias::IoError::WriteZero);
+        }
+        co_return {};
+    }
 
     static auto validateFrameSize(std::span<const std::byte> frame, const rpc::NekoRpcFrameLimits& limits)
         -> ilias::Result<void, std::error_code> {
@@ -841,6 +898,9 @@ private:
 
     static auto encodeResponseFrame(const Options& options, PeerSession& session, const ResponseValue& response)
         -> ilias::Result<Message, std::error_code> {
+        if (response.header.kind == Kind::UnsupportedVersion) {
+            return Codec::encodeUnsupportedVersion();
+        }
         return rpc::nekoRpcEncodeOutgoingFrame<NekoRpcBackend>(
             options, session,
             {

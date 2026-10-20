@@ -2,6 +2,7 @@
 #include "nekoproto/global/macros.hpp"
 
 #include <atomic>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -32,6 +33,7 @@ enum class NekoRpcKind : std::uint8_t {
     Notify   = 3,
     Cancel   = 4,
     Hello    = 5,
+    UnsupportedVersion = 6,
 };
 
 enum NekoRpcFlag : std::uint8_t {
@@ -84,6 +86,7 @@ public:
 
     static constexpr std::uint16_t Magic           = 0x4E52U;
     static constexpr std::uint8_t Version          = 1U;
+    static constexpr std::array<std::uint8_t, 1> CompatibleVersions{Version};
     static constexpr std::size_t MaxExtensionBytes = std::numeric_limits<std::uint16_t>::max();
 
     struct Header {
@@ -91,7 +94,7 @@ public:
         std::uint16_t magic = Magic;
         // Wire format version.
         std::uint8_t version = Version;
-        // Request, response, notification, cancel, or hello frame.
+        // Request, response, notification, cancel, hello, or version error frame.
         NekoRpcKind kind = NekoRpcKind::Request;
         // NekoRpcFlag bitset describing optional frame features.
         std::uint8_t flags = 0;
@@ -164,9 +167,17 @@ public:
 
     static auto encodeFrame(FrameParts frame) -> MessageType;
     static auto encodeHello(ExtensionMapType extensions, std::uint8_t codec) -> MessageType;
+    // This one control message always uses the fixed V1 encoding, independently
+    // of the current wire version, serializer, and negotiated features.
+    static auto encodeUnsupportedVersion() -> MessageType;
+    static auto isUnsupportedVersion(std::span<const std::byte> data) -> bool;
+    static auto supportsVersion(std::uint8_t version) noexcept -> bool;
+    static auto needsVersionError(std::span<const std::byte> data) -> bool;
     static auto decodeFrame(std::span<const std::byte> data) -> ilias::Result<DecodedRequest, std::error_code>;
 
     static auto knownKind(NekoRpcKind kind) -> bool;
+    // Framing accepts readable unsupported-version envelopes for the V1 error
+    // reply. parseFrame still decodes only CompatibleVersions and this codec.
     static auto headerBodySize(std::span<const std::byte> header, std::uint8_t codec)
         -> ilias::Result<std::size_t, std::error_code>;
     static auto headerBodySize(std::span<const std::byte> header, std::uint8_t codec, const NekoRpcFrameLimits& limits)
@@ -310,7 +321,8 @@ template <>
 struct Meta<rpc::NekoRpcKind, void> {
     static constexpr auto value =
         Enumerate("Request", rpc::NekoRpcKind::Request, "Response", rpc::NekoRpcKind::Response, "Notify",
-                  rpc::NekoRpcKind::Notify, "Cancel", rpc::NekoRpcKind::Cancel, "Hello", rpc::NekoRpcKind::Hello);
+                  rpc::NekoRpcKind::Notify, "Cancel", rpc::NekoRpcKind::Cancel, "Hello", rpc::NekoRpcKind::Hello,
+                  "UnsupportedVersion", rpc::NekoRpcKind::UnsupportedVersion);
 };
 
 template <>

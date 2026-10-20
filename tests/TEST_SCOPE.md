@@ -12,15 +12,21 @@
   - 模块：JSON-RPC client/server/backend 的端到端流程。
   - 范围：方法绑定、动态调用、内置 rpc 方法、通知、批量调用、嵌套 API 名称、`rpc_no_prefix`。
   - 说明：端点使用 `ilias::DuplexStream`，属于纯内存流，避免本地 UDP bind 权限影响单测结果。
+  - 协议边界：另用纯内存完整消息端点，分别验证 client/server 与手写 JSON 消息的对端通信；第一条请求即普通 JSON-RPC 请求，不需要 Neko 握手、帧头或版本字段，响应也不附加私有封装。
 
 ## RPC
 
+- `tests/unit/rpc/test_rpc_backend_contract.cpp`
+  - 范围：必需工厂、会话、控制消息、编解码结果形状及具体方法的类型契约；对缺失接口和错误返回类型做反向断言。
+  - 说明：独立 backend fixture 使用不公开 options 的 context、只支持 `<` 的自定义 ID，并省略多路分流、取消、恢复和流工厂，验证核心不要求具体后端布局或网络协议。流适配按 client/server 角色分别检查。
 - `tests/unit/rpc/test_neko_rpc_backend.cpp`
   - 模块：通用 RPC 前端、二进制 backend、方法 ID 表、压缩 TLV、内存流端点。
   - 范围：注册方法调用、`DuplexStream` 端点、method id 协商和刷新、压缩/解压、通知无响应、内置方法、未找到方法错误；还覆盖 call deadline/timeout/stop token、超时后的 pending 清理和 late response 隔离、跨连接全局 active/queued 背压、每连接和 client pending 上限、服务端排队加 handler 的总 timeout、惰性公开 `RpcRequestContext`、provider-supplied peer info、公开执行策略、连接级 timeout 设置、仅当前连接的任务/排队查询、指标以及 close/partial-frame 生命周期。
   - 边界矩阵：容量 `0`、恰好达到上限、上限外第一个请求；过去 deadline、`0ns`/负 timeout、固定种子普通随机参数和合法但非常规的 24 小时 timeout。connection timeout 另测 `0` 清除、`1ns`、中间值、server 上限减 `1ns`、等于/随机超过上限、`uint64_t` 极值和连接隔离。错误用例同时断言公开错误码、用户 handler 未被错误调用以及容量/指标可恢复。任务查询额外断言普通排队（无特权）、跨连接隔离、调用结束后为空（无历史）。
   - deadline 边界：客户端单次 deadline 是 local pending/cancel 契约；`rpc.set_connection_timeout` 提供 backend-neutral 的服务端可见默认值，正值严格小于 server timeout，并覆盖未来请求的 queue + handler。不通过 Neko backend 私有 extension 传播逐调用 deadline；未来若需要逐调用传播，必须设计公开且可协商的通用 request metadata。
   - 说明：这是 JSON-RPC 之外的 backend 验证，适合补 `include/nekoproto/rpc/**` 与二进制 RPC frame 行为。
+  - 生命周期：串行 backend 替换 endpoint 后重新创建 peer session；client shutdown 等待内部 receiver 退出并结束 pending；server 析构时先取消并等待 handler，再销毁协议集合元数据。
+  - wire 版本：固定 V1 `UnsupportedVersion` golden vector；未知版本 Hello/请求的回复、跨 codec 识别、未启用 Hello 的并发/串行客户端、客户端收到未知版本时的回复；坏头/截断/超限不回复，错误控制消息不互相回复。
 
 ## Serializer
 

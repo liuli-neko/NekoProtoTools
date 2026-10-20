@@ -1,10 +1,14 @@
 #include <ilias/io/duplex.hpp>
 #include <ilias/platform.hpp>
+#include <ilias/sync/event.hpp>
 #include <iostream>
 
 #include <gtest/gtest.h>
+#include <memory>
 #include <optional>
 #include <string>
+
+#include "../common/json_semantic.hpp"
 
 #include "ilias/defines.hpp"
 #include "ilias/io/error.hpp"
@@ -192,6 +196,82 @@ public:
     static ilias::PlatformContext* gContext;
 };
 
+namespace {
+// A complete-message transport with no backend or wire framing on the peer
+// side. Each direction carries one raw JSON message.
+struct RawJsonEndpoint {
+    ilias::oneshot::Sender<std::string> outgoing;
+    ilias::oneshot::Receiver<std::string> incoming;
+    std::shared_ptr<ilias::Event> closed = std::make_shared<ilias::Event>();
+
+    auto send(std::span<const std::byte> bytes) -> ilias::IoTask<std::size_t> {
+        if (!outgoing.send(std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size()))) {
+            co_return ilias::Err(ilias::IoError::WriteZero);
+        }
+        co_return bytes.size();
+    }
+
+    auto recv(std::vector<std::byte>& bytes) -> ilias::IoTask<std::size_t> {
+        if (!incoming) {
+            co_await closed->wait();
+            co_return ilias::Err(ilias::IoError::UnexpectedEOF);
+        }
+        auto message = co_await std::move(incoming);
+        if (!message) co_return ilias::Err(ilias::IoError::UnexpectedEOF);
+        const auto data = std::as_bytes(std::span{message->data(), message->size()});
+        bytes.assign(data.begin(), data.end());
+        co_return bytes.size();
+    }
+
+    void close() { outgoing.close(); closed->set(); }
+    auto flush() -> ilias::IoTask<void> { co_return {}; }
+    auto shutdown() -> ilias::IoTask<void> { close(); co_return {}; }
+};
+static_assert(MessageEndpoint<RawJsonEndpoint>);
+} // namespace
+
+TEST_F(JsonRpcTest, ClientCommunicatesWithRawJsonPeerWithoutNekoHandshakeOrEnvelope) {
+    using namespace std::chrono_literals;
+    auto request = ilias::oneshot::channel<std::string>();
+    auto response = ilias::oneshot::channel<std::string>();
+    JsonRpcClient<Protocol> client{*gContext};
+    client.setEndpoint(RawJsonEndpoint{std::move(request.sender), std::move(response.receiver)});
+
+    ilias::TaskGroup<void> peer;
+    peer.spawn([&]() -> ilias::Task<void> {
+        auto message = co_await std::move(request.receiver);
+        EXPECT_TRUE(message);
+        if (!message) co_return;
+        EXPECT_TRUE(neko_test::jsonEquivalent(
+            *message, R"({"jsonrpc":"2.0","method":"test1","params":{"num1":20,"num2":22},"id":0})"));
+        EXPECT_TRUE(response.sender.send(R"({"jsonrpc":"2.0","result":42,"id":0})"));
+    });
+    auto result = ilias::timeout(client->test1(20, 22), 500ms).wait();
+    ASSERT_TRUE(result);
+    ASSERT_TRUE(*result);
+    EXPECT_EQ(**result, 42);
+    peer.waitAll().wait();
+    client.close();
+}
+
+TEST_F(JsonRpcTest, ServerCommunicatesWithRawJsonPeerWithoutNekoHandshakeOrEnvelope) {
+    using namespace std::chrono_literals;
+    auto request = ilias::oneshot::channel<std::string>();
+    auto response = ilias::oneshot::channel<std::string>();
+    JsonRpcServer<Protocol> server{*gContext};
+    server->test1 = [](int a, int b) -> ilias::IoTask<int> { co_return a + b; };
+    server.addEndpoint(RawJsonEndpoint{std::move(response.sender), std::move(request.receiver)});
+
+    ASSERT_TRUE(request.sender.send(
+        R"({"jsonrpc":"2.0","method":"test1","params":[20,22],"id":"external-peer"})"));
+    auto message = ilias::timeout(std::move(response.receiver), 500ms).wait();
+    ASSERT_TRUE(message);
+    ASSERT_TRUE(*message);
+    EXPECT_TRUE(neko_test::jsonEquivalent(**message,
+        R"({"jsonrpc":"2.0","result":42,"id":"external-peer"})"));
+    server.close();
+}
+
 template <typename Server, typename Client>
 static void connectEndpoint(Server& server, Client& client) {
 #if 0
@@ -322,6 +402,46 @@ TEST_F(JsonRpcTest, BindAndCall) {
         EXPECT_TRUE(res.has_value());
         EXPECT_EQ(res.value(), "no params");
     }
+    client.close();
+    server.close();
+}
+
+TEST_F(JsonRpcTest, ContextAwareBindingPreservesBackendParameterRepresentation) {
+    RpcServer<JsonRpcBackend> server{*gContext};
+    RpcClient<JsonRpcBackend> client{*gContext};
+    bool objectContext = false;
+    bool voidContext = false;
+    server.bindMethodWithContext(
+        "context.object",
+        traits::FunctionT<ilias::IoTask<std::string>(const RpcRequestContext&, MXXParams)>(
+            [&](const RpcRequestContext& context, MXXParams params) -> ilias::IoTask<std::string> {
+                objectContext = context.method() == "context.object";
+                co_return std::to_string(params.param1) + params.param2;
+            }));
+    server.bindMethodWithContext(
+        "context.tuple",
+        traits::FunctionT<ilias::IoTask<int>(const RpcRequestContext&, std::tuple<int, int>)>(
+            [](const RpcRequestContext&, std::tuple<int, int> params) -> ilias::IoTask<int> {
+                co_return std::get<0>(params) + std::get<1>(params);
+            }));
+    server.bindMethodWithContext(
+        "context.void",
+        traits::FunctionT<ilias::IoTask<void>(const RpcRequestContext&)>(
+            [&](const RpcRequestContext& context) -> ilias::IoTask<void> {
+                voidContext = context.method() == "context.void";
+                co_return {};
+            }));
+    connectEndpoint(server, client);
+    auto object = client.callRemote<std::string>("context.object", MXXParams{7, "value", {}}).wait();
+    ASSERT_TRUE(object);
+    EXPECT_EQ(*object, "7value");
+    EXPECT_TRUE(objectContext);
+    auto tuple = client.callRemote<int>("context.tuple", std::tuple<int, int>{2, 3}).wait();
+    ASSERT_TRUE(tuple);
+    EXPECT_EQ(*tuple, 5);
+    auto empty = client.callRemote<void>("context.void").wait();
+    EXPECT_TRUE(empty);
+    EXPECT_TRUE(voidContext);
     client.close();
     server.close();
 }

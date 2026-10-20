@@ -3,6 +3,7 @@
 
 #include "nekoproto/serialization/reflection.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <limits>
 #include <utility>
@@ -22,6 +23,11 @@ void appendBytes(NekoRpcFrameCodec::MessageType& out, std::span<const std::byte>
 }
 
 constexpr std::uint8_t MethodTableFormatVersion = 2U;
+
+// The only cross-version fallback: NR, wire V1, kind 6, all remaining
+// V1 header fields zero. Keep these bytes independent of Header/Version.
+constexpr std::array<std::byte, 24> UnsupportedVersionFrame{
+    std::byte{0x4e}, std::byte{0x52}, std::byte{0x01}, std::byte{0x06}};
 
 auto readHeader(std::span<const std::byte> data) -> NekoRpcFrameCodec::Header {
     std::size_t offset = 0;
@@ -68,7 +74,7 @@ auto frameBodySize(const NekoRpcFrameCodec::Header& header) -> ilias::Result<std
 }
 
 auto validHeader(const NekoRpcFrameCodec::Header& header) -> bool {
-    return header.magic == NekoRpcFrameCodec::Magic && header.version == NekoRpcFrameCodec::Version &&
+    return header.magic == NekoRpcFrameCodec::Magic && NekoRpcFrameCodec::supportsVersion(header.version) &&
            NekoRpcFrameCodec::knownKind(header.kind);
 }
 
@@ -211,6 +217,9 @@ auto NekoRpcFrameCodec::encodeResponses(const ResponseValuesType& responses, boo
 }
 
 auto NekoRpcFrameCodec::encodeFrame(FrameParts frame) -> MessageType {
+    if (frame.header.kind == NekoRpcKind::UnsupportedVersion) {
+        return encodeUnsupportedVersion();
+    }
     MessageType extensions;
     if (!NekoRpcExtensionCodec::appendTlvs(extensions, frame.extensions)) {
         return {};
@@ -269,6 +278,28 @@ auto NekoRpcFrameCodec::decodeFrame(std::span<const std::byte> data) -> ilias::R
     return request;
 }
 
+auto NekoRpcFrameCodec::encodeUnsupportedVersion() -> MessageType {
+    return {UnsupportedVersionFrame.begin(), UnsupportedVersionFrame.end()};
+}
+
+auto NekoRpcFrameCodec::isUnsupportedVersion(std::span<const std::byte> data) -> bool {
+    return std::ranges::equal(data, UnsupportedVersionFrame);
+}
+
+auto NekoRpcFrameCodec::supportsVersion(std::uint8_t version) noexcept -> bool {
+    return std::ranges::find(CompatibleVersions, version) != CompatibleVersions.end();
+}
+
+auto NekoRpcFrameCodec::needsVersionError(std::span<const std::byte> data) -> bool {
+    if (data.size() < headerSize()) {
+        return false;
+    }
+    const auto header = readHeader(data);
+    const auto body_size = frameBodySize(header);
+    return header.magic == Magic && !supportsVersion(header.version) && body_size &&
+           body_size.value() == data.size() - headerSize();
+}
+
 auto NekoRpcFrameCodec::knownKind(NekoRpcKind kind) -> bool {
     switch (kind) {
     case NekoRpcKind::Request:
@@ -276,6 +307,7 @@ auto NekoRpcFrameCodec::knownKind(NekoRpcKind kind) -> bool {
     case NekoRpcKind::Notify:
     case NekoRpcKind::Cancel:
     case NekoRpcKind::Hello:
+    case NekoRpcKind::UnsupportedVersion:
         return true;
     default:
         return false;
@@ -290,12 +322,21 @@ auto NekoRpcFrameCodec::headerBodySize(std::span<const std::byte> header, std::u
 auto NekoRpcFrameCodec::headerBodySize(std::span<const std::byte> header, std::uint8_t codec,
                                        const NekoRpcFrameLimits& limits)
     -> ilias::Result<std::size_t, std::error_code> {
+    if (isUnsupportedVersion(header)) {
+        if (header.size() > limits.max_frame_bytes) {
+            return ilias::Err(ilias::IoError::MessageTooLarge);
+        }
+        return 0U;
+    }
     if (header.size() != headerSize()) {
         return ilias::Err(RpcError::InvalidRequest);
     }
 
     const auto parsed = readHeader(header);
-    if (!validHeader(parsed) || parsed.codec != codec) {
+    // Unsupported versions still need framing so the backend can send the
+    // fixed V1 error. Do not interpret their kind, codec, or extensions.
+    if (parsed.magic != Magic ||
+        (supportsVersion(parsed.version) && (!knownKind(parsed.kind) || parsed.codec != codec))) {
         return ilias::Err(RpcError::InvalidRequest);
     }
     if (parsed.method_size > limits.max_method_bytes || parsed.payload_size > limits.max_payload_bytes ||

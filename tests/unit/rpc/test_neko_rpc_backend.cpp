@@ -66,6 +66,17 @@ struct NoCompressionCodec {
 using NoCompressionRpcBackend = NekoRpcBackend<BinarySerializer, 0, NoCompressionCodec>;
 using JsonSerializedRpcBackend = NekoRpcBackend<JsonSerializer, 1>;
 
+struct SerialSessionBackend : BinaryRpcBackend {
+    inline static std::size_t sessionCreations = 0;
+
+    static auto makeClientPeerSession(const ClientContext& context) -> PeerSession {
+        ++sessionCreations;
+        return BinaryRpcBackend::makeClientPeerSession(context);
+    }
+
+    static auto responseId(std::span<const std::byte>) -> std::optional<Id> = delete;
+};
+
 static_assert(RpcBackend<BinaryRpcBackend>);
 static_assert(RpcBackend<NoCompressionRpcBackend>);
 static_assert(RpcBackend<JsonSerializedRpcBackend>);
@@ -125,7 +136,29 @@ auto waitUntil(Predicate predicate, std::chrono::milliseconds budget = std::chro
     return true;
 }
 
+struct RpcLifetimeState {
+    bool protocolAlive = true;
+    bool handlerStarted = false;
+    bool handlerDrained = false;
+    bool drainedBeforeProtocol = false;
+};
+
+struct RpcLifetimeApi {
+    RpcMethodSpec<int()> probe;
+    std::shared_ptr<RpcLifetimeState> state;
+    ~RpcLifetimeApi() {
+        if (state) {
+            state->protocolAlive = false;
+        }
+    }
+};
+
 } // namespace
+
+template <>
+struct nekoproto::Meta<RpcLifetimeApi> {
+    static constexpr auto value = Object("probe", &RpcLifetimeApi::probe);
+};
 
 TEST(NekoRpcBackend, FrameV1GoldenVectorAndVersionGate) {
     const std::array method{std::byte{'a'}, std::byte{'d'}, std::byte{'d'}};
@@ -172,6 +205,182 @@ TEST(NekoRpcBackend, FrameV1GoldenVectorAndVersionGate) {
 
     fixedFrame[2] = std::byte{0x02};
     EXPECT_FALSE(rpc::NekoRpcFrameCodec::parseFrame(asBytes(fixedFrame), 0, parts));
+}
+
+TEST(NekoRpcBackend, UnsupportedVersionHasAFixedSerializerIndependentV1Encoding) {
+    using Codec = rpc::NekoRpcFrameCodec;
+    const std::array<std::uint8_t, 24> golden{0x4e, 0x52, 0x01, 0x06};
+    std::vector<std::byte> expected;
+    for (const auto byte : golden) expected.push_back(static_cast<std::byte>(byte));
+    const auto message = Codec::encodeUnsupportedVersion();
+    EXPECT_EQ(message, expected);
+    Codec::Header header{.version = 255, .kind = rpc::NekoRpcKind::UnsupportedVersion,
+                         .flags = 255, .codec = 255, .id = 123};
+    EXPECT_EQ(Codec::encodeFrame({.header = header, .method = {}, .extensions = {}, .payload = {}}), expected);
+    EXPECT_TRUE(Codec::isUnsupportedVersion(expected));
+    for (unsigned version = 0; version <= 255; ++version) {
+        EXPECT_EQ(Codec::supportsVersion(static_cast<std::uint8_t>(version)), version == 1);
+    }
+
+    BinaryRpcTestApi api;
+    auto binary = BinaryRpcBackend::decodeResponse<decltype(api.add)>(message, 123);
+    auto json = JsonSerializedRpcBackend::decodeResponse<decltype(api.add)>(message, 456);
+    ASSERT_FALSE(binary);
+    ASSERT_FALSE(json);
+    EXPECT_EQ(binary.error(), makeErrorCode(RpcError::UnsupportedVersion));
+    EXPECT_EQ(json.error(), makeErrorCode(RpcError::UnsupportedVersion));
+
+    auto malformed = message;
+    malformed.push_back(std::byte{0});
+    EXPECT_FALSE(Codec::isUnsupportedVersion(malformed));
+    malformed = message;
+    malformed[2] = std::byte{2};
+    EXPECT_FALSE(Codec::isUnsupportedVersion(malformed));
+}
+
+TEST(NekoRpcBackend, UnsupportedVersionsReplyWithoutDecodingTheirBody) {
+    ilias::PlatformContext context;
+    context.install();
+    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context};
+    unsigned calls = 0;
+    server->add = [&](int a, int b) -> ilias::IoTask<int> { ++calls; co_return a + b; };
+    std::uint64_t nextId = 0;
+    auto request = BinaryRpcBackend::encodeRequest(server->add, false, nextId, 1, 2);
+    ASSERT_TRUE(request);
+    for (const auto version : {0, 2, 255}) {
+        auto future = request->message;
+        future[2] = static_cast<std::byte>(version);
+        // Version rejection needs only a readable envelope. Future kinds,
+        // codecs and payloads must not be interpreted as today's protocol.
+        future[3] = std::byte{0xff};
+        future[5] = std::byte{0xff};
+        future.back() = std::byte{0xff};
+        auto response = server.processMessage(future).wait();
+        EXPECT_EQ(response, rpc::NekoRpcFrameCodec::encodeUnsupportedVersion());
+    }
+    EXPECT_EQ(calls, 0U);
+    EXPECT_TRUE(server.processMessage(rpc::NekoRpcFrameCodec::encodeUnsupportedVersion()).wait().empty());
+}
+
+TEST(NekoRpcBackend, UnrecognizableAndOversizedFramesHaveNoVersionReply) {
+    ilias::PlatformContext context;
+    context.install();
+    BinaryRpcBackend::Options options;
+    options.frame_limits.max_payload_bytes = 32;
+    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
+    auto header = rpc::NekoRpcFrameCodec::encodeHello({}, 0);
+    header[2] = std::byte{2};
+    auto badMagic = header;
+    badMagic[0] = std::byte{0};
+    EXPECT_TRUE(server.processMessage(badMagic).wait().empty());
+    auto truncated = header;
+    truncated.pop_back();
+    EXPECT_TRUE(server.processMessage(truncated).wait().empty());
+    auto missingBody = header;
+    missingBody[23] = std::byte{1};
+    EXPECT_TRUE(server.processMessage(missingBody).wait().empty());
+    auto oversized = header;
+    oversized[23] = std::byte{33};
+    oversized.resize(oversized.size() + 33);
+    EXPECT_TRUE(server.processMessage(oversized).wait().empty());
+    auto extraBody = header;
+    extraBody.push_back(std::byte{0});
+    EXPECT_TRUE(server.processMessage(extraBody).wait().empty());
+}
+
+TEST(NekoRpcBackend, StreamServerRepliesToUnsupportedHelloAndRequestWithV1) {
+    using namespace std::chrono_literals;
+    ilias::PlatformContext context;
+    context.install();
+    RpcServer<JsonSerializedRpcBackend, BinaryRpcTestApi> server{context};
+    unsigned calls = 0;
+    server->add = [&](int a, int b) -> ilias::IoTask<int> { ++calls; co_return a + b; };
+    auto [clientStream, serverStream] = ilias::DuplexStream::make(65536);
+    server.addEndpoint(std::move(serverStream));
+    auto peer = JsonSerializedRpcBackend::makeEndpoint(std::move(clientStream));
+    std::uint64_t nextId = 0;
+    auto request = JsonSerializedRpcBackend::encodeRequest(server->add, false, nextId, 20, 22);
+    ASSERT_TRUE(request);
+    for (auto frame : {rpc::NekoRpcFrameCodec::encodeHello({}, 1), request->message}) {
+        frame[2] = std::byte{255};
+        frame[5] = std::byte{255};
+        ASSERT_TRUE(peer.send(frame).wait());
+        std::vector<std::byte> response;
+        auto received = ilias::timeout(peer.recv(response), 250ms).wait();
+        ASSERT_TRUE(received);
+        ASSERT_TRUE(*received);
+        EXPECT_EQ(response, rpc::NekoRpcFrameCodec::encodeUnsupportedVersion());
+    }
+    EXPECT_EQ(calls, 0U);
+    // Receiving the fallback itself must not trigger another fallback.
+    ASSERT_TRUE(peer.send(rpc::NekoRpcFrameCodec::encodeUnsupportedVersion()).wait());
+    ASSERT_TRUE(peer.send(request->message).wait());
+    std::vector<std::byte> response;
+    auto received = ilias::timeout(peer.recv(response), 250ms).wait();
+    ASSERT_TRUE(received);
+    ASSERT_TRUE(*received);
+    auto result = JsonSerializedRpcBackend::decodeResponse<decltype(server->add)>(response, request->id);
+    ASSERT_TRUE(result);
+    EXPECT_EQ(*result, 42);
+    EXPECT_EQ(calls, 1U);
+    peer.close();
+    server.close();
+}
+
+namespace {
+template <typename Backend>
+void checkClientVersionError(bool negotiate, bool futureResponse) {
+    using namespace std::chrono_literals;
+    ilias::PlatformContext context;
+    context.install();
+    typename Backend::Options options;
+    options.method_id = negotiate ? Backend::MethodIdMode::Auto : Backend::MethodIdMode::Disable;
+    options.compression = Backend::CompressionMode::Disable;
+    RpcClient<Backend, BinaryRpcTestApi> client{context, options};
+    auto [clientStream, peerStream] = ilias::DuplexStream::make(65536);
+    client.setEndpoint(std::move(clientStream));
+    auto peer = Backend::makeEndpoint(std::move(peerStream));
+    bool gotVersionReply = false;
+    ilias::TaskGroup<void> tasks;
+    tasks.spawn([&]() -> ilias::Task<void> {
+        std::vector<std::byte> request;
+        auto received = co_await ilias::timeout(peer.recv(request), 250ms);
+        EXPECT_TRUE(received && *received);
+        if (!received || !*received) co_return;
+        auto response = rpc::NekoRpcFrameCodec::encodeUnsupportedVersion();
+        if (futureResponse) response[2] = std::byte{2};
+        auto sent = co_await peer.send(response);
+        EXPECT_TRUE(sent);
+        if (futureResponse && sent) {
+            std::vector<std::byte> reply;
+            auto got = co_await ilias::timeout(peer.recv(reply), 250ms);
+            gotVersionReply = got && *got && rpc::NekoRpcFrameCodec::isUnsupportedVersion(reply);
+        }
+    });
+    auto call = ilias::timeout(client->add(1, 2), 500ms).wait();
+    ASSERT_TRUE(call);
+    ASSERT_FALSE(*call);
+    EXPECT_EQ(call->error(), makeErrorCode(RpcError::UnsupportedVersion));
+    tasks.waitAll().wait();
+    EXPECT_EQ(gotVersionReply, futureResponse);
+    client.close();
+    peer.close();
+}
+} // namespace
+
+TEST(NekoRpcBackend, ClientRecognizesV1VersionErrorDuringHello) {
+    checkClientVersionError<JsonSerializedRpcBackend>(true, false);
+}
+
+TEST(NekoRpcBackend, ClientRecognizesV1VersionErrorWithoutHello) {
+    checkClientVersionError<JsonSerializedRpcBackend>(false, false);
+    checkClientVersionError<SerialSessionBackend>(false, false);
+}
+
+TEST(NekoRpcBackend, ClientRepliesToUnsupportedVersionsDuringHelloAndCalls) {
+    checkClientVersionError<JsonSerializedRpcBackend>(true, true);
+    checkClientVersionError<JsonSerializedRpcBackend>(false, true);
+    checkClientVersionError<SerialSessionBackend>(false, true);
 }
 
 TEST(NekoRpcBackend, CallsRegisteredMethodThroughBinaryFrame) {
@@ -816,6 +1025,103 @@ TEST(NekoRpcBackend, ClientCloseCompletesAnInflightCallAndUpdatesConnectionState
     EXPECT_EQ(result->error(), makeErrorCode(RpcError::ClientNotInit));
 
     server.close();
+}
+
+TEST(NekoRpcBackend, SerialBackendGetsANewPeerSessionAfterEndpointReplacement) {
+    ilias::PlatformContext context;
+    context.install();
+    SerialSessionBackend::sessionCreations = 0;
+    BinaryRpcBackend::Options options;
+    options.method_id = BinaryRpcBackend::MethodIdMode::Disable;
+    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> first{context, options};
+    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> second{context, options};
+    RpcClient<SerialSessionBackend, BinaryRpcTestApi> client{context, options};
+    first->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs + rhs; };
+    second->add = [](int lhs, int rhs) -> ilias::IoTask<int> { co_return lhs * rhs; };
+    connectEndpoint(first, client);
+    auto firstResult = client->add(2, 3).wait();
+    ASSERT_TRUE(firstResult);
+    EXPECT_EQ(*firstResult, 5);
+    EXPECT_EQ(SerialSessionBackend::sessionCreations, 2U);
+    connectEndpoint(second, client);
+    auto secondResult = client->add(2, 3).wait();
+    ASSERT_TRUE(secondResult);
+    EXPECT_EQ(*secondResult, 6);
+    EXPECT_EQ(SerialSessionBackend::sessionCreations, 3U);
+    client.close();
+    first.close();
+    second.close();
+}
+
+TEST(NekoRpcBackend, ClientShutdownDrainsReceiverAndCompletesPendingCalls) {
+    using namespace std::chrono_literals;
+    ilias::PlatformContext context;
+    context.install();
+    BinaryRpcBackend::Options options;
+    options.method_id = BinaryRpcBackend::MethodIdMode::Disable;
+    RpcServer<BinaryRpcBackend, BinaryRpcTestApi> server{context, options};
+    RpcClient<BinaryRpcBackend, BinaryRpcTestApi> client{context, options};
+    connectEndpoint(server, client);
+    bool started = false;
+    server->add = [&](int lhs, int rhs) -> ilias::IoTask<int> {
+        started = true;
+        co_await ilias::sleep(1h);
+        co_return lhs + rhs;
+    };
+    bool completed = false;
+    ilias::TaskGroup<void> calls;
+    calls.spawn([&]() -> ilias::Task<void> {
+        auto result = co_await client->add(1, 2);
+        EXPECT_FALSE(result);
+        completed = true;
+    });
+    ASSERT_TRUE(waitUntil([&] { return started; }));
+    EXPECT_TRUE(client.shutdown().wait());
+    EXPECT_FALSE(client.isConnected());
+    calls.waitAll().wait();
+    EXPECT_TRUE(completed);
+    EXPECT_EQ(client.metrics().active, 0U);
+    // Both shutdown and close remain safe after the receiver has been drained.
+    EXPECT_TRUE(client.shutdown().wait());
+    client.close();
+    server.close();
+}
+
+TEST(NekoRpcBackend, ServerDestructionDrainsHandlersBeforeProtocolMetadata) {
+    using namespace std::chrono_literals;
+    ilias::PlatformContext context;
+    context.install();
+    auto state = std::make_shared<RpcLifetimeState>();
+    BinaryRpcBackend::Options options;
+    options.method_id = BinaryRpcBackend::MethodIdMode::Disable;
+    auto server = std::make_unique<RpcServer<BinaryRpcBackend, RpcLifetimeApi>>(context, options);
+    server->state = state;
+    server->probe = [state]() -> ilias::IoTask<int> {
+        struct HandlerGuard {
+            std::shared_ptr<RpcLifetimeState> state;
+            ~HandlerGuard() {
+                state->handlerDrained = true;
+                state->drainedBeforeProtocol = state->protocolAlive;
+            }
+        } guard{state};
+        state->handlerStarted = true;
+        co_await ilias::sleep(1h);
+        co_return 1;
+    };
+    RpcClient<BinaryRpcBackend, RpcLifetimeApi> client{context, options};
+    connectEndpoint(*server, client);
+    ilias::TaskGroup<void> calls;
+    calls.spawn([&]() -> ilias::Task<void> {
+        auto result = co_await client->probe();
+        EXPECT_FALSE(result);
+    });
+    ASSERT_TRUE(waitUntil([&] { return state->handlerStarted; }));
+    server.reset();
+    EXPECT_TRUE(state->handlerDrained);
+    EXPECT_TRUE(state->drainedBeforeProtocol);
+    EXPECT_FALSE(state->protocolAlive);
+    calls.waitAll().wait();
+    client.close();
 }
 
 TEST(NekoRpcBackend, ServerCloseInterruptsAPartialFrameBody) {

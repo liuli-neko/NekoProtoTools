@@ -319,19 +319,20 @@ protected:
     }
 
     void finalizeInit(typename Backend::Options options) {
-        mBackendContext = Backend::makeServerContext(std::move(options), methodDatas());
+        mBackendContext = Backend::makeServerContext(std::move(options), methodMetadata());
         configureExecution();
     }
 
 public:
     static constexpr int BuiltinMethodsCount = Reflect<RpcBuiltinMethods>::value_count;
 
+    // The borrowed context must cover the server, endpoint tasks and handlers.
     explicit RpcServerBase(ilias::IoContext& ctx) : RpcServerBase(ctx, typename Backend::Options{}) {}
 
     explicit RpcServerBase(ilias::IoContext& ctx, typename Backend::Options options)
         : mRpc(), mDispatcher(ctx), mBackendContext(), mScope() {
         initBuiltin();
-        mBackendContext = Backend::makeServerContext(std::move(options), methodDatas());
+        mBackendContext = Backend::makeServerContext(std::move(options), methodMetadata());
         configureExecution();
     }
 
@@ -353,8 +354,10 @@ public:
         // Cancel endpoint and request tasks before destroying their streams.
         // Closing a stream concurrently with a just-started read can race in
         // some endpoint implementations; framed reads are cancellation-aware.
-        mScope.stop();
-        wait().wait();
+        if (!mScope.empty()) {
+            mScope.stop();
+            wait().wait();
+        }
         for (auto& slot : endpoints) {
             slot->endpoint->close();
         }
@@ -414,21 +417,21 @@ public:
     }
 
     template <typename StreamT>
-        requires detail::RpcStreamBackend<Backend, StreamT>
+        requires detail::RpcServerStreamBackend<Backend, StreamT>
     void addEndpoint(StreamT stream, RpcPeerInfo peer = {}) {
-        if constexpr (requires(StreamT value, std::vector<MethodData> methods) {
+        if constexpr (requires(StreamT value, std::vector<RpcMethodMetadata> methods) {
                           {
                               Backend::makeServerEndpoint(std::move(value), std::move(methods), mBackendContext.options)
                           } -> MessageEndpoint;
                       }) {
-            addEndpoint(Backend::makeServerEndpoint(std::move(stream), methodDatas(), mBackendContext.options),
+            addEndpoint(Backend::makeServerEndpoint(std::move(stream), methodMetadata(), mBackendContext.options),
                         std::move(peer));
-        } else if constexpr (requires(StreamT value, std::vector<MethodData> methods) {
+        } else if constexpr (requires(StreamT value, std::vector<RpcMethodMetadata> methods) {
                                  {
                                      Backend::makeServerEndpoint(std::move(value), std::move(methods))
                                  } -> MessageEndpoint;
                              }) {
-            addEndpoint(Backend::makeServerEndpoint(std::move(stream), methodDatas()), std::move(peer));
+            addEndpoint(Backend::makeServerEndpoint(std::move(stream), methodMetadata()), std::move(peer));
         } else if constexpr (requires(StreamT value) {
                                  {
                                      Backend::makeEndpoint(std::move(value), mBackendContext.options)
@@ -516,6 +519,14 @@ public:
         if constexpr (sizeof...(ProtocolSets) > 0) {
             (this->registerProtocol(static_cast<ProtocolSets&>(*this)), ...);
             this->finalizeInit(std::move(options));
+        }
+    }
+
+    ~RpcServer() {
+        // Handlers borrow ProtocolSets metadata; finish them before base teardown.
+        try {
+            this->close();
+        } catch (...) {
         }
     }
 

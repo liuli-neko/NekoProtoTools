@@ -248,7 +248,12 @@ private:
     struct ActiveKey {
         const void* session = nullptr;
         Id id{};
-        auto operator<=>(const ActiveKey&) const = default;
+        auto operator<(const ActiveKey& other) const -> bool {
+            if (session != other.session) {
+                return std::less<const void*>{}(session, other.session);
+            }
+            return std::less<Id>{}(id, other.id);
+        }
     };
 
     enum class RequestState : std::uint8_t { Queued, Running };
@@ -834,6 +839,8 @@ private:
     template <typename T>
     auto handle(const typename Backend::DecodedRequest& request, typename Backend::ResponseValues& responses,
                 T& metadata) -> ilias::Task<void> {
+        static_assert(RpcBackendFor<Backend, T>,
+                      "RPC backend does not implement the typed operations required by this method");
         auto decoded_params = Backend::template decodeParams<T>(request, metadata);
 
         if (!decoded_params) {
@@ -860,6 +867,8 @@ private:
     template <typename T, typename Function>
     auto handleWithContext(const typename Backend::DecodedRequest& request, typename Backend::ResponseValues& responses,
                            T& metadata, Function& function, const RpcRequestContext& context) -> ilias::Task<void> {
+        static_assert(RpcBackendFor<Backend, T>,
+                      "RPC backend does not implement the typed operations required by this method");
         auto decodedParams = Backend::template decodeParams<T>(request, metadata);
         if (!decodedParams) {
             Backend::appendError(responses, request, decodedParams.error());
@@ -869,9 +878,11 @@ private:
         NEKO_LOG_TRACE("rpc", "rpc dispatcher context invoke begin: method={}", metadata.name());
         ilias::Result<typename T::RawReturnType, std::error_code> result = ilias::Err(ilias::SystemError::Canceled);
         try {
-            result = co_await std::apply(
-                [&](auto&&... args) { return function(context, std::forward<decltype(args)>(args)...); },
-                std::move(decodedParams.value()));
+            static_assert(requires {
+                { Backend::template invokeWithContext<T>(function, context, std::move(decodedParams.value())) }
+                    -> std::same_as<ilias::IoTask<typename T::RawReturnType>>;
+            }, "Context-aware RPC binding requires Backend::invokeWithContext for this method");
+            result = co_await Backend::template invokeWithContext<T>(function, context, std::move(decodedParams.value()));
         } catch (...) {
             NEKO_LOG_ERROR("rpc", "rpc context handler threw an exception: method={}", metadata.name());
             result = ilias::Err(RpcError::InternalError);

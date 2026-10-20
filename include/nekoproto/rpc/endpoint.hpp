@@ -10,8 +10,6 @@
 NEKO_BEGIN_EXPORT
 namespace nekoproto {
 
-namespace detail {
-
 struct RpcMethodMetadata {
     std::string name;
     std::string signature;
@@ -23,10 +21,33 @@ struct RpcMethodMetadata {
     bool usesContext = false;
 };
 
+namespace detail {
+
+using RpcMethodMetadata = ::nekoproto::RpcMethodMetadata;
+
 template <typename Backend, typename StreamT>
-concept RpcStreamBackend = CommunicationStream<StreamT> && requires(StreamT stream) {
-    { Backend::makeEndpoint(std::move(stream)) } -> MessageEndpoint;
-};
+concept RpcClientStreamBackend = CommunicationStream<StreamT> &&
+    (requires(StreamT stream, typename Backend::ClientContext& context) {
+        { Backend::makeClientEndpoint(std::move(stream), context.options) } -> MessageEndpoint;
+    } || requires(StreamT stream) {
+        { Backend::makeClientEndpoint(std::move(stream)) } -> MessageEndpoint;
+    } || requires(StreamT stream, typename Backend::ClientContext& context) {
+        { Backend::makeEndpoint(std::move(stream), context.options) } -> MessageEndpoint;
+    } || requires(StreamT stream) {
+        { Backend::makeEndpoint(std::move(stream)) } -> MessageEndpoint;
+    });
+
+template <typename Backend, typename StreamT>
+concept RpcServerStreamBackend = CommunicationStream<StreamT> &&
+    (requires(StreamT stream, std::vector<RpcMethodMetadata> methods, typename Backend::ServerContext& context) {
+        { Backend::makeServerEndpoint(std::move(stream), std::move(methods), context.options) } -> MessageEndpoint;
+    } || requires(StreamT stream, std::vector<RpcMethodMetadata> methods) {
+        { Backend::makeServerEndpoint(std::move(stream), std::move(methods)) } -> MessageEndpoint;
+    } || requires(StreamT stream, typename Backend::ServerContext& context) {
+        { Backend::makeEndpoint(std::move(stream), context.options) } -> MessageEndpoint;
+    } || requires(StreamT stream) {
+        { Backend::makeEndpoint(std::move(stream)) } -> MessageEndpoint;
+    });
 
 } // namespace detail
 

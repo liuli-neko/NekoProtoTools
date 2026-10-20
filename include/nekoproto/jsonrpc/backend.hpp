@@ -213,6 +213,21 @@ public:
         }
     }
 
+    template <typename Method, typename Function>
+    static auto invokeWithContext(
+        Function& function, const RpcRequestContext& context,
+        typename detail::JsonRpcMethodTraits<typename Method::MethodTraits>::ParamsTupleType params)
+        -> ilias::IoTask<typename Method::RawReturnType> {
+        using JsonTraits = detail::JsonRpcMethodTraits<typename Method::MethodTraits>;
+        if constexpr (JsonTraits::IsAutomaticExpansionAble || JsonTraits::IsTopTuple) {
+            co_return co_await function(context, std::move(params));
+        } else {
+            co_return co_await std::apply(
+                [&](auto&&... args) { return function(context, std::forward<decltype(args)>(args)...); },
+                std::move(params));
+        }
+    }
+
     template <typename Method>
     static void appendMethodReturn(ResponseValues& responses, const DecodedRequest& request,
                                    ilias::Result<typename Method::RawReturnType, std::error_code> result) {

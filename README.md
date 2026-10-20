@@ -70,4 +70,4 @@ xmake 用户可使用 `xmake f -m release --stdcxx=20 --enable_rapidjson=y && xm
 
 ## 稳定性范围
 
-当前是 0.4.1 开发版本，尚未发布正式的跨版本兼容承诺。反射的 `Meta<T>` / `Object` / `Reflect<T>`、Binary 和 ArgParser 是公开 API 的稳定候选；`NEKO_SERIALIZER` 保留给已有代码，新代码推荐 `Meta<T>`。Protocol 已有显式类型 ID 的跨进程验证，但自动 ID 取决于注册顺序。RPC、Communication 和第三方后端扩展仍是实验性接口。Binary 与 RPC 的 wire 格式均不承诺跨发布版本兼容；格式后端也不承诺输出文本完全相同。详情见 [序列化](docs/serialization.md)、[协议](docs/protocol.md) 和 [RPC](docs/rpc.md)。欢迎通过 issue 或 PR 反馈使用问题。
+当前是 0.4.1 开发版本，尚未发布正式的跨版本兼容承诺。反射的 `Meta<T>` / `Object` / `Reflect<T>`、Binary 和 ArgParser 是公开 API 的稳定候选；`NEKO_SERIALIZER` 保留给已有代码，新代码推荐 `Meta<T>`。Protocol 已有显式类型 ID 的跨进程验证，但自动 ID 取决于注册顺序。RPC、Communication 和第三方后端扩展仍是实验性接口。Binary 的 wire 格式尚未承诺跨发布版本兼容；RPC 以尽可能兼容为原则，版本不兼容通知固定使用 wire V1，后续协议变更时再决定历史版本兼容方式。格式后端不承诺输出文本完全相同。详情见 [序列化](docs/serialization.md)、[协议](docs/protocol.md) 和 [RPC](docs/rpc.md)。欢迎通过 issue 或 PR 反馈使用问题。

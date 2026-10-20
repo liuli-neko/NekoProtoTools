@@ -153,6 +153,10 @@ protected:
                       }) {
             ILIAS_CO_TRYV(co_await ensureReceiver(endpoint));
         } else {
+            auto protocolGuard = co_await mProtocolMutex.lock();
+            if (std::exchange(mResetPeerSession, false)) {
+                mPeerSession = Backend::makeClientPeerSession(mBackendContext);
+            }
             ILIAS_CO_TRYV(co_await Backend::ensureClientReady(mBackendContext, mPeerSession, *endpoint));
         }
         co_return endpoint;
@@ -180,6 +184,18 @@ protected:
         co_return {};
     }
 
+    auto handleClientControl(const std::shared_ptr<detail::IMessageEndpoint>& endpoint,
+                             std::span<const std::byte> message) -> ilias::IoTask<bool> {
+        if constexpr (requires { Backend::handleClientControl(mBackendContext, mPeerSession, *endpoint, message); }) {
+            auto sendGuard = co_await mSendMutex.lock();
+            co_return co_await Backend::handleClientControl(mBackendContext, mPeerSession, *endpoint, message);
+        } else if constexpr (requires { Backend::handleClientControl(mBackendContext, mPeerSession, message); }) {
+            co_return Backend::handleClientControl(mBackendContext, mPeerSession, message);
+        } else {
+            co_return false;
+        }
+    }
+
     auto receiveLoop(std::shared_ptr<detail::IMessageEndpoint> endpoint) -> ilias::Task<void> {
         while (true) {
             std::vector<std::byte> buffer;
@@ -197,7 +213,13 @@ protected:
                     co_return;
                 }
             }
-            if (Backend::handleClientControl(mBackendContext, mPeerSession, buffer)) {
+            auto control = co_await handleClientControl(endpoint, buffer);
+            if (!control) {
+                endpoint->close();
+                disconnect(endpoint, control.error());
+                co_return;
+            }
+            if (control.value()) {
                 continue;
             }
             auto id = Backend::responseId(buffer);
@@ -237,10 +259,18 @@ protected:
         if (isNotification) {
             co_return std::vector<std::byte>{};
         }
-        std::vector<std::byte> buffer;
-        ILIAS_CO_TRY(auto received, co_await endpoint->recv(buffer));
-        (void)received;
-        co_return buffer;
+        while (true) {
+            std::vector<std::byte> buffer;
+            ILIAS_CO_TRY(auto received, co_await endpoint->recv(buffer));
+            (void)received;
+            if constexpr (requires { Backend::validateMessage(mBackendContext, buffer); }) {
+                ILIAS_CO_TRYV(Backend::validateMessage(mBackendContext, buffer));
+            }
+            ILIAS_CO_TRY(auto control, co_await handleClientControl(endpoint, buffer));
+            if (!control) {
+                co_return buffer;
+            }
+        }
     }
 
     auto sendAndReceive(const std::shared_ptr<detail::IMessageEndpoint>& endpoint,
@@ -347,6 +377,8 @@ protected:
 
     template <typename T>
     void registerRpcMethod(T& metadata) {
+        static_assert(RpcBackendFor<Backend, std::decay_t<T>>,
+                      "RPC backend does not implement the typed operations required by this method");
         metadata = (typename std::decay_t<T>::CoroutinesFuncType)[this, &metadata](auto... args)
                        -> ilias::IoTask<typename std::decay_t<T>::RawReturnType> {
             return this->callRemoteWithOptions<T, decltype(args)...>(metadata, {},
@@ -355,7 +387,8 @@ protected:
     }
 
 public:
-    explicit RpcClientBase(ilias::IoContext& /*unused*/, typename Backend::Options options = {})
+    // The borrowed context must outlive this client and all tasks returned by it.
+    explicit RpcClientBase([[maybe_unused]] ilias::IoContext& ctx, typename Backend::Options options = {})
         : rpc(), mBackendContext(Backend::makeClientContext(std::move(options))),
           mPeerSession(Backend::makeClientPeerSession(mBackendContext)) {
         registerProtocol(rpc, "rpc");
@@ -383,7 +416,7 @@ public:
             endpoint->close();
         }
         failAllPending(Backend::clientNotInitError());
-        if (receiverScope != nullptr) {
+        if (receiverScope != nullptr && !receiverScope->empty()) {
             receiverScope->stop();
             receiverScope->waitAll().wait();
         }
@@ -399,14 +432,17 @@ public:
     }
 
     auto shutdown() -> ilias::IoTask<void> {
-        auto endpoint = mEndpoint;
+        auto endpoint      = mEndpoint;
+        auto receiverScope = mReceiverScope;
+        std::error_code error;
         if (endpoint != nullptr) {
-            auto sendGuard = co_await mSendMutex.lock();
-            std::error_code error;
-            if (auto ret = co_await endpoint->flush(); !ret) {
-                error = ret.error();
-            } else if (auto ret = co_await endpoint->shutdown(); !ret) {
-                error = ret.error();
+            {
+                auto sendGuard = co_await mSendMutex.lock();
+                if (auto ret = co_await endpoint->flush(); !ret) {
+                    error = ret.error();
+                } else if (auto ret = co_await endpoint->shutdown(); !ret) {
+                    error = ret.error();
+                }
             }
             endpoint->close();
             if (mEndpoint == endpoint) {
@@ -415,9 +451,12 @@ public:
                 mReceiverStarted = false;
             }
             failAllPending(error ? error : Backend::clientNotInitError());
-            if (error) {
-                co_return ilias::Err(error);
-            }
+        }
+        if (receiverScope != nullptr) {
+            co_await (receiverScope->shutdown() | ilias::unstoppable);
+        }
+        if (error) {
+            co_return ilias::Err(error);
         }
         co_return {};
     }
@@ -478,7 +517,7 @@ public:
     }
 
     template <typename StreamT>
-        requires detail::RpcStreamBackend<Backend, StreamT>
+        requires detail::RpcClientStreamBackend<Backend, StreamT>
     void setEndpoint(StreamT stream) {
         if constexpr (requires(StreamT value) {
                           { Backend::makeClientEndpoint(std::move(value), mBackendContext.options) } -> MessageEndpoint;
@@ -525,6 +564,8 @@ public:
     template <typename T, typename... Args>
     auto callRemoteWithOptions(T& metadata, RpcCallOptions options, Args... args)
         -> ilias::IoTask<typename std::decay_t<T>::RawReturnType> {
+        static_assert(RpcBackendFor<Backend, std::decay_t<T>>,
+                      "RPC backend does not implement the typed operations required by this method");
         using RetType = typename std::decay_t<T>::RawReturnType;
 
         struct CompletionGuard {
@@ -676,6 +717,14 @@ public:
         : RpcClientBase<Backend>(ctx, std::move(options)), ProtocolSets()... {
         if constexpr (sizeof...(ProtocolSets) > 0) {
             (this->registerProtocol(static_cast<ProtocolSets&>(*this)), ...);
+        }
+    }
+
+    ~RpcClient() {
+        // Drain internal tasks before the ProtocolSets base objects are destroyed.
+        try {
+            this->close();
+        } catch (...) {
         }
     }
 
