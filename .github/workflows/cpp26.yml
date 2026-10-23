@@ -1,4 +1,4 @@
-name: Reflection and modules
+name: C++26 native reflection and modules
 on:
   push:
     branches: [main, master, dev]
@@ -8,34 +8,22 @@ permissions:
   contents: read
 jobs:
   gcc16:
+    name: Native reflection and modules (Linux, GCC16, C++26)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - {std: 20, backend: legacy, native: 'OFF'}
-          - {std: 23, backend: legacy, native: 'OFF'}
-          - {std: 26, backend: legacy, native: 'OFF'}
-          - {std: 26, backend: native, native: 'ON'}
     container:
       image: public.ecr.aws/docker/library/gcc@sha256:17043c23ec2ad97fc3beca18da77275d26be5db5cd70ea0a5d73200e21a8e999
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Install build tools
         run: apt-get update && apt-get install -y --no-install-recommends cmake ninja-build
-      - name: Build enabled components and their modules
+      - name: Build and test native reflection and modules
         run: |
-          cmake -S . -B /tmp/neko-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=${{ matrix.std }} -DNEKO_PROTO_REFLECTION_BACKEND=${{ matrix.backend }} -DNEKO_PROTO_BUILD_MODULES=ON -DNEKO_PROTO_BUILD_TESTS=ON -DNEKO_PROTO_ENABLE_RAPIDJSON=ON -DNEKO_PROTO_ENABLE_PUGIXML=ON -DNEKO_PROTO_ENABLE_LIBFYAML=ON -DNEKO_PROTO_ENABLE_TOMLPLUSPLUS=ON -DNEKO_PROTO_ENABLE_COMMUNICATION=ON -DNEKO_PROTO_ENABLE_JSONRPC=ON -DNEKO_PROTO_ENABLE_RPC_TRACE=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON -DILIAS_TLS=OFF
+          cmake -S . -B /tmp/neko-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=26 -DNEKO_PROTO_REFLECTION_BACKEND=native -DNEKO_PROTO_BUILD_MODULES=ON -DNEKO_PROTO_BUILD_TESTS=ON -DNEKO_PROTO_ENABLE_RAPIDJSON=ON -DNEKO_PROTO_ENABLE_PUGIXML=ON -DNEKO_PROTO_ENABLE_LIBFYAML=ON -DNEKO_PROTO_ENABLE_TOMLPLUSPLUS=ON -DNEKO_PROTO_ENABLE_COMMUNICATION=ON -DNEKO_PROTO_ENABLE_JSONRPC=ON -DNEKO_PROTO_ENABLE_RPC_TRACE=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON -DILIAS_TLS=OFF
           cmake --build /tmp/neko-build --parallel 2
           ctest --test-dir /tmp/neko-build --output-on-failure
           cmake --install /tmp/neko-build --prefix /tmp/neko-install
-      - name: Installed header consumer
-        run: |
-          cmake -S tests/cmake/consumer -B /tmp/neko-include-consumer -G Ninja -DCMAKE_CXX_STANDARD=${{ matrix.std }} -DCMAKE_PREFIX_PATH=/tmp/neko-install -DNEKO_PROTO_FETCH_MISSING_DEPS=ON
-          cmake --build /tmp/neko-include-consumer --parallel 2
-          ctest --test-dir /tmp/neko-include-consumer --output-on-failure
       - name: Installed module consumers
         run: |
-          cmake -S tests/cmake/module-consumer -B /tmp/neko-module-consumer -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=${{ matrix.std }} -DCMAKE_PREFIX_PATH=/tmp/neko-install -DNEKO_TEST_NATIVE=${{ matrix.native }} -DNEKO_PROTO_FETCH_MISSING_DEPS=ON
+          cmake -S tests/cmake/module-consumer -B /tmp/neko-module-consumer -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=26 -DCMAKE_PREFIX_PATH=/tmp/neko-install -DNEKO_TEST_NATIVE=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON -DILIAS_TLS=OFF
           cmake --build /tmp/neko-module-consumer --parallel 2
           ctest --test-dir /tmp/neko-module-consumer --output-on-failure

@@ -13,8 +13,6 @@
 #include <ilias/task.hpp>
 #include <system_error>
 
-using namespace ilias;
-
 namespace nekoproto {
 
 template class NEKO_PROTO_API detail::ProtoBase<ProtocolTable, BinarySerializer>;

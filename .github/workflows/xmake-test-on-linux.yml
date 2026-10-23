@@ -11,45 +11,28 @@ permissions:
 
 env:
   MIN_CLANG_VERSION: 19
+  PRIMARY_CXX_STANDARD: 23
 
 jobs:
   build-and-test:
     name: Build and test (C++${{ matrix.stdcxx }}, ${{ matrix.kind }}, ${{ matrix.mode }})
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - stdcxx: 20
+          - stdcxx: 23
             kind: shared
             mode: coverage
             cc: gcc
             cxx: g++
             coverage: true
-            experimental: false
           - stdcxx: 20
             kind: static
             mode: debug
             cc: gcc
             cxx: g++
             coverage: false
-            experimental: false
-          - stdcxx: 23
-            kind: static
-            mode: debug
-            cc: gcc
-            cxx: g++
-            coverage: false
-            experimental: false
-          # Keep C++26 non-blocking until compiler and library support settles.
-          # - stdcxx: 26
-          #   kind: shared
-          #   mode: debug
-          #   cc: gcc-14
-          #   cxx: g++-14
-          #   coverage: false
-          #   experimental: true
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Update submodules
@@ -58,10 +41,9 @@ jobs:
       uses: xmake-io/github-action-setup-xmake@3a1a5dddfc7fa625d9a698738334bf55655a861a # v1.2.5
       with:
         xmake-version: 3.0.9
-    - name: Update apt
-      run: sudo apt update -y
     - name: Install lcov
-      run: sudo apt install lcov -y
+      if: ${{ matrix.coverage }}
+      run: sudo apt-get update && sudo apt-get install -y lcov
     - name: Configure
       run: xmake f -m ${{ matrix.mode }} -k ${{ matrix.kind }} --stdcxx=${{ matrix.stdcxx }} --cc=${{ matrix.cc }} --cxx=${{ matrix.cxx }} --enable_simdjson=y --enable_protocol=y --enable_rapidjson=y --enable_communication=y --enable_jsonrpc=y --enable_fmt=y --enable_pugixml=y --enable_libfyaml=y --enable_tomlplusplus=y --enable_tests=y --ccache=n -vy
     - name: Build
@@ -82,12 +64,11 @@ jobs:
         verbose: true
 
   sanitizers:
-    name: ${{ matrix.mode }} focused regression (supported Clang, C++${{ matrix.stdcxx }})
+    name: ${{ matrix.mode }} focused regression (Linux, C++23)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        stdcxx: [20, 23]
         mode: [asan, ubsan, tsan]
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -113,7 +94,7 @@ jobs:
           "clang++-${MIN_CLANG_VERSION}" --version
         fi
     - name: Configure
-      run: xmake f -m ${{ matrix.mode }} -k static --stdcxx=${{ matrix.stdcxx }} --cc=${CC} --cxx=${CXX} --ld=${CXX} --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --ccache=n -vy
+      run: xmake f -m ${{ matrix.mode }} -k static --stdcxx=${PRIMARY_CXX_STANDARD} --cc=${CC} --cxx=${CXX} --ld=${CXX} --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --ccache=n -vy
     - name: Build serializer regression
       if: ${{ matrix.mode != 'tsan' }}
       run: xmake build test_binary_serializer
@@ -126,12 +107,8 @@ jobs:
       run: xmake run test_neko_rpc_backend
 
   fuzz-smoke:
-    name: Fuzz smoke (supported Clang, ASan+UBSan, C++${{ matrix.stdcxx }})
+    name: Fuzz smoke (Linux, C++23, ASan+UBSan)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        stdcxx: [20, 23]
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
     - name: Update submodules
@@ -156,7 +133,7 @@ jobs:
           "clang++-${MIN_CLANG_VERSION}" --version
         fi
     - name: Configure
-      run: xmake f -m debug -k static --stdcxx=${{ matrix.stdcxx }} --cc=${CC} --cxx=${CXX} --ld=${CXX} --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --fuzzer_test=y --ccache=n -vy
+      run: xmake f -m debug -k static --stdcxx=${PRIMARY_CXX_STANDARD} --cc=${CC} --cxx=${CXX} --ld=${CXX} --enable_protocol=y --enable_rapidjson=y --enable_jsonrpc=y --enable_tests=y --fuzzer_test=y --ccache=n -vy
     - name: Build fuzz targets
       run: |
         xmake build test_json_proto

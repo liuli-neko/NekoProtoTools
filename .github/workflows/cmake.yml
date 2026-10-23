@@ -1,4 +1,4 @@
-name: CMake integration
+name: CMake package integration
 
 on:
   push:
@@ -10,64 +10,27 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            compiler: gcc
-            libfyaml: ON
-            rpc: ON
-            stdcxx: 20
-          - os: ubuntu-latest
-            compiler: gcc
-            libfyaml: ON
-            rpc: ON
-            stdcxx: 23
-          - os: ubuntu-latest
-            compiler: clang
-            libfyaml: ON
-            rpc: OFF
-            stdcxx: 20
-          - os: windows-latest
-            compiler: msvc
-            libfyaml: OFF
-            rpc: ON
-            stdcxx: 20
-          - os: windows-latest
-            compiler: msvc
-            libfyaml: OFF
-            rpc: ON
-            stdcxx: 23
-    defaults:
-      run:
-        shell: bash
+  integration:
+    # Platform/version coverage lives in the xmake workflows.
+    name: Installed and FetchContent consumers (Linux, C++23)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Select Clang
-        if: matrix.compiler == 'clang'
-        run: |
-          echo "CC=clang" >> "$GITHUB_ENV"
-          echo "CXX=clang++" >> "$GITHUB_ENV"
       - name: Configure
-        run: cmake -S . -B build -DNEKO_PROTO_BUILD_TESTS=ON -DNEKO_PROTO_ENABLE_RAPIDJSON=ON -DNEKO_PROTO_ENABLE_YYJSON=ON -DNEKO_PROTO_ENABLE_SIMDJSON=ON -DNEKO_PROTO_ENABLE_PUGIXML=ON -DNEKO_PROTO_ENABLE_YAMLCPP=ON -DNEKO_PROTO_ENABLE_LIBFYAML=${{ matrix.libfyaml }} -DNEKO_PROTO_ENABLE_TOMLPLUSPLUS=ON -DNEKO_PROTO_ENABLE_COMMUNICATION=${{ matrix.rpc }} -DNEKO_PROTO_ENABLE_JSONRPC=${{ matrix.rpc }} -DNEKO_PROTO_ENABLE_RPC_TRACE=${{ matrix.rpc }} -DCMAKE_CXX_STANDARD=${{ matrix.stdcxx }} -DCMAKE_CXX_STANDARD_REQUIRED=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DNEKO_PROTO_ENABLE_RAPIDJSON=ON -DNEKO_PROTO_ENABLE_YYJSON=ON -DNEKO_PROTO_ENABLE_SIMDJSON=ON -DNEKO_PROTO_ENABLE_PUGIXML=ON -DNEKO_PROTO_ENABLE_YAMLCPP=ON -DNEKO_PROTO_ENABLE_LIBFYAML=ON -DNEKO_PROTO_ENABLE_TOMLPLUSPLUS=ON -DNEKO_PROTO_ENABLE_COMMUNICATION=ON -DNEKO_PROTO_ENABLE_JSONRPC=ON -DNEKO_PROTO_ENABLE_RPC_TRACE=ON -DCMAKE_CXX_STANDARD=23 -DCMAKE_CXX_STANDARD_REQUIRED=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON -DILIAS_TLS=OFF
       - name: Build
-        run: cmake --build build --config Release --parallel 2
-      - name: Run examples
-        run: ctest --test-dir build -C Release --output-on-failure
+        run: cmake --build build --parallel 2
       - name: Install
-        run: cmake --install build --config Release --prefix "$RUNNER_TEMP/neko-install"
+        run: cmake --install build --prefix "$RUNNER_TEMP/neko-install"
       - name: Configure installed consumer
-        run: cmake -S tests/cmake/consumer -B "$RUNNER_TEMP/neko-consumer" -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/neko-install" -DCMAKE_CXX_STANDARD=${{ matrix.stdcxx }} -DCMAKE_CXX_STANDARD_REQUIRED=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON
+        run: cmake -S tests/cmake/consumer -B "$RUNNER_TEMP/neko-consumer" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/neko-install" -DCMAKE_CXX_STANDARD=23 -DCMAKE_CXX_STANDARD_REQUIRED=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON -DILIAS_TLS=OFF
       - name: Build installed consumer
-        run: cmake --build "$RUNNER_TEMP/neko-consumer" --config Release
+        run: cmake --build "$RUNNER_TEMP/neko-consumer" --parallel 2
       - name: Run installed consumer
-        run: ctest --test-dir "$RUNNER_TEMP/neko-consumer" -C Release --output-on-failure
+        run: ctest --test-dir "$RUNNER_TEMP/neko-consumer" --output-on-failure
       - name: Configure FetchContent consumer
-        run: cmake -S tests/cmake/consumer -B "$RUNNER_TEMP/neko-fetch" -DNEKO_USE_FETCHCONTENT=ON -DNEKO_SOURCE_DIR="$GITHUB_WORKSPACE" -DNEKO_PROTO_ENABLE_RAPIDJSON=ON -DNEKO_PROTO_ENABLE_YYJSON=ON -DNEKO_PROTO_ENABLE_SIMDJSON=ON -DNEKO_PROTO_ENABLE_PUGIXML=ON -DNEKO_PROTO_ENABLE_YAMLCPP=ON -DNEKO_PROTO_ENABLE_LIBFYAML=${{ matrix.libfyaml }} -DNEKO_PROTO_ENABLE_TOMLPLUSPLUS=ON -DNEKO_PROTO_ENABLE_COMMUNICATION=${{ matrix.rpc }} -DNEKO_PROTO_ENABLE_JSONRPC=${{ matrix.rpc }} -DNEKO_PROTO_ENABLE_RPC_TRACE=${{ matrix.rpc }} -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/neko-install" -DCMAKE_CXX_STANDARD=${{ matrix.stdcxx }} -DCMAKE_CXX_STANDARD_REQUIRED=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON
+        run: cmake -S tests/cmake/consumer -B "$RUNNER_TEMP/neko-fetch" -DCMAKE_BUILD_TYPE=Release -DNEKO_USE_FETCHCONTENT=ON -DNEKO_SOURCE_DIR="$GITHUB_WORKSPACE" -DNEKO_PROTO_ENABLE_RAPIDJSON=ON -DCMAKE_CXX_STANDARD=23 -DCMAKE_CXX_STANDARD_REQUIRED=ON -DNEKO_PROTO_FETCH_MISSING_DEPS=ON
       - name: Build FetchContent consumer
-        run: cmake --build "$RUNNER_TEMP/neko-fetch" --config Release
+        run: cmake --build "$RUNNER_TEMP/neko-fetch" --parallel 2
       - name: Run FetchContent consumer
-        run: ctest --test-dir "$RUNNER_TEMP/neko-fetch" -C Release --output-on-failure
+        run: ctest --test-dir "$RUNNER_TEMP/neko-fetch" --output-on-failure

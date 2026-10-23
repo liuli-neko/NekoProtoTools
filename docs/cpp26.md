@@ -132,4 +132,4 @@ C++ 宏不随 import 导出。需要 tag property 或 `NEKO_SERIALIZER` 宏时�
 
 0.4.1 移除了三个纯转发头：tags 使用 `<nekoproto/reflection/tags.hpp>`，编译期字符串使用 `<nekoproto/global/string_literal.hpp>`，文本格式化使用 `<nekoproto/serialization/to_string.hpp>`。需要全部已启用格式时包含 `<nekoproto/serialization.hpp>`。
 
-正式回归在 `tests/cpp26` 和 `tests/modules`，由 CTest / `xmake test` 执行。安装消费工程在 `tests/cmake/module-consumer` 和 `tests/xmake/module-consumer`。CI 固定 GCC 镜像，并覆盖 C++20/23/26 legacy 与 C++26 native。编译成本对照复用现有 [编译基准](../benchmarks/compile_time/README.md)，不为原生能力设置性能准入门槛。
+正式回归在 `tests/cpp26` 和 `tests/modules`，由 CTest / `xmake test` 执行。安装消费工程在 `tests/cmake/module-consumer` 和 `tests/xmake/module-consumer`。CI 的常规构建与运行测试覆盖 Linux/GCC、Windows/MSVC、Windows/clang-cl 的 C++20/23；coverage、ASan、UBSan、TSan、fuzz 和 CMake 包消费检查集中在 Linux/C++23。模块构建与安装消费合并到唯一的 GCC16/C++26 native 任务，不再重复 legacy 矩阵。编译成本对照复用现有 [编译基准](../benchmarks/compile_time/README.md)，不为原生能力设置性能准入门槛。
