@@ -15,6 +15,7 @@ local native = get_config("reflection_backend") ~= "legacy" and
                (has_config("has_native_reflection") or has_config("has_native_reflection_flag"))
 module_test("module_consumer", {"module_main.cpp", "module_header.cpp"}, {"NekoReflectionModule"}, native and {"NEKO_TEST_NATIVE"} or {})
 module_test("module_pure", {"module_pure.cpp"}, {"NekoReflectionModule"})
+module_test("module_type_detection", {"../cpp26/type_detection.cpp"}, {"NekoReflectionModule"}, {"NEKO_TEST_TYPE_DETECTION_MODULE"})
 local components = {"Serializer", "ArgParser"}
 if has_config("enable_protocol") then table.insert(components, "Protocol") end
 if has_config("enable_communication") or (has_config("enable_jsonrpc") and json_serializer_enabled()) then

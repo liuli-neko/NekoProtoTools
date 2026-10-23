@@ -10,6 +10,7 @@ local function reflection_test(name, source, defines, fails)
     target_end()
 end
 reflection_test("reflection_public_api", "public_api.cpp")
+reflection_test("reflection_type_detection", "type_detection.cpp")
 if tonumber(get_config("stdcxx")) == 26 then
     for _, count in ipairs({64, 65, 128, 129}) do
         if count ~= 129 or get_config("reflection_backend") == "native" or

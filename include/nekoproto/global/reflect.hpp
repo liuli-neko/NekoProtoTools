@@ -94,7 +94,16 @@ inline constexpr size_t member_count_v = memberCount<T>();
 #endif
 
 template <typename T>
-inline constexpr bool can_unwrap_v = std::is_aggregate_v<std::remove_cv_t<T>> && !IsStdArray<T>::value;
+inline constexpr bool can_unwrap_v = [] {
+    using U = std::remove_cvref_t<T>;
+    // is_aggregate requires a complete class. Arrays and unions cannot use the
+    // object member/name discovery contract even though they are aggregates.
+    if constexpr (!std::is_class_v<U> || !requires { sizeof(U); }) {
+        return false;
+    } else {
+        return std::is_aggregate_v<U> && !IsStdArray<U>::value;
+    }
+}();
 
 /**
  * @brief Convert the struct reference to tuple

@@ -76,6 +76,8 @@ static_assert(NamedReflectable<ExplicitUser>);
 static_assert(NamedReflectable<TaggedUser>);
 static_assert(!NamedReflectable<Status>);
 static_assert(!NamedReflectable<std::tuple<int, float>>);
+static_assert(!NamedReflectable<int>);
+static_assert(!NamedReflectable<void>);
 
 static_assert(TupleLike<std::tuple<int, std::string>>);
 static_assert(!TupleLike<AggregateUser>);

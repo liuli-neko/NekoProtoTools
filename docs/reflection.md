@@ -2,6 +2,10 @@
 
 公共入口为 `<nekoproto/reflect.hpp>`；业务类型可以通过 `nekoproto::Meta<T>` 非侵入地声明 `Object(...)`。`Reflect<T>::forEach` 可按字段遍历，`Reflect<T>::names()` 和 `value_count` 可读取字段信息。字段 tags 用于格式、CLI 等不同调用上下文。
 
+`Reflectable` / `is_reflectable_v`、`NamedReflectable` / `has_named_reflection_v`、`TupleLike` / `is_tuple_v` 和 `OptionalLike` / `is_optional_v` 均可用于泛型约束，统一忽略顶层 cv/ref。`void`、基本类型、指针、函数、数组和未完成类型可以安全参与检测；不满足相应条件时返回 `false`。枚举满足 `Reflectable`，不满足 `NamedReflectable`。`is_optional_v` 还识别含 `std::monostate` 的 variant；`OptionalLike` 检测的是 optional 操作接口。
+
+反射能力检测只选择 metadata / 后端，不展开字段。错误的自定义 metadata 检测为 `false`；实际使用 `Reflect<T>` 时仍报告声明错误。旧式自动展开的复杂聚合仍需满足结构化绑定的要求，字段与 tags 的完整校验发生在实际反射时。`Reflect<T>::hasMember<P>()` 对非成员对象指针或不属于该类型的成员返回 `false`。
+
 可编译的最小示例：[examples/reflection.cpp](../examples/reflection.cpp)；复用同一份 metadata 的示例：[examples/all_in_one.cpp](../examples/all_in_one.cpp)。
 
 C++26 接入约定：默认假设每个类型只采用一种反射声明方式。若多种来源并存，优先级固定为：

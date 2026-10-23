@@ -45,7 +45,14 @@ struct LegacyReflectionProvider {
         }
     }
 
-    using accessors_type = std::decay_t<decltype(accessors(std::declval<context_type&>()))>;
+    static constexpr auto accessorType() {
+        if constexpr (has_values) {
+            return std::type_identity<std::decay_t<decltype(accessors(std::declval<context_type&>()))>>{};
+        } else {
+            return std::type_identity<std::tuple<>>{};
+        }
+    }
+    using accessors_type = typename decltype(accessorType())::type;
 
     static constexpr std::size_t value_count = has_values ? reflect_accessor_count_v<accessors_type> : 0;
 
@@ -126,10 +133,10 @@ struct LegacyReflectionProvider {
     }
     template <auto MemberPtr>
     static consteval auto memberIndex() noexcept -> std::size_t {
-        if constexpr (!LegacyReflectionProvider::has_values) {
+        if constexpr (!LegacyReflectionProvider::has_values ||
+                      !std::is_member_object_pointer_v<decltype(MemberPtr)>) {
             return static_cast<std::size_t>(-1);
-        } else if constexpr (std::is_member_object_pointer_v<decltype(MemberPtr)> &&
-                             !std::is_base_of_v<traits::MemberClassOfT<decltype(MemberPtr)>, T>) {
+        } else if constexpr (!std::is_base_of_v<traits::MemberClassOfT<decltype(MemberPtr)>, T>) {
             return static_cast<std::size_t>(-1);
         } else if constexpr (LegacyReflectionProvider::provider_kind == detail::ReflectProviderKind::ExplicitMetadata) {
             constexpr auto accs = LegacyReflectionProvider::accessors();

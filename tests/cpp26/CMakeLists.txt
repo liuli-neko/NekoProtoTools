@@ -5,6 +5,7 @@ function(neko_reflection_test name source)
 endfunction()
 
 neko_reflection_test(reflection_public_api public_api.cpp)
+neko_reflection_test(reflection_type_detection type_detection.cpp)
 if(CMAKE_CXX_STANDARD GREATER_EQUAL 26)
     foreach(count IN ITEMS 64 65 128 129)
         if(count EQUAL 129 AND NOT NEKO_PROTO_REFLECTION_BACKEND STREQUAL "native" AND

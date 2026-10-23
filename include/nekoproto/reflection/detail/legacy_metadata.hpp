@@ -192,14 +192,16 @@ struct NativeReflectionFieldTags {
 template <typename T, std::size_t I>
 inline constexpr auto native_reflection_field_tags_v = NativeReflectionFieldTags<T, I>::value;
 
-template <typename T>
+template <typename T, bool Diagnose = true>
 constexpr auto getReflectProviderKind() noexcept -> ReflectProviderKind {
     if constexpr (std::is_enum_v<T>) {
         return ReflectProviderKind::Error; // enum concepts retain their existing semantics
     } else if constexpr (is_ref_by_local_v<T> || is_ref_by_meta_v<T>) {
         return ReflectProviderKind::ExplicitMetadata;
     } else if constexpr (requires { typename T::Neko; } || requires { sizeof(Meta<T>); }) {
-        static_assert(nekoproto::always_false_v<T>, "invalid custom reflection metadata; lower-priority sources are not used");
+        if constexpr (Diagnose) {
+            static_assert(nekoproto::always_false_v<T>, "invalid custom reflection metadata; lower-priority sources are not used");
+        }
         return ReflectProviderKind::Error;
     } else if constexpr (native_reflection_provider_available_v<T>) {
         return ReflectProviderKind::NativeReflection;

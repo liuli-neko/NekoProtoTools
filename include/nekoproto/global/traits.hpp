@@ -97,9 +97,17 @@ using RefType = typename std::conditional<
     typename std::conditional<std::is_lvalue_reference<T>::value, T, typename std::decay<T>::type>::type>::type;
 
 template <typename T>
-inline constexpr bool is_string_like_v =
-    std::is_same_v<std::remove_cvref_t<T>, std::string> || std::is_same_v<std::remove_cvref_t<T>, std::string_view> ||
-    std::is_convertible_v<std::remove_cvref_t<T>, std::string_view>;
+inline constexpr bool is_string_like_v = [] {
+    using U = std::remove_cvref_t<T>;
+    // Conversion traits require complete class/union operands. An incomplete
+    // type can still be queried safely, but has no known string conversion.
+    if constexpr ((std::is_class_v<U> || std::is_union_v<U>) && !requires { sizeof(U); }) {
+        return false;
+    } else {
+        return std::is_same_v<U, std::string> || std::is_same_v<U, std::string_view> ||
+               std::is_convertible_v<U, std::string_view>;
+    }
+}();
 
 template <typename T, bool OptionalLikeValue = OptionalLikeType<std::remove_cvref_t<T>>::value>
 struct UnwrappedOptionalLikeType {

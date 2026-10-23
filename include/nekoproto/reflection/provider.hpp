@@ -17,7 +17,33 @@ struct ReflectProvider : SelectedReflectionProvider<T> {
     static constexpr auto kind = legacy_kind; // compatibility with legacy introspection
 };
 
-template <typename T> concept HasNamesMeta = ReflectProvider<T>::has_names;
-template <typename T> concept HasValuesMeta = ReflectProvider<T>::has_values;
+// Capability queries must not instantiate the provider's accessor tuple: doing
+// so can form void&, instantiate an unsupported structured binding, or diagnose
+// invalid metadata while merely testing a constraint. Actual reflection still
+// uses the diagnostic provider selection above.
+template <typename T>
+struct ReflectionCapabilities {
+    using context_type = std::remove_cvref_t<T>;
+    static constexpr auto kind = getReflectProviderKind<context_type, false>();
+    static constexpr bool has_values = [] {
+        if constexpr (kind == ReflectProviderKind::NativeReflection) {
+            return NativeReflectionProvider<context_type>::has_values;
+        } else {
+            return kind != ReflectProviderKind::Error;
+        }
+    }();
+    static constexpr bool has_names = [] {
+        if constexpr (kind == ReflectProviderKind::NativeReflection) {
+            return NativeReflectionProvider<context_type>::has_names;
+        } else if constexpr (has_values) {
+            return HasLegacyNamesMeta<context_type>;
+        } else {
+            return false;
+        }
+    }();
+};
+
+template <typename T> concept HasNamesMeta = ReflectionCapabilities<T>::has_names;
+template <typename T> concept HasValuesMeta = ReflectionCapabilities<T>::has_values;
 }
 NEKO_END_EXPORT
