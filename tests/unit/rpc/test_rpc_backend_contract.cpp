@@ -203,3 +203,5 @@ TEST(RpcBackendContract, StreamAdaptersAreOptionalAndSelectedPerRole) {
     EXPECT_FALSE((detail::RpcServerStreamBackend<OpaqueBackend, ilias::DuplexStream>));
     EXPECT_TRUE(RpcBackend<OpaqueBackend>);
 }
+
+#include "../common/common_main.cpp.in"
