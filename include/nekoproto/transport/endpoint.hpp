@@ -4,7 +4,13 @@
 #if !defined(NEKO_BUILDING_MODULE) || NEKO_BUILDING_MODULE == NEKO_MODULE_TRANSPORT
 
 #ifndef NEKO_BUILDING_MODULE
-#include <ilias.hpp>
+// Include only the runtime components used by transport and RPC. Ilias 0.5.1's
+// umbrella header also pulls in fs/file.hpp with non-inline OpenOptions constants.
+#include <ilias/io.hpp>
+#include <ilias/net.hpp>
+#include <ilias/platform.hpp>
+#include <ilias/sync.hpp>
+#include <ilias/task.hpp>
 #endif
 #include "nekoproto/serialization.hpp"
 

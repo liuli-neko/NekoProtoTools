@@ -137,7 +137,7 @@ struct RpcCallTraceSpan {
     }
 };
 
-class RpcTraceRegistry {
+class NEKO_PROTO_API RpcTraceRegistry {
 public:
     using CancelHook = std::function<bool(const void* session, std::string_view requestId)>;
 

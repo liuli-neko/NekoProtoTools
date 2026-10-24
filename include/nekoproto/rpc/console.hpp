@@ -13,7 +13,7 @@ namespace nekoproto {
 
 #if defined(NEKO_PROTO_RPC_TRACE)
 
-class RpcTracingWebUi {
+class NEKO_PROTO_API RpcTracingWebUi {
 public:
     /**
      * @brief Construct a new Rpc Tracing Web Ui object
