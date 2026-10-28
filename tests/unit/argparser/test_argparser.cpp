@@ -1645,4 +1645,44 @@ TEST(ArgParser, BuiltinConfigOptionNamesYieldToUserOptions) {
     EXPECT_EQ(help.find("import options from a binary file"), std::string::npos);
 }
 
+struct ForwardDeclaredSubCommand {
+    std::string host = "localhost";
+    int port = 8080;
+};
+
+struct ForwardParentCommand {
+    argparser::ArgCommand<1> stdio;
+    ForwardDeclaredSubCommand sub;
+};
+
+template <>
+struct nekoproto::Meta<ForwardParentCommand, void> {
+    constexpr static auto value =
+        Object("stdio",
+               makeTags<arg_help<"stdio">, ArgTags{.command = true}>(&ForwardParentCommand::stdio),
+               "sub",
+               makeTags<arg_help<"sub">, ArgTags{.command = true}>(&ForwardParentCommand::sub));
+};
+
+template <>
+struct nekoproto::Meta<ForwardDeclaredSubCommand, void> {
+    constexpr static auto value =
+        Object("host", &ForwardDeclaredSubCommand::host,
+               "port", &ForwardDeclaredSubCommand::port);
+};
+
+TEST(ArgParser, SubCommandMetadataDefinedAfterParentCommand) {
+    static_assert(nekoproto::detail::is_ref_by_meta_v<ForwardDeclaredSubCommand>);
+    static_assert(nekoproto::detail::is_ref_by_meta_v<ForwardParentCommand>);
+
+    ArgParserConfig config;
+    const char* argv[] = {"prog", "sub", "--host", "127.0.0.1", "--port", "9000"};
+    auto result = parser<ForwardParentCommand>(6, argv, config);
+    ASSERT_TRUE(result.has_value());
+    ASSERT_EQ(result->index(), 1);
+    auto sub = std::get<ForwardDeclaredSubCommand>(*result);
+    EXPECT_EQ(sub.host, "127.0.0.1");
+    EXPECT_EQ(sub.port, 9000);
+}
+
 #include "../common/common_main.cpp.in" // IWYU pragma: export

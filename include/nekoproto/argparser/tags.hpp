@@ -176,8 +176,6 @@ struct ArgTags {
                           "argparser repeatable tags require a std::vector field; vectors are repeatable by default");
         }
         if constexpr (is_command) {
-            static_assert(detail::IsCommandType<raw_t>::value || nekoproto::detail::HasValuesMeta<raw_t>,
-                          "argparser command tags require a reflected command struct or ArgCommand placeholder");
             static_assert(!is_flag && !is_position && !has_range && !has_required && !has_repeat,
                           "argparser command tags cannot also be flag, positional, range, required, or repeatable");
         }

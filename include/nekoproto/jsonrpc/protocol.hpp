@@ -167,10 +167,20 @@ template <typename ParamsTupleType>
 struct JsonRpcNamedParams {
     static constexpr std::size_t ParamsSize = jsonRpcParamsSize<ParamsTupleType>();
 
-    static auto provided(const JsonRpcMethodContext& context) noexcept -> bool { return !context.arg_names.empty(); }
+    static auto provided(const JsonRpcMethodContext& context) noexcept -> bool {
+        if constexpr (!nekoproto::is_tuple_v<ParamsTupleType>) {
+            return false;
+        } else {
+            return !context.arg_names.empty();
+        }
+    }
 
     static auto matchesParamsSize(const JsonRpcMethodContext& context) noexcept -> bool {
-        return !context.arg_names.empty() && context.arg_names.size() == ParamsSize;
+        if constexpr (!nekoproto::is_tuple_v<ParamsTupleType>) {
+            return false;
+        } else {
+            return !context.arg_names.empty() && context.arg_names.size() == ParamsSize;
+        }
     }
 };
 
@@ -246,9 +256,17 @@ struct JsonRpcRequestParser {
         } else {
             result = parserReadReflectField<R>(in, value.params, "params", NoTags{});
         }
-        if (!result && IsNullAble &&
-            result.error().ec == sa::makeErrorCode(sa::ErrorCode::InvalidField)) {
-            return sa::success();
+        if (!result && IsNullAble) {
+            if (result.error().ec == sa::makeErrorCode(sa::ErrorCode::InvalidField)) {
+                return sa::success();
+            }
+            if (auto object = parsing::readerToObject<R>(in, NoTags{}); object) {
+                if (auto fieldValue = parsing::readerObjectField<R>(object.value(), "params", NoTags{}); fieldValue) {
+                    if (parsing::readerIsEmpty<R>(fieldValue.value(), NoTags{})) {
+                        return sa::success();
+                    }
+                }
+            }
         }
         return result;
     }

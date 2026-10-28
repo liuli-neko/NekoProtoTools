@@ -188,6 +188,35 @@ struct SpecNestedApi {
     SpecPrefixApi api;
 };
 
+struct TestInitParams {
+    std::string protocolVersion;
+    std::optional<std::string> clientName;
+};
+
+template <>
+struct nekoproto::Meta<TestInitParams> {
+    static constexpr auto value = Object(
+        "protocolVersion", &TestInitParams::protocolVersion,
+        "clientName", &TestInitParams::clientName
+    );
+};
+
+struct TestPaginatedParams {
+    std::optional<std::string> cursor;
+};
+
+template <>
+struct nekoproto::Meta<TestPaginatedParams> {
+    static constexpr auto value = Object(
+        "cursor", &TestPaginatedParams::cursor
+    );
+};
+
+struct SpecStructApi {
+    RpcMethodSpec<std::string(TestInitParams), rpc_name<"spec.init">, rpc_args<"init_params">> init;
+    RpcMethodSpec<std::string(TestPaginatedParams), rpc_name<"spec.list">, rpc_args<"paginated_params">> list;
+};
+
 class JsonRpcTest : public ::testing::Test {
 public:
     void SetUp() override {}
@@ -923,6 +952,103 @@ TEST_F(JsonRpcTest, TestApiV1) {
 
     client->close();
     server->close();
+}
+
+TEST_F(JsonRpcTest, RpcMethodSpecWithStructAndRpcArgsSupportsTypedClientAndRawJsonPeer) {
+    using namespace std::chrono_literals;
+
+    // 1. Raw peer requests to Server
+    {
+        auto request = ilias::oneshot::channel<std::string>();
+        auto response = ilias::oneshot::channel<std::string>();
+        JsonRpcServer<SpecStructApi> server{*gContext};
+
+        server->init = [](TestInitParams params) -> ilias::IoTask<std::string> {
+            co_return params.protocolVersion + ":" + params.clientName.value_or("unknown");
+        };
+        server->list = [](TestPaginatedParams params) -> ilias::IoTask<std::string> {
+            co_return params.cursor.value_or("default_cursor");
+        };
+
+        server.addEndpoint(RawJsonEndpoint{std::move(response.sender), std::move(request.receiver)});
+
+        // Test normal struct call with params object
+        ASSERT_TRUE(request.sender.send(
+            R"({"jsonrpc":"2.0","method":"spec.init","params":{"protocolVersion":"2024-11-05","clientName":"Cline"},"id":0})"));
+        auto msg0 = ilias::timeout(std::move(response.receiver), 500ms).wait();
+        ASSERT_TRUE(msg0 && *msg0);
+        EXPECT_TRUE(neko_test::jsonEquivalent(**msg0,
+            R"({"jsonrpc":"2.0","result":"2024-11-05:Cline","id":0})"));
+
+        server.close();
+    }
+
+    // Test missing params, null params, empty params object on nullable struct
+    {
+        auto testListPayload = [](std::string payload, std::string expectedResult, int id) {
+            auto req = ilias::oneshot::channel<std::string>();
+            auto resp = ilias::oneshot::channel<std::string>();
+            JsonRpcServer<SpecStructApi> server{*gContext};
+            server->list = [](TestPaginatedParams params) -> ilias::IoTask<std::string> {
+                co_return params.cursor.value_or("default_cursor");
+            };
+            server.addEndpoint(RawJsonEndpoint{std::move(resp.sender), std::move(req.receiver)});
+            EXPECT_TRUE(req.sender.send(payload));
+            auto msg = ilias::timeout(std::move(resp.receiver), 500ms).wait();
+            EXPECT_TRUE(msg && *msg);
+            if (msg && *msg) {
+                EXPECT_TRUE(neko_test::jsonEquivalent(**msg, expectedResult));
+            }
+            server.close();
+        };
+
+        // Missing params
+        testListPayload(R"({"jsonrpc":"2.0","method":"spec.list","id":1})",
+                        R"({"jsonrpc":"2.0","result":"default_cursor","id":1})", 1);
+        // Null params
+        testListPayload(R"({"jsonrpc":"2.0","method":"spec.list","params":null,"id":2})",
+                        R"({"jsonrpc":"2.0","result":"default_cursor","id":2})", 2);
+        // Empty object params
+        testListPayload(R"({"jsonrpc":"2.0","method":"spec.list","params":{},"id":3})",
+                        R"({"jsonrpc":"2.0","result":"default_cursor","id":3})", 3);
+        // Populated params
+        testListPayload(R"({"jsonrpc":"2.0","method":"spec.list","params":{"cursor":"page2"},"id":4})",
+                        R"({"jsonrpc":"2.0","result":"page2","id":4})", 4);
+    }
+
+    // 2. Typed Client <-> Server communication
+    {
+        JsonRpcServer<SpecStructApi> server{*gContext};
+        JsonRpcClient<SpecStructApi> client{*gContext};
+        connectEndpoint(server, client);
+
+        server->init = [](TestInitParams params) -> ilias::IoTask<std::string> {
+            co_return params.protocolVersion + ":" + params.clientName.value_or("none");
+        };
+        server->list = [](TestPaginatedParams params) -> ilias::IoTask<std::string> {
+            co_return params.cursor.value_or("empty");
+        };
+
+        auto res1 = client->init(TestInitParams{.protocolVersion = "1.0", .clientName = "Test"}).wait();
+        ASSERT_TRUE(res1.has_value()) << res1.error().message();
+        EXPECT_EQ(*res1, "1.0:Test");
+
+        auto res2 = client->list(TestPaginatedParams{.cursor = std::nullopt}).wait();
+        ASSERT_TRUE(res2.has_value()) << res2.error().message();
+        EXPECT_EQ(*res2, "empty");
+
+        // Verify rpc.get_method_info still retains argument names
+        auto info = client->rpc.get_method_info("spec.init").wait();
+        ASSERT_TRUE(info.has_value());
+        EXPECT_TRUE(info.value().find("init_params") != std::string::npos);
+
+        auto listInfo = client->rpc.get_method_info("spec.list").wait();
+        ASSERT_TRUE(listInfo.has_value());
+        EXPECT_TRUE(listInfo.value().find("paginated_params") != std::string::npos);
+
+        client.close();
+        server.close();
+    }
 }
 
 ilias::PlatformContext* JsonRpcTest::gContext = nullptr;
