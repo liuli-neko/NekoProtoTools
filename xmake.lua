@@ -288,12 +288,6 @@ option("enable_jsonrpc")
     set_showmenu(true)
     set_description("Enable jsonrpc support, need ilias module")
     set_category("modules")
-    after_check(function (option)
-        if option:enabled() and not (has_config("enable_rapidjson") or has_config("enable_simdjson")) then
-            cprint("${yellow}warning: enable_jsonrpc requires a JSON serializer; disabling it because neither rapidjson nor simdjson is enabled")
-            option:enable(false, {force = true})
-        end
-    end)
 option_end()
 
 option("enable_rpc_trace")
